@@ -58,6 +58,7 @@ export interface ChatMessage {
   /** 学生消息：后端对这条回答的诊断（每轮评价当前回答） */
   diagnosis?: Diagnosis;
   webSources?: WebSource[];
+  sources?: SourceReference[];
 }
 
 export interface WebSource {
@@ -65,6 +66,16 @@ export interface WebSource {
 }
 export interface WebSearchResponse {
   provider: "anysearch"; query: string; results: WebSource[]; request_id: string | null;
+}
+
+export interface CourseMaterial {
+  id: string; title: string; kind: "pdf" | "txt" | "md";
+  pageCount: number; chunkCount: number; createdAt: string;
+}
+
+export interface SourceReference {
+  id: string; documentId: string; title: string; label: string;
+  page?: number | null; startLine?: number | null; endLine?: number | null; excerpt: string;
 }
 
 export interface MemoryChange {

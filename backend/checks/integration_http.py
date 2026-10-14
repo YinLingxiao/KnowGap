@@ -16,8 +16,10 @@ class Provider(http.server.BaseHTTPRequestHandler):
             context=json.loads(payload['messages'][1]['content'])
             answer=context['current_answer']
             assessment='correct' if answer.startswith('栈顶') or '后进先出' in answer else 'incorrect'
+            sources=context.get('course_sources',[])
             output=json.dumps({'assessment':assessment,'issue':'未检查实际栈顶' if assessment=='incorrect' else None,
-                              'confidence':0.7,'evidence':answer,'reply':'请检查当前栈顶。'},ensure_ascii=False)
+                              'confidence':0.7,'evidence':answer,'reply':'请检查当前栈顶。'+('[资料1]' if sources else ''),
+                              'citation_ids':[sources[0]['id']] if sources else []},ensure_ascii=False)
         body=json.dumps({'choices':[{'finish_reason':'stop','message':{'content':output}}]}).encode()
         self.send_response(200);self.send_header('Content-Type','application/json');self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body)
 

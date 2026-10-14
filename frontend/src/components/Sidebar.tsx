@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import Image from "next/image";
-import { SquarePen, Search } from "lucide-react";
+import { SquarePen, Search, BookOpen } from "lucide-react";
 import type { HealthState, Resource } from "@/hooks/useWorkbench";
 import type { DataSource } from "@/lib/config";
 import { cx } from "@/lib/cx";
@@ -26,6 +26,8 @@ interface SidebarProps {
   onOpenWebSearch: () => void;
   webSearch: boolean;
   onWebSearchChange: (enabled: boolean) => void;
+  onOpenMaterials: () => void;
+  materialsActive: boolean;
   /** Mock 模式下的 Mock 控制台入口 */
   mockConsole?: ReactNode;
 }
@@ -52,6 +54,8 @@ export function Sidebar({
   onOpenWebSearch,
   webSearch,
   onWebSearchChange,
+  onOpenMaterials,
+  materialsActive,
 }: SidebarProps) {
   const { data, loading, error } = problems;
 
@@ -79,6 +83,9 @@ export function Sidebar({
         <input type="checkbox" checked={webSearch} disabled={disabled || source === 'mock'} onChange={(event) => onWebSearchChange(event.target.checked)} />
         导师联网参考
       </label>
+      <button className={cx(styles.materials, materialsActive && styles.active)} onClick={onOpenMaterials} aria-current={materialsActive ? 'page' : undefined}>
+        <BookOpen size={15} aria-hidden />课程资料
+      </button>
 
       <div className={styles.source}>
         {source === "mock" ? (
@@ -115,7 +122,7 @@ export function Sidebar({
         ) : (
           <ul className={styles.list}>
             {data.map((problem) => {
-              const selected = problem.id === selectedId;
+              const selected = problem.id === selectedId && !materialsActive;
               const related = memoryCountByTopic[problem.topicKey] ?? 0;
               const Icon = topicIcon(problem.topicKey);
               const topic = topicLabel(problem.topicKey, problem.topicLabel);

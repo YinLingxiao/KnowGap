@@ -11,6 +11,7 @@ import { RichText } from "./ui/RichText";
 import { StatusBadge } from "./ui/StatusBadge";
 import styles from "./ChatThread.module.css";
 import { WebSources } from "./WebSearchPanel";
+import { SourceReferences } from "./SourceReferences";
 
 interface ChatThreadProps {
   submission: { answer: string; reasoning: string };
@@ -90,6 +91,7 @@ export function ChatThread({ submission, submissionDiagnosis, messages, sending,
                   <RichText text={message.content} />
                 </p>
                 <WebSources sources={message.webSources ?? []} />
+                <SourceReferences sources={message.sources ?? []} />
                 {message.memoryChanges?.map((change) => (
                   <MemoryChangeNote key={`${change.memoryId}-${change.action}-${change.toStatus}`} change={change} />
                 ))}

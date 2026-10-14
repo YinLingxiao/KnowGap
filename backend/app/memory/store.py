@@ -8,7 +8,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from app.models.schemas import (
-    Diagnosis, Evidence, Memory, MemoryChange, Session, SessionMessage, TeachingResponse, TutorOutput, WebSource,
+    Diagnosis, Evidence, Memory, MemoryChange, Session, SessionMessage, TeachingResponse, TutorOutput, WebSource, SourceReference,
 )
 
 
@@ -58,6 +58,10 @@ class Store:
                 );
                 CREATE INDEX IF NOT EXISTS messages_session ON messages(session_id);
                 CREATE TABLE IF NOT EXISTS message_web_sources (
+                    message_id TEXT PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
+                    sources_json TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS message_sources (
                     message_id TEXT PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
                     sources_json TEXT NOT NULL
                 );
@@ -118,14 +122,18 @@ class Store:
             if row is None:
                 return None
             messages = db.execute(
-                "SELECT m.*, COALESCE(w.sources_json, '[]') AS web_sources_json FROM messages m "
-                "LEFT JOIN message_web_sources w ON w.message_id = m.id WHERE m.session_id = ? ORDER BY m.rowid", (session_id,)
+                "SELECT m.*, COALESCE(w.sources_json, '[]') AS web_sources_json, "
+                "COALESCE(s.sources_json, '[]') AS sources_json FROM messages m "
+                "LEFT JOIN message_web_sources w ON w.message_id = m.id "
+                "LEFT JOIN message_sources s ON s.message_id = m.id "
+                "WHERE m.session_id = ? ORDER BY m.rowid", (session_id,)
             ).fetchall()
             return Session(**dict(row), messages=[SessionMessage(
                 id=m["id"], role=m["role"], content=m["content"], created_at=m["created_at"],
                 diagnosis=Diagnosis.model_validate_json(m["diagnosis_json"]) if m["diagnosis_json"] else None,
                 used_memory_ids=json.loads(m["used_memory_ids_json"]),
                 web_sources=[WebSource.model_validate(source) for source in json.loads(m['web_sources_json'])],
+                sources=[SourceReference.model_validate(source) for source in json.loads(m["sources_json"])],
             ) for m in messages])
 
     def _update_memory(
@@ -172,16 +180,21 @@ class Store:
         self, *, student_id: str, problem_id: str, topic_key: str, answer: str,
         result: TutorOutput, used_memory_ids: list[str], session: Session | None,
         web_sources: list[WebSource] | None = None,
+        sources: list[SourceReference] | None = None,
     ) -> TeachingResponse:
         session_id = session.id if session else new_id("session")
         timestamp = now()
         phase = "tutoring" if session else "initial"
         web_sources = web_sources or []
-        diagnosis = Diagnosis(topic_key=topic_key, **result.model_dump(exclude={"reply", "web_source_ids"}))
+        sources = sources or []
+        diagnosis = Diagnosis(topic_key=topic_key, **result.model_dump(exclude={"reply", "web_source_ids", "citation_ids"}))
         turn = (session.turn if session else 0) + 1
         with self.connection() as db:
             # Never hold a database lock across a model HTTP request.
             db.execute("BEGIN IMMEDIATE")
+            for source in sources:
+                if db.execute('SELECT id FROM course_chunks WHERE id = ?', (source.id,)).fetchone() is None:
+                    raise StateConflict('生成期间引用资料已删除，请重新提交作答。')
             for memory_id in used_memory_ids:
                 if db.execute(
                     "SELECT id FROM learning_memories WHERE id = ? AND student_id = ?", (memory_id, student_id)
@@ -205,10 +218,13 @@ class Store:
                        (assistant_id, session_id, "assistant", result.reply, now(), phase,
                         None, json.dumps(used_memory_ids)))
             if web_sources:
-                db.execute('INSERT INTO message_web_sources VALUES (?, ?)',
+                db.execute("INSERT INTO message_web_sources VALUES (?, ?)",
                            (assistant_id, json.dumps([source.model_dump() for source in web_sources], ensure_ascii=False)))
+            if sources:
+                db.execute("INSERT INTO message_sources VALUES (?, ?)",
+                           (assistant_id, json.dumps([source.model_dump() for source in sources], ensure_ascii=False)))
             changes = self._update_memory(db, student_id, topic_key, user_id, result, timestamp)
         return TeachingResponse(
             session_id=session_id, turn=turn, diagnosis=diagnosis, reply=result.reply,
-            used_memory_ids=used_memory_ids, memory_changes=changes, web_sources=web_sources,
+            used_memory_ids=used_memory_ids, memory_changes=changes, web_sources=web_sources, sources=sources,
         )

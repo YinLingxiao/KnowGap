@@ -3,15 +3,17 @@ const fs = require('node:fs');
 const path = require('node:path');
 const ts = require('../node_modules/typescript');
 const temp = process.env.ROUNDTRIP_DIR;
-for (const file of ['lib/config.ts', 'lib/api/errors.ts', 'lib/api/http-client.ts']) {
+for (const file of ['lib/config.ts', 'lib/api/errors.ts', 'lib/api/http-client.ts', 'lib/api/material-client.ts']) {
   const dest = path.join(temp, file.replace(/\.ts$/, '.js'));
   fs.mkdirSync(path.dirname(dest), {recursive:true});
   fs.writeFileSync(dest, ts.transpileModule(fs.readFileSync(path.join(__dirname,'../src',file),'utf8'),
     {compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText);
 }
 const {createHttpClient,request} = require(path.join(temp,'lib/api/http-client.js'));
+const {createMaterialClient} = require(path.join(temp,'lib/api/material-client.js'));
 const root = process.env.ROUNDTRIP_API;
 const client = createHttpClient(root);
+const materials = createMaterialClient(root);
 async function main() {
   await client.checkHealth();
   const config = await request(root,'/api/ai/config');
@@ -24,18 +26,25 @@ async function main() {
     assert.equal(session.diagnosis.assessment,'correct');
     assert.equal(session.submissionDiagnosis.assessment,'incorrect');
     assert.equal(session.messages.length,7);
+    assert.equal(session.messages[0].sources[0].title,'stack-notes.md');
     const memories = await client.listMemories('demo-student-001');
     assert.equal(memories.length,1);
     assert.equal(memories[0].status,'improving');
     await client.deleteMemory(memories[0].id);
     assert.deepEqual(await client.listMemories('demo-student-001'),[]);
+    const [document] = await materials.list();
+    await materials.remove(document.id);
+    assert.deepEqual(await materials.search('后进先出'),[]);
     const next = await client.startSession({studentId:'demo-student-001',problemId:'stack-sequence-001',answer:'合法',reasoning:'数字相同'});
     assert.deepEqual(next.usedMemoryIds,[]);
+    assert.deepEqual(next.reply.sources,[]);
     console.log('HTTP adapter roundtrip: restart recovery, persisted AI configuration, memory deletion passed.');
     return;
   }
   assert.equal(config.configured,false);
   assert.equal((await client.listProblems()).length,3);
+  const document = await materials.upload(new File(['栈遵循后进先出，只能弹出栈顶。 LIFO means last in first out.'], 'stack-notes.md'));
+  assert.equal((await materials.search('后进先出'))[0].documentId,document.id);
   const input = {base_url:process.env.ROUNDTRIP_PROVIDER,model:'synthetic-tutor',api_key:'synthetic-key'};
   await assert.rejects(request(root,'/api/ai/test',{method:'POST',body:JSON.stringify({...input,model:'bad-auth'})}),e=>e.kind==='model_unavailable');
   await assert.rejects(request(root,'/api/ai/test',{method:'POST',body:JSON.stringify({...input,model:'bad-format'})}),e=>e.kind==='model_unavailable');
@@ -49,6 +58,7 @@ async function main() {
   assert.equal((await request(root,'/api/ai/test',{method:'POST'})).status,'ok');
   const start = await client.startSession({studentId:'demo-student-001',problemId:'stack-sequence-001',answer:'合法',reasoning:'数字相同'});
   assert.equal(start.diagnosis.assessment,'incorrect');
+  assert.equal(start.reply.sources.length,1);
   const memoryId = start.memoryChanges[0].memoryId;
   const first = await client.sendMessage(start.sessionId,'弹出3后可以直接拿1。');
   assert.equal(first.turn,2);

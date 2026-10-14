@@ -41,6 +41,26 @@ class WebSearchResponse(BaseModel):
     request_id: str | None = None
 
 
+class Material(BaseModel):
+    id: str
+    title: str
+    kind: Literal['pdf', 'txt', 'md']
+    page_count: int
+    chunk_count: int
+    created_at: str
+
+
+class SourceReference(BaseModel):
+    id: str
+    document_id: str
+    title: str
+    label: str
+    page: int | None = None
+    start_line: int | None = None
+    end_line: int | None = None
+    excerpt: str
+
+
 class Problem(BaseModel):
     id: str
     title: str
@@ -57,6 +77,7 @@ class TutorOutput(StrictModel):
     evidence: ShortText
     reply: ShortText
     web_source_ids: list[str] = Field(default_factory=list, max_length=5)
+    citation_ids: list[str] = Field(default_factory=list, max_length=3)
 
     @model_validator(mode="after")
     def consistent_issue(self):
@@ -111,6 +132,7 @@ class TeachingResponse(BaseModel):
     used_memory_ids: list[str]
     memory_changes: list[MemoryChange]
     web_sources: list[WebSource] = Field(default_factory=list)
+    sources: list[SourceReference] = Field(default_factory=list)
 
 
 class SessionMessage(BaseModel):
@@ -121,6 +143,7 @@ class SessionMessage(BaseModel):
     diagnosis: Diagnosis | None = None
     used_memory_ids: list[str] = []
     web_sources: list[WebSource] = Field(default_factory=list)
+    sources: list[SourceReference] = Field(default_factory=list)
 
 
 class Session(BaseModel):

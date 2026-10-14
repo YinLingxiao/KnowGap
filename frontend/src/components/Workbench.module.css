@@ -13,6 +13,9 @@
   background: var(--bg-sidebar);
 }
 
+.learningView { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; }
+.learningView[hidden] { display: none; }
+
 /* 主区域略微内嵌，像一块独立的工作面板 */
 .main {
   display: flex;

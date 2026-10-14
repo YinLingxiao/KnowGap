@@ -22,6 +22,8 @@ from app.services.teaching import teach
 from app.services.ai_settings import AISettings
 from app.services.anysearch import AnySearchClient, SearchService
 from app.models.schemas import WebSearchResponse
+from app.services.materials import MaterialStore
+from app.api.materials import material_router
 
 logger = logging.getLogger(__name__)
 DemoStudent = Literal["demo-student-001"]
@@ -30,6 +32,7 @@ DemoStudent = Literal["demo-student-001"]
 def create_app(settings: Settings | None = None, tutor: Tutor | None = None, search_service: SearchService | None = None) -> FastAPI:
     settings = settings or Settings()
     store = Store(settings.resolved_database_path())
+    library = MaterialStore(store)
     ai_settings = AISettings(settings)
     model = tutor if tutor is not None else ChatCompletionsTutor(ai_settings.current)
     search = search_service if search_service is not None else AnySearchClient(settings)
@@ -37,12 +40,15 @@ def create_app(settings: Settings | None = None, tutor: Tutor | None = None, sea
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         store.initialize()
+        library.initialize()
         yield
 
     app = FastAPI(title="KnowGap API", version="0.2.0", lifespan=lifespan)
     app.state.store = store
     app.state.tutor = model
     app.state.search = search
+    app.state.materials = library
+    app.include_router(material_router(library))
     app.add_middleware(
         CORSMiddleware, allow_origins=settings.cors_origins,
         allow_credentials=False, allow_methods=["GET", "POST", "PUT", "DELETE"], allow_headers=["Content-Type"],
@@ -120,7 +126,7 @@ def create_app(settings: Settings | None = None, tutor: Tutor | None = None, sea
 
     @app.post("/api/diagnosis", response_model=TeachingResponse)
     async def diagnosis(body: DiagnosisRequest):
-        return await teach(store, model, body, search_service=search)
+        return await teach(store, model, body, search_service=search, library=library)
 
     @app.get("/api/sessions/{session_id}", response_model=Session)
     def get_session(session_id: str, student_id: DemoStudent = DEMO_STUDENT):
@@ -134,7 +140,7 @@ def create_app(settings: Settings | None = None, tutor: Tutor | None = None, sea
         session = get_session(session_id)
         return await teach(store, model, DiagnosisRequest(
             student_id=session.student_id, problem_id=session.problem_id, answer=body.content, web_search=body.web_search,
-        ), session, search_service=search)
+        ), session, search_service=search, library=library)
 
     @app.get("/api/memories", response_model=list[Memory])
     def memories(student_id: DemoStudent = DEMO_STUDENT):

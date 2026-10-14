@@ -21,6 +21,7 @@ import { WelcomeHero } from "./WelcomeHero";
 import { Toaster, useToasts } from "./ui/Toaster";
 import styles from "./Workbench.module.css";
 import { WebSearchPanel } from "./WebSearchPanel";
+import { MaterialLibrary } from "./MaterialLibrary";
 
 function isTyping(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
@@ -31,6 +32,7 @@ export function Workbench() {
   const { toasts, push, dismiss } = useToasts();
   const wb = useWorkbench(push);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [view, setView] = useState<'learning' | 'materials'>('learning');
   const contentRef = useRef<HTMLDivElement>(null);
   const sessionTopRef = useRef<HTMLDivElement>(null);
 
@@ -76,7 +78,7 @@ export function Workbench() {
   const startNewSession = wb.startNewSession;
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (searchOpen) return;
+      if (searchOpen || view !== 'learning') return;
       if (event.metaKey || event.ctrlKey || event.altKey || isTyping(event.target)) return;
       if (event.key === "n" || event.key === "N") {
         if (!canStartNew) return;
@@ -91,7 +93,7 @@ export function Workbench() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [canStartNew, startNewSession, searchOpen]);
+  }, [canStartNew, startNewSession, searchOpen, view]);
 
   const CrumbIcon = selectedProblem ? topicIcon(selectedProblem.topicKey) : null;
 
@@ -105,19 +107,23 @@ export function Workbench() {
           problems={wb.problems}
           selectedId={wb.selectedProblemId}
           memoryCountByTopic={memoryCountByTopic}
-          onSelect={wb.selectProblem}
+          onSelect={(id) => { wb.selectProblem(id); setView('learning'); }}
           onRetry={wb.loadProblems}
           disabled={busy}
           canStartNew={canStartNew}
-          onNewSession={wb.startNewSession}
+          onNewSession={() => { wb.startNewSession(); setView('learning'); }}
           onOpenWebSearch={() => setSearchOpen(true)}
           webSearch={wb.webSearch}
           onWebSearchChange={wb.setWebSearch}
+          onOpenMaterials={() => setView('materials')}
+          materialsActive={view === 'materials'}
           mockConsole={wb.source === "mock" ? <MockConsole onReset={wb.resetDemo} /> : null}
         />
       </aside>
 
       <main className={styles.main}>
+        {view === 'materials' && <MaterialLibrary enabled={wb.source === 'api'} onBack={() => setView('learning')} />}
+        <div className={styles.learningView} hidden={view !== 'learning'}>
         <header className={styles.topbar}>
           <div className={styles.breadcrumb}>
             {selectedProblem && CrumbIcon ? (
@@ -216,6 +222,7 @@ export function Workbench() {
             </div>
           </div>
         )}
+        </div>
       </main>
 
       <aside className={styles.panel}>
