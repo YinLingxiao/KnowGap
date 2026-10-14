@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronRight } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChevronRight, Menu } from "lucide-react";
 import { useWorkbench } from "@/hooks/useWorkbench";
+import { getAIConfig, type AIConfigStatus } from "@/lib/api/ai-config";
+import { cx } from "@/lib/cx";
 import { topicLabel } from "@/lib/labels";
 import type { LearningMemory } from "@/lib/types";
 import { AnswerForm } from "./AnswerForm";
@@ -14,10 +16,13 @@ import { LoopStepper, type LoopStep } from "./LoopStepper";
 import { MemoryPanel } from "./MemoryPanel";
 import { MockConsole } from "./MockConsole";
 import { ProblemStatement } from "./ProblemStatement";
+import type { ModelSignal } from "./settings/ModelAccessCard";
+import { SettingsDialog } from "./settings/SettingsDialog";
 import { Sidebar } from "./Sidebar";
 import { topicIcon } from "./topicIcon";
 import { UsedMemories } from "./UsedMemories";
 import { WelcomeHero } from "./WelcomeHero";
+import { Button } from "./ui/Button";
 import { Toaster, useToasts } from "./ui/Toaster";
 import styles from "./Workbench.module.css";
 import { WebSearchPanel } from "./WebSearchPanel";
@@ -35,6 +40,11 @@ export function Workbench() {
   const [view, setView] = useState<'learning' | 'materials'>('learning');
   const contentRef = useRef<HTMLDivElement>(null);
   const sessionTopRef = useRef<HTMLDivElement>(null);
+  const [catalogOpen, setCatalogOpen] = useState(false);
+  const [memoryOpen, setMemoryOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [modelSignal, setModelSignal] = useState<ModelSignal>({ state: "unknown" });
+  const [modelConfigured, setModelConfigured] = useState<boolean | null>(null);
 
   const selectedProblem = wb.problems.data.find((problem) => problem.id === wb.selectedProblemId) ?? null;
   const session = wb.session;
@@ -54,11 +64,18 @@ export function Workbench() {
     return counts;
   }, [wb.memories.data]);
 
+  const draft = selectedProblem ? wb.drafts[selectedProblem.id] ?? { answer: "", reasoning: "" } : null;
+  const awaitingSession = Boolean(selectedProblem && wb.pendingSessionProblemId === selectedProblem.id);
+  const nextProblem = useMemo(() => {
+    const index = wb.problems.data.findIndex((problem) => problem.id === wb.selectedProblemId);
+    if (index < 0 || index >= wb.problems.data.length - 1) return null;
+    return wb.problems.data[index + 1];
+  }, [wb.problems.data, wb.selectedProblemId]);
+
   const steps: LoopStep[] = [
     { key: "answer", label: "作答", status: session || wb.submitting ? "done" : "active" },
-    { key: "diagnose", label: "诊断", status: session ? "done" : wb.submitting ? "active" : "todo" },
-    { key: "guide", label: "引导", status: session ? "active" : "todo" },
-    { key: "remember", label: "记忆", status: session && session.memoryChangeCount > 0 ? "done" : "todo" },
+    { key: "note", label: "批注", status: session ? "done" : wb.submitting ? "active" : "todo" },
+    { key: "ask", label: "追问", status: session ? "active" : "todo" },
   ];
 
   // 诊断完成后，把视线带到「参考记忆 + 作答批注」
@@ -67,20 +84,66 @@ export function Workbench() {
     if (sessionId) sessionTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [sessionId]);
 
-  // 换题时内容区回到顶部；单栏布局下把视线带到题目
+  useEffect(() => {
+    if (wb.focusRequest) setMemoryOpen(true);
+  }, [wb.focusRequest]);
+
+  // 后端没有模型状态接口：从诊断请求的结果推断模型是否可用，供设置里的模型接入卡片展示
+  const modelError = [wb.submitError, wb.chatError].find((error) => error?.kind === "model_unavailable") ?? null;
+  useEffect(() => {
+    if (modelError) setModelSignal({ state: "unavailable", at: Date.now(), detail: modelError.message });
+  }, [modelError]);
+
+  // API 模式下启动时读取一次模型配置，未配置时侧栏直接提示
+  useEffect(() => {
+    if (wb.source !== "api") return;
+    getAIConfig()
+      .then((config) => setModelConfigured(config.configured))
+      .catch(() => setModelConfigured(null));
+  }, [wb.source]);
+
+  const handleConfigChange = useCallback((config: AIConfigStatus, saved: boolean) => {
+    setModelConfigured(config.configured);
+    // 保存后此前的模型错误已过期
+    if (saved) setModelSignal({ state: "unknown" });
+  }, []);
+
+  const wasWaiting = useRef(false);
+  const waiting = wb.submitting || wb.sending;
+  const requestFailed = Boolean(wb.submitError || wb.chatError);
+  const hasSession = Boolean(session);
+  useEffect(() => {
+    if (wasWaiting.current && !waiting && !requestFailed && hasSession) setModelSignal({ state: "ok", at: Date.now() });
+    wasWaiting.current = waiting;
+  }, [waiting, requestFailed, hasSession]);
+
+  useEffect(() => {
+    if (!catalogOpen && !memoryOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setCatalogOpen(false);
+      setMemoryOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [catalogOpen, memoryOpen]);
+
   useEffect(() => {
     if (!wb.selectedProblemId) return;
-    if (window.innerWidth > 900) contentRef.current?.scrollTo({ top: 0, behavior: "smooth" });
-    else contentRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    contentRef.current?.scrollTo({ top: 0 });
   }, [wb.selectedProblemId]);
 
-  // 键盘快捷键：N 新会话，/ 聚焦输入框
+  // 键盘快捷键：N 新会话，/ 聚焦输入框，逗号打开设置
   const startNewSession = wb.startNewSession;
   useEffect(() => {
+    if (settingsOpen) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (searchOpen || view !== 'learning') return;
       if (event.metaKey || event.ctrlKey || event.altKey || isTyping(event.target)) return;
-      if (event.key === "n" || event.key === "N") {
+      if (event.key === ",") {
+        event.preventDefault();
+        setSettingsOpen(true);
+      } else if (event.key === "n" || event.key === "N") {
         if (!canStartNew) return;
         event.preventDefault();
         startNewSession();
@@ -93,13 +156,30 @@ export function Workbench() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [canStartNew, startNewSession, searchOpen, view]);
+  }, [canStartNew, startNewSession, settingsOpen, searchOpen, view]);
+
+  const openSettings = () => {
+    setCatalogOpen(false);
+    setSettingsOpen(true);
+  };
 
   const CrumbIcon = selectedProblem ? topicIcon(selectedProblem.topicKey) : null;
 
+  const showAnswerForm = Boolean(selectedProblem && draft && !session && !awaitingSession && !wb.restoreError);
+
   return (
     <div className={styles.app}>
-      <aside className={styles.sidebar}>
+      {(catalogOpen || memoryOpen) && (
+        <button
+          className={styles.backdrop}
+          aria-label="关闭面板"
+          onClick={() => {
+            setCatalogOpen(false);
+            setMemoryOpen(false);
+          }}
+        />
+      )}
+      <aside className={cx(styles.sidebar, catalogOpen && styles.sidebarOpen)}>
         <Sidebar
           source={wb.source}
           health={wb.health}
@@ -107,16 +187,22 @@ export function Workbench() {
           problems={wb.problems}
           selectedId={wb.selectedProblemId}
           memoryCountByTopic={memoryCountByTopic}
-          onSelect={(id) => { wb.selectProblem(id); setView('learning'); }}
+          onSelect={(problemId) => {
+            wb.selectProblem(problemId);
+            setView('learning');
+            setCatalogOpen(false);
+          }}
           onRetry={wb.loadProblems}
           disabled={busy}
           canStartNew={canStartNew}
-          onNewSession={() => { wb.startNewSession(); setView('learning'); }}
-          onOpenWebSearch={() => setSearchOpen(true)}
+          onNewSession={() => { wb.startNewSession(); setView('learning'); setCatalogOpen(false); }}
+          onOpenWebSearch={() => { setSearchOpen(true); setCatalogOpen(false); }}
           webSearch={wb.webSearch}
           onWebSearchChange={wb.setWebSearch}
-          onOpenMaterials={() => setView('materials')}
+          onOpenMaterials={() => { setView('materials'); setCatalogOpen(false); setMemoryOpen(false); }}
           materialsActive={view === 'materials'}
+          onOpenSettings={openSettings}
+          modelIssue={modelSignal.state === "unavailable" || modelConfigured === false}
           mockConsole={wb.source === "mock" ? <MockConsole onReset={wb.resetDemo} /> : null}
         />
       </aside>
@@ -125,6 +211,16 @@ export function Workbench() {
         {view === 'materials' && <MaterialLibrary enabled={wb.source === 'api'} onBack={() => setView('learning')} />}
         <div className={styles.learningView} hidden={view !== 'learning'}>
         <header className={styles.topbar}>
+          <button
+            className={styles.menuButton}
+            onClick={() => {
+              setCatalogOpen(true);
+              setMemoryOpen(false);
+            }}
+          >
+            <Menu size={16} aria-hidden />
+            题目
+          </button>
           <div className={styles.breadcrumb}>
             {selectedProblem && CrumbIcon ? (
               <>
@@ -137,105 +233,174 @@ export function Workbench() {
               <span className={styles.crumbCurrent}>开始学习</span>
             )}
           </div>
-          <LoopStepper steps={steps} />
+          <div className={styles.topActions}>
+            <LoopStepper steps={steps} />
+            <button
+              className={cx(styles.memoryToggle, memoryOpen && styles.memoryToggleOpen)}
+              aria-expanded={memoryOpen}
+              onClick={() => {
+                setMemoryOpen((open) => !open);
+                setCatalogOpen(false);
+              }}
+            >
+              记忆
+              {wb.changedMemoryIds.length > 0 && <span className={styles.badge}>{wb.changedMemoryIds.length}</span>}
+            </button>
+          </div>
         </header>
 
-        <div ref={contentRef} className={styles.scroll}>
-          <div className={styles.content}>
-            {wb.restoring && (
-              <p className={styles.restoring} role="status">
-                正在恢复服务器中的学习会话…
-              </p>
-            )}
-            {!selectedProblem ? (
-              <WelcomeHero
-                canStart={wb.problems.data.length > 0}
-                onStart={() => {
-                  const first = wb.problems.data[0];
-                  if (first) wb.selectProblem(first.id);
-                }}
+        {showAnswerForm && selectedProblem && draft ? (
+          <AnswerForm
+            key={`${selectedProblem.id}:${wb.formNonce}`}
+            leading={<ProblemStatement problem={selectedProblem} />}
+            relatedMemoryCount={memoryCountByTopic[selectedProblem.topicKey] ?? 0}
+            submitting={wb.submitting}
+            answer={draft.answer}
+            reasoning={draft.reasoning}
+            onDraftChange={(answer, reasoning) => wb.saveDraft(selectedProblem.id, answer, reasoning)}
+            onSubmit={wb.submitForProblem}
+          >
+            {wb.submitError && (
+              <ErrorNotice
+                error={wb.submitError}
+                onRetry={wb.retrySubmit}
+                onDismiss={wb.dismissSubmitError}
+                onConfigure={openSettings}
+                reveal
+                className={styles.notice}
               />
-            ) : (
-              <>
-                <ProblemStatement problem={selectedProblem} />
-
-                {!session ? (
+            )}
+            {wb.submitting && <DiagnosisPending />}
+          </AnswerForm>
+        ) : (
+          <>
+            <div ref={contentRef} className={styles.scroll}>
+              <div className={styles.content}>
+                {(wb.restoring || awaitingSession) && (
+                  <p className={styles.restoring} role="status">
+                    正在恢复这道题的学习会话…
+                  </p>
+                )}
+                {!selectedProblem ? (
+                  <WelcomeHero
+                    canStart={wb.problems.data.length > 0}
+                    onStart={() => {
+                      const first = wb.problems.data[0];
+                      if (first) wb.selectProblem(first.id);
+                    }}
+                  />
+                ) : (
                   <>
-                    <AnswerForm
-                      key={selectedProblem.id}
-                      relatedMemoryCount={memoryCountByTopic[selectedProblem.topicKey] ?? 0}
-                      submitting={wb.submitting}
-                      onSubmit={wb.submitForProblem}
-                    />
-                    {wb.submitError && (
+                    <ProblemStatement problem={selectedProblem} compact={Boolean(session)} />
+                    {wb.restoreError && !session && (
                       <ErrorNotice
-                        error={wb.submitError}
-                        onRetry={wb.retrySubmit}
-                        onDismiss={wb.dismissSubmitError}
-                        reveal
+                        error={wb.restoreError}
+                        onRetry={wb.retryProblemSession}
+                        retryLabel="重新读取会话"
+                        onRestart={wb.startNewSession}
                         className={styles.notice}
                       />
                     )}
-                    {wb.submitting && <DiagnosisPending />}
-                  </>
-                ) : (
-                  <>
-                    <div ref={sessionTopRef} className={styles.sessionTop}>
-                      <UsedMemories usedIds={session.usedMemoryIds} memoriesById={memoriesById} onFocus={wb.focusMemory} />
-                    </div>
-                    <ChatThread
-                      submission={session.submission}
-                      submissionDiagnosis={session.submissionDiagnosis}
-                      messages={session.messages}
-                      sending={wb.sending}
-                      onRetry={wb.retryMessage}
-                    />
-                    {wb.chatError && (
-                      <ErrorNotice
-                        error={wb.chatError}
-                        context="session"
-                        onRetry={
-                          wb.chatError.kind === "not_found"
-                            ? undefined
-                            : wb.chatError.kind === "conflict"
-                              ? () => void wb.restoreSession()
-                              : () => void wb.retryMessage()
-                        }
-                        retryLabel={wb.chatError.kind === "conflict" ? "刷新会话" : "核对后重试"}
-                        onRestart={wb.chatError.kind === "not_found" ? wb.startNewSession : undefined}
-                        onDismiss={wb.dismissChatError}
-                        reveal
-                        className={styles.notice}
-                      />
+                    {session && (
+                      <>
+                        <div ref={sessionTopRef} className={styles.sessionTop}>
+                          <UsedMemories usedIds={session.usedMemoryIds} memoriesById={memoriesById} onFocus={wb.focusMemory} />
+                        </div>
+                        <ChatThread
+                          submission={session.submission}
+                          submissionDiagnosis={session.submissionDiagnosis}
+                          messages={session.messages}
+                          sending={wb.sending}
+                          onRetry={wb.retryMessage}
+                        />
+                        {wb.chatError && (
+                          <ErrorNotice
+                            error={wb.chatError}
+                            context="session"
+                            onRetry={
+                              wb.chatError.kind === "not_found"
+                                ? undefined
+                                : wb.chatError.kind === "conflict"
+                                  ? () => void wb.restoreSession()
+                                  : () => void wb.retryMessage()
+                            }
+                            retryLabel={wb.chatError.kind === "conflict" ? "刷新会话" : "核对后重试"}
+                            onRestart={wb.chatError.kind === "not_found" ? wb.startNewSession : undefined}
+                            onDismiss={wb.dismissChatError}
+                            onConfigure={openSettings}
+                            reveal
+                            className={styles.notice}
+                          />
+                        )}
+                      </>
                     )}
                   </>
                 )}
-              </>
-            )}
-          </div>
-        </div>
-
-        {session && (
-          <div className={styles.composerDock}>
-            <div className={styles.composerInner}>
-              <ChatComposer sending={wb.sending || wb.restoring} onSend={(content) => void wb.sendMessage(content)} />
+              </div>
             </div>
-          </div>
+
+            {session && (
+              <div className={styles.composerDock}>
+                <div className={styles.composerInner}>
+                  <div className={styles.stageBar}>
+                    <p className={styles.stageStatus}>
+                      <span>已提交</span>
+                      <span>正在推导</span>
+                    </p>
+                    <div className={styles.stageActions}>
+                      <Button
+                        size="sm"
+                        onClick={wb.startNewSession}
+                        disabled={busy}
+                        title="清空本题引导，重新作答。这次是新的首次作答。"
+                      >
+                        独立验证
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          if (nextProblem) wb.selectProblem(nextProblem.id);
+                        }}
+                        disabled={!nextProblem || busy}
+                      >
+                        下一题
+                      </Button>
+                    </div>
+                  </div>
+                  <ChatComposer sending={wb.sending || wb.restoring} onSend={(content) => void wb.sendMessage(content)} />
+                </div>
+              </div>
+            )}
+          </>
         )}
         </div>
       </main>
 
-      <aside className={styles.panel}>
-        <MemoryPanel
-          memories={wb.memories}
-          usedIds={session?.usedMemoryIds ?? []}
-          changedIds={wb.changedMemoryIds}
-          deletingIds={wb.deletingIds}
-          focusRequest={wb.focusRequest}
-          onDelete={wb.deleteMemory}
-          onRefresh={wb.loadMemories}
+      {memoryOpen && (
+        <aside className={styles.panel}>
+          <MemoryPanel
+            memories={wb.memories}
+            usedIds={session?.usedMemoryIds ?? []}
+            changedIds={wb.changedMemoryIds}
+            deletingIds={wb.deletingIds}
+            focusRequest={wb.focusRequest}
+            onDelete={wb.deleteMemory}
+            onRefresh={wb.loadMemories}
+          />
+        </aside>
+      )}
+
+      {settingsOpen && (
+        <SettingsDialog
+          source={wb.source}
+          health={wb.health}
+          studentId={wb.studentId}
+          modelSignal={modelSignal}
+          onCheckHealth={() => void wb.checkHealth()}
+          onConfigChange={handleConfigChange}
+          onClose={() => setSettingsOpen(false)}
         />
-      </aside>
+      )}
 
       <Toaster toasts={toasts} onDismiss={dismiss} />
       <WebSearchPanel open={searchOpen} onClose={() => setSearchOpen(false)} />

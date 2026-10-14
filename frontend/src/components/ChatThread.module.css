@@ -112,17 +112,17 @@
 
 .answer {
   color: var(--text);
-  font-size: var(--text-lg);
+  font-size: 16px;
   font-weight: 600;
-  line-height: 1.6;
+  line-height: 1.7;
   white-space: pre-wrap;
   word-break: break-word;
 }
 
 .reasoning {
   margin-top: 4px;
-  color: var(--text-secondary);
-  font-size: var(--text-md);
+  color: var(--text);
+  font-size: 16px;
   line-height: 1.7;
   white-space: pre-wrap;
   word-break: break-word;
@@ -130,7 +130,7 @@
 
 .studentText {
   color: var(--text);
-  font-size: var(--text-md);
+  font-size: 16px;
   line-height: 1.7;
   white-space: pre-wrap;
   word-break: break-word;
@@ -138,10 +138,32 @@
 
 .tutorText {
   color: var(--text);
-  font-size: var(--text-md);
+  font-size: 16px;
   line-height: 1.75;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.earlier {
+  margin: 4px 0 4px 36px;
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+}
+
+.earlier summary {
+  cursor: pointer;
+  width: fit-content;
+}
+
+.earlier .list {
+  margin-top: 4px;
+}
+
+.currentLabel {
+  margin: 8px 0 0 36px;
+  color: var(--accent-text);
+  font-size: var(--text-sm);
+  font-weight: 600;
 }
 
 /* 依据划线：浅色衬底 + 下划线，样式随结论变化 */

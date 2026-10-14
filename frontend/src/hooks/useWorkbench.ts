@@ -46,22 +46,99 @@ export interface Notify {
   (toast: { tone: "success" | "error" | "info"; title: string; description?: string }): void;
 }
 
-const SESSION_POINTER = `knowgap.api.session.v1:${API_BASE_URL}`;
+const SESSION_POINTERS = `knowgap.api.sessions.v1:${API_BASE_URL}`;
+const LEGACY_SESSION_POINTER = `knowgap.api.session.v1:${API_BASE_URL}`;
+const DRAFTS_KEY = "knowgap.drafts.v1";
 
-function rememberSession(session: { id: string; problemId: string } | null) {
+interface SessionPointers {
+  active: string | null;
+  byProblem: Record<string, string>;
+}
+
+export interface AnswerDraft {
+  answer: string;
+  reasoning: string;
+}
+
+function emptyPointers(): SessionPointers {
+  return { active: null, byProblem: {} };
+}
+
+function readPointers(): SessionPointers {
   try {
-    if (session) localStorage.setItem(SESSION_POINTER, JSON.stringify({ id: session.id, problemId: session.problemId }));
-    else localStorage.removeItem(SESSION_POINTER);
+    const raw = localStorage.getItem(SESSION_POINTERS);
+    if (raw) {
+      const parsed: unknown = JSON.parse(raw);
+      if (parsed && typeof parsed === "object" && "byProblem" in parsed) {
+        const record = parsed as { active?: unknown; byProblem?: unknown };
+        const byProblem: Record<string, string> = {};
+        if (record.byProblem && typeof record.byProblem === "object") {
+          for (const [key, value] of Object.entries(record.byProblem as Record<string, unknown>)) {
+            if (typeof value === "string") byProblem[key] = value;
+          }
+        }
+        return { active: typeof record.active === "string" ? record.active : null, byProblem };
+      }
+    }
+    const legacy: unknown = JSON.parse(localStorage.getItem(LEGACY_SESSION_POINTER) ?? "null");
+    if (
+      legacy && typeof legacy === "object" && "id" in legacy && "problemId" in legacy &&
+      typeof legacy.id === "string" && typeof legacy.problemId === "string"
+    ) {
+      return { active: legacy.problemId, byProblem: { [legacy.problemId]: legacy.id } };
+    }
+  } catch { /* Ignore malformed or unavailable local storage. */ }
+  return emptyPointers();
+}
+
+function writePointers(next: SessionPointers | null) {
+  try {
+    if (!next || (!next.active && Object.keys(next.byProblem).length === 0)) localStorage.removeItem(SESSION_POINTERS);
+    else localStorage.setItem(SESSION_POINTERS, JSON.stringify(next));
+    localStorage.removeItem(LEGACY_SESSION_POINTER);
   } catch { /* Disabled browser storage must not prevent learning. */ }
 }
 
-function readRememberedSession(): { id: string; problemId: string } | null {
+function rememberProblemSession(problemId: string, sessionId: string) {
+  const current = readPointers();
+  writePointers({ active: problemId, byProblem: { ...current.byProblem, [problemId]: sessionId } });
+}
+
+function forgetProblemSession(problemId: string) {
+  const current = readPointers();
+  const byProblem = { ...current.byProblem };
+  delete byProblem[problemId];
+  writePointers({ active: problemId, byProblem });
+}
+
+function activateProblem(problemId: string) {
+  const current = readPointers();
+  writePointers({ ...current, active: problemId });
+}
+
+function readDrafts(): Record<string, AnswerDraft> {
   try {
-    const saved: unknown = JSON.parse(localStorage.getItem(SESSION_POINTER) ?? "null");
-    if (saved && typeof saved === "object" && "id" in saved && "problemId" in saved &&
-        typeof saved.id === "string" && typeof saved.problemId === "string") return { id: saved.id, problemId: saved.problemId };
-  } catch { /* Ignore malformed or unavailable local storage. */ }
-  return null;
+    const parsed: unknown = JSON.parse(localStorage.getItem(DRAFTS_KEY) ?? "null");
+    if (!parsed || typeof parsed !== "object") return {};
+    const drafts: Record<string, AnswerDraft> = {};
+    for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+      if (
+        value && typeof value === "object" && "answer" in value && "reasoning" in value &&
+        typeof value.answer === "string" && typeof value.reasoning === "string"
+      ) {
+        drafts[key] = { answer: value.answer, reasoning: value.reasoning };
+      }
+    }
+    return drafts;
+  } catch {
+    return {};
+  }
+}
+
+function writeDrafts(drafts: Record<string, AnswerDraft>) {
+  try {
+    localStorage.setItem(DRAFTS_KEY, JSON.stringify(drafts));
+  } catch { /* Disabled browser storage must not prevent learning. */ }
 }
 
 function recoveredSession(snapshot: SessionSnapshot, memories: LearningMemory[]): ActiveSession {
@@ -92,6 +169,17 @@ export function useWorkbench(notify: Notify) {
   const [changedMemoryIds, setChangedMemoryIds] = useState<string[]>([]);
   const [deletingIds, setDeletingIds] = useState<string[]>([]);
   const [focusRequest, setFocusRequest] = useState<{ id: string; nonce: number } | null>(null);
+  const [drafts, setDrafts] = useState<Record<string, AnswerDraft>>({});
+  const [formNonce, setFormNonce] = useState(0);
+  const [pendingSessionProblemId, setPendingSessionProblemId] = useState<string | null>(null);
+  const [restoreError, setRestoreError] = useState<ApiError | null>(null);
+
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
+  const selectedProblemIdRef = useRef(selectedProblemId);
+  selectedProblemIdRef.current = selectedProblemId;
+  const cacheRef = useRef<Record<string, ActiveSession>>({});
+  const selectSeq = useRef(0);
 
   /* ---------- 加载 ---------- */
 
@@ -132,26 +220,53 @@ export function useWorkbench(notify: Notify) {
   }, [loadProblems, loadMemories, checkHealth]);
 
   useEffect(() => {
+    setDrafts((current) => ({ ...readDrafts(), ...current }));
+  }, []);
+
+  useEffect(() => {
+    if (session) cacheRef.current[session.problemId] = session;
+  }, [session]);
+
+  useEffect(() => {
     if (client.source !== "api" || !client.getSession) return;
-    const saved = readRememberedSession();
-    if (!saved) return;
+    const saved = readPointers();
+    if (!saved.active) return;
+    setSelectedProblemId(saved.active);
+    const sessionId = saved.byProblem[saved.active];
+    if (!sessionId) return;
+    const problemId = saved.active;
+    const seq = ++selectSeq.current;
     let cancelled = false;
     busy.current = true;
     setRestoring(true);
-    void Promise.all([client.getSession(saved.id), client.listMemories(studentId)])
+    setPendingSessionProblemId(problemId);
+    void Promise.all([client.getSession(sessionId), client.listMemories(studentId)])
       .then(([snapshot, data]) => {
-        if (cancelled) return;
+        if (cancelled || seq !== selectSeq.current) return;
+        const recovered = recoveredSession(snapshot, data);
+        cacheRef.current[snapshot.problemId] = recovered;
         setSelectedProblemId(snapshot.problemId);
-        setSession(recoveredSession(snapshot, data));
+        setSession(recovered);
         setMemories({ data, loading: false, error: null });
       })
       .catch((error: unknown) => {
-        if (cancelled) return;
+        if (cancelled || seq !== selectSeq.current) return;
         const failure = toApiError(error);
-        if (failure.kind === "not_found") rememberSession(null);
+        if (failure.kind === "not_found") {
+          forgetProblemSession(problemId);
+          setRestoreError(null);
+        } else {
+          setRestoreError(failure);
+        }
         notify({ tone: "error", title: "未能恢复上次会话", description: failure.message });
       })
-      .finally(() => { if (!cancelled) { busy.current = false; setRestoring(false); } });
+      .finally(() => {
+        if (!cancelled && seq === selectSeq.current) {
+          busy.current = false;
+          setRestoring(false);
+          setPendingSessionProblemId(null);
+        }
+      });
     return () => { cancelled = true; };
   }, [client, studentId, notify]);
 
@@ -166,24 +281,102 @@ export function useWorkbench(notify: Notify) {
 
   /* ---------- 题目与会话 ---------- */
 
-  const selectProblem = useCallback((problemId: string) => {
-    if (busy.current) return;
-    if (client.source === "api") rememberSession(null);
-    setSelectedProblemId(problemId);
+  const saveDraft = useCallback((problemId: string, answer: string, reasoning: string) => {
+    setDrafts((current) => {
+      const next = { ...current, [problemId]: { answer, reasoning } };
+      writeDrafts(next);
+      return next;
+    });
+  }, []);
+
+  const clearDraft = useCallback((problemId: string) => {
+    setDrafts((current) => {
+      const next = { ...current };
+      delete next[problemId];
+      writeDrafts(next);
+      return next;
+    });
+    setFormNonce((nonce) => nonce + 1);
+  }, []);
+
+  const restoreProblemSession = useCallback((problemId: string) => {
+    const seq = ++selectSeq.current;
+    const cached = cacheRef.current[problemId];
+    if (cached) {
+      setSession(cached);
+      setPendingSessionProblemId(null);
+      setRestoreError(null);
+      return;
+    }
+    const sessionId = client.source === "api" ? readPointers().byProblem[problemId] : undefined;
+    if (!sessionId || !client.getSession) {
+      setSession(null);
+      setPendingSessionProblemId(null);
+      setRestoreError(null);
+      return;
+    }
     setSession(null);
+    setRestoreError(null);
+    setPendingSessionProblemId(problemId);
+    void client.getSession(sessionId)
+      .then(async (snapshot) => {
+        if (seq !== selectSeq.current) return null;
+        const data = await client.listMemories(studentId);
+        if (seq !== selectSeq.current) return null;
+        const recovered = recoveredSession(snapshot, data);
+        cacheRef.current[problemId] = recovered;
+        setSession(recovered);
+        setMemories({ data, loading: false, error: null });
+        return recovered;
+      })
+      .catch((error: unknown) => {
+        if (seq !== selectSeq.current) return;
+        const failure = toApiError(error);
+        if (failure.kind === "not_found") {
+          forgetProblemSession(problemId);
+          setSession(null);
+          setRestoreError(null);
+        } else {
+          setRestoreError(failure);
+        }
+      })
+      .finally(() => {
+        if (seq === selectSeq.current) setPendingSessionProblemId(null);
+      });
+  }, [client, studentId]);
+
+  const selectProblem = useCallback((problemId: string) => {
+    if (problemId === selectedProblemIdRef.current) return;
+    if (busy.current) return;
+    const previousId = selectedProblemIdRef.current;
+    const previous = sessionRef.current;
+    if (previousId && previous && previous.problemId === previousId) cacheRef.current[previousId] = previous;
+    if (client.source === "api") activateProblem(problemId);
+    setChangedMemoryIds([]);
+    setSelectedProblemId(problemId);
     setSubmitError(null);
     setChatError(null);
     setLastSubmission(null);
-  }, [client.source]);
+    restoreProblemSession(problemId);
+  }, [client.source, restoreProblemSession]);
 
   const startNewSession = useCallback(() => {
     if (busy.current) return;
-    if (client.source === "api") rememberSession(null);
+    selectSeq.current += 1;
+    const problemId = selectedProblemIdRef.current;
+    if (problemId) {
+      delete cacheRef.current[problemId];
+      if (client.source === "api") forgetProblemSession(problemId);
+      clearDraft(problemId);
+    }
     setSession(null);
+    setPendingSessionProblemId(null);
+    setRestoreError(null);
     setSubmitError(null);
     setChatError(null);
     setLastSubmission(null);
-  }, [client.source]);
+    setChangedMemoryIds([]);
+  }, [clearDraft, client.source]);
 
   const submitAnswer = useCallback(
     async (input: AnswerSubmission) => {
@@ -205,7 +398,7 @@ export function useWorkbench(notify: Notify) {
           messages: [{ ...result.reply, memoryChanges: result.memoryChanges }],
           memoryChangeCount: result.memoryChanges.length,
         });
-        if (client.source === "api") rememberSession({ id: result.sessionId, problemId: input.problemId });
+        if (client.source === "api") rememberProblemSession(input.problemId, result.sessionId);
         applyMemoryChanges(result.memoryChanges);
       } catch (error) {
         setSubmitError(toApiError(error));
@@ -365,8 +558,16 @@ export function useWorkbench(notify: Notify) {
   /** 仅 Mock 模式：清空模拟的会话与记忆 */
   const resetDemo = useCallback(() => {
     resetMockDb();
+    cacheRef.current = {};
+    selectSeq.current += 1;
+    writePointers(null);
+    writeDrafts({});
+    setDrafts({});
+    setFormNonce((nonce) => nonce + 1);
     setSession(null);
     setSelectedProblemId(null);
+    setPendingSessionProblemId(null);
+    setRestoreError(null);
     setSubmitError(null);
     setChatError(null);
     setChangedMemoryIds([]);
@@ -380,6 +581,7 @@ export function useWorkbench(notify: Notify) {
     setWebSearch,
     studentId,
     health,
+    checkHealth,
     problems,
     memories,
     selectedProblemId,
@@ -393,6 +595,15 @@ export function useWorkbench(notify: Notify) {
     changedMemoryIds,
     deletingIds,
     focusRequest,
+    drafts,
+    formNonce,
+    saveDraft,
+    pendingSessionProblemId,
+    restoreError,
+    retryProblemSession: () => {
+      const problemId = selectedProblemIdRef.current;
+      if (problemId) restoreProblemSession(problemId);
+    },
     loadProblems,
     loadMemories,
     selectProblem,

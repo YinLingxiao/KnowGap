@@ -11,7 +11,6 @@ from app.models.schemas import DiagnosisRequest, Session, TeachingResponse
 from app.services.problems import PROBLEMS, reference_for
 from app.services.reference_guard import validate_initial_conclusion
 from app.services.materials import MaterialStore
-from app.agents.llm import ProviderError
 
 MAX_TURNS = 40
 

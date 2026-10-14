@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import Image from "next/image";
-import { SquarePen, Search, BookOpen } from "lucide-react";
+import { Settings, SquarePen, Search, BookOpen } from "lucide-react";
 import type { HealthState, Resource } from "@/hooks/useWorkbench";
 import type { DataSource } from "@/lib/config";
 import { cx } from "@/lib/cx";
@@ -28,6 +28,9 @@ interface SidebarProps {
   onWebSearchChange: (enabled: boolean) => void;
   onOpenMaterials: () => void;
   materialsActive: boolean;
+  onOpenSettings: () => void;
+  /** 最近一次诊断请求报告模型不可用 */
+  modelIssue: boolean;
   /** Mock 模式下的 Mock 控制台入口 */
   mockConsole?: ReactNode;
 }
@@ -50,6 +53,8 @@ export function Sidebar({
   disabled,
   canStartNew,
   onNewSession,
+  onOpenSettings,
+  modelIssue,
   mockConsole,
   onOpenWebSearch,
   webSearch,
@@ -65,14 +70,16 @@ export function Sidebar({
         <span className={styles.logo} aria-hidden>
           <Image src="/brand/knowgap-logo-v1.png" alt="" width={32} height={32} priority />
         </span>
-        <span className={styles.name}>知隙</span>
         <span className={styles.latin} lang="en">
           KnowGap
         </span>
         <ThemeToggle />
+        <button className={styles.iconButton} onClick={onOpenSettings} aria-label="设置" title="设置（,）">
+          <Settings size={15} aria-hidden />
+        </button>
       </div>
 
-      <button className={styles.newSession} onClick={onNewSession} disabled={!canStartNew} title="保留学习记忆，重新作答当前题目">
+      <button className={styles.newSession} onClick={onNewSession} disabled={!canStartNew} title="清空本题未提交的草稿，重新作答">
         <SquarePen size={15} aria-hidden />
         新会话
         <kbd className={styles.kbd}>N</kbd>
@@ -95,6 +102,11 @@ export function Sidebar({
             <span className={styles.healthDot} aria-hidden />
             {HEALTH_LABEL[health]}
           </span>
+        )}
+        {source === "api" && modelIssue && (
+          <button className={styles.modelIssue} onClick={onOpenSettings} title="打开设置中的模型接入">
+            模型未接入
+          </button>
         )}
       </div>
 

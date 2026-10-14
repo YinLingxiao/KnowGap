@@ -1,7 +1,7 @@
-/* 桌面应用式外壳：侧栏 | 主区域 | 学习记忆，各自滚动 */
+/* 桌面：侧栏 | 主区域。记忆按需从右侧打开 */
 .app {
   display: grid;
-  grid-template-columns: var(--sidebar-w) minmax(0, 1fr) var(--panel-w);
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
   height: 100vh;
   overflow: hidden;
   background: var(--bg-sidebar);
@@ -17,25 +17,37 @@
 .learningView[hidden] { display: none; }
 
 /* 主区域略微内嵌，像一块独立的工作面板 */
+.backdrop {
+  position: fixed;
+  z-index: 30;
+  inset: 0;
+  border: 0;
+  background: rgb(0 0 0 / 28%);
+}
+
 .main {
   display: flex;
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  margin: 8px 0 8px;
+  margin: 8px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg) 0 0 var(--radius-lg);
-  border-right: none;
+  border-radius: var(--radius-lg);
   background: var(--bg);
   overflow: hidden;
 }
 
 .panel {
-  min-height: 0;
-  margin: 8px 8px 8px 0;
+  position: fixed;
+  z-index: 40;
+  top: 8px;
+  right: 8px;
+  bottom: 8px;
+  width: min(380px, calc(100vw - 16px));
   border: 1px solid var(--border);
-  border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
+  border-radius: var(--radius-lg);
   background: var(--bg);
+  box-shadow: var(--shadow-popover);
   overflow-y: auto;
 }
 
@@ -43,11 +55,55 @@
   display: flex;
   flex-shrink: 0;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
   height: var(--topbar-h);
-  padding: 0 20px;
+  padding: 0 16px 0 20px;
   border-bottom: 1px solid var(--border);
+}
+
+.menuButton,
+.memoryToggle {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+  color: var(--text);
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+.menuButton {
+  display: none;
+}
+
+.memoryToggleOpen {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.badge {
+  min-width: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--accent-solid);
+  color: var(--on-accent);
+  font-size: 10.5px;
+  line-height: 16px;
+  text-align: center;
+}
+
+.topActions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
 }
 
 .breadcrumb {
@@ -90,7 +146,7 @@
 .content {
   max-width: 760px;
   margin: 0 auto;
-  padding: 28px 32px 40px;
+  padding: 20px 32px 24px;
 }
 
 .sessionTop {
@@ -119,11 +175,37 @@
   padding: 12px 32px 14px;
 }
 
-/* 中等宽度：三栏都保留，只收窄侧栏和记忆栏 */
+.stageBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin-bottom: 10px;
+}
+
+.stageStatus {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.stageStatus span:first-child {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.stageActions {
+  display: flex;
+  gap: 8px;
+}
+
+/* 中等宽度仍是两栏，不留空记忆栏 */
 @media (max-width: 1240px) {
   .app {
     --sidebar-w: 212px;
-    --panel-w: 288px;
   }
 
   .content,
@@ -136,36 +218,45 @@
 @media (max-width: 900px) {
   .app {
     display: block;
-    height: auto;
-    overflow: visible;
+    height: 100vh;
+    overflow: hidden;
   }
 
   .sidebar {
-    overflow: visible;
-    border-bottom: 1px solid var(--border);
+    display: none;
+  }
+
+  .sidebarOpen {
+    display: block;
+    position: fixed;
+    z-index: 40;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: min(300px, 88vw);
+    box-shadow: var(--shadow-popover);
+  }
+
+  .menuButton {
+    display: inline-flex;
   }
 
   .main {
+    height: 100%;
     margin: 0;
     border: none;
     border-radius: 0;
-    overflow: visible;
   }
 
   .topbar {
     position: sticky;
     top: 0;
     z-index: 20;
-    background: var(--bg);
-    padding: 0 16px;
-  }
-
-  .scroll {
-    overflow: visible;
+    padding: 0 12px;
   }
 
   .content {
-    padding: 20px 16px 24px;
+    padding: 16px 16px 20px;
   }
 
   .composerDock {
@@ -176,14 +267,5 @@
 
   .composerInner {
     padding: 10px 16px 12px;
-  }
-
-  .panel {
-    display: block;
-    margin: 0;
-    border: none;
-    border-top: 1px solid var(--border);
-    border-radius: 0;
-    overflow: visible;
   }
 }
