@@ -1,0 +1,130 @@
+{
+  "topic_key": "stack.lifo",
+  "student_id": "demo-student-001",
+  "oracle": "2026-10-14 手工推演。入栈顺序固定，入栈与出栈可交替；某次要弹出的数不是当时栈顶则不可能。",
+  "problems": [
+    {
+      "id": "stack-sequence-001",
+      "input_sequence": [1, 2, 3],
+      "output_sequence": [3, 1, 2],
+      "possible": false,
+      "trace": [
+        "push 1: [1]",
+        "push 2: [1, 2]",
+        "push 3: [1, 2, 3]",
+        "pop 3: [1, 2]",
+        "blocked: want 1, top is 2"
+      ],
+      "explanation": "要先弹出 3，必须先压入 1、2、3。弹出 3 后栈为 [1, 2]，栈顶是 2。下一个目标是 1，1 不在栈顶，不能得到该序列。",
+      "answers": {
+        "incorrect": {
+          "text": "我认为该序列合法，因为所有元素都能依次出栈。",
+          "rubric": "incorrect",
+          "issue": "把元素集合相同当成了出栈合法，没有检查弹出 3 之后的栈顶。",
+          "evidence": "我认为该序列合法，因为所有元素都能依次出栈。"
+        },
+        "correct": {
+          "text": "不合法。要弹出3，必须先依次压入1、2、3。弹出3后栈内是[1, 2]，栈顶是2，下一个目标是1，1不在栈顶。",
+          "rubric": "correct",
+          "evidence": "弹出3后栈内是[1, 2]，栈顶是2"
+        },
+        "insufficient": {
+          "text": "不合法。",
+          "rubric": "uncertain",
+          "evidence": "不合法。"
+        }
+      },
+      "guided_turns": [
+        {
+          "student": "弹出3之后，栈顶应该是1，所以接下来可以直接弹出1。",
+          "rubric": "incorrect",
+          "issue": "把弹出3之后的栈顶误认为1，实际栈顶是2。",
+          "evidence": "栈顶应该是1",
+          "tutor_should_ask": "弹出 3 之前，1 和 2 在栈里的上下位置是什么？"
+        },
+        {
+          "student": "我再想一下，弹出3后栈里还有1和2，栈顶是2。",
+          "rubric": "correct",
+          "evidence": "栈顶是2",
+          "tutor_should_ask": "栈顶是 2 时，下一个目标 1 能直接弹出吗？"
+        },
+        {
+          "student": "不能直接弹出1，必须先弹出2，所以这个序列不合法。",
+          "rubric": "correct",
+          "evidence": "不能直接弹出1，必须先弹出2",
+          "tutor_should_ask": "请用同样的栈顶检查，判断下一个同类序列，不要只重复这句结论。"
+        }
+      ]
+    },
+    {
+      "id": "stack-sequence-002",
+      "input_sequence": [1, 2, 3, 4],
+      "output_sequence": [2, 4, 1, 3],
+      "possible": false,
+      "trace": [
+        "push 1: [1]",
+        "push 2: [1, 2]",
+        "pop 2: [1]",
+        "push 3: [1, 3]",
+        "push 4: [1, 3, 4]",
+        "pop 4: [1, 3]",
+        "blocked: want 1, top is 3"
+      ],
+      "explanation": "弹出 2 后栈为 [1]。为了弹出 4，还要压入 3、4。弹出 4 后栈顶是 3，下一个目标是 1，1 被 3 压住。",
+      "answers": {
+        "incorrect": {
+          "text": "合法。先入栈1和2并弹出2，再把剩下的都入栈后可以按4、1、3弹出。",
+          "rubric": "incorrect",
+          "issue": "承认了弹出 2 的前半段，但默认之后可以按目标顺序随意弹出，忽略了弹出 4 后栈顶是 3。",
+          "evidence": "再把剩下的都入栈后可以按4、1、3弹出。"
+        },
+        "correct": {
+          "text": "不合法。弹出2后栈内只剩[1]。为了弹出4，还要压入3和4。弹出4后栈顶是3，下一个目标1不能弹出。",
+          "rubric": "correct",
+          "evidence": "弹出4后栈顶是3"
+        },
+        "insufficient": {
+          "text": "应该不行吧，我说不太清。",
+          "rubric": "uncertain",
+          "evidence": "我说不太清。"
+        }
+      },
+      "second_session_prompt": "若已有“弹出后未核对栈顶”的记忆，第一次追问应先问：弹出 4 之后栈顶是哪一个数？不应直接重复上一题的完整结论。"
+    },
+    {
+      "id": "stack-sequence-003",
+      "input_sequence": [1, 2, 3, 4],
+      "output_sequence": [2, 1, 4, 3],
+      "possible": true,
+      "trace": [
+        "push 1: [1]",
+        "push 2: [1, 2]",
+        "pop 2: [1]",
+        "pop 1: []",
+        "push 3: [3]",
+        "push 4: [3, 4]",
+        "pop 4: [3]",
+        "pop 3: []"
+      ],
+      "explanation": "压入 1、压入 2、弹出 2、弹出 1、压入 3、压入 4、弹出 4、弹出 3。每次弹出的都是当时栈顶。",
+      "answers": {
+        "incorrect": {
+          "text": "不合法。4比3先出来，但3必须比4更早入栈，所以4不可能先出栈。",
+          "rubric": "incorrect",
+          "issue": "把入栈先后误解成出栈必须保持同一顺序，没有允许入栈和出栈交替。",
+          "evidence": "所以4不可能先出栈。"
+        },
+        "correct": {
+          "text": "合法。过程是：压入1，压入2，弹出2，弹出1，压入3，压入4，弹出4，弹出3。每次弹出的都是当时的栈顶。",
+          "rubric": "correct",
+          "evidence": "每次弹出的都是当时的栈顶。"
+        },
+        "insufficient": {
+          "text": "合法。",
+          "rubric": "uncertain",
+          "evidence": "合法。"
+        }
+      }
+    }
+  ]
+}
