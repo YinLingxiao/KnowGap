@@ -24,6 +24,26 @@ class MessageRequest(StrictModel):
     content: TextInput
 
 
+class Material(BaseModel):
+    id: str
+    title: str
+    kind: Literal['pdf', 'txt', 'md']
+    page_count: int
+    chunk_count: int
+    created_at: str
+
+
+class SourceReference(BaseModel):
+    id: str
+    document_id: str
+    title: str
+    label: str
+    page: int | None = None
+    start_line: int | None = None
+    end_line: int | None = None
+    excerpt: str
+
+
 class Problem(BaseModel):
     id: str
     title: str
@@ -39,6 +59,7 @@ class TutorOutput(StrictModel):
     confidence: float = Field(ge=0, le=1, allow_inf_nan=False)
     evidence: ShortText
     reply: ShortText
+    citation_ids: list[str] = Field(default_factory=list, max_length=3)
 
     @model_validator(mode="after")
     def consistent_issue(self):
@@ -92,6 +113,7 @@ class TeachingResponse(BaseModel):
     reply: str
     used_memory_ids: list[str]
     memory_changes: list[MemoryChange]
+    sources: list[SourceReference] = Field(default_factory=list)
 
 
 class SessionMessage(BaseModel):
@@ -101,6 +123,7 @@ class SessionMessage(BaseModel):
     created_at: str
     diagnosis: Diagnosis | None = None
     used_memory_ids: list[str] = []
+    sources: list[SourceReference] = Field(default_factory=list)
 
 
 class Session(BaseModel):

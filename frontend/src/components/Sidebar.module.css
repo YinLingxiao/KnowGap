@@ -302,3 +302,8 @@
     display: none;
   }
 }
+
+.materials { display: flex; align-items: center; gap: 8px; margin: 0 12px 12px; padding: 9px 12px; border: 0; border-radius: var(--radius); background: transparent; color: var(--text-secondary); font: inherit; font-size: var(--text-md); text-align: left; cursor: pointer; }
+.materials:hover { background: var(--bg-hover); }
+.materials.active { background: var(--bg-active); color: var(--text); }
+.materials:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

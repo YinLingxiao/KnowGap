@@ -56,6 +56,17 @@ export interface ChatMessage {
   phase?: TutorPhase;
   /** 学生消息：后端对这条回答的诊断（每轮评价当前回答） */
   diagnosis?: Diagnosis;
+  sources?: SourceReference[];
+}
+
+export interface CourseMaterial {
+  id: string; title: string; kind: "pdf" | "txt" | "md";
+  pageCount: number; chunkCount: number; createdAt: string;
+}
+
+export interface SourceReference {
+  id: string; documentId: string; title: string; label: string;
+  page?: number | null; startLine?: number | null; endLine?: number | null; excerpt: string;
 }
 
 export interface MemoryChange {

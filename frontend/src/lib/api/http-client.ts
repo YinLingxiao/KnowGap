@@ -3,7 +3,7 @@ import { ApiError, type ApiErrorKind } from "./errors";
 import { DEMO_STUDENT_ID, REQUEST_TIMEOUT_MS } from "../config";
 import type {
   AnswerSubmission, ChatMessage, Diagnosis, KnowGapClient, LearningMemory,
-  MemoryChange, MemoryStatus, SessionSnapshot,
+  MemoryChange, MemoryStatus, SessionSnapshot, SourceReference,
 } from "../types";
 
 interface WireDiagnosis {
@@ -35,6 +35,7 @@ interface WireTurn {
   reply: string;
   used_memory_ids: string[];
   memory_changes: Array<{ action: "created" | "updated"; memory: WireMemory }>;
+  sources?: WireSource[];
 }
 interface WireSession {
   id: string;
@@ -45,10 +46,20 @@ interface WireSession {
   messages: Array<{
     id: string; role: "user" | "assistant"; content: string; created_at: string;
     diagnosis: WireDiagnosis | null; used_memory_ids: string[];
+    sources?: WireSource[];
   }>;
 }
 
 const REASONING_SEPARATOR = "\n\n解题思路：\n";
+
+export interface WireSource {
+  id: string; document_id: string; title: string; label: string;
+  page: number | null; start_line: number | null; end_line: number | null; excerpt: string;
+}
+export function mapSource(source: WireSource): SourceReference {
+  return { id: source.id, documentId: source.document_id, title: source.title, label: source.label,
+    page: source.page, startLine: source.start_line, endLine: source.end_line, excerpt: source.excerpt };
+}
 
 function mapDiagnosis(data: WireDiagnosis): Diagnosis {
   return { topicKey: data.topic_key, assessment: data.assessment, issue: data.issue,
@@ -71,6 +82,7 @@ function mapTurn(data: WireTurn) {
   const reply: ChatMessage = {
     id: `${data.session_id}-tutor-${data.turn}`, role: "tutor", content: data.reply,
     createdAt: new Date().toISOString(),
+    sources: data.sources?.map(mapSource) ?? [],
     // The API does not report a hint/answer phase. Do not invent one.
   };
   const memoryChanges: MemoryChange[] = data.memory_changes.map(({ action, memory }) => ({
@@ -98,6 +110,7 @@ function mapSession(data: WireSession): SessionSnapshot {
       id: message.id, role: message.role === "user" ? "student" : "tutor",
       content: message.content, createdAt: message.created_at,
       diagnosis: message.role === "user" && message.diagnosis ? mapDiagnosis(message.diagnosis) : undefined,
+      sources: message.sources?.map(mapSource) ?? [],
     })),
   };
 }
@@ -153,7 +166,7 @@ export async function request<T = unknown>(
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(`${baseUrl}${path}`, {
-      ...init, headers: { Accept: "application/json", ...(init.body ? { "Content-Type": "application/json" } : {}), ...headers },
+      ...init, headers: { Accept: "application/json", ...(init.body && !(init.body instanceof FormData) ? { "Content-Type": "application/json" } : {}), ...headers },
       signal: controller.signal,
     });
     if (!response.ok) {
@@ -189,7 +202,7 @@ async function readDetail(response: Response): Promise<string | null> {
 function statusToKind(status: number): ApiErrorKind {
   if (status === 409) return "conflict";
   if (status === 404) return "not_found";
-  if (status === 400 || status === 422) return "validation";
+  if (status === 400 || status === 413 || status === 415 || status === 422) return "validation";
   if (status === 408 || status === 504) return "timeout";
   if (status === 502 || status === 503) return "model_unavailable";
   if (status >= 500) return "server";

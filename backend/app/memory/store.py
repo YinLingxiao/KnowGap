@@ -8,7 +8,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from app.models.schemas import (
-    Diagnosis, Evidence, Memory, MemoryChange, Session, SessionMessage, TeachingResponse, TutorOutput,
+    Diagnosis, Evidence, Memory, MemoryChange, Session, SessionMessage, TeachingResponse, TutorOutput, SourceReference,
 )
 
 
@@ -57,6 +57,10 @@ class Store:
                     diagnosis_json TEXT, used_memory_ids_json TEXT NOT NULL DEFAULT '[]'
                 );
                 CREATE INDEX IF NOT EXISTS messages_session ON messages(session_id);
+                CREATE TABLE IF NOT EXISTS message_sources (
+                    message_id TEXT PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
+                    sources_json TEXT NOT NULL
+                );
                 CREATE TABLE IF NOT EXISTS learning_memories (
                     id TEXT PRIMARY KEY, student_id TEXT NOT NULL,
                     topic_key TEXT NOT NULL, issue_key TEXT NOT NULL,
@@ -114,12 +118,14 @@ class Store:
             if row is None:
                 return None
             messages = db.execute(
-                "SELECT * FROM messages WHERE session_id = ? ORDER BY rowid", (session_id,)
+                "SELECT m.*, COALESCE(s.sources_json, '[]') AS sources_json FROM messages m "
+                "LEFT JOIN message_sources s ON s.message_id = m.id WHERE m.session_id = ? ORDER BY m.rowid", (session_id,)
             ).fetchall()
             return Session(**dict(row), messages=[SessionMessage(
                 id=m["id"], role=m["role"], content=m["content"], created_at=m["created_at"],
                 diagnosis=Diagnosis.model_validate_json(m["diagnosis_json"]) if m["diagnosis_json"] else None,
                 used_memory_ids=json.loads(m["used_memory_ids_json"]),
+                sources=[SourceReference.model_validate(source) for source in json.loads(m["sources_json"])],
             ) for m in messages])
 
     def _update_memory(
@@ -165,15 +171,20 @@ class Store:
     def save_turn(
         self, *, student_id: str, problem_id: str, topic_key: str, answer: str,
         result: TutorOutput, used_memory_ids: list[str], session: Session | None,
+        sources: list[SourceReference] | None = None,
     ) -> TeachingResponse:
         session_id = session.id if session else new_id("session")
         timestamp = now()
         phase = "tutoring" if session else "initial"
-        diagnosis = Diagnosis(topic_key=topic_key, **result.model_dump(exclude={"reply"}))
+        sources = sources or []
+        diagnosis = Diagnosis(topic_key=topic_key, **result.model_dump(exclude={"reply", "citation_ids"}))
         turn = (session.turn if session else 0) + 1
         with self.connection() as db:
             # Never hold a database lock across a model HTTP request.
             db.execute("BEGIN IMMEDIATE")
+            for source in sources:
+                if db.execute('SELECT id FROM course_chunks WHERE id = ?', (source.id,)).fetchone() is None:
+                    raise StateConflict('生成期间引用资料已删除，请重新提交作答。')
             for memory_id in used_memory_ids:
                 if db.execute(
                     "SELECT id FROM learning_memories WHERE id = ? AND student_id = ?", (memory_id, student_id)
@@ -192,11 +203,15 @@ class Store:
             user_id = new_id("message")
             db.execute("INSERT INTO messages VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                        (user_id, session_id, "user", answer, timestamp, phase, diagnosis.model_dump_json(), "[]"))
+            assistant_id = new_id('message')
             db.execute("INSERT INTO messages VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                       (new_id("message"), session_id, "assistant", result.reply, now(), phase,
+                       (assistant_id, session_id, "assistant", result.reply, now(), phase,
                         None, json.dumps(used_memory_ids)))
+            if sources:
+                db.execute('INSERT INTO message_sources VALUES (?, ?)',
+                           (assistant_id, json.dumps([source.model_dump() for source in sources], ensure_ascii=False)))
             changes = self._update_memory(db, student_id, topic_key, user_id, result, timestamp)
         return TeachingResponse(
             session_id=session_id, turn=turn, diagnosis=diagnosis, reply=result.reply,
-            used_memory_ids=used_memory_ids, memory_changes=changes,
+            used_memory_ids=used_memory_ids, memory_changes=changes, sources=sources,
         )

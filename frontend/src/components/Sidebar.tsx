@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import Image from "next/image";
-import { SquarePen } from "lucide-react";
+import { SquarePen, BookOpen } from "lucide-react";
 import type { HealthState, Resource } from "@/hooks/useWorkbench";
 import type { DataSource } from "@/lib/config";
 import { cx } from "@/lib/cx";
@@ -23,6 +23,8 @@ interface SidebarProps {
   disabled: boolean;
   canStartNew: boolean;
   onNewSession: () => void;
+  onOpenMaterials: () => void;
+  materialsActive: boolean;
   /** Mock 模式下的 Mock 控制台入口 */
   mockConsole?: ReactNode;
 }
@@ -46,6 +48,8 @@ export function Sidebar({
   canStartNew,
   onNewSession,
   mockConsole,
+  onOpenMaterials,
+  materialsActive,
 }: SidebarProps) {
   const { data, loading, error } = problems;
 
@@ -66,6 +70,10 @@ export function Sidebar({
         <SquarePen size={15} aria-hidden />
         新会话
         <kbd className={styles.kbd}>N</kbd>
+      </button>
+
+      <button className={cx(styles.materials, materialsActive && styles.active)} onClick={onOpenMaterials} aria-current={materialsActive ? 'page' : undefined}>
+        <BookOpen size={15} aria-hidden />课程资料
       </button>
 
       <div className={styles.source}>
@@ -103,7 +111,7 @@ export function Sidebar({
         ) : (
           <ul className={styles.list}>
             {data.map((problem) => {
-              const selected = problem.id === selectedId;
+              const selected = problem.id === selectedId && !materialsActive;
               const related = memoryCountByTopic[problem.topicKey] ?? 0;
               const Icon = topicIcon(problem.topicKey);
               const topic = topicLabel(problem.topicKey, problem.topicLabel);

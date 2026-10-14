@@ -10,6 +10,7 @@ import { DiagnosisNote, verdictOf, type Verdict } from "./DiagnosisNote";
 import { RichText } from "./ui/RichText";
 import { StatusBadge } from "./ui/StatusBadge";
 import styles from "./ChatThread.module.css";
+import { SourceReferences } from "./SourceReferences";
 
 interface ChatThreadProps {
   submission: { answer: string; reasoning: string };
@@ -88,6 +89,7 @@ export function ChatThread({ submission, submissionDiagnosis, messages, sending,
                 <p className={styles.tutorText}>
                   <RichText text={message.content} />
                 </p>
+                <SourceReferences sources={message.sources ?? []} />
                 {message.memoryChanges?.map((change) => (
                   <MemoryChangeNote key={`${change.memoryId}-${change.action}-${change.toStatus}`} change={change} />
                 ))}
