@@ -1,0 +1,63 @@
+.badge {
+  --tone: var(--text-muted);
+  --tone-soft: var(--surface-sunken);
+  --tone-line: var(--line);
+  --tone-text: var(--text-secondary);
+
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 9px 0 8px;
+  border: 1px solid var(--tone-line);
+  border-radius: 999px;
+  background: var(--tone-soft);
+  color: var(--tone-text);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.sm {
+  height: 20px;
+  padding: 0 7px 0 6px;
+  gap: 5px;
+  font-size: 11px;
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--tone);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--tone) 22%, transparent);
+}
+
+.suspected {
+  --tone: var(--st-suspected);
+  --tone-soft: var(--st-suspected-soft);
+  --tone-line: var(--st-suspected-line);
+  --tone-text: var(--st-suspected-text);
+}
+
+.review {
+  --tone: var(--st-review);
+  --tone-soft: var(--st-review-soft);
+  --tone-line: var(--st-review-line);
+  --tone-text: var(--st-review-text);
+}
+
+.improving {
+  --tone: var(--st-improving);
+  --tone-soft: var(--st-improving-soft);
+  --tone-line: var(--st-improving-line);
+  --tone-text: var(--st-improving-text);
+}
+
+.resolved {
+  --tone: var(--st-resolved);
+  --tone-soft: var(--st-resolved-soft);
+  --tone-line: var(--st-resolved-line);
+  --tone-text: var(--st-resolved-text);
+}

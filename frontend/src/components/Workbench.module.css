@@ -1,0 +1,77 @@
+.app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.main {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr) 340px;
+  align-items: start;
+  gap: 20px;
+  width: 100%;
+  max-width: 1480px;
+  margin: 0 auto;
+  padding: 20px 24px 96px;
+}
+
+.left,
+.right {
+  position: sticky;
+  top: calc(var(--header-h) + 20px);
+  max-height: calc(100vh - var(--header-h) - 40px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+.center {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+  scroll-margin-top: calc(var(--header-h) + 16px);
+}
+
+/* 吸底输入框会遮住页面底部，错误提示滚动到可见区域时预留它的高度 */
+.chatError {
+  scroll-margin-bottom: 190px;
+}
+
+.composerDock {
+  position: sticky;
+  bottom: 16px;
+  z-index: 10;
+}
+
+@media (max-width: 1240px) {
+  .main {
+    grid-template-columns: 260px minmax(0, 1fr);
+  }
+
+  .right {
+    position: static;
+    grid-column: 1 / -1;
+    max-height: none;
+    overflow: visible;
+  }
+}
+
+@media (max-width: 900px) {
+  .main {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+    padding: 16px 16px 96px;
+  }
+
+  .left {
+    position: static;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .center {
+    scroll-margin-top: 16px;
+  }
+}

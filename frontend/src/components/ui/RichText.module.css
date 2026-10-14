@@ -1,0 +1,13 @@
+.code {
+  display: inline-block;
+  margin: 0 1px;
+  padding: 0 6px;
+  border: 1px solid var(--primary-line);
+  border-radius: 6px;
+  background: var(--primary-soft);
+  color: var(--primary-text);
+  font-size: 0.88em;
+  font-weight: 500;
+  line-height: 1.6;
+  white-space: nowrap;
+}

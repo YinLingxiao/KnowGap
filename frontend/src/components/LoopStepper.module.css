@@ -1,0 +1,88 @@
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-muted);
+}
+
+.step {
+  display: flex;
+  align-items: center;
+}
+
+.index {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  transition: all 0.25s var(--ease);
+}
+
+.label {
+  margin: 0 10px 0 6px;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: color 0.25s var(--ease);
+}
+
+.connector {
+  width: 18px;
+  height: 2px;
+  margin-right: 10px;
+  border-radius: 2px;
+  background: var(--line-strong);
+}
+
+.done .index {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--on-primary);
+}
+
+.done .label {
+  color: var(--text-secondary);
+}
+
+.done .connector {
+  background: var(--primary-line);
+}
+
+.active .index {
+  border-color: var(--primary);
+  color: var(--primary-text);
+  box-shadow: 0 0 0 4px var(--primary-soft);
+  animation: pulse 2.2s var(--ease) infinite;
+}
+
+.active .label {
+  color: var(--text);
+}
+
+@keyframes pulse {
+  50% {
+    box-shadow: 0 0 0 6px var(--primary-soft);
+  }
+}
+
+@media (max-width: 520px) {
+  .label {
+    margin: 0 6px 0 4px;
+    font-size: 12px;
+  }
+
+  .connector {
+    width: 8px;
+    margin-right: 6px;
+  }
+}

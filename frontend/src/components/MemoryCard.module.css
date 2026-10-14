@@ -1,0 +1,276 @@
+.card {
+  --tone: var(--line-strong);
+  position: relative;
+  padding: 12px 14px 10px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  transition:
+    border-color 0.2s var(--ease),
+    box-shadow 0.2s var(--ease);
+  animation: enter 0.3s var(--ease);
+}
+
+.card::before {
+  content: "";
+  position: absolute;
+  top: 10px;
+  bottom: 10px;
+  left: 0;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--tone);
+}
+
+.suspected {
+  --tone: var(--st-suspected);
+}
+
+.review {
+  --tone: var(--st-review);
+}
+
+.improving {
+  --tone: var(--st-improving);
+}
+
+.resolved {
+  --tone: var(--st-resolved);
+}
+
+.used {
+  border-color: var(--accent-line);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.flash {
+  animation: flash 1.6s var(--ease);
+}
+
+.top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.usedTag,
+.changedTag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.usedTag {
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.changedTag {
+  background: var(--primary-soft);
+  color: var(--primary-text);
+}
+
+.time {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: auto;
+  color: var(--text-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.topic {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.issueKey {
+  padding: 0 5px;
+  border-radius: 4px;
+  background: var(--surface-sunken);
+  font-size: 10.5px;
+}
+
+.summary {
+  margin-top: 4px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.55;
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.metaItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--line);
+}
+
+.linkButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 4px 2px 0;
+  color: var(--primary-text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.linkButton:hover {
+  text-decoration: underline;
+}
+
+.chevron {
+  transition: transform 0.2s var(--ease);
+}
+
+.chevronOpen {
+  transform: rotate(180deg);
+}
+
+.deleteButton {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-xs);
+  color: var(--text-muted);
+  transition:
+    background-color 0.15s var(--ease),
+    color 0.15s var(--ease);
+}
+
+.deleteButton:hover {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.refs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+  animation: enter 0.2s var(--ease);
+}
+
+.ref {
+  display: flex;
+  gap: 8px;
+}
+
+.refIndex {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  border-radius: 50%;
+  background: var(--surface-sunken);
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.refBody {
+  min-width: 0;
+}
+
+.refLabel {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.refExcerpt {
+  margin-top: 3px;
+  padding: 4px 8px;
+  border-left: 2px solid var(--line-strong);
+  background: var(--surface-muted);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.55;
+  word-break: break-word;
+}
+
+.refMeta {
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+}
+
+.refEmpty {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--danger-line);
+  border-radius: var(--radius-sm);
+  background: var(--danger-soft);
+  color: var(--danger-text);
+  font-size: 12.5px;
+  font-weight: 550;
+  animation: enter 0.2s var(--ease);
+}
+
+.confirmActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+@keyframes enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes flash {
+  0%,
+  100% {
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+  25%,
+  65% {
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 40%, transparent);
+  }
+}
