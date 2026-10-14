@@ -1,0 +1,20 @@
+.meter {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+  cursor: help;
+}
+
+.label {
+  text-decoration: underline dotted var(--border-strong);
+  text-underline-offset: 3px;
+}
+
+.value {
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}

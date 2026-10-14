@@ -1,0 +1,11 @@
+.code {
+  padding: 1px 5px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  font-variant-ligatures: none;
+  white-space: nowrap;
+}

@@ -3,3 +3,4 @@ uvicorn[standard]
 pydantic
 pydantic-settings
 python-dotenv
+httpx[socks]>=0.28,<1

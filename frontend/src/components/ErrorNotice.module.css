@@ -1,0 +1,87 @@
+/* 错误：原因 + 下一步。图标、文字、边框一起表达，不单靠颜色 */
+.notice {
+  --tone: var(--red);
+  position: relative;
+  display: flex;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--red) 35%, var(--border));
+  border-radius: var(--radius-lg);
+  background: var(--red-soft);
+  animation: enter 200ms var(--ease);
+}
+
+/* 接口未接入不是故障，用中性提示 */
+.neutral {
+  --tone: var(--orange);
+  border-color: var(--border-strong);
+  background: var(--bg-subtle);
+}
+
+.compact {
+  padding: 8px 10px;
+}
+
+.icon {
+  flex-shrink: 0;
+  padding-top: 1px;
+  color: var(--tone);
+}
+
+.body {
+  flex: 1;
+  min-width: 0;
+  padding-right: 20px;
+}
+
+.title {
+  color: var(--tone);
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.hint {
+  margin-top: 2px;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  line-height: 1.55;
+}
+
+.detail {
+  margin-top: 4px;
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  word-break: break-word;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+}
+
+.close:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+@keyframes enter {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+}

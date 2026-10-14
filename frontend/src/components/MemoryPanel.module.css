@@ -1,0 +1,164 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  height: var(--topbar-h);
+  padding: 0 12px 0 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.count {
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-active);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  line-height: 18px;
+  text-align: center;
+}
+
+.refresh {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius);
+  color: var(--text-tertiary);
+  transition:
+    background-color var(--duration-fast) var(--ease),
+    color var(--duration-fast) var(--ease);
+}
+
+.refresh:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.spinning {
+  animation: spin 0.8s linear infinite;
+}
+
+.sub {
+  padding: 12px 16px 0;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  line-height: 1.55;
+}
+
+.legend {
+  padding: 6px 16px 4px;
+  font-size: var(--text-xs);
+}
+
+.legend summary {
+  width: fit-content;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.legend summary:hover {
+  color: var(--text);
+}
+
+.legend ul {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 8px;
+}
+
+.legend li {
+  display: grid;
+  grid-template-columns: 76px 1fr;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-tertiary);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px;
+}
+
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 8px;
+}
+
+.skeleton span {
+  height: 10px;
+  border-radius: 3px;
+  background: var(--bg-hover);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+.skeleton span:nth-child(1) {
+  width: 85%;
+  height: 12px;
+}
+
+.skeleton span:nth-child(2) {
+  width: 60%;
+}
+
+.skeleton span:nth-child(3) {
+  display: none;
+}
+
+.empty {
+  margin: 12px 16px;
+  padding: 16px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  text-align: center;
+}
+
+.emptyTitle {
+  margin-bottom: 4px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.panel > [role="alert"] {
+  margin: 8px 12px 0;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.5;
+  }
+}

@@ -1,0 +1,237 @@
+.record {
+  padding: 8px 8px 10px;
+  border-radius: var(--radius-lg);
+  transition: background-color var(--duration) var(--ease);
+  animation: enter 220ms var(--ease);
+}
+
+.record:hover {
+  background: var(--bg-hover);
+}
+
+/* 本轮参考的记忆：浅强调底色 */
+.used,
+.used:hover {
+  background: var(--accent-soft);
+}
+
+.flash {
+  animation: flash 1.4s var(--ease);
+}
+
+.row {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.rowButton {
+  display: flex;
+  flex: 1;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  text-align: left;
+}
+
+.status {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  height: 20px;
+}
+
+.summary {
+  flex: 1;
+  min-width: 0;
+  color: var(--text);
+  font-size: var(--text-md);
+  font-weight: 500;
+  line-height: 20px;
+}
+
+.chevron {
+  flex-shrink: 0;
+  margin-top: 4px;
+  color: var(--text-tertiary);
+  transition: transform var(--duration) var(--ease);
+}
+
+.open .chevron {
+  transform: rotate(90deg);
+}
+
+/* 删除按钮：桌面悬停时出现，触屏一直显示 */
+.delete {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+  opacity: 0;
+  transition:
+    opacity var(--duration-fast) var(--ease),
+    background-color var(--duration-fast) var(--ease),
+    color var(--duration-fast) var(--ease);
+}
+
+.record:hover .delete,
+.delete:focus-visible {
+  opacity: 1;
+}
+
+.delete:hover {
+  background: var(--red-soft);
+  color: var(--red);
+}
+
+@media (hover: none) {
+  .delete {
+    opacity: 1;
+  }
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  margin: 3px 0 0 22px;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.statusLabel {
+  color: var(--text-secondary);
+}
+
+.time {
+  margin-left: auto;
+}
+
+.tags {
+  display: flex;
+  gap: 6px;
+  margin: 6px 0 0 22px;
+}
+
+.usedTag,
+.changedTag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: var(--radius-sm);
+  font-size: 10.5px;
+  font-weight: 500;
+}
+
+.usedTag {
+  background: var(--accent-soft-strong);
+  color: var(--accent-text);
+}
+
+.changedTag {
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+
+.refs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0 0 22px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  animation: reveal 200ms var(--ease);
+}
+
+.refLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  font-weight: 500;
+}
+
+.refIndex {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--bg-active);
+  color: var(--text-secondary);
+  font-size: 10px;
+}
+
+.refExcerpt {
+  margin: 4px 0 0 22px;
+  padding-left: 8px;
+  border-left: 2px solid var(--border-strong);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  line-height: 1.6;
+  word-break: break-word;
+}
+
+.refMeta {
+  margin: 2px 0 0 22px;
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+}
+
+.refEmpty {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin: 8px 0 0 22px;
+  padding: 6px 6px 6px 10px;
+  border: 1px solid color-mix(in srgb, var(--red) 35%, var(--border));
+  border-radius: var(--radius);
+  background: var(--red-soft);
+  color: var(--red);
+  font-size: var(--text-xs);
+  animation: reveal 160ms var(--ease);
+}
+
+.confirmActions {
+  display: flex;
+  gap: 4px;
+}
+
+@keyframes enter {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+}
+
+@keyframes reveal {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes flash {
+  0%,
+  100% {
+    background: var(--accent-soft);
+  }
+  30%,
+  60% {
+    background: var(--accent-soft-strong);
+  }
+}

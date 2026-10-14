@@ -1,0 +1,99 @@
+/* 输入框整体是一个带边框的编辑器：上面输入，下面一排快捷回复和发送 */
+.composer {
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
+  transition:
+    border-color var(--duration-fast) var(--ease),
+    box-shadow var(--duration-fast) var(--ease);
+}
+
+.composer:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.box {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 8px 8px 0 12px;
+}
+
+.input {
+  flex: 1;
+  min-height: 36px;
+  max-height: 180px;
+  padding: 7px 0;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: var(--text-md);
+  line-height: 1.55;
+  resize: none;
+}
+
+.input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.input:focus {
+  outline: none;
+}
+
+.input[aria-invalid="true"]::placeholder {
+  color: var(--red);
+}
+
+.foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+  padding: 4px 8px 8px 8px;
+  font-size: var(--text-xs);
+}
+
+.quick {
+  display: flex;
+  gap: 4px;
+}
+
+.quickButton {
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  transition:
+    background-color var(--duration-fast) var(--ease),
+    color var(--duration-fast) var(--ease),
+    border-color var(--duration-fast) var(--ease);
+}
+
+.quickButton:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.quickButton:disabled {
+  opacity: 0.45;
+}
+
+.hint {
+  color: var(--text-tertiary);
+}
+
+.warn {
+  color: var(--red);
+  font-weight: 500;
+}
+
+@media (max-width: 640px) {
+  .hint {
+    display: none;
+  }
+}

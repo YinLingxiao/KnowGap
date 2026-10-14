@@ -1,0 +1,186 @@
+/* 桌面应用式外壳：侧栏 | 主区域 | 学习记忆，各自滚动 */
+.app {
+  display: grid;
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr) var(--panel-w);
+  height: 100vh;
+  overflow: hidden;
+  background: var(--bg-sidebar);
+}
+
+.sidebar {
+  min-height: 0;
+  overflow-y: auto;
+  background: var(--bg-sidebar);
+}
+
+/* 主区域略微内嵌，像一块独立的工作面板 */
+.main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  margin: 8px 0 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg) 0 0 var(--radius-lg);
+  border-right: none;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.panel {
+  min-height: 0;
+  margin: 8px 8px 8px 0;
+  border: 1px solid var(--border);
+  border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
+  background: var(--bg);
+  overflow-y: auto;
+}
+
+.topbar {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  height: var(--topbar-h);
+  padding: 0 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: var(--text-md);
+  white-space: nowrap;
+}
+
+.crumbIcon {
+  flex-shrink: 0;
+  color: var(--accent);
+}
+
+.crumbMuted {
+  color: var(--text-tertiary);
+}
+
+.crumbSep {
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+}
+
+.crumbCurrent {
+  overflow: hidden;
+  color: var(--text);
+  font-weight: 500;
+  text-overflow: ellipsis;
+}
+
+.scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scroll-padding-top: 16px;
+}
+
+.content {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 28px 32px 40px;
+}
+
+.sessionTop {
+  scroll-margin-top: 16px;
+}
+
+.restoring {
+  margin-bottom: 16px;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.notice {
+  margin-top: 16px;
+}
+
+.composerDock {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.composerInner {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 12px 32px 14px;
+}
+
+/* 中等宽度：三栏都保留，只收窄侧栏和记忆栏 */
+@media (max-width: 1240px) {
+  .app {
+    --sidebar-w: 212px;
+    --panel-w: 288px;
+  }
+
+  .content,
+  .composerInner {
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+}
+
+@media (max-width: 900px) {
+  .app {
+    display: block;
+    height: auto;
+    overflow: visible;
+  }
+
+  .sidebar {
+    overflow: visible;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .main {
+    margin: 0;
+    border: none;
+    border-radius: 0;
+    overflow: visible;
+  }
+
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: var(--bg);
+    padding: 0 16px;
+  }
+
+  .scroll {
+    overflow: visible;
+  }
+
+  .content {
+    padding: 20px 16px 24px;
+  }
+
+  .composerDock {
+    position: sticky;
+    bottom: 0;
+    z-index: 20;
+  }
+
+  .composerInner {
+    padding: 10px 16px 12px;
+  }
+
+  .panel {
+    display: block;
+    margin: 0;
+    border: none;
+    border-top: 1px solid var(--border);
+    border-radius: 0;
+    overflow: visible;
+  }
+}

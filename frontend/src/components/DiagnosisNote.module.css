@@ -1,0 +1,126 @@
+/* 诊断批注：挂在作答下方的一块小面板，结论颜色只出现在图标与标签上 */
+.note {
+  --verdict: var(--grey);
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
+  animation: enter 260ms var(--ease) 60ms both;
+}
+
+.incorrect {
+  --verdict: var(--orange);
+}
+
+.correct {
+  --verdict: var(--green);
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  font-size: var(--text-xs);
+}
+
+.mark {
+  color: var(--text-tertiary);
+  font-weight: 500;
+}
+
+.verdict {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--verdict);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.topic {
+  color: var(--text-tertiary);
+}
+
+.head > :last-child {
+  margin-left: auto;
+}
+
+.finding {
+  margin-top: 6px;
+  color: var(--text);
+  font-size: var(--text-lg);
+  font-weight: 500;
+  line-height: 1.55;
+}
+
+.evidence {
+  margin-top: 4px;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  line-height: 1.6;
+}
+
+.quote {
+  color: var(--text-secondary);
+  quotes: "「" "」";
+}
+
+.compact {
+  margin-top: 6px;
+  padding: 7px 10px;
+}
+
+.compact .finding {
+  margin-top: 4px;
+  font-size: var(--text-md);
+}
+
+.compact .evidence {
+  margin-top: 2px;
+}
+
+.pending {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px 0;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.pendingLine {
+  position: relative;
+  display: block;
+  height: 2px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--bg-hover);
+}
+
+.pendingLine::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 35%;
+  border-radius: 2px;
+  background: var(--accent);
+  animation: travel 1.3s var(--ease) infinite;
+}
+
+@keyframes travel {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(300%);
+  }
+}
+
+@keyframes enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
