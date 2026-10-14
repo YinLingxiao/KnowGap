@@ -11,60 +11,58 @@
   text-wrap: balance;
 }
 
-.lead {
-  max-width: 34em;
-  margin-top: 10px;
-  color: var(--text-secondary);
-  font-size: var(--text-lg);
+.exampleLabel {
+  margin-top: 18px;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.example {
+  max-width: 36em;
+  margin-top: 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-subtle);
+}
+
+.exampleAnswer {
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 600;
   line-height: 1.7;
 }
 
-/* 学习闭环四步：紧凑的列表行 */
-.route {
-  margin-top: 28px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
+.exampleAnswer mark {
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--orange) 14%, transparent);
+  color: inherit;
+  text-decoration-line: underline;
+  text-decoration-style: wavy;
+  text-decoration-thickness: 1.5px;
+  text-decoration-color: var(--orange);
+  text-underline-offset: 4px;
 }
 
-.step {
-  display: grid;
-  grid-template-columns: 28px 48px minmax(0, 1fr);
-  align-items: center;
-  gap: 8px;
-  min-height: 44px;
-  padding: 8px 14px;
-  transition: background-color var(--duration-fast) var(--ease);
-}
-
-.step + .step {
+.exampleNote {
+  margin-top: 10px;
+  padding-top: 10px;
   border-top: 1px solid var(--border);
 }
 
-.step:hover {
-  background: var(--bg-hover);
-}
-
-.stepIndex {
-  display: grid;
-  place-items: center;
-  width: 20px;
-  height: 20px;
-  border: 1px solid var(--border-strong);
-  border-radius: 50%;
-  color: var(--text-secondary);
-  font-size: var(--text-xs);
-  font-weight: 600;
-}
-
-.stepTitle {
-  font-weight: 600;
-}
-
-.stepText {
-  color: var(--text-secondary);
+.exampleNote span {
+  color: var(--orange);
   font-size: var(--text-sm);
-  line-height: 1.55;
+  font-weight: 600;
+}
+
+.exampleNote p {
+  margin-top: 4px;
+  color: var(--text);
+  font-size: 16px;
+  line-height: 1.7;
 }
 
 .actions {
@@ -75,24 +73,33 @@
   margin-top: 20px;
 }
 
-.hint {
-  color: var(--text-tertiary);
+.more {
+  max-width: 36em;
+  margin-top: 18px;
+  color: var(--text-secondary);
   font-size: var(--text-sm);
+  line-height: 1.6;
+}
+
+.more summary {
+  width: fit-content;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.more ol {
+  margin-top: 8px;
+  padding-left: 1.2em;
+  list-style: decimal;
+}
+
+.more li + li {
+  margin-top: 4px;
 }
 
 @keyframes enter {
   from {
     opacity: 0;
     transform: translateY(4px);
-  }
-}
-
-@media (max-width: 640px) {
-  .step {
-    grid-template-columns: 28px minmax(0, 1fr);
-  }
-
-  .stepText {
-    grid-column: 2;
   }
 }

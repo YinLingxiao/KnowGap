@@ -47,44 +47,33 @@
 .statement {
   margin-top: 16px;
   color: var(--text);
-  font-size: var(--text-lg);
+  font-size: 16px;
   line-height: 1.75;
   white-space: pre-wrap;
 }
 
-.sequences {
-  margin-top: 16px;
-  border-collapse: separate;
-  border-spacing: 4px;
-  margin-left: -4px;
+.compact {
+  padding-bottom: 16px;
 }
 
-.sequences th {
-  padding-right: 12px;
-  color: var(--text-tertiary);
-  font-size: var(--text-xs);
+.compact .title {
+  font-size: var(--text-xl);
+}
+
+.benchFold {
+  margin-top: 12px;
+}
+
+.benchFold summary {
+  width: fit-content;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
   font-weight: 500;
-  text-align: left;
-  white-space: nowrap;
+  cursor: pointer;
 }
 
-.sequences td span {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg-subtle);
-  font-family: var(--font-mono);
-  font-size: var(--text-lg);
-  font-weight: 500;
-}
-
-.sequences td .target {
-  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
-  background: var(--accent-soft);
-  color: var(--accent-text);
+.benchFold:not([open]) > :not(summary) {
+  display: none;
 }
 
 @keyframes enter {
@@ -97,14 +86,5 @@
 @media (max-width: 640px) {
   .title {
     font-size: var(--text-xl);
-  }
-
-  .statement {
-    font-size: var(--text-md);
-  }
-
-  .sequences td span {
-    width: 28px;
-    height: 28px;
   }
 }

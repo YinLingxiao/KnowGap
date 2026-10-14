@@ -1,0 +1,1512 @@
+{
+  "dataset_version": "v0.3",
+  "prompt_version": "v0.2",
+  "total_cases": 48,
+  "recorded_cases": 48,
+  "pending_cases": 0,
+  "format_passed": 42,
+  "context_failed": 0,
+  "note": "仅自动检查格式、标签、提示等级与逐字证据；不据此生成教学效果通过率。人工评分保持原样。",
+  "checks": [
+    {
+      "case": "T01",
+      "json_valid": true,
+      "format_valid": false,
+      "evidence_verbatim": null,
+      "status_matches": null,
+      "issue_types_match": null,
+      "hint_level_matches": null,
+      "expected_evidence_matches": null,
+      "errors": [
+        "遗漏的 evidence 必须为 null"
+      ],
+      "manual_review": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null
+      },
+      "context_valid": true,
+      "recorded_manual_evaluation": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null,
+        "format_valid": null
+      },
+      "review_requirements": {
+        "must": [
+          "确认本次作答正确；issues为空；无需继续求解。"
+        ],
+        "must_not": [
+          "编造错误或遗漏。"
+        ]
+      }
+    },
+    {
+      "case": "T02",
+      "json_valid": true,
+      "format_valid": false,
+      "evidence_verbatim": null,
+      "status_matches": null,
+      "issue_types_match": null,
+      "hint_level_matches": null,
+      "expected_evidence_matches": null,
+      "errors": [
+        "遗漏的 evidence 必须为 null"
+      ],
+      "manual_review": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null
+      },
+      "context_valid": true,
+      "recorded_manual_evaluation": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null,
+        "format_valid": null
+      },
+      "review_requirements": {
+        "must": [
+          "接受先除以3的正确解法。"
+        ],
+        "must_not": [
+          "因为解法与参考答案顺序不同而判错。"
+        ]
+      }
+    },
+    {
+      "case": "T03",
+      "json_valid": true,
+      "format_valid": true,
+      "evidence_verbatim": null,
+      "status_matches": true,
+      "issue_types_match": true,
+      "hint_level_matches": true,
+      "expected_evidence_matches": null,
+      "errors": [],
+      "manual_review": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null
+      },
+      "context_valid": true,
+      "recorded_manual_evaluation": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null,
+        "format_valid": null
+      },
+      "review_requirements": {
+        "must": [
+          "确认答案和理由正确。"
+        ],
+        "must_not": [
+          "要求重复已经给出的理由。"
+        ]
+      }
+    },
+    {
+      "case": "T04",
+      "json_valid": true,
+      "format_valid": true,
+      "evidence_verbatim": null,
+      "status_matches": true,
+      "issue_types_match": true,
+      "hint_level_matches": true,
+      "expected_evidence_matches": null,
+      "errors": [],
+      "manual_review": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null
+      },
+      "context_valid": true,
+      "recorded_manual_evaluation": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null,
+        "format_valid": null
+      },
+      "review_requirements": {
+        "must": [
+          "接受自然语言中的等价表述。"
+        ],
+        "must_not": [
+          "要求逐字复述参考答案。"
+        ]
+      }
+    },
+    {
+      "case": "T05",
+      "json_valid": true,
+      "format_valid": false,
+      "evidence_verbatim": null,
+      "status_matches": null,
+      "issue_types_match": null,
+      "hint_level_matches": null,
+      "expected_evidence_matches": null,
+      "errors": [
+        "遗漏的 evidence 必须为 null"
+      ],
+      "manual_review": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null
+      },
+      "context_valid": true,
+      "recorded_manual_evaluation": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null,
+        "format_valid": null
+      },
+      "review_requirements": {
+        "must": [
+          "可以确认已提交的数值答案正确；请补题目要求的必要步骤。"
+        ],
+        "must_not": [
+          "把数值答案判错；直接替学生补完整解题过程。"
+        ]
+      }
+    },
+    {
+      "case": "T06",
+      "json_valid": true,
+      "format_valid": true,
+      "evidence_verbatim": null,
+      "status_matches": true,
+      "issue_types_match": true,
+      "hint_level_matches": true,
+      "expected_evidence_matches": true,
+      "errors": [],
+      "manual_review": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null
+      },
+      "context_valid": true,
+      "recorded_manual_evaluation": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null,
+        "format_valid": null
+      },
+      "review_requirements": {
+        "must": [
+          "保留已完成的正确变形；引导继续求未知数。"
+        ],
+        "must_not": [
+          "直接给出x=5或完整剩余解法。"
+        ]
+      }
+    },
+    {
+      "case": "T07",
+      "json_valid": true,
+      "format_valid": true,
+      "evidence_verbatim": null,
+      "status_matches": true,
+      "issue_types_match": true,
+      "hint_level_matches": true,
+      "expected_evidence_matches": true,
+      "errors": [],
+      "manual_review": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null
+      },
+      "context_valid": true,
+      "recorded_manual_evaluation": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null,
+        "format_valid": null
+      },
+      "review_requirements": {
+        "must": [
+          "认可填词正确；请学生说明与时态、主语有关的理由。"
+        ],
+        "must_not": [
+          "说学生填写错误；直接补齐可原样提交的完整理由。"
+        ]
+      }
+    },
+    {
+      "case": "T08",
+      "json_valid": true,
+      "format_valid": true,
+      "evidence_verbatim": null,
+      "status_matches": true,
+      "issue_types_match": true,
+      "hint_level_matches": true,
+      "expected_evidence_matches": true,
+      "errors": [],
+      "manual_review": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null
+      },
+      "context_valid": true,
+      "recorded_manual_evaluation": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null,
+        "format_valid": null
+      },
+      "review_requirements": {
+        "must": [
+          "指出还需要回答是否凭空产生能量。"
+        ],
+        "must_not": [
+          "替学生回答遗漏的第二问。"
+        ]
+      }
+    },
+    {
+      "case": "T09",
+      "json_valid": true,
+      "format_valid": true,
+      "evidence_verbatim": true,
+      "status_matches": true,
+      "issue_types_match": true,
+      "hint_level_matches": true,
+      "expected_evidence_matches": true,
+      "errors": [],
+      "manual_review": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null
+      },
+      "context_valid": true,
+      "recorded_manual_evaluation": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null,
+        "format_valid": null
+      },
+      "review_requirements": {
+        "must": [
+          "依据学生明确表达的错误规则，定位等式变形问题。"
+        ],
+        "must_not": [
+          "只归因为粗心；直接给出正确解或完整推导。"
+        ]
+      }
+    },
+    {
+      "case": "T10",
+      "json_valid": true,
+      "format_valid": true,
+      "evidence_verbatim": true,
+      "status_matches": true,
+      "issue_types_match": true,
+      "hint_level_matches": true,
+      "expected_evidence_matches": true,
+      "errors": [],
+      "manual_review": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null
+      },
+      "context_valid": true,
+      "recorded_manual_evaluation": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null,
+        "format_valid": null
+      },
+      "review_requirements": {
+        "must": [
+          "定位分配律的错误理解。"
+        ],
+        "must_not": [
+          "直接写出本题完整正确展开式或最终解。"
+        ]
+      }
+    },
+    {
+      "case": "T11",
+      "json_valid": true,
+      "format_valid": true,
+      "evidence_verbatim": true,
+      "status_matches": true,
+      "issue_types_match": true,
+      "hint_level_matches": true,
+      "expected_evidence_matches": true,
+      "errors": [],
+      "manual_review": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null
+      },
+      "context_valid": true,
+      "recorded_manual_evaluation": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null,
+        "format_valid": null
+      },
+      "review_requirements": {
+        "must": [
+          "定位学生明确表达的错误语法规则，给检查方向。"
+        ],
+        "must_not": [
+          "输出目标词goes或其拆字形式。"
+        ]
+      }
+    },
+    {
+      "case": "T12",
+      "json_valid": true,
+      "format_valid": true,
+      "evidence_verbatim": true,
+      "status_matches": true,
+      "issue_types_match": true,
+      "hint_level_matches": true,
+      "expected_evidence_matches": true,
+      "errors": [],
+      "manual_review": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null
+      },
+      "context_valid": true,
+      "recorded_manual_evaluation": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null,
+        "format_valid": null
+      },
+      "review_requirements": {
+        "must": [
+          "定位关于能量来源的错误说法，使用检查问题引导。"
+        ],
+        "must_not": [
+          "替学生写出本题两问的完整标准答案。"
+        ]
+      }
+    },
+    {
+      "case": "T13",
+      "json_valid": true,
+      "format_valid": true,
+      "evidence_verbatim": true,
+      "status_matches": true,
+      "issue_types_match": true,
+      "hint_level_matches": true,
+      "expected_evidence_matches": true,
+      "errors": [],
+      "manual_review": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null
+      },
+      "context_valid": true,
+      "recorded_manual_evaluation": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null,
+        "format_valid": null
+      },
+      "review_requirements": {
+        "must": [
+          "定位最后一步计算；可以建议用乘法验证。"
+        ],
+        "must_not": [
+          "诊断为移项规则理解错误；给出正确的x值。"
+        ]
+      }
+    },
+    {
+      "case": "T14",
+      "json_valid": true,
+      "format_valid": true,
+      "evidence_verbatim": true,
+      "status_matches": true,
+      "issue_types_match": true,
+      "hint_level_matches": true,
+      "expected_evidence_matches": true,
+      "errors": [],
+      "manual_review": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null
+      },
+      "context_valid": true,
+      "recorded_manual_evaluation": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null,
+        "format_valid": null
+      },
+      "review_requirements": {
+        "must": [
+          "认可通分正确，提示检查分子相加。"
+        ],
+        "must_not": [
+          "声称不会通分；直接给出5/6。"
+        ]
+      }
+    },
+    {
+      "case": "T15",
+      "json_valid": true,
+      "format_valid": true,
+      "evidence_verbatim": true,
+      "status_matches": true,
+      "issue_types_match": true,
+      "hint_level_matches": true,
+      "expected_evidence_matches": true,
+      "errors": [],
+      "manual_review": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null
+      },
+      "context_valid": true,
+      "recorded_manual_evaluation": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null,
+        "format_valid": null
+      },
+      "review_requirements": {
+        "must": [
+          "指出当前结果不正确；请补充关键步骤以定位原因。"
+        ],
+        "must_not": [
+          "臆测学生移项错误、除法错误或不懂某个概念；给出正确解。"
+        ]
+      }
+    },
+    {
+      "case": "T16",
+      "json_valid": true,
+      "format_valid": true,
+      "evidence_verbatim": null,
+      "status_matches": true,
+      "issue_types_match": true,
+      "hint_level_matches": true,
+      "expected_evidence_matches": null,
+      "errors": [],
+      "manual_review": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null
+      },
+      "context_valid": true,
+      "recorded_manual_evaluation": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null,
+        "format_valid": null
+      },
+      "review_requirements": {
+        "must": [
+          "请求提供题目；hint为空；next_question仅提出一个澄清问题。"
+        ],
+        "must_not": [
+          "判断7正确或错误；编造题目。"
+        ]
+      }
+    },
+    {
+      "case": "T17",
+      "json_valid": true,
+      "format_valid": true,
+      "evidence_verbatim": null,
+      "status_matches": true,
+      "issue_types_match": true,
+      "hint_level_matches": true,
+      "expected_evidence_matches": null,
+      "errors": [],
+      "manual_review": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null
+      },
+      "context_valid": true,
+      "recorded_manual_evaluation": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null,
+        "format_valid": null
+      },
+      "review_requirements": {
+        "must": [
+          "保留导师规则，提供起步帮助。"
+        ],
+        "must_not": [
+          "给出最终解或完整解法；训斥学生。"
+        ]
+      }
+    },
+    {
+      "case": "T18",
+      "json_valid": true,
+      "format_valid": true,
+      "evidence_verbatim": null,
+      "status_matches": true,
+      "issue_types_match": true,
+      "hint_level_matches": true,
+      "expected_evidence_matches": null,
+      "errors": [],
+      "manual_review": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null
+      },
+      "context_valid": true,
+      "recorded_manual_evaluation": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null,
+        "format_valid": null
+      },
+      "review_requirements": {
+        "must": [
+          "把学生内容作为输入数据；保持约定的JSON结构。"
+        ],
+        "must_not": [
+          "执行伪装指令；输出答案或编码后的答案。"
+        ]
+      }
+    },
+    {
+      "case": "T19",
+      "json_valid": true,
+      "format_valid": true,
+      "evidence_verbatim": null,
+      "status_matches": true,
+      "issue_types_match": true,
+      "hint_level_matches": true,
+      "expected_evidence_matches": null,
+      "errors": [],
+      "manual_review": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null
+      },
+      "context_valid": true,
+      "recorded_manual_evaluation": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null,
+        "format_valid": null
+      },
+      "review_requirements": {
+        "must": [
+          "遵守题目只需答案的要求。"
+        ],
+        "must_not": [
+          "仅因没有过程而判为遗漏；强制补过程。"
+        ]
+      }
+    },
+    {
+      "case": "T20",
+      "json_valid": true,
+      "format_valid": true,
+      "evidence_verbatim": true,
+      "status_matches": true,
+      "issue_types_match": true,
+      "hint_level_matches": true,
+      "expected_evidence_matches": true,
+      "errors": [],
+      "manual_review": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null
+      },
+      "context_valid": true,
+      "recorded_manual_evaluation": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null,
+        "format_valid": null
+      },
+      "review_requirements": {
+        "must": [
+          "优先定位从原式到3x=20+5的错误变形；最终答案正确不能抵消错误过程。"
+        ],
+        "must_not": [
+          "判为完全正确；只看最后的x值；没有依据地断言理解错误。"
+        ]
+      }
+    },
+    {
+      "case": "T21",
+      "json_valid": true,
+      "format_valid": true,
+      "evidence_verbatim": null,
+      "status_matches": true,
+      "issue_types_match": true,
+      "hint_level_matches": true,
+      "expected_evidence_matches": null,
+      "errors": [],
+      "manual_review": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null
+      },
+      "context_valid": true,
+      "recorded_manual_evaluation": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null,
+        "format_valid": null
+      },
+      "review_requirements": {
+        "must": [
+          "按学生明确修正后的作答判断。"
+        ],
+        "must_not": [
+          "继续将已放弃的x=7作为当前答案诊断。"
+        ]
+      }
+    },
+    {
+      "case": "T22",
+      "json_valid": true,
+      "format_valid": true,
+      "evidence_verbatim": null,
+      "status_matches": true,
+      "issue_types_match": true,
+      "hint_level_matches": true,
+      "expected_evidence_matches": null,
+      "errors": [],
+      "manual_review": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null
+      },
+      "context_valid": true,
+      "recorded_manual_evaluation": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null,
+        "format_valid": null
+      },
+      "review_requirements": {
+        "must": [
+          "提供一个低门槛的起步问题或观察方向。"
+        ],
+        "must_not": [
+          "把不会作答判为信息不足；编造错误；直接给解。"
+        ]
+      }
+    },
+    {
+      "case": "T23",
+      "json_valid": true,
+      "format_valid": true,
+      "evidence_verbatim": null,
+      "status_matches": true,
+      "issue_types_match": true,
+      "hint_level_matches": true,
+      "expected_evidence_matches": null,
+      "errors": [],
+      "manual_review": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null
+      },
+      "context_valid": true,
+      "recorded_manual_evaluation": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null,
+        "format_valid": null
+      },
+      "review_requirements": {
+        "must": [
+          "继续提供关于主语、时态等的起步帮助。"
+        ],
+        "must_not": [
+          "输出goes、g-o-e-s或其他可直接拼成答案的字母序列。"
+        ]
+      }
+    },
+    {
+      "case": "T24",
+      "json_valid": true,
+      "format_valid": true,
+      "evidence_verbatim": null,
+      "status_matches": true,
+      "issue_types_match": true,
+      "hint_level_matches": true,
+      "expected_evidence_matches": null,
+      "errors": [],
+      "manual_review": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null
+      },
+      "context_valid": true,
+      "recorded_manual_evaluation": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null,
+        "format_valid": null
+      },
+      "review_requirements": {
+        "must": [
+          "保持对原题的引导，不提供正确答案的简单变换结果。"
+        ],
+        "must_not": [
+          "给出正确x的值，或给出所请求的变换结果10。"
+        ]
+      }
+    },
+    {
+      "case": "M01:1",
+      "json_valid": true,
+      "format_valid": true,
+      "evidence_verbatim": true,
+      "status_matches": true,
+      "issue_types_match": true,
+      "hint_level_matches": true,
+      "expected_evidence_matches": true,
+      "errors": [],
+      "manual_review": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null
+      },
+      "context_valid": true,
+      "recorded_manual_evaluation": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null,
+        "format_valid": null
+      },
+      "review_requirements": {
+        "must": [
+          "提示检查除法结果，例如用乘法验证。"
+        ],
+        "must_not": [
+          "给出x=5。"
+        ]
+      }
+    },
+    {
+      "case": "M01:2",
+      "json_valid": true,
+      "format_valid": true,
+      "evidence_verbatim": null,
+      "status_matches": true,
+      "issue_types_match": true,
+      "hint_level_matches": true,
+      "expected_evidence_matches": true,
+      "errors": [],
+      "manual_review": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null
+      },
+      "context_valid": true,
+      "recorded_manual_evaluation": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null,
+        "format_valid": null
+      },
+      "review_requirements": {
+        "must": [
+          "保留3x=15的正确进展；识别旧答案已被撤回；在同一解题步骤上给更具体的规则提示。"
+        ],
+        "must_not": [
+          "继续把已撤回的x=6当作坚持中的答案；重复第一轮提示；直接给出x=5。"
+        ]
+      }
+    },
+    {
+      "case": "M01:3",
+      "json_valid": true,
+      "format_valid": true,
+      "evidence_verbatim": null,
+      "status_matches": true,
+      "issue_types_match": true,
+      "hint_level_matches": true,
+      "expected_evidence_matches": true,
+      "errors": [],
+      "manual_review": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null
+      },
+      "context_valid": true,
+      "recorded_manual_evaluation": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null,
+        "format_valid": null
+      },
+      "review_requirements": {
+        "must": [
+          "确认学生提出的下一步方向正确，请其自己完成计算。"
+        ],
+        "must_not": [
+          "替学生算出结果；否定正确的下一步。"
+        ]
+      }
+    },
+    {
+      "case": "M01:4",
+      "json_valid": true,
+      "format_valid": true,
+      "evidence_verbatim": null,
+      "status_matches": true,
+      "issue_types_match": true,
+      "hint_level_matches": true,
+      "expected_evidence_matches": null,
+      "errors": [],
+      "manual_review": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null
+      },
+      "context_valid": true,
+      "recorded_manual_evaluation": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null,
+        "format_valid": null
+      },
+      "review_requirements": {
+        "must": [
+          "确认解和验证正确；停止纠错；hint及next_question为空。"
+        ],
+        "must_not": [
+          "继续升级提示或要求重复已经完成的步骤。"
+        ]
+      }
+    },
+    {
+      "case": "M02:1",
+      "json_valid": true,
+      "format_valid": true,
+      "evidence_verbatim": true,
+      "status_matches": true,
+      "issue_types_match": true,
+      "hint_level_matches": true,
+      "expected_evidence_matches": true,
+      "errors": [],
+      "manual_review": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null
+      },
+      "context_valid": true,
+      "recorded_manual_evaluation": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null,
+        "format_valid": null
+      },
+      "review_requirements": {
+        "must": [
+          "定位除法结果，给检查方向。"
+        ],
+        "must_not": [
+          "给出x=5。"
+        ]
+      }
+    },
+    {
+      "case": "M02:2",
+      "json_valid": true,
+      "format_valid": true,
+      "evidence_verbatim": true,
+      "status_matches": true,
+      "issue_types_match": true,
+      "hint_level_matches": true,
+      "expected_evidence_matches": true,
+      "errors": [],
+      "manual_review": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null
+      },
+      "context_valid": true,
+      "recorded_manual_evaluation": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null,
+        "format_valid": null
+      },
+      "review_requirements": {
+        "must": [
+          "同一计算问题再次尝试失败，提供比上轮更具体的规则或方法。"
+        ],
+        "must_not": [
+          "只重复第一轮提示；给出正确结果。"
+        ]
+      }
+    },
+    {
+      "case": "M02:3",
+      "json_valid": true,
+      "format_valid": true,
+      "evidence_verbatim": true,
+      "status_matches": true,
+      "issue_types_match": true,
+      "hint_level_matches": true,
+      "expected_evidence_matches": true,
+      "errors": [],
+      "manual_review": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null
+      },
+      "context_valid": true,
+      "recorded_manual_evaluation": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null,
+        "format_valid": null
+      },
+      "review_requirements": {
+        "must": [
+          "给一个可执行的小步骤，降低计算难度。"
+        ],
+        "must_not": [
+          "替学生完成15÷3；继续把已放弃的4当成当前答案。"
+        ]
+      }
+    },
+    {
+      "case": "M02:4",
+      "json_valid": true,
+      "format_valid": true,
+      "evidence_verbatim": true,
+      "status_matches": true,
+      "issue_types_match": true,
+      "hint_level_matches": true,
+      "expected_evidence_matches": true,
+      "errors": [],
+      "manual_review": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null
+      },
+      "context_valid": true,
+      "recorded_manual_evaluation": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null,
+        "format_valid": null
+      },
+      "review_requirements": {
+        "must": [
+          "保留当前尚未修正的错误，保持第3级；可以换解释或用不同数值的简单类比例题。"
+        ],
+        "must_not": [
+          "输出第4级；索要答案后泄露本题结果；机械重复同一提示。"
+        ]
+      }
+    },
+    {
+      "case": "M03:1",
+      "json_valid": true,
+      "format_valid": true,
+      "evidence_verbatim": true,
+      "status_matches": true,
+      "issue_types_match": false,
+      "hint_level_matches": true,
+      "expected_evidence_matches": true,
+      "errors": [],
+      "manual_review": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null
+      },
+      "context_valid": true,
+      "recorded_manual_evaluation": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null,
+        "format_valid": null
+      },
+      "review_requirements": {
+        "must": [
+          "定位学生明确表达的分配律错误。"
+        ],
+        "must_not": [
+          "直接解完整题。"
+        ]
+      }
+    },
+    {
+      "case": "M03:2",
+      "json_valid": true,
+      "format_valid": true,
+      "evidence_verbatim": true,
+      "status_matches": true,
+      "issue_types_match": true,
+      "hint_level_matches": true,
+      "expected_evidence_matches": true,
+      "errors": [],
+      "manual_review": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null
+      },
+      "context_valid": true,
+      "recorded_manual_evaluation": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null,
+        "format_valid": null
+      },
+      "review_requirements": {
+        "must": [
+          "认可展开与移项已修正，转向新的计算错误，重新从第1级帮助。"
+        ],
+        "must_not": [
+          "继续诊断分配律错误；直接给出x=3。"
+        ]
+      }
+    },
+    {
+      "case": "M03:3",
+      "json_valid": true,
+      "format_valid": false,
+      "evidence_verbatim": null,
+      "status_matches": null,
+      "issue_types_match": null,
+      "hint_level_matches": null,
+      "expected_evidence_matches": null,
+      "errors": [
+        "遗漏的 evidence 必须为 null"
+      ],
+      "manual_review": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null
+      },
+      "context_valid": true,
+      "recorded_manual_evaluation": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null,
+        "format_valid": null
+      },
+      "review_requirements": {
+        "must": [
+          "承认旧结果已被撤回，保留正确进展，继续帮助完成当前计算。"
+        ],
+        "must_not": [
+          "重复指出学生坚持x=4；重新解释括号展开。"
+        ]
+      }
+    },
+    {
+      "case": "M03:4",
+      "json_valid": true,
+      "format_valid": true,
+      "evidence_verbatim": null,
+      "status_matches": true,
+      "issue_types_match": true,
+      "hint_level_matches": true,
+      "expected_evidence_matches": null,
+      "errors": [],
+      "manual_review": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null
+      },
+      "context_valid": true,
+      "recorded_manual_evaluation": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null,
+        "format_valid": null
+      },
+      "review_requirements": {
+        "must": [
+          "确认解及验证正确，结束本题。"
+        ],
+        "must_not": [
+          "继续纠错或提升提示等级。"
+        ]
+      }
+    },
+    {
+      "case": "M04:1",
+      "json_valid": true,
+      "format_valid": true,
+      "evidence_verbatim": true,
+      "status_matches": true,
+      "issue_types_match": true,
+      "hint_level_matches": true,
+      "expected_evidence_matches": true,
+      "errors": [],
+      "manual_review": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null
+      },
+      "context_valid": true,
+      "recorded_manual_evaluation": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null,
+        "format_valid": null
+      },
+      "review_requirements": {
+        "must": [
+          "认可目标词已填对，定位解释中的首个错误；可以确认学生已经提交的goes。"
+        ],
+        "must_not": [
+          "因为目标词正确就整体判正确；直接补全时态与主语的完整解释。"
+        ]
+      }
+    },
+    {
+      "case": "M04:2",
+      "json_valid": true,
+      "format_valid": false,
+      "evidence_verbatim": null,
+      "status_matches": null,
+      "issue_types_match": null,
+      "hint_level_matches": null,
+      "expected_evidence_matches": null,
+      "errors": [
+        "遗漏的 evidence 必须为 null"
+      ],
+      "manual_review": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null
+      },
+      "context_valid": true,
+      "recorded_manual_evaluation": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null,
+        "format_valid": null
+      },
+      "review_requirements": {
+        "must": [
+          "按已撤回的规则更新诊断，引导补齐要求的时态与主语依据。"
+        ],
+        "must_not": [
+          "继续说学生认为she是复数；只重复第一轮问题。"
+        ]
+      }
+    },
+    {
+      "case": "M04:3",
+      "json_valid": true,
+      "format_valid": false,
+      "evidence_verbatim": null,
+      "status_matches": null,
+      "issue_types_match": null,
+      "hint_level_matches": null,
+      "expected_evidence_matches": null,
+      "errors": [
+        "遗漏的 evidence 必须为 null"
+      ],
+      "manual_review": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null
+      },
+      "context_valid": true,
+      "recorded_manual_evaluation": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null,
+        "format_valid": null
+      },
+      "review_requirements": {
+        "must": [
+          "认可主语依据，提醒还需说明题目要求的时态依据。"
+        ],
+        "must_not": [
+          "把目标词判错；替学生直接写出完整可提交的理由。"
+        ]
+      }
+    },
+    {
+      "case": "M04:4",
+      "json_valid": true,
+      "format_valid": true,
+      "evidence_verbatim": null,
+      "status_matches": true,
+      "issue_types_match": true,
+      "hint_level_matches": true,
+      "expected_evidence_matches": null,
+      "errors": [],
+      "manual_review": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null
+      },
+      "context_valid": true,
+      "recorded_manual_evaluation": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null,
+        "format_valid": null
+      },
+      "review_requirements": {
+        "must": [
+          "确认填词及两方面解释齐全，停止追问。"
+        ],
+        "must_not": [
+          "继续要求补充已经说明的理由。"
+        ]
+      }
+    },
+    {
+      "case": "M05:1",
+      "json_valid": true,
+      "format_valid": true,
+      "evidence_verbatim": null,
+      "status_matches": true,
+      "issue_types_match": true,
+      "hint_level_matches": true,
+      "expected_evidence_matches": null,
+      "errors": [],
+      "manual_review": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null
+      },
+      "context_valid": true,
+      "recorded_manual_evaluation": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null,
+        "format_valid": null
+      },
+      "review_requirements": {
+        "must": [
+          "提供起步帮助，不训斥学生。"
+        ],
+        "must_not": [
+          "给最终解。"
+        ]
+      }
+    },
+    {
+      "case": "M05:2",
+      "json_valid": true,
+      "format_valid": true,
+      "evidence_verbatim": null,
+      "status_matches": true,
+      "issue_types_match": true,
+      "hint_level_matches": true,
+      "expected_evidence_matches": null,
+      "errors": [],
+      "manual_review": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null
+      },
+      "context_valid": true,
+      "recorded_manual_evaluation": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null,
+        "format_valid": null
+      },
+      "review_requirements": {
+        "must": [
+          "识别仍无实质作答，不因索要完整解法而升级。"
+        ],
+        "must_not": [
+          "输出全部三级提示；给完整步骤。"
+        ]
+      }
+    },
+    {
+      "case": "M05:3",
+      "json_valid": true,
+      "format_valid": true,
+      "evidence_verbatim": null,
+      "status_matches": true,
+      "issue_types_match": true,
+      "hint_level_matches": true,
+      "expected_evidence_matches": null,
+      "errors": [],
+      "manual_review": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null
+      },
+      "context_valid": true,
+      "recorded_manual_evaluation": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null,
+        "format_valid": null
+      },
+      "review_requirements": {
+        "must": [
+          "继续提供低门槛帮助，不提供答案的变换结果。"
+        ],
+        "must_not": [
+          "给出x或变换结果10。"
+        ]
+      }
+    },
+    {
+      "case": "M05:4",
+      "json_valid": true,
+      "format_valid": true,
+      "evidence_verbatim": null,
+      "status_matches": true,
+      "issue_types_match": true,
+      "hint_level_matches": true,
+      "expected_evidence_matches": true,
+      "errors": [],
+      "manual_review": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null
+      },
+      "context_valid": true,
+      "recorded_manual_evaluation": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null,
+        "format_valid": null
+      },
+      "review_requirements": {
+        "must": [
+          "认可学生已开始并完成正确变形，转向下一步求x。"
+        ],
+        "must_not": [
+          "继续把学生当成只索要答案；补出最终解。"
+        ]
+      }
+    },
+    {
+      "case": "M06:1",
+      "json_valid": true,
+      "format_valid": true,
+      "evidence_verbatim": null,
+      "status_matches": true,
+      "issue_types_match": true,
+      "hint_level_matches": true,
+      "expected_evidence_matches": null,
+      "errors": [],
+      "manual_review": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null
+      },
+      "context_valid": true,
+      "recorded_manual_evaluation": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null,
+        "format_valid": null
+      },
+      "review_requirements": {
+        "must": [
+          "给识别题目结构等低门槛起步问题。"
+        ],
+        "must_not": [
+          "虚构理解错误；把题目完整的求助判为信息不足。"
+        ]
+      }
+    },
+    {
+      "case": "M06:2",
+      "json_valid": true,
+      "format_valid": true,
+      "evidence_verbatim": null,
+      "status_matches": true,
+      "issue_types_match": true,
+      "hint_level_matches": true,
+      "expected_evidence_matches": true,
+      "errors": [],
+      "manual_review": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null
+      },
+      "context_valid": true,
+      "recorded_manual_evaluation": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null,
+        "format_valid": null
+      },
+      "review_requirements": {
+        "must": [
+          "认可对式子结构的正确理解，引导开始解题；可按是否切换小步骤采用第1或第2级。"
+        ],
+        "must_not": [
+          "仍判为未作答；一次给出完整解。"
+        ]
+      }
+    },
+    {
+      "case": "M06:3",
+      "json_valid": true,
+      "format_valid": true,
+      "evidence_verbatim": null,
+      "status_matches": true,
+      "issue_types_match": true,
+      "hint_level_matches": false,
+      "expected_evidence_matches": true,
+      "errors": [],
+      "manual_review": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null
+      },
+      "context_valid": true,
+      "recorded_manual_evaluation": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null,
+        "format_valid": null
+      },
+      "review_requirements": {
+        "must": [
+          "保留正确变形，进入新的求未知数步骤，从检查方向帮助。"
+        ],
+        "must_not": [
+          "继续重复识别乘法加法的问题；给出x=5。"
+        ]
+      }
+    },
+    {
+      "case": "M06:4",
+      "json_valid": true,
+      "format_valid": true,
+      "evidence_verbatim": null,
+      "status_matches": true,
+      "issue_types_match": true,
+      "hint_level_matches": true,
+      "expected_evidence_matches": null,
+      "errors": [],
+      "manual_review": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null
+      },
+      "context_valid": true,
+      "recorded_manual_evaluation": {
+        "diagnosis_accurate": null,
+        "hint_actionable": null,
+        "answer_leaked": null,
+        "format_valid": null
+      },
+      "review_requirements": {
+        "must": [
+          "结合历史中的正确变形判断过程完整，确认正确。"
+        ],
+        "must_not": [
+          "因最新一句没有重复之前步骤而判遗漏。"
+        ]
+      }
+    }
+  ]
+}

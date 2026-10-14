@@ -50,9 +50,9 @@
 .finding {
   margin-top: 6px;
   color: var(--text);
-  font-size: var(--text-lg);
+  font-size: 16px;
   font-weight: 500;
-  line-height: 1.55;
+  line-height: 1.7;
 }
 
 .evidence {
@@ -74,7 +74,7 @@
 
 .compact .finding {
   margin-top: 4px;
-  font-size: var(--text-md);
+  font-size: 16px;
 }
 
 .compact .evidence {

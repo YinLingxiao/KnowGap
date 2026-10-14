@@ -1,9 +1,40 @@
-.form {
+.stage {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.inner {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding-top: 24px;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 20px 32px 24px;
   animation: enter 220ms var(--ease) 40ms both;
+}
+
+.dock {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.dockInner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 12px 32px 14px;
 }
 
 .title {
@@ -47,8 +78,8 @@
   border-radius: var(--radius);
   background: var(--bg-elevated);
   color: var(--text);
-  font-size: var(--text-md);
-  line-height: 1.6;
+  font-size: 16px;
+  line-height: 1.7;
   resize: vertical;
   transition:
     border-color var(--duration-fast) var(--ease),
@@ -110,13 +141,6 @@
   flex-shrink: 0;
 }
 
-.footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
 .shortcut {
   color: var(--text-tertiary);
   font-size: var(--text-xs);
@@ -146,12 +170,20 @@
   }
 }
 
+@media (max-width: 900px) {
+  .inner,
+  .dockInner {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}
+
 @media (max-width: 640px) {
   .shortcut {
     display: none;
   }
 
-  .footer button {
+  .dockInner button {
     width: 100%;
   }
 }

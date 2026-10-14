@@ -1,16 +1,38 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { cx } from "@/lib/cx";
 import { topicLabel } from "@/lib/labels";
 import type { Problem } from "@/lib/types";
+import { StackBench } from "./StackBench";
 import { topicIcon } from "./topicIcon";
 import { RichText } from "./ui/RichText";
 import styles from "./ProblemStatement.module.css";
 
-/** 题目：标题 + 属性行 + 题干；后端提供序列时排成对照格，方便逐位比对 */
-export function ProblemStatement({ problem }: { problem: Problem }) {
-  const hasSequences = Boolean(problem.inputSequence?.length && problem.outputSequence?.length);
+function useNarrow() {
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const query = window.matchMedia("(max-width: 900px)");
+    const update = () => setNarrow(query.matches);
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+  return narrow;
+}
+
+/** 题目：标题 + 属性行 + 题干；有序列时给出可操作的栈，不含是否合法的判断 */
+export function ProblemStatement({ problem, compact = false }: { problem: Problem; compact?: boolean }) {
+  const input = problem.inputSequence ?? [];
+  const output = problem.outputSequence ?? [];
+  const hasSequences = input.length > 0 && output.length > 0;
   const Icon = topicIcon(problem.topicKey);
+  const narrow = useNarrow();
+  const bench = hasSequences ? <StackBench key={problem.id} input={input} output={output} /> : null;
+  const folded = compact || narrow;
 
   return (
-    <article className={styles.problem} aria-labelledby="problem-title">
+    <article className={cx(styles.problem, compact && styles.compact)} aria-labelledby="problem-title">
       <h1 id="problem-title" className={styles.title}>
         {problem.title}
       </h1>
@@ -28,29 +50,15 @@ export function ProblemStatement({ problem }: { problem: Problem }) {
         <RichText text={problem.statement} />
       </p>
 
-      {hasSequences && (
-        <table className={styles.sequences}>
-          <caption className="sr-only">序列对照</caption>
-          <tbody>
-            <tr>
-              <th scope="row">入栈顺序</th>
-              {problem.inputSequence?.map((value, index) => (
-                <td key={`in-${index}`}>
-                  <span>{value}</span>
-                </td>
-              ))}
-            </tr>
-            <tr>
-              <th scope="row">待判序列</th>
-              {problem.outputSequence?.map((value, index) => (
-                <td key={`out-${index}`}>
-                  <span className={styles.target}>{value}</span>
-                </td>
-              ))}
-            </tr>
-          </tbody>
-        </table>
-      )}
+      {bench &&
+        (folded ? (
+          <details className={styles.benchFold}>
+            <summary>自己推一推这道栈</summary>
+            {bench}
+          </details>
+        ) : (
+          bench
+        ))}
     </article>
   );
 }

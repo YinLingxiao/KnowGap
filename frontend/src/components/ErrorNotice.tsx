@@ -3,6 +3,7 @@ import {
   CircleHelp,
   RotateCcw,
   ServerCrash,
+  Settings2,
   Timer,
   TriangleAlert,
   Unplug,
@@ -35,6 +36,8 @@ interface ErrorNoticeProps {
   retryLabel?: string;
   onRestart?: () => void;
   onDismiss?: () => void;
+  /** 模型不可用时显示「配置模型」，打开设置里的模型接入卡片 */
+  onConfigure?: () => void;
   /** 出现时滚动到可见区域（用于页面下方的操作错误） */
   reveal?: boolean;
   className?: string;
@@ -48,6 +51,7 @@ export function ErrorNotice({
   retryLabel = "重试",
   onRestart,
   onDismiss,
+  onConfigure,
   reveal = false,
   className,
 }: ErrorNoticeProps) {
@@ -55,6 +59,7 @@ export function ErrorNotice({
   const copy = describeError(error, context);
   const Icon = ICONS[error.kind];
   const showDetail = error.message && error.message !== copy.title;
+  const configure = error.kind === "model_unavailable" ? onConfigure : undefined;
 
   useEffect(() => {
     if (reveal) ref.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -73,8 +78,13 @@ export function ErrorNotice({
         <div className={styles.title}>{copy.title}</div>
         <p className={styles.hint}>{copy.hint}</p>
         {showDetail && <p className={styles.detail}>详情：{error.message}</p>}
-        {(onRetry || onRestart) && (
+        {(onRetry || onRestart || configure) && (
           <div className={styles.actions}>
+            {configure && (
+              <Button size="sm" variant="primary" icon={<Settings2 size={14} />} onClick={configure}>
+                配置模型
+              </Button>
+            )}
             {onRestart && (
               <Button size="sm" variant="primary" icon={<RotateCcw size={14} />} onClick={onRestart}>
                 重新开始作答

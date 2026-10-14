@@ -26,7 +26,6 @@ interface ChatThreadProps {
 export function ChatThread({ submission, submissionDiagnosis, messages, sending, onRetry }: ChatThreadProps) {
   const endRef = useRef<HTMLDivElement>(null);
   const previousCount = useRef(messages.length);
-  const tutorTurns = messages.filter((message) => message.role === "tutor").length;
 
   // 有新消息时滚动到底部；首轮不滚动，保证作答与批注可见
   useEffect(() => {
@@ -42,14 +41,20 @@ export function ChatThread({ submission, submissionDiagnosis, messages, sending,
   const quoteInAnswer = Boolean(quote) && submission.answer.includes(quote);
   const quoteInReasoning = Boolean(quote) && !quoteInAnswer && submission.reasoning.includes(quote);
   const submissionVerdict = verdictOf(submissionDiagnosis);
+  let lastTutorIndex = -1;
+  messages.forEach((message, index) => {
+    if (message.role === "tutor") lastTutorIndex = index;
+  });
+  const earlier = lastTutorIndex > 0 ? messages.slice(0, lastTutorIndex) : [];
+  const currentTutor = lastTutorIndex >= 0 ? messages[lastTutorIndex] : null;
+  const after = lastTutorIndex >= 0 ? messages.slice(lastTutorIndex + 1) : messages;
 
   return (
     <section className={styles.thread} aria-labelledby="thread-title">
       <header className={styles.head}>
-        <h3 id="thread-title" className={styles.title}>
-          诊断与引导
+        <h3 id="thread-title" className="sr-only">
+          作答、批注与当前追问
         </h3>
-        <span className={styles.turns}>导师已回应 {tutorTurns} 轮</span>
       </header>
 
       <ol className={styles.list} aria-live="polite" aria-relevant="additions">
@@ -75,24 +80,33 @@ export function ChatThread({ submission, submissionDiagnosis, messages, sending,
           </div>
         </li>
 
-        {messages.map((message) =>
+        {earlier.length > 0 && (
+          <li className={styles.earlier}>
+            <details>
+              <summary>之前的追问 · {earlier.filter((message) => message.role === "tutor").length} 轮</summary>
+              <ol className={styles.list}>
+                {earlier.map((message) =>
+                  message.role === "tutor" ? (
+                    <TutorEntry key={message.id} message={message} />
+                  ) : (
+                    <StudentEntry key={message.id} message={message} onRetry={onRetry} />
+                  ),
+                )}
+              </ol>
+            </details>
+          </li>
+        )}
+
+        {currentTutor && (
+          <>
+            <li className={styles.currentLabel}>当前追问</li>
+            <TutorEntry message={currentTutor} />
+          </>
+        )}
+
+        {after.map((message) =>
           message.role === "tutor" ? (
-            <li key={message.id} className={cx(styles.entry, styles.tutor)}>
-              <Avatar role="tutor" />
-              <div className={styles.body}>
-                <Meta
-                  name="导师"
-                  time={message.createdAt}
-                  detail={message.phase === "answer" ? "讲解" : message.phase === "hint" ? "提示" : undefined}
-                />
-                <p className={styles.tutorText}>
-                  <RichText text={message.content} />
-                </p>
-                {message.memoryChanges?.map((change) => (
-                  <MemoryChangeNote key={`${change.memoryId}-${change.action}-${change.toStatus}`} change={change} />
-                ))}
-              </div>
-            </li>
+            <TutorEntry key={message.id} message={message} />
           ) : (
             <StudentEntry key={message.id} message={message} onRetry={onRetry} />
           ),
@@ -114,6 +128,27 @@ export function ChatThread({ submission, submissionDiagnosis, messages, sending,
       </ol>
       <div ref={endRef} className={styles.end} />
     </section>
+  );
+}
+
+function TutorEntry({ message }: { message: ThreadMessage }) {
+  return (
+    <li className={cx(styles.entry, styles.tutor)}>
+      <Avatar role="tutor" />
+      <div className={styles.body}>
+        <Meta
+          name="导师"
+          time={message.createdAt}
+          detail={message.phase === "answer" ? "讲解" : message.phase === "hint" ? "提示" : undefined}
+        />
+        <p className={styles.tutorText}>
+          <RichText text={message.content} />
+        </p>
+        {message.memoryChanges?.map((change) => (
+          <MemoryChangeNote key={`${change.memoryId}-${change.action}-${change.toStatus}`} change={change} />
+        ))}
+      </div>
+    </li>
   );
 }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 import { History, TriangleAlert } from "lucide-react";
 import { Button } from "./ui/Button";
 import styles from "./AnswerForm.module.css";
@@ -10,12 +10,24 @@ const MAX_LENGTH = 2000;
 interface AnswerFormProps {
   relatedMemoryCount: number;
   submitting: boolean;
+  answer: string;
+  reasoning: string;
+  onDraftChange: (answer: string, reasoning: string) => void;
   onSubmit: (answer: string, reasoning: string) => void;
+  leading?: ReactNode;
+  children?: ReactNode;
 }
 
-export function AnswerForm({ relatedMemoryCount, submitting, onSubmit }: AnswerFormProps) {
-  const [answer, setAnswer] = useState("");
-  const [reasoning, setReasoning] = useState("");
+export function AnswerForm({
+  relatedMemoryCount,
+  submitting,
+  answer,
+  reasoning,
+  onDraftChange,
+  onSubmit,
+  leading,
+  children,
+}: AnswerFormProps) {
   const [attempted, setAttempted] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
   const answerRef = useRef<HTMLTextAreaElement>(null);
@@ -42,7 +54,10 @@ export function AnswerForm({ relatedMemoryCount, submitting, onSubmit }: AnswerF
   };
 
   return (
-    <form ref={formRef} className={styles.form} onSubmit={handleSubmit} noValidate aria-busy={submitting}>
+    <form ref={formRef} className={styles.stage} onSubmit={handleSubmit} noValidate aria-busy={submitting}>
+      <div className={styles.scroll}>
+        <div className={styles.inner}>
+          {leading}
       <div className={styles.header}>
         <h3 className={styles.title}>你的作答</h3>
         <p className={styles.sub}>提交后，导师先在你的原文上做诊断批注，再用提问一步步引导。</p>
@@ -60,7 +75,7 @@ export function AnswerForm({ relatedMemoryCount, submitting, onSubmit }: AnswerF
           maxLength={MAX_LENGTH}
           value={answer}
           readOnly={submitting}
-          onChange={(event) => setAnswer(event.target.value)}
+          onChange={(event) => onDraftChange(event.target.value, reasoning)}
           onKeyDown={handleKeyDown}
           placeholder="例如：不合法 / 合法，或直接写出结果"
           aria-invalid={showAnswerError}
@@ -85,7 +100,7 @@ export function AnswerForm({ relatedMemoryCount, submitting, onSubmit }: AnswerF
           maxLength={MAX_LENGTH}
           value={reasoning}
           readOnly={submitting}
-          onChange={(event) => setReasoning(event.target.value)}
+          onChange={(event) => onDraftChange(answer, event.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="说说你是怎么想的，哪怕不确定也没关系。思路写得越具体，诊断越准确。"
         />
@@ -103,13 +118,19 @@ export function AnswerForm({ relatedMemoryCount, submitting, onSubmit }: AnswerF
         </div>
       )}
 
-      <div className={styles.footer}>
-        <span className={styles.shortcut}>
-          <kbd>Ctrl</kbd> + <kbd>Enter</kbd> 提交
-        </span>
-        <Button variant="primary" size="lg" type="submit" loading={submitting}>
-          {submitting ? "正在诊断…" : "提交并诊断"}
-        </Button>
+          {children}
+        </div>
+      </div>
+
+      <div className={styles.dock}>
+        <div className={styles.dockInner}>
+          <span className={styles.shortcut}>
+            <kbd>Ctrl</kbd> + <kbd>Enter</kbd> 提交
+          </span>
+          <Button variant="primary" size="lg" type="submit" loading={submitting}>
+            {submitting ? "正在诊断…" : "提交并诊断"}
+          </Button>
+        </div>
       </div>
     </form>
   );
