@@ -212,6 +212,14 @@
   padding: 4px 12px;
 }
 
+.listPane ul + .group {
+  margin-top: 12px;
+}
+
+.listPane li.muted {
+  padding: 4px 12px;
+}
+
 .listPane ul,
 .memories,
 .files ul {

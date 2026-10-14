@@ -13,6 +13,16 @@ export function levelLabel(level: Level | null): string | null {
   return LEVELS.find((item) => item.id === level)?.label ?? null;
 }
 
+/** 摘录只用于一两行预览，去掉 Markdown 记号后直接显示文字 */
+export function plainText(markdown: string): string {
+  return markdown
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/^\s{0,3}(#{1,6}|[-*+]|\d+\.|>)\s+/gm, "")
+    .replace(/[*_`~|]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export function studiedLabel(iso: string | null, now = Date.now()): string {
   if (!iso) return "还没开始";
   const time = new Date(iso).getTime();

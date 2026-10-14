@@ -70,18 +70,27 @@ def chat_router(store: ChatStore, service: ChatService) -> APIRouter:
             raise HTTPException(422, "标题不能为空。")
         if "subject_id" in fields:
             require_subject(body.subject_id)
-        if not store.update_conversation(
-            conversation_id, student,
-            title=body.title if "title" in fields else UNSET,
-            subject_id=body.subject_id if "subject_id" in fields else UNSET,
-        ):
+        try:
+            updated = store.update_conversation(
+                conversation_id, student,
+                title=body.title if "title" in fields else UNSET,
+                subject_id=body.subject_id if "subject_id" in fields else UNSET,
+            )
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from None
+        if not updated:
             raise HTTPException(404, "会话不存在或已删除。")
         return require(conversation_id)
 
     @router.delete("/conversations/{conversation_id}", status_code=204)
     def delete_conversation(conversation_id: str):
-        service.stop(conversation_id)
-        if not store.delete_conversation(conversation_id, student):
+        if store.role_context(conversation_id)["role"] != "main":
+            service.stop(conversation_id)
+        try:
+            deleted = store.delete_conversation(conversation_id, student)
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from None
+        if not deleted:
             raise HTTPException(404, "会话不存在或已删除。")
         return Response(status_code=204)
 

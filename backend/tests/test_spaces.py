@@ -108,11 +108,11 @@ def test_progress_counts_memories_and_threads(tmp_path):
         main_id = space["main_conversation_id"]
         send(client, main_id, "て形就是过去式", "req-prog-0001")
         send(client, main_id, "你好是こんにちは", "req-prog-0002")
-        open_thread = new_thread(client, space["id"], "thread-prog-01")
-        done = new_thread(client, space["id"], "thread-prog-02")
+        done = new_thread(client, space["id"], "thread-prog-01")
         client.post(f"/api/conversations/{done['id']}/resolve", json={
             "title": "问候", "summary": "问题是不会问候。结论是先记整句。", "takeaways": ["こんにちは"],
         })
+        open_thread = new_thread(client, space["id"], "thread-prog-02")
         progress = client.get(f"/api/subjects/{space['id']}").json()["progress"]
         assert progress["to_review"] == 1 and progress["mastered"] == 1 and progress["improving"] == 0
         assert progress["open_threads"] == 1 and progress["resolved_threads"] == 1
@@ -130,6 +130,51 @@ def test_deleting_a_space_turns_threads_into_chats(tmp_path):
         opened = client.get(f"/api/conversations/{thread['id']}").json()
         assert main["kind"] == "chat" and main["subject_id"] is None and main["parent_id"] is None
         assert opened["kind"] == "chat" and opened["parent_id"] is None and opened["thread_status"] is None
+
+
+def test_main_conversation_and_threads_stay_inside_their_space(tmp_path):
+    with TestClient(create_app(isolated_settings(tmp_path), chat_model=FakeChat())) as client:
+        space = new_space(client)
+        main_id = space["main_conversation_id"]
+        thread = new_thread(client, space["id"], "thread-own-001")
+
+        assert client.delete(f"/api/conversations/{main_id}").status_code == 409
+        assert client.get(f"/api/conversations/{main_id}").status_code == 200
+        assert client.get(f"/api/subjects/{space['id']}").json()["main_conversation_id"] == main_id
+
+        for conversation_id in (main_id, thread["id"]):
+            assert client.patch(f"/api/conversations/{conversation_id}", json={"subject_id": None}).status_code == 409
+            assert client.patch(f"/api/conversations/{conversation_id}", json={"subject_id": space["id"]}).status_code == 200
+            renamed = client.patch(f"/api/conversations/{conversation_id}", json={"title": "改个名"})
+            assert renamed.status_code == 200 and renamed.json()["title"] == "改个名"
+            assert renamed.json()["subject_id"] == space["id"]
+
+        assert client.delete(f"/api/conversations/{thread['id']}").status_code == 204
+
+
+def test_opening_a_thread_twice_reuses_the_empty_one(tmp_path):
+    model = FakeChat(["好的。"])
+    with TestClient(create_app(isolated_settings(tmp_path), chat_model=model)) as client:
+        space = new_space(client)
+        main_id = space["main_conversation_id"]
+        send(client, main_id, "我想学问候", "req-reuse-0001")
+        anchor_id = client.get(f"/api/conversations/{main_id}").json()["messages"][0]["id"]
+
+        first = new_thread(client, space["id"], "reuse-req-01", anchor_message_id=anchor_id)
+        assert new_thread(client, space["id"], "reuse-req-02", anchor_message_id=anchor_id)["id"] == first["id"]
+        blank = new_thread(client, space["id"], "reuse-req-03")
+        assert blank["id"] != first["id"]
+        assert new_thread(client, space["id"], "reuse-req-04")["id"] == blank["id"]
+        assert len(client.get(f"/api/subjects/{space['id']}/threads").json()) == 2
+
+        send(client, first["id"], "て形怎么用", "req-reuse-0002")
+        used = new_thread(client, space["id"], "reuse-req-05", anchor_message_id=anchor_id)
+        assert used["id"] != first["id"]
+
+        client.post(f"/api/conversations/{blank['id']}/resolve", json={
+            "title": "空的", "summary": "没有问题。随手关掉了。", "takeaways": [],
+        })
+        assert new_thread(client, space["id"], "reuse-req-06")["id"] != blank["id"]
 
 
 def test_old_space_conversations_become_threads(tmp_path):

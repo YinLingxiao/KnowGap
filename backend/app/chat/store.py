@@ -348,9 +348,12 @@ class ChatStore:
 
     def update_conversation(self, conversation_id: str, student_id: str, title=UNSET, subject_id=UNSET) -> bool:
         with self.connection() as db:
-            if db.execute("SELECT 1 FROM conversations WHERE id = ? AND student_id = ?",
-                          (conversation_id, student_id)).fetchone() is None:
+            row = db.execute("SELECT kind, subject_id FROM conversations WHERE id = ? AND student_id = ?",
+                             (conversation_id, student_id)).fetchone()
+            if row is None:
                 return False
+            if subject_id is not UNSET and subject_id != row["subject_id"] and (row["kind"] or "chat") != "chat":
+                raise ValueError("主对话和 Thread 属于学习空间，不能单独移出。")
             if title is not UNSET:
                 db.execute("UPDATE conversations SET title = ?, title_source = 'user' WHERE id = ?",
                            (title, conversation_id))
@@ -502,6 +505,16 @@ class ChatStore:
             ).fetchone()
             if existing:
                 return existing["id"]
+            # A thread nobody has written in yet is reused, so repeated clicks do not pile up empty ones.
+            blank = db.execute(
+                "SELECT id FROM conversations c WHERE c.student_id = ? AND c.subject_id = ? AND c.kind = 'thread' "
+                "AND COALESCE(c.thread_status, 'open') = 'open' AND c.anchor_message_id IS ? "
+                "AND NOT EXISTS (SELECT 1 FROM conversation_messages m WHERE m.conversation_id = c.id) "
+                "ORDER BY c.created_at LIMIT 1",
+                (student_id, subject_id, anchor_message_id or None),
+            ).fetchone()
+            if blank:
+                return blank["id"]
             if anchor_message_id:
                 anchor = db.execute(
                     "SELECT 1 FROM conversation_messages WHERE id = ? AND conversation_id = ?",
@@ -605,6 +618,11 @@ class ChatStore:
 
     def delete_conversation(self, conversation_id: str, student_id: str) -> bool:
         with self.connection() as db:
+            row = db.execute(
+                "SELECT kind FROM conversations WHERE id = ? AND student_id = ?", (conversation_id, student_id),
+            ).fetchone()
+            if row is not None and row["kind"] == "main":
+                raise ValueError("主对话不能单独删除，请删除整个学习空间。")
             cursor = db.execute(
                 "DELETE FROM conversations WHERE id = ? AND student_id = ?", (conversation_id, student_id),
             )

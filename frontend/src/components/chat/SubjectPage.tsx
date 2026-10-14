@@ -6,7 +6,7 @@ import type { ChatController } from "@/hooks/useChat";
 import { createMaterialClient } from "@/lib/api/material-client";
 import { toApiError } from "@/lib/api/errors";
 import { chatApi } from "@/lib/chat/api";
-import { levelLabel, progressLine } from "@/lib/chat/space";
+import { levelLabel, plainText, progressLine } from "@/lib/chat/space";
 import type { ConversationSummary, LearnerMemory, Subject } from "@/lib/chat/types";
 import { API_BASE_URL } from "@/lib/config";
 import { cx } from "@/lib/cx";
@@ -128,12 +128,14 @@ export function SubjectPage({
   const branch = async (messageId: string) => {
     const created = await chatApi.createThread(subject.id, { anchorMessageId: messageId, clientRequestId: requestId() });
     await refreshThreads();
+    void chat.loadSubjects();
     openThread(created.id);
   };
 
   const newThread = async () => {
     const created = await chatApi.createThread(subject.id, { clientRequestId: requestId() });
     await refreshThreads();
+    void chat.loadSubjects();
     openThread(created.id);
   };
 
@@ -288,7 +290,7 @@ export function SubjectPage({
               <header className={styles.threadHead}>
                 <div>
                   <strong>{threadSummary?.title ?? "Thread"}</strong>
-                  {threadSummary?.anchor && <p className={styles.anchor}>{threadSummary.anchor.excerpt}</p>}
+                  {threadSummary?.anchor && <p className={styles.anchor}>{plainText(threadSummary.anchor.excerpt)}</p>}
                 </div>
                 {threadSummary?.threadStatus === "resolved" ? (
                   <button onClick={() => void reopen(threadId)}>重新打开</button>
@@ -418,7 +420,7 @@ function ThreadList({
           <li key={item.id}>
             <button onClick={() => onOpen(item.id)}>
               <span>{item.title}</span>
-              {item.preview && <small>{item.preview}</small>}
+              {item.preview && <small>{plainText(item.preview)}</small>}
             </button>
           </li>
         ))}
