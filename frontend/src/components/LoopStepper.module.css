@@ -1,68 +1,57 @@
 .stepper {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
-  justify-content: center;
-  gap: 0;
-  font-size: var(--text-ui);
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: var(--text-sm);
 }
 
 .step {
   display: flex;
   align-items: center;
-  gap: 6px;
-  color: var(--ink-dim);
-}
-
-/* 步骤之间用一段短细线连接 */
-.step + .step::before {
-  content: "";
-  width: 28px;
-  height: 1px;
-  margin: 0 12px;
-  background: var(--rule);
+  gap: 5px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  transition:
+    background-color var(--duration) var(--ease),
+    color var(--duration) var(--ease);
 }
 
 .index {
   display: inline-grid;
   place-items: center;
-  min-width: 14px;
+  min-width: 12px;
   font-size: var(--text-xs);
   font-weight: 600;
 }
 
-.label {
-  padding: 2px 0;
-  border-bottom: 1px solid transparent;
-  transition:
-    color var(--duration) var(--ease),
-    border-color 220ms var(--ease-reveal);
-}
-
 .done {
-  color: var(--ink-muted);
+  color: var(--text-secondary);
 }
 
 .done .index {
-  color: var(--verdict-correct);
+  color: var(--green);
 }
 
+/* 当前步骤：浅强调底 + 强调色文字 */
 .active {
-  color: var(--ink-strong);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-weight: 500;
 }
 
-.active .index {
-  color: var(--accent-ink);
-}
+@media (max-width: 1080px) {
+  .label {
+    display: none;
+  }
 
-/* 当前步骤：强调色下划线 */
-.active .label {
-  border-bottom-color: var(--accent);
-  font-weight: 600;
-}
-
-@media (max-width: 480px) {
-  .step + .step::before {
-    width: 12px;
-    margin: 0 8px;
+  .active .label {
+    display: inline;
   }
 }

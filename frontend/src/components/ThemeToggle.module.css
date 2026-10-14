@@ -1,0 +1,27 @@
+.toggle {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius);
+  color: var(--text-tertiary);
+  transition:
+    background-color var(--duration-fast) var(--ease),
+    color var(--duration-fast) var(--ease);
+}
+
+.toggle:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.icon {
+  animation: spin-in 280ms var(--ease);
+}
+
+@keyframes spin-in {
+  from {
+    opacity: 0;
+    transform: rotate(-60deg) scale(0.7);
+  }
+}

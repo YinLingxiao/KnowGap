@@ -1,11 +1,11 @@
-/* 题目与对话中的序列、代码：等宽、不加框，只用浅底衬一下 */
 .code {
-  padding: 0 0.25em;
-  border-radius: var(--radius-chip);
-  background: var(--surface-soft);
-  color: var(--ink-strong);
+  padding: 1px 5px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
+  color: var(--text);
   font-family: var(--font-mono);
-  font-size: 0.86em;
+  font-size: 0.88em;
   font-variant-ligatures: none;
   white-space: nowrap;
 }

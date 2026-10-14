@@ -1,46 +1,46 @@
-/* 批注：左侧 1px 强调色细线 + 缩进，批语用宋体，标签与数字用无衬线 */
+/* 诊断批注：挂在作答下方的一块小面板，结论颜色只出现在图标与标签上 */
 .note {
-  --verdict: var(--verdict-uncertain);
-  margin-top: var(--space-3);
-  padding: 2px 0 2px var(--space-4);
-  border-left: 1px solid var(--accent);
-  animation: enter 400ms var(--ease-reveal);
+  --verdict: var(--grey);
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
+  animation: enter 260ms var(--ease) 60ms both;
 }
 
 .incorrect {
-  --verdict: var(--verdict-incorrect);
+  --verdict: var(--orange);
 }
 
 .correct {
-  --verdict: var(--verdict-correct);
+  --verdict: var(--green);
 }
 
 .head {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 12px;
+  align-items: center;
+  gap: 4px 10px;
   font-size: var(--text-xs);
 }
 
 .mark {
-  color: var(--accent-ink);
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  color: var(--text-tertiary);
+  font-weight: 500;
 }
 
 .verdict {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  align-self: center;
+  gap: 5px;
   color: var(--verdict);
   font-size: var(--text-sm);
   font-weight: 600;
 }
 
 .topic {
-  color: var(--ink-dim);
+  color: var(--text-tertiary);
 }
 
 .head > :last-child {
@@ -49,63 +49,64 @@
 
 .finding {
   margin-top: 6px;
-  color: var(--ink-strong);
-  font-family: var(--font-content);
-  font-size: var(--text-lead);
-  line-height: 1.6;
+  color: var(--text);
+  font-size: var(--text-lg);
+  font-weight: 500;
+  line-height: 1.55;
 }
 
 .evidence {
-  margin-top: 6px;
-  color: var(--ink-muted);
-  font-size: var(--text-sm);
+  margin-top: 4px;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
   line-height: 1.6;
 }
 
 .quote {
-  color: var(--ink);
-  font-family: var(--font-content);
+  color: var(--text-secondary);
   quotes: "「" "」";
 }
 
 .compact {
-  margin-top: var(--space-2);
+  margin-top: 6px;
+  padding: 7px 10px;
 }
 
 .compact .finding {
   margin-top: 4px;
-  font-size: var(--text-base);
+  font-size: var(--text-md);
 }
 
 .compact .evidence {
   margin-top: 2px;
-  font-size: var(--text-xs);
 }
 
 .pending {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: var(--space-5) 0;
-  color: var(--ink-muted);
+  padding: 20px 0;
+  color: var(--text-secondary);
   font-size: var(--text-sm);
 }
 
 .pendingLine {
   position: relative;
   display: block;
-  height: 1px;
+  height: 2px;
   overflow: hidden;
-  background: var(--rule);
+  border-radius: 2px;
+  background: var(--bg-hover);
 }
 
 .pendingLine::after {
   content: "";
   position: absolute;
   inset: 0 auto 0 0;
-  width: 30%;
+  width: 35%;
+  border-radius: 2px;
   background: var(--accent);
-  animation: travel 1.6s var(--ease) infinite;
+  animation: travel 1.3s var(--ease) infinite;
 }
 
 @keyframes travel {
@@ -113,7 +114,7 @@
     transform: translateX(-100%);
   }
   to {
-    transform: translateX(340%);
+    transform: translateX(300%);
   }
 }
 

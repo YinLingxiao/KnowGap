@@ -10,6 +10,7 @@
     "test:api": "node --test tests/http-client.test.cjs"
   },
   "dependencies": {
+    "@fontsource-variable/inter": "5.2.8",
     "lucide-react": "1.56.0",
     "next": "15.1.12",
     "react": "19.0.8",

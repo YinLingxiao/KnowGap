@@ -1,178 +1,227 @@
 .record {
-  padding: var(--space-4) var(--space-3);
-  border-bottom: 1px solid var(--rule);
-  transition: background-color 400ms var(--ease);
-  animation: enter 300ms var(--ease-reveal);
+  padding: 8px 8px 10px;
+  border-radius: var(--radius-lg);
+  transition: background-color var(--duration) var(--ease);
+  animation: enter 220ms var(--ease);
 }
 
-/* 本轮参考的记忆：浅强调底色，表示“正在被使用” */
-.used {
+.record:hover {
+  background: var(--bg-hover);
+}
+
+/* 本轮参考的记忆：浅强调底色 */
+.used,
+.used:hover {
   background: var(--accent-soft);
 }
 
 .flash {
-  animation: flash 1.6s var(--ease);
+  animation: flash 1.4s var(--ease);
 }
 
-.top {
+.row {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 10px;
+  align-items: flex-start;
+  gap: 4px;
 }
 
-.usedTag {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  color: var(--accent-ink);
-  font-size: var(--text-xs);
-  font-weight: 600;
+.rowButton {
+  display: flex;
+  flex: 1;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  text-align: left;
 }
 
-.changedTag {
-  color: var(--ink-muted);
-  font-size: var(--text-xs);
-}
-
-.time {
-  margin-left: auto;
-  color: var(--ink-dim);
-  font-size: var(--text-xs);
-  white-space: nowrap;
+.status {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  height: 20px;
 }
 
 .summary {
-  margin-top: 6px;
-  color: var(--ink-strong);
-  font-family: var(--font-content);
-  font-size: var(--text-base);
-  line-height: 1.65;
+  flex: 1;
+  min-width: 0;
+  color: var(--text);
+  font-size: var(--text-md);
+  font-weight: 500;
+  line-height: 20px;
+}
+
+.chevron {
+  flex-shrink: 0;
+  margin-top: 4px;
+  color: var(--text-tertiary);
+  transition: transform var(--duration) var(--ease);
+}
+
+.open .chevron {
+  transform: rotate(90deg);
+}
+
+/* 删除按钮：桌面悬停时出现，触屏一直显示 */
+.delete {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+  opacity: 0;
+  transition:
+    opacity var(--duration-fast) var(--ease),
+    background-color var(--duration-fast) var(--ease),
+    color var(--duration-fast) var(--ease);
+}
+
+.record:hover .delete,
+.delete:focus-visible {
+  opacity: 1;
+}
+
+.delete:hover {
+  background: var(--red-soft);
+  color: var(--red);
+}
+
+@media (hover: none) {
+  .delete {
+    opacity: 1;
+  }
 }
 
 .meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 2px 12px;
-  margin-top: 4px;
-  color: var(--ink-dim);
+  gap: 2px 8px;
+  margin: 3px 0 0 22px;
+  color: var(--text-tertiary);
   font-size: var(--text-xs);
 }
 
-.actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  margin-top: 6px;
+.statusLabel {
+  color: var(--text-secondary);
 }
 
-.textButton {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  min-height: 32px;
-  color: var(--ink-muted);
-  font-size: var(--text-xs);
-  font-weight: 600;
-  transition: color var(--duration) var(--ease);
-}
-
-.textButton:hover {
-  color: var(--accent-ink);
-}
-
-.deleteButton {
+.time {
   margin-left: auto;
 }
 
-.deleteButton:hover {
-  color: var(--danger);
+.tags {
+  display: flex;
+  gap: 6px;
+  margin: 6px 0 0 22px;
 }
 
-.chevron {
-  transition: transform 220ms var(--ease-reveal);
+.usedTag,
+.changedTag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: var(--radius-sm);
+  font-size: 10.5px;
+  font-weight: 500;
 }
 
-.chevronOpen {
-  transform: rotate(180deg);
+.usedTag {
+  background: var(--accent-soft-strong);
+  color: var(--accent-text);
+}
+
+.changedTag {
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
 }
 
 .refs {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
-  margin-top: var(--space-2);
-  padding-top: var(--space-3);
-  border-top: 1px dashed var(--rule);
-}
-
-.ref {
-  display: grid;
-  grid-template-columns: 1.25rem minmax(0, 1fr);
-  gap: 6px;
-}
-
-.refIndex {
-  color: var(--ink-dim);
-  font-size: var(--text-xs);
-  font-weight: 600;
-}
-
-.refBody {
-  min-width: 0;
+  gap: 8px;
+  margin: 8px 0 0 22px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  animation: reveal 200ms var(--ease);
 }
 
 .refLabel {
-  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
   font-size: var(--text-xs);
-  font-weight: 600;
+  font-weight: 500;
+}
+
+.refIndex {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--bg-active);
+  color: var(--text-secondary);
+  font-size: 10px;
 }
 
 .refExcerpt {
-  margin-top: 4px;
-  padding-left: 10px;
-  border-left: 1px solid var(--rule-strong);
-  color: var(--ink-muted);
-  font-family: var(--font-content);
-  font-size: var(--text-sm);
+  margin: 4px 0 0 22px;
+  padding-left: 8px;
+  border-left: 2px solid var(--border-strong);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
   line-height: 1.6;
   word-break: break-word;
 }
 
 .refMeta {
-  margin-top: 2px;
-  color: var(--ink-dim);
+  margin: 2px 0 0 22px;
+  color: var(--text-tertiary);
   font-family: var(--font-mono);
-  font-size: 0.6875rem;
+  font-size: 10.5px;
 }
 
 .refEmpty {
-  color: var(--ink-dim);
+  color: var(--text-tertiary);
   font-size: var(--text-xs);
 }
 
 .confirm {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  margin-top: var(--space-2);
-  padding: 10px 12px;
-  border: 1px solid var(--danger-line);
-  border-radius: var(--radius-control);
-  background: var(--danger-surface);
-  color: var(--danger);
-  font-size: var(--text-sm);
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin: 8px 0 0 22px;
+  padding: 6px 6px 6px 10px;
+  border: 1px solid color-mix(in srgb, var(--red) 35%, var(--border));
+  border-radius: var(--radius);
+  background: var(--red-soft);
+  color: var(--red);
+  font-size: var(--text-xs);
+  animation: reveal 160ms var(--ease);
 }
 
 .confirmActions {
   display: flex;
-  justify-content: flex-end;
-  gap: 6px;
+  gap: 4px;
 }
 
 @keyframes enter {
   from {
     opacity: 0;
+    transform: translateY(3px);
+  }
+}
+
+@keyframes reveal {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
   }
 }
 
@@ -183,6 +232,6 @@
   }
   30%,
   60% {
-    background: color-mix(in srgb, var(--accent) 22%, var(--bg));
+    background: var(--accent-soft-strong);
   }
 }

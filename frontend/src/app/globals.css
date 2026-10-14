@@ -1,79 +1,130 @@
 /* ============================================
- * KnowGap 设计令牌 —— 墨浅设计系统 Quiet Utility
- * 中性灰阶 + 一个强调色；层级靠字号、明度与留白，强调色只给批注与当前状态。
- * 内容（题目、作答、导师回复）用宋体系，界面信息（标签、按钮、数字）用无衬线。
- * 详见 frontend/DESIGN.md。
+ * KnowGap 设计令牌：紧凑工具界面（参考 Linear 的密度与交互）
+ * 中性灰阶 + 一个蓝色强调；浅色 / 深色两套，默认跟随系统，
+ * <html data-theme="light|dark"> 手动覆盖。详见 frontend/DESIGN.md。
  * ============================================ */
 
 :root {
   color-scheme: light;
 
-  /* 字体：只是回退栈，不下载字体 */
-  --font-content: "STZhongsong", "华文中宋", "Noto Serif SC", "Source Han Serif SC", "Songti SC", "SimSun", serif;
-  --font-ui: "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Noto Sans SC", "HarmonyOS Sans SC", system-ui,
-    -apple-system, "Segoe UI", sans-serif;
+  --font-sans: "Inter Variable", "Inter", "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans SC",
+    system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", "Cascadia Code", "SF Mono", Consolas, monospace;
 
-  /* 中性灰阶：工作区纯白，两侧栏浅灰，靠明度与细线分区 */
+  /* 浅色 */
   --bg: #ffffff;
-  --surface-side: #f6f6f6; /* 左右侧栏 */
-  --surface-raised: #ffffff; /* 输入框、浮层 */
-  --surface-soft: #f0f0f0; /* 选中行、学生作答区 */
-  --surface-deep: #e6e6e6; /* 骨架屏、按下 */
-  --ink: #292929;
-  --ink-strong: #141414;
-  --ink-muted: #555555;
-  --ink-dim: #6b6b6b;
-  --rule: #dedede; /* 装饰分隔线 */
-  --rule-strong: #767676; /* 控件边界 */
+  --bg-sidebar: #f7f7f8;
+  --bg-elevated: #ffffff;
+  --bg-subtle: #f4f4f5; /* 作答区、代码片段 */
+  --bg-hover: #efeff1;
+  --bg-active: #e8e8eb;
+  --border: #e6e6e9;
+  --border-strong: #d2d2d7;
+  --text: #1b1b1f;
+  --text-secondary: #5d5e66;
+  --text-tertiary: #72737a;
 
-  /* 强调色：朱砂橙，只用于批注、当前状态、链接与焦点。换色只改这三行 */
-  --accent: #c84b1e;
-  --accent-soft: #fbece5;
-  --accent-ink: #a33c15; /* 浅底上的强调文字 */
+  --accent: #3d6fdb;
+  --accent-hover: #3462c7;
+  --accent-text: #2d5bc4;
+  --accent-soft: rgb(61 111 219 / 9%);
+  --accent-soft-strong: rgb(61 111 219 / 16%);
+  --on-accent: #ffffff;
+  /* 实心按钮两套主题共用，保证白字对比度 ≥ 4.5:1 */
+  --accent-solid: #3d6fdb;
+  --accent-solid-hover: #3462c7;
 
-  /* 语义色：只在有意义时出现 */
-  --danger: #a61b1b;
-  --danger-surface: #fdeeee;
-  --danger-line: #e4b1b1;
-  --verdict-correct: #2f6b3f;
-  --verdict-incorrect: var(--accent-ink);
-  --verdict-uncertain: #6b6b6b;
+  --green: #2e8a5c;
+  --orange: #c2650a;
+  --red: #c93535;
+  --red-soft: rgb(201 53 53 / 8%);
+  --amber: #a87b0c;
+  --grey: #8a8b91;
 
-  /* 学习记忆状态 */
-  --st-suspected: #8f6400;
-  --st-review: #b42318;
-  --st-improving: #2e5e8c;
-  --st-resolved: #2f6b3f;
+  --shadow-popover: 0 0 0 1px rgb(0 0 0 / 4%), 0 8px 24px rgb(0 0 0 / 10%), 0 2px 6px rgb(0 0 0 / 6%);
 
-  /* 字号（固定 rem，比例约 1.2） */
-  --text-xs: 0.75rem; /* 12 元信息 */
-  --text-sm: 0.8125rem; /* 13 辅助说明 */
-  --text-ui: 0.875rem; /* 14 控件 */
-  --text-base: 0.9375rem; /* 15 界面正文 */
-  --text-read: 1.0625rem; /* 17 对话正文 */
-  --text-lead: 1.1875rem; /* 19 题干 */
-  --text-title: 1.625rem; /* 26 题目标题 */
-  --text-display: 2rem; /* 32 导读标题 */
+  --text-xs: 11.5px;
+  --text-sm: 12.5px;
+  --text-md: 13.5px;
+  --text-lg: 15px;
+  --text-xl: 18px;
+  --text-2xl: 22px;
 
-  /* 间距 4 / 8 / 12 / 16 / 24 / 32 / 48 / 64 */
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-5: 24px;
-  --space-6: 32px;
-  --space-7: 48px;
-  --space-8: 64px;
+  --radius-sm: 4px;
+  --radius: 6px;
+  --radius-lg: 8px;
 
-  --radius-control: 6px;
-  --radius-chip: 3px;
-  --shadow-float: 0 12px 32px rgb(20 20 20 / 12%);
-
-  --header-h: 64px;
+  --duration-fast: 120ms;
   --duration: 180ms;
-  --ease: cubic-bezier(0.32, 0.08, 0.24, 1);
-  --ease-reveal: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  --sidebar-w: 248px;
+  --panel-w: 340px;
+  --topbar-h: 52px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #111214;
+    --bg-sidebar: #0d0e10;
+    --bg-elevated: #18191c;
+    --bg-subtle: #18191c;
+    --bg-hover: #1b1c20;
+    --bg-active: #232429;
+    --border: #232428;
+    --border-strong: #33343a;
+    --text: #e8e8ea;
+    --text-secondary: #a3a4aa;
+    --text-tertiary: #7f8087;
+
+    --accent: #5b8def;
+    --accent-hover: #4c80e8;
+    --accent-text: #8db1f6;
+    --accent-soft: rgb(91 141 239 / 12%);
+    --accent-soft-strong: rgb(91 141 239 / 22%);
+    --on-accent: #ffffff;
+
+    --green: #4cb782;
+    --orange: #f2994a;
+    --red: #eb6b6b;
+    --red-soft: rgb(235 107 107 / 10%);
+    --amber: #d9a23a;
+    --grey: #7f8087;
+
+    --shadow-popover: 0 0 0 1px rgb(255 255 255 / 6%), 0 12px 32px rgb(0 0 0 / 50%);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #111214;
+  --bg-sidebar: #0d0e10;
+  --bg-elevated: #18191c;
+  --bg-subtle: #18191c;
+  --bg-hover: #1b1c20;
+  --bg-active: #232429;
+  --border: #232428;
+  --border-strong: #33343a;
+  --text: #e8e8ea;
+  --text-secondary: #a3a4aa;
+  --text-tertiary: #7f8087;
+
+  --accent: #5b8def;
+  --accent-hover: #4c80e8;
+  --accent-text: #8db1f6;
+  --accent-soft: rgb(91 141 239 / 12%);
+  --accent-soft-strong: rgb(91 141 239 / 22%);
+  --on-accent: #ffffff;
+
+  --green: #4cb782;
+  --orange: #f2994a;
+  --red: #eb6b6b;
+  --red-soft: rgb(235 107 107 / 10%);
+  --amber: #d9a23a;
+  --grey: #7f8087;
+
+  --shadow-popover: 0 0 0 1px rgb(255 255 255 / 6%), 0 12px 32px rgb(0 0 0 / 50%);
 }
 
 *,
@@ -89,22 +140,26 @@
 
 html {
   -webkit-text-size-adjust: 100%;
-  scroll-padding-top: calc(var(--header-h) + 16px);
-  scrollbar-color: var(--rule-strong) transparent;
 }
 
 body {
   min-height: 100vh;
-  overflow-x: hidden;
   background: var(--bg);
-  color: var(--ink);
-  caret-color: var(--accent);
-  font-family: var(--font-ui);
-  font-size: var(--text-base);
-  line-height: 1.6;
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: var(--text-md);
+  line-height: 1.55;
+  font-feature-settings: "cv11", "ss01";
   font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+}
+
+/* 只在手动切换主题的那一刻做颜色过渡，不影响组件自身的动效 */
+html.theme-switching,
+html.theme-switching * {
+  transition: background-color 220ms var(--ease), border-color 220ms var(--ease), color 220ms var(--ease) !important;
 }
 
 button,
@@ -138,12 +193,11 @@ kbd {
 
 :focus-visible {
   outline: 2px solid var(--accent);
-  outline-offset: 3px;
+  outline-offset: 2px;
 }
 
 ::selection {
-  background: var(--accent-soft);
-  color: var(--ink-strong);
+  background: var(--accent-soft-strong);
 }
 
 ::-webkit-scrollbar {
@@ -152,13 +206,10 @@ kbd {
 }
 
 ::-webkit-scrollbar-thumb {
-  border: 3px solid var(--bg);
+  border: 3px solid transparent;
   border-radius: 10px;
-  background: var(--rule);
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: var(--rule-strong);
+  background: var(--border-strong);
+  background-clip: padding-box;
 }
 
 ::-webkit-scrollbar-track {

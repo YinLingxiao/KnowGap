@@ -1,84 +1,110 @@
 .problem {
-  padding-bottom: var(--space-6);
-  border-bottom: 1px solid var(--ink);
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--border);
+  animation: enter 220ms var(--ease);
 }
 
-.meta {
+.title {
+  font-size: var(--text-2xl);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.35;
+  text-wrap: balance;
+}
+
+/* 属性行：像 issue 的属性标签 */
+.properties {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 14px;
-  color: var(--ink-dim);
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.property {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-secondary);
   font-size: var(--text-xs);
+}
+
+.property svg {
+  color: var(--accent);
 }
 
 .id {
   margin-left: auto;
+  color: var(--text-tertiary);
   font-family: var(--font-mono);
-}
-
-.title {
-  margin-top: var(--space-3);
-  color: var(--ink-strong);
-  font-family: var(--font-content);
-  font-size: var(--text-title);
-  font-weight: 400;
-  line-height: 1.4;
-  letter-spacing: 0.02em;
-  text-wrap: balance;
+  font-size: var(--text-xs);
 }
 
 .statement {
-  max-width: 36em;
-  margin-top: var(--space-4);
-  color: var(--ink);
-  font-family: var(--font-content);
-  font-size: var(--text-lead);
-  line-height: 1.9;
+  margin-top: 16px;
+  color: var(--text);
+  font-size: var(--text-lg);
+  line-height: 1.75;
   white-space: pre-wrap;
 }
 
-/* 序列对照：表头左对齐，数字等宽，便于逐位比较 */
 .sequences {
-  margin-top: var(--space-5);
-  border-collapse: collapse;
-  font-variant-numeric: tabular-nums;
+  margin-top: 16px;
+  border-collapse: separate;
+  border-spacing: 4px;
+  margin-left: -4px;
 }
 
 .sequences th {
-  padding: 8px 20px 8px 0;
-  color: var(--ink-dim);
+  padding-right: 12px;
+  color: var(--text-tertiary);
   font-size: var(--text-xs);
-  font-weight: 600;
+  font-weight: 500;
   text-align: left;
   white-space: nowrap;
 }
 
-.sequences td {
-  min-width: 2.75rem;
-  padding: 6px 0;
-  color: var(--ink-strong);
-  font-family: var(--font-ui);
-  font-size: 1.375rem;
+.sequences td span {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-subtle);
+  font-family: var(--font-mono);
+  font-size: var(--text-lg);
   font-weight: 500;
-  text-align: center;
 }
 
-.sequences tr + tr th,
-.sequences tr + tr td {
-  border-top: 1px solid var(--rule);
+.sequences td .target {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+@keyframes enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
 }
 
 @media (max-width: 640px) {
   .title {
-    font-size: 1.375rem;
+    font-size: var(--text-xl);
   }
 
   .statement {
-    font-size: var(--text-read);
+    font-size: var(--text-md);
   }
 
-  .sequences td {
-    min-width: 2rem;
-    font-size: 1.125rem;
+  .sequences td span {
+    width: 28px;
+    height: 28px;
   }
 }

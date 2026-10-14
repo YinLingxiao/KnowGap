@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, type ReactNode } from "react";
-import { RotateCcw } from "lucide-react";
+import { GraduationCap, RotateCcw } from "lucide-react";
 import type { ThreadMessage } from "@/hooks/useWorkbench";
 import { cx } from "@/lib/cx";
 import { formatClock } from "@/lib/labels";
@@ -54,8 +54,9 @@ export function ChatThread({ submission, submissionDiagnosis, messages, sending,
 
       <ol className={styles.list} aria-live="polite" aria-relevant="additions">
         <li className={cx(styles.entry, styles.student, styles.submission)}>
-          <Speaker name="我的作答" />
+          <Avatar role="student" />
           <div className={styles.body}>
+            <Meta name="我的作答" />
             <div className={styles.studentBox}>
               <p className={styles.answer}>
                 {quoteInAnswer ? <Marked text={submission.answer} quote={quote} verdict={submissionVerdict} /> : submission.answer}
@@ -77,12 +78,13 @@ export function ChatThread({ submission, submissionDiagnosis, messages, sending,
         {messages.map((message) =>
           message.role === "tutor" ? (
             <li key={message.id} className={cx(styles.entry, styles.tutor)}>
-              <Speaker
-                name="导师"
-                time={message.createdAt}
-                detail={message.phase === "answer" ? "讲解" : message.phase === "hint" ? "提示" : undefined}
-              />
+              <Avatar role="tutor" />
               <div className={styles.body}>
+                <Meta
+                  name="导师"
+                  time={message.createdAt}
+                  detail={message.phase === "answer" ? "讲解" : message.phase === "hint" ? "提示" : undefined}
+                />
                 <p className={styles.tutorText}>
                   <RichText text={message.content} />
                 </p>
@@ -98,7 +100,7 @@ export function ChatThread({ submission, submissionDiagnosis, messages, sending,
 
         {sending && (
           <li className={cx(styles.entry, styles.tutor)}>
-            <Speaker name="导师" />
+            <Avatar role="tutor" />
             <div className={styles.typing} aria-label="导师正在思考">
               正在思考
               <span className={styles.dots} aria-hidden>
@@ -121,8 +123,9 @@ function StudentEntry({ message, onRetry }: { message: ThreadMessage; onRetry: (
 
   return (
     <li className={cx(styles.entry, styles.student, message.delivery === "failed" && styles.failed)}>
-      <Speaker name="我" time={message.createdAt} />
+      <Avatar role="student" />
       <div className={styles.body}>
+        <Meta name="我" time={message.createdAt} />
         <div className={styles.studentBox}>
           <p className={styles.studentText}>
             {marked && message.diagnosis ? (
@@ -145,12 +148,24 @@ function StudentEntry({ message, onRetry }: { message: ThreadMessage; onRetry: (
   );
 }
 
-function Speaker({ name, time, detail }: { name: string; time?: string; detail?: ReactNode }) {
+function Avatar({ role }: { role: "student" | "tutor" }) {
+  return role === "tutor" ? (
+    <span className={cx(styles.avatar, styles.avatarTutor)} aria-hidden>
+      <GraduationCap size={13} />
+    </span>
+  ) : (
+    <span className={cx(styles.avatar, styles.avatarStudent)} aria-hidden>
+      演
+    </span>
+  );
+}
+
+function Meta({ name, time, detail }: { name: string; time?: string; detail?: ReactNode }) {
   return (
-    <div className={styles.speaker}>
-      <span className={styles.speakerName}>{name}</span>
-      {detail && <span className={styles.speakerDetail}>{detail}</span>}
-      {time && <span className={styles.speakerTime}>{formatClock(time)}</span>}
+    <div className={styles.meta}>
+      <span className={styles.metaName}>{name}</span>
+      {detail && <span className={styles.metaChip}>{detail}</span>}
+      {time && <span className={styles.metaTime}>{formatClock(time)}</span>}
     </div>
   );
 }

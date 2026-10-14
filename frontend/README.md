@@ -55,4 +55,4 @@ npm run build
 
 ## 设计约定
 
-视觉遵循墨浅设计系统（Quiet Utility）：中性灰阶 + 一个强调色（朱砂橙），内容用宋体、界面用无衬线，细线分栏、不用卡片阴影。完整规范、令牌和组件约定见 [DESIGN.md](DESIGN.md)；令牌集中在 `src/app/globals.css`，换强调色只改 `--accent` 三个变量。组件使用 CSS Modules，图标使用 `lucide-react`。≥1241px 三栏，901–1240px 两栏，≤900px 单栏。
+紧凑工具界面（参考 Linear）：中性灰阶 + 蓝色强调，浅色 / 深色两套主题，默认跟随系统、侧栏可手动切换；快捷键 `N` 新会话、`/` 聚焦输入框。完整规范与令牌见 [DESIGN.md](DESIGN.md)，令牌集中在 `src/app/globals.css`。组件使用 CSS Modules，图标使用 `lucide-react`，字体 Inter 来自本地依赖 `@fontsource-variable/inter`。
