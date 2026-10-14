@@ -67,7 +67,7 @@ def test_pdf_has_correct_page_and_text(tmp_path):
     ('a.exe', b'code', 415), ('a.pdf', b'broken', 422), ('a.txt', b'', 422),
     ('a.txt', b'\xff\xfeinvalid', 422), ('a.txt', b'x' * (5 * 1024 * 1024 + 1), 413),
     ('a.txt', b'x' * 200_001, 413),
-])
+], ids=['unsupported-extension', 'broken-pdf', 'empty-text', 'invalid-encoding', 'too-many-bytes', 'too-many-characters'])
 def test_invalid_upload_never_indexes(tmp_path, filename, data, status):
     with TestClient(create_app(config(tmp_path))) as client:
         assert client.post('/api/materials', files={'file': (filename, data)}).status_code == status
