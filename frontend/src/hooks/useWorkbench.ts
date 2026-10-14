@@ -77,6 +77,7 @@ export function useWorkbench(notify: Notify) {
   const [problems, setProblems] = useState<Resource<Problem[]>>({ data: [], loading: true, error: null });
   const [memories, setMemories] = useState<Resource<LearningMemory[]>>({ data: [], loading: true, error: null });
   const [health, setHealth] = useState<HealthState>("checking");
+  const [webSearch, setWebSearch] = useState(false);
 
   const [selectedProblemId, setSelectedProblemId] = useState<string | null>(null);
   const [session, setSession] = useState<ActiveSession | null>(null);
@@ -224,9 +225,10 @@ export function useWorkbench(notify: Notify) {
         problemId: selectedProblemId,
         answer: answer.trim(),
         reasoning: reasoning.trim(),
+        webSearch,
       });
     },
-    [selectedProblemId, studentId, submitAnswer],
+    [selectedProblemId, studentId, submitAnswer, webSearch],
   );
 
   const retrySubmit = useCallback(() => {
@@ -255,7 +257,7 @@ export function useWorkbench(notify: Notify) {
       setSending(true);
       setChatError(null);
       try {
-        const turn = await client.sendMessage(sessionId, text);
+        const turn = await client.sendMessage(sessionId, text, webSearch);
         patchSession((s) => ({
           ...s,
           turn: turn.turn ?? s.turn + 1,
@@ -279,7 +281,7 @@ export function useWorkbench(notify: Notify) {
         setSending(false);
       }
     },
-    [client, session, applyMemoryChanges],
+    [client, session, applyMemoryChanges, webSearch],
   );
 
   const restoreSession = useCallback(async () => {
@@ -374,6 +376,8 @@ export function useWorkbench(notify: Notify) {
 
   return {
     source: client.source,
+    webSearch,
+    setWebSearch,
     studentId,
     health,
     problems,

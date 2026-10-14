@@ -30,6 +30,7 @@ export interface AnswerSubmission {
   problemId: string;
   answer: string;
   reasoning: string;
+  webSearch?: boolean;
 }
 
 export interface Diagnosis {
@@ -56,6 +57,14 @@ export interface ChatMessage {
   phase?: TutorPhase;
   /** 学生消息：后端对这条回答的诊断（每轮评价当前回答） */
   diagnosis?: Diagnosis;
+  webSources?: WebSource[];
+}
+
+export interface WebSource {
+  id: string; label: string; title: string; url: string; snippet: string;
+}
+export interface WebSearchResponse {
+  provider: "anysearch"; query: string; results: WebSource[]; request_id: string | null;
 }
 
 export interface MemoryChange {
@@ -123,7 +132,7 @@ export interface KnowGapClient {
   checkHealth(): Promise<void>;
   listProblems(): Promise<Problem[]>;
   startSession(input: AnswerSubmission): Promise<SessionStart>;
-  sendMessage(sessionId: string, content: string): Promise<TutorTurn>;
+  sendMessage(sessionId: string, content: string, webSearch?: boolean): Promise<TutorTurn>;
   getSession?(sessionId: string): Promise<SessionSnapshot>;
   listMemories(studentId: string): Promise<LearningMemory[]>;
   deleteMemory(memoryId: string): Promise<void>;
