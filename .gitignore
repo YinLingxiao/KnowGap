@@ -45,3 +45,6 @@ backend/data/
 *.sqlite3-*
 *.db
 *.db-*
+ai-settings.json
+.ai-settings-*
+
