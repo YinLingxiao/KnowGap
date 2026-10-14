@@ -49,13 +49,19 @@ def main():
                 assert ready.json() == {"status": "ok"}
                 assert len(client.get("/api/problems").json()) == 3
                 assert client.get("/api/memories").json() == []
-                assert len(client.get("/openapi.json").json()["paths"]) == 7
+                paths = client.get("/openapi.json").json()["paths"]
+                assert set(paths) == {
+                    "/health", "/api/problems", "/api/diagnosis", "/api/sessions/{session_id}",
+                    "/api/sessions/{session_id}/messages", "/api/memories", "/api/memories/{memory_id}",
+                    "/api/ai/config", "/api/ai/test",
+                }
+                assert client.get("/api/ai/config").status_code == 200
                 response = client.post("/api/diagnosis", json={
                     "problem_id": "stack-sequence-001", "answer": "合法，因为数字集合相同。",
                 })
                 assert response.status_code == 503
                 assert client.get("/api/memories").json() == []
-                print("Real HTTP smoke passed: health, 3 problems, memories, 7-path OpenAPI, unconfigured model 503.")
+                print("Real HTTP smoke passed: health, 3 problems, memories, AI config, 9-path OpenAPI, unconfigured model 503.")
         finally:
             process.terminate()
             try:
@@ -67,3 +73,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
