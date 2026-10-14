@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import Image from "next/image";
 import { SquarePen } from "lucide-react";
 import type { HealthState, Resource } from "@/hooks/useWorkbench";
 import type { DataSource } from "@/lib/config";
@@ -52,7 +53,7 @@ export function Sidebar({
     <nav className={styles.sidebar} aria-label="主导航">
       <div className={styles.workspace}>
         <span className={styles.logo} aria-hidden>
-          隙
+          <Image src="/brand/knowgap-logo-v1.png" alt="" width={32} height={32} priority />
         </span>
         <span className={styles.name}>知隙</span>
         <span className={styles.latin} lang="en">

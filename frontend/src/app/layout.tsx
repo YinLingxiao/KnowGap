@@ -4,6 +4,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "知隙 KnowGap",
+  icons: { icon: "/brand/knowgap-logo-v1.png", apple: "/brand/knowgap-logo-v1.png" },
   description: "认知诊断 → 苏格拉底式引导 → 长期学习记忆：发现知识漏洞，引导学生自主纠错。",
 };
 
