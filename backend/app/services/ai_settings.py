@@ -46,7 +46,7 @@ class AISettings:
                 key = self.current.llm_api_key.get_secret_value()
             if not valid or not model or len(model) > 200 or not key or len(key) > 4096:
                 raise ValueError()
-            if any(ord(c) < 32 or ord(c) == 127 for c in base + model + key):
+            if not key.isascii() or any(ord(c) < 32 or ord(c) == 127 for c in base + model + key):
                 raise ValueError()
         except (ValidationError, ValueError, TypeError):
             raise HTTPException(422, "请填写有效的 API 根地址、模型名称和 API Key；更换服务地址时需重新填写密钥。") from None

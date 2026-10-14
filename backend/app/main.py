@@ -6,6 +6,8 @@ from contextlib import asynccontextmanager
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi.exceptions import RequestValidationError
+from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -45,6 +47,13 @@ def create_app(settings: Settings | None = None, tutor: Tutor | None = None) -> 
     @app.exception_handler(ProviderError)
     async def provider_error(request: Request, exc: ProviderError):
         return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_error(request: Request, exc: RequestValidationError):
+        if request.url.path in {"/api/ai/config", "/api/ai/test"}:
+            # FastAPI's default validation details include the rejected input, possibly a key.
+            return JSONResponse(status_code=422, content={"detail": "AI 配置请求格式无效，请提交 JSON 对象。"})
+        return await request_validation_exception_handler(request, exc)
 
     @app.exception_handler(StateConflict)
     async def conflict_error(request: Request, exc: StateConflict):

@@ -86,6 +86,10 @@ class ChatCompletionsTutor:
             raise ProviderError(502, "暂时无法连接模型服务，请检查后端配置后重试。") from None
         except httpx.InvalidURL:
             raise ProviderError(503, "LLM_BASE_URL 配置无效，请检查服务地址。") from None
+        except UnicodeEncodeError:
+            raise ProviderError(503, "模型密钥格式无效，请检查 API Key。") from None
+        except ImportError:
+            raise ProviderError(503, "模型代理依赖未安装，请重新安装后端 requirements.txt。") from None
         if response.status_code in {401, 403}:
             raise ProviderError(503, "模型服务拒绝访问，请检查后端密钥与模型权限。")
         if response.status_code == 429:

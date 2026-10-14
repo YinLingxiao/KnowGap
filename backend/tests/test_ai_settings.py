@@ -1,4 +1,8 @@
 from fastapi.testclient import TestClient
+import pytest
+import asyncio
+
+from app.agents.llm import ChatCompletionsTutor, ProviderError
 
 from app.config import Settings
 from app.main import create_app
@@ -81,3 +85,40 @@ def test_save_failure_keeps_active_config(monkeypatch, tmp_path):
         assert response.status_code == 503
         assert "private details" not in response.text
         assert client.get("/api/ai/config").json()["configured"] is False
+
+
+@pytest.mark.parametrize("method,path", [("PUT", "/api/ai/config"), ("POST", "/api/ai/test")])
+@pytest.mark.parametrize("invalid_json", [True, False])
+def test_malformed_configuration_never_echoes_key(tmp_path, method, path, invalid_json):
+    secret = "synthetic-test-secret"
+    with TestClient(create_app(settings(tmp_path))) as client:
+        body = '{"api_key":"' + secret + '"' if invalid_json else '[{"api_key":"' + secret + '"}]'
+        response = client.request(method, path, content=body, headers={"Content-Type": "application/json"})
+        assert response.status_code == 422
+        assert secret not in response.text
+        assert isinstance(response.json()["detail"], str)
+        assert client.get("/api/ai/config").json()["configured"] is False
+
+
+def test_unicode_key_is_rejected_before_save(tmp_path):
+    with TestClient(create_app(settings(tmp_path))) as client:
+        response = client.put("/api/ai/config", json={
+            "base_url": "https://provider.example/v1", "model": "tutor", "api_key": "中文密钥",
+        })
+        assert response.status_code == 422
+        assert "中文密钥" not in response.text
+        assert client.get("/api/ai/config").json()["configured"] is False
+
+
+@pytest.mark.parametrize("failure", [ImportError("synthetic-private-key"), UnicodeEncodeError("ascii", "密钥", 0, 1, "invalid")])
+def test_provider_configuration_errors_are_readable(monkeypatch, tmp_path, failure):
+    def fail(*args, **kwargs):
+        raise failure
+    monkeypatch.setattr("app.agents.llm.httpx.AsyncClient", fail)
+    config = settings(tmp_path).model_copy(update={"llm_base_url": "https://provider.example/v1", "llm_model": "tutor"})
+    from pydantic import SecretStr
+    config.llm_api_key = SecretStr("synthetic-private-key")
+    with pytest.raises(ProviderError) as error:
+        asyncio.run(ChatCompletionsTutor(config).generate({"current_answer": "测试"}))
+    assert error.value.status_code == 503
+    assert "synthetic-private-key" not in error.value.detail
