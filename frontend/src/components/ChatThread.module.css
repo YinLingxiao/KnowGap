@@ -1,160 +1,165 @@
 .thread {
-  padding: 18px 20px 20px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
-  background: var(--surface);
-  box-shadow: var(--shadow-sm);
+  padding-top: var(--space-6);
 }
 
 .head {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   justify-content: space-between;
-  gap: 8px;
-  padding-bottom: 14px;
-  border-bottom: 1px solid var(--line);
+  gap: var(--space-3);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--rule);
 }
 
 .title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 15px;
-  font-weight: 700;
-}
-
-.title svg {
-  color: var(--primary);
+  color: var(--ink-strong);
+  font-family: var(--font-content);
+  font-size: 1.25rem;
+  font-weight: 400;
+  letter-spacing: 0.02em;
 }
 
 .turns {
-  padding: 2px 10px;
-  border-radius: 999px;
-  background: var(--surface-sunken);
-  color: var(--text-secondary);
-  font-size: 12px;
+  color: var(--ink-dim);
+  font-size: var(--text-xs);
+}
+
+/* 每一条记录：左侧是说话人栏，右侧是内容 */
+.entry {
+  display: grid;
+  grid-template-columns: 5rem minmax(0, 1fr);
+  gap: var(--space-4);
+  padding: var(--space-5) 0;
+  border-bottom: 1px solid var(--rule);
+  animation: enter 300ms var(--ease-reveal);
+}
+
+/* 底部留出吸底输入框的高度，自动滚动时内容不会被遮住 */
+.end {
+  scroll-margin-bottom: 170px;
+}
+
+.speaker {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 3px;
+  font-size: var(--text-xs);
+  line-height: 1.4;
+}
+
+.speakerName {
+  color: var(--ink);
+  font-size: var(--text-sm);
   font-weight: 600;
 }
 
-.list {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  padding-top: 18px;
+.tutor .speakerName {
+  color: var(--accent-ink);
 }
 
-/* 底部留出吸底输入框的高度，自动滚动时消息不会被遮住 */
-.end {
-  scroll-margin-bottom: 190px;
+.speakerDetail {
+  color: var(--ink-muted);
 }
 
-.row {
-  display: flex;
-  gap: 10px;
-  animation: enter 0.3s var(--ease);
+.speakerTime {
+  color: var(--ink-dim);
 }
 
-.student {
-  flex-direction: row-reverse;
-}
-
-.avatar {
-  flex-shrink: 0;
-  margin-top: 22px;
-}
-
-.stack {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+.body {
   min-width: 0;
-  max-width: min(620px, 86%);
 }
 
-.student .stack {
-  align-items: flex-end;
+/* 学生的文字放在浅灰作答区里，与导师的开放正文区分 */
+.studentBox {
+  padding: 10px 14px;
+  border-radius: var(--radius-control);
+  background: var(--surface-soft);
 }
 
-.meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--text-muted);
-  font-size: 12px;
-}
-
-.author {
-  color: var(--text-secondary);
-  font-weight: 650;
-}
-
-.phaseHint,
-.phaseAnswer {
-  padding: 0 7px;
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: 650;
-  line-height: 18px;
-}
-
-.phaseHint {
-  background: var(--primary-soft);
-  color: var(--primary-text);
-}
-
-.phaseAnswer {
-  background: var(--accent-soft);
-  color: var(--accent-text);
-}
-
-.time {
-  font-family: var(--font-mono);
-  font-size: 11px;
-}
-
-.bubble {
-  padding: 11px 15px;
-  border-radius: 4px 16px 16px 16px;
-  border: 1px solid var(--line);
-  background: var(--surface-muted);
-  font-size: 15px;
+.answer {
+  color: var(--ink-strong);
+  font-family: var(--font-content);
+  font-size: var(--text-lead);
   line-height: 1.75;
   white-space: pre-wrap;
   word-break: break-word;
 }
 
-.student .bubble {
-  border-color: transparent;
-  border-radius: 16px 4px 16px 16px;
-  background: var(--primary);
-  color: var(--on-primary);
-  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.18);
+.reasoning {
+  margin-top: 4px;
+  color: var(--ink);
+  font-family: var(--font-content);
+  font-size: var(--text-read);
+  line-height: 1.85;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
-.student .bubble code {
-  border-color: rgba(255, 255, 255, 0.3);
-  background: rgba(255, 255, 255, 0.16);
+.studentText {
+  color: var(--ink-strong);
+  font-family: var(--font-content);
+  font-size: var(--text-read);
+  line-height: 1.85;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.tutorText {
+  max-width: 36em;
+  color: var(--ink);
+  font-family: var(--font-content);
+  font-size: var(--text-read);
+  line-height: 1.9;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* 依据划线：批改的笔迹 */
+.evidence {
+  background: none;
   color: inherit;
+  text-decoration-line: underline;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 6px;
+  text-decoration-skip-ink: none;
 }
 
-.student .bubble.failed {
-  border-color: var(--danger);
-  background: var(--danger-soft);
-  color: var(--text);
-  box-shadow: none;
+.evidence-incorrect {
+  text-decoration-style: wavy;
+  text-decoration-color: var(--accent);
+}
+
+.evidence-correct {
+  text-decoration-style: solid;
+  text-decoration-color: var(--verdict-correct);
+}
+
+.evidence-uncertain {
+  text-decoration-style: dotted;
+  text-decoration-color: var(--ink-dim);
+}
+
+.failed .studentBox {
+  box-shadow: inset 0 0 0 1px var(--danger-line);
+  background: var(--danger-surface);
 }
 
 .delivery {
-  color: var(--text-muted);
-  font-size: 12px;
+  display: inline-block;
+  margin-top: 6px;
+  color: var(--ink-dim);
+  font-size: var(--text-xs);
 }
 
 .retry {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  color: var(--danger-text);
-  font-size: 12px;
+  min-height: 32px;
+  margin-top: 4px;
+  color: var(--danger);
+  font-size: var(--text-xs);
   font-weight: 600;
 }
 
@@ -162,72 +167,76 @@
   text-decoration: underline;
 }
 
+/* 记忆变化：界面信息，用无衬线小字，和正文用一条细线隔开 */
 .change {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px 8px;
-  padding: 7px 10px;
-  border: 1px dashed var(--accent-line);
-  border-radius: var(--radius-sm);
-  background: var(--accent-soft);
-  color: var(--accent-text);
-  font-size: 12px;
-  animation: enter 0.4s var(--ease) 0.15s both;
+  gap: 4px 10px;
+  max-width: 36em;
+  margin-top: var(--space-3);
+  padding-top: var(--space-2);
+  border-top: 1px dashed var(--rule);
+  font-size: var(--text-xs);
+  animation: enter 400ms var(--ease-reveal) 120ms both;
 }
 
 .changeAction {
+  color: var(--accent-ink);
   font-weight: 700;
 }
 
 .changeSummary {
-  color: var(--text-secondary);
+  color: var(--ink-muted);
 }
 
 .changeStatus {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
+}
+
+.arrow {
+  color: var(--ink-dim);
 }
 
 .typing {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 5px;
-  height: 44px;
-  margin-top: 22px;
-  padding: 0 16px;
-  border: 1px solid var(--line);
-  border-radius: 4px 16px 16px 16px;
-  background: var(--surface-muted);
+  gap: 6px;
+  padding-top: 3px;
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
 }
 
-.typing span {
-  width: 7px;
-  height: 7px;
+.dots {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.dots span {
+  width: 4px;
+  height: 4px;
   border-radius: 50%;
-  background: var(--text-muted);
-  animation: bounce 1.2s ease-in-out infinite;
+  background: var(--accent);
+  animation: fade 1.2s ease-in-out infinite;
 }
 
-.typing span:nth-child(2) {
-  animation-delay: 0.15s;
+.dots span:nth-child(2) {
+  animation-delay: 0.2s;
 }
 
-.typing span:nth-child(3) {
-  animation-delay: 0.3s;
+.dots span:nth-child(3) {
+  animation-delay: 0.4s;
 }
 
-@keyframes bounce {
+@keyframes fade {
   0%,
-  60%,
   100% {
-    opacity: 0.35;
-    transform: translateY(0);
+    opacity: 0.25;
   }
-  30% {
+  40% {
     opacity: 1;
-    transform: translateY(-4px);
   }
 }
 
@@ -236,22 +245,17 @@
     opacity: 0;
     transform: translateY(6px);
   }
-  to {
-    opacity: 1;
-    transform: none;
-  }
 }
 
 @media (max-width: 640px) {
-  .thread {
-    padding: 16px 14px;
+  .entry {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-2);
   }
 
-  .stack {
-    max-width: 90%;
-  }
-
-  .avatar {
-    display: none;
+  .speaker {
+    flex-direction: row;
+    gap: 8px;
+    align-items: baseline;
   }
 }

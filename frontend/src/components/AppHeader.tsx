@@ -5,7 +5,6 @@ import type { DataSource } from "@/lib/config";
 import { cx } from "@/lib/cx";
 import { LoopStepper, type LoopStep } from "./LoopStepper";
 import { Button } from "./ui/Button";
-import { LogoMark } from "./ui/LogoMark";
 import styles from "./AppHeader.module.css";
 
 interface AppHeaderProps {
@@ -30,13 +29,11 @@ export function AppHeader({ source, health, studentId, steps, canStartNew, onNew
     <header className={styles.header}>
       <div className={styles.inner}>
         <div className={styles.brand}>
-          <LogoMark size={36} />
-          <div>
-            <div className={styles.name}>
-              KnowGap <span className={styles.cn}>知隙</span>
-            </div>
-            <div className={styles.tagline}>发现知识漏洞 · 引导自主纠错 · 记住你的学习</div>
-          </div>
+          <span className={styles.wordmark}>知隙</span>
+          <span className={styles.latin} lang="en">
+            KnowGap
+          </span>
+          <span className={styles.subject}>数据结构学习助手</span>
         </div>
 
         <LoopStepper steps={steps} className={styles.stepper} />
@@ -52,20 +49,15 @@ export function AppHeader({ source, health, studentId, steps, canStartNew, onNew
           )}
 
           <span className={styles.student} title="MVP 使用固定的演示身份，不收集真实学生信息">
-            <span className={styles.avatar} aria-hidden>
-              演
-            </span>
-            <span className={styles.studentText}>
-              <span className={styles.studentLabel}>演示学生</span>
-              <span className={styles.studentId}>{studentId}</span>
-            </span>
+            <span className={styles.studentLabel}>演示身份</span>
+            <span className={styles.studentId}>{studentId}</span>
           </span>
 
           <Button
-            variant="primary"
+            variant="secondary"
             size="sm"
             className={styles.newSession}
-            icon={<Plus size={15} />}
+            icon={<Plus size={14} />}
             onClick={onNewSession}
             disabled={!canStartNew}
             aria-label="新会话"

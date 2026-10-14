@@ -57,7 +57,7 @@ export function MockConsole({ onReset }: { onReset: () => void }) {
         title="当前使用前端模拟数据，诊断与记忆均来自预设脚本。点击打开 Mock 控制台"
       >
         <FlaskConical size={14} aria-hidden />
-        Mock<span className={styles.triggerExtra}> 演示数据</span>
+        <span className={styles.triggerExtra}>演示数据 · </span>Mock
         <ChevronDown size={13} className={cx(styles.chevron, open && styles.chevronOpen)} aria-hidden />
         {controls.fault !== "none" && <span className={styles.armed} title="已设置一次性故障" />}
       </button>

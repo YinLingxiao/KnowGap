@@ -33,6 +33,23 @@ export interface MockProblemScript {
   unclearReply: string;
 }
 
+/**
+ * 与后端契约一致：诊断依据必须是学生原文中的一段（逐字），
+ * 这里取第一句命中关键词的话，没有则取第一句。
+ */
+export function quoteFrom(text: string, pattern?: RegExp): string | null {
+  const sentences = text
+    .split(/(?<=[。！？!?；;\n])/)
+    .map((sentence) => sentence.trim().replace(/[。！？!?；;]+$/, ""))
+    .filter(Boolean);
+  if (sentences.length === 0) return null;
+  return (pattern && sentences.find((sentence) => pattern.test(sentence))) || sentences[0];
+}
+
+function quoteAnswer(answer: string, reasoning: string, pattern?: RegExp): string {
+  return quoteFrom(reasoning, pattern) ?? quoteFrom(answer) ?? answer.trim();
+}
+
 export function excerpt(text: string, max = 40): string {
   const flat = text.replace(/\s+/g, " ").trim().replace(/[。！？，、；.!?,;]+$/, "");
   return flat.length > max ? `${flat.slice(0, max)}…` : flat;
@@ -54,14 +71,11 @@ function stackInsight(text: string): boolean {
 }
 
 function stackIncorrectEvidence(answer: string, reasoning: string): string {
-  const why = reasoning ? `，理由是「${excerpt(reasoning)}」` : "";
-  return `你的结论是「${excerpt(answer, 24)}」${why}，但没有逐步检查每次出栈时栈顶是哪个元素。`;
+  return quoteAnswer(answer, reasoning, /(合法|都能|依次|可以)/);
 }
 
-function stackCorrectEvidence(_answer: string, reasoning: string): string {
-  return /(栈顶|top|压在|模拟|push|pop)/i.test(reasoning)
-    ? "结论正确，并且理由中检查了出栈时的栈顶状态。"
-    : "结论正确；理由较简略，暂时没有看到逐步模拟的过程。";
+function stackCorrectEvidence(answer: string, reasoning: string): string {
+  return quoteAnswer(answer, reasoning, /(栈顶|top|压在|模拟|push|pop)/i);
 }
 
 const STACK_MEMORY_HINTS = [
@@ -80,6 +94,8 @@ const stackSequence1: MockProblemScript = {
     difficulty: "基础",
     statement:
       "元素 `1`、`2`、`3`、`4`、`5` 按顺序依次入栈，入栈过程中可以随时出栈。请判断出栈序列 `4, 3, 5, 1, 2` 是否合法，并写出你的理由。",
+    inputSequence: [1, 2, 3, 4, 5],
+    outputSequence: [4, 3, 5, 1, 2],
   },
   issueKey: "ignore_top_constraint",
   issue: "可能忽略了「只能弹出栈顶元素」的后进先出（LIFO）约束",
@@ -114,6 +130,8 @@ const stackSequence2: MockProblemScript = {
     difficulty: "同类变式",
     statement:
       "元素 `1`、`2`、`3`、`4`、`5` 按顺序依次入栈，入栈过程中可以随时出栈。请判断出栈序列 `2, 5, 3, 4, 1` 是否合法，并写出你的理由。",
+    inputSequence: [1, 2, 3, 4, 5],
+    outputSequence: [2, 5, 3, 4, 1],
   },
   issueKey: "ignore_top_constraint",
   issue: "可能忽略了「只能弹出栈顶元素」的后进先出（LIFO）约束",
@@ -165,14 +183,8 @@ const queueFifo: MockProblemScript = {
     return element === "c" ? "correct" : "incorrect";
   },
   reachedInsight: (text) => /队头[^a-d]{0,8}c/i.test(text) || /^\s*c\b/i.test(text) || /是\s*c\b/i.test(text),
-  incorrectEvidence: (answer, reasoning) => {
-    const why = reasoning ? `，思路是「${excerpt(reasoning)}」` : "";
-    return `你给出的队头是「${excerpt(answer, 16)}」${why}，但没有按「先进先出」逐步推出每次出队后的队列状态。`;
-  },
-  correctEvidence: (_answer, reasoning) =>
-    /(\[|队头|出队)/.test(reasoning)
-      ? "结论正确，并且逐步写出了队列状态。"
-      : "结论正确；理由较简略，暂时没有看到每一步的队列状态。",
+  incorrectEvidence: (answer) => quoteFrom(answer) ?? answer.trim(),
+  correctEvidence: (answer, reasoning) => quoteAnswer(answer, reasoning, /(\[|队头|出队)/),
   hints: [
     "先回忆队列的规则：执行第一次「出队」时，被移出的是最早入队的元素，还是最晚入队的元素？",
     "那么在入队 `a`、`b`、`c` 并出队一次之后，再入队 `d`，此时队列从队头到队尾依次是什么？",

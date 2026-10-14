@@ -25,6 +25,8 @@ export interface ActiveSession {
   turn: number;
   problemId: string;
   submission: { answer: string; reasoning: string };
+  /** 首次作答的诊断（批注在作答原文上）；diagnosis 为最新一轮 */
+  submissionDiagnosis: Diagnosis;
   diagnosis: Diagnosis;
   usedMemoryIds: string[];
   messages: ThreadMessage[];
@@ -63,7 +65,8 @@ function readRememberedSession(): { id: string; problemId: string } | null {
 }
 
 function recoveredSession(snapshot: SessionSnapshot, memories: LearningMemory[]): ActiveSession {
-  return { ...snapshot, memoryChangeCount: memories.reduce((count, memory) =>
+  return { ...snapshot, submissionDiagnosis: snapshot.submissionDiagnosis ?? snapshot.diagnosis,
+    memoryChangeCount: memories.reduce((count, memory) =>
     count + memory.evidenceRefs.filter((ref) => ref.sessionId === snapshot.id).length, 0) };
 }
 
@@ -195,6 +198,7 @@ export function useWorkbench(notify: Notify) {
           turn: result.turn ?? 1,
           problemId: input.problemId,
           submission: { answer: input.answer, reasoning: input.reasoning },
+          submissionDiagnosis: result.diagnosis,
           diagnosis: result.diagnosis,
           usedMemoryIds: result.usedMemoryIds,
           messages: [{ ...result.reply, memoryChanges: result.memoryChanges }],
@@ -258,7 +262,7 @@ export function useWorkbench(notify: Notify) {
           diagnosis: turn.diagnosis ?? s.diagnosis,
           usedMemoryIds: turn.usedMemoryIds ?? s.usedMemoryIds,
           messages: [
-            ...s.messages.map((m) => (m.id === localId ? { ...m, delivery: undefined } : m)),
+            ...s.messages.map((m) => (m.id === localId ? { ...m, delivery: undefined, diagnosis: turn.diagnosis } : m)),
             { ...turn.reply, memoryChanges: turn.memoryChanges },
           ],
           memoryChangeCount: s.memoryChangeCount + turn.memoryChanges.length,

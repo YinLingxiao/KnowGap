@@ -1,4 +1,4 @@
-import { Database, Inbox, Info, RefreshCw } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import type { Resource } from "@/hooks/useWorkbench";
 import { cx } from "@/lib/cx";
 import { STATUS_META, STATUS_ORDER } from "@/lib/labels";
@@ -31,15 +31,11 @@ export function MemoryPanel({
 
   return (
     <section className={styles.panel} aria-labelledby="memory-panel-title">
-      <div className={styles.header}>
-        <div>
-          <h2 id="memory-panel-title" className={styles.title}>
-            <Database size={16} aria-hidden />
-            学习记忆
-            {data.length > 0 && <span className={styles.count}>{data.length}</span>}
-          </h2>
-          <p className={styles.sub}>只记录有证据支持的学习状态</p>
-        </div>
+      <header className={styles.header}>
+        <h2 id="memory-panel-title" className={styles.title}>
+          学习记忆
+          {data.length > 0 && <span className={styles.count}>{data.length}</span>}
+        </h2>
         <button
           className={styles.refresh}
           onClick={onRefresh}
@@ -47,12 +43,13 @@ export function MemoryPanel({
           aria-label="刷新学习记忆"
           title="刷新"
         >
-          <RefreshCw size={15} className={cx(loading && styles.spinning)} />
+          <RefreshCw size={14} className={cx(loading && styles.spinning)} />
         </button>
-      </div>
+      </header>
+      <p className={styles.sub}>只记录有证据支持的学习状态；当前作答的证据优先于历史记忆。</p>
 
       <details className={styles.legend}>
-        <summary>状态说明</summary>
+        <summary>四种状态的含义</summary>
         <ul>
           {STATUS_ORDER.map((status) => (
             <li key={status}>
@@ -68,18 +65,19 @@ export function MemoryPanel({
       {loading && data.length === 0 ? (
         <div className={styles.list} aria-busy="true" aria-label="正在加载学习记忆">
           {[0, 1].map((key) => (
-            <div key={key} className={styles.skeleton} />
+            <div key={key} className={styles.skeleton}>
+              <span />
+              <span />
+              <span />
+            </div>
           ))}
         </div>
       ) : error && data.length === 0 ? (
         <ErrorNotice error={error} compact onRetry={onRefresh} retryLabel="重新加载" />
       ) : data.length === 0 ? (
         <div className={styles.empty}>
-          <span className={styles.emptyIcon}>
-            <Inbox size={20} aria-hidden />
-          </span>
-          <div className={styles.emptyTitle}>还没有学习记忆</div>
-          <p>完成一次作答后，有证据支持的误区会出现在这里，并在下次学习同类题时被参考。</p>
+          <p className={styles.emptyTitle}>还没有学习记忆</p>
+          <p>完成一次作答后，有证据支持的误区会记在这里，并在你下次学习同类题时被参考。记录不准确时可以删除。</p>
         </div>
       ) : (
         <div className={styles.list}>
@@ -96,11 +94,6 @@ export function MemoryPanel({
           ))}
         </div>
       )}
-
-      <p className={styles.footnote}>
-        <Info size={12} aria-hidden />
-        当前作答的证据优先于历史记忆；记忆不准确时可以删除。
-      </p>
     </section>
   );
 }

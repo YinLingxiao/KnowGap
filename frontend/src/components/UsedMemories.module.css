@@ -1,114 +1,90 @@
-.none {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 14px;
-  border: 1px dashed var(--line-strong);
-  border-radius: var(--radius);
-  color: var(--text-secondary);
-  font-size: 13px;
-}
-
-.noneHint {
-  color: var(--text-muted);
-}
-
-.banner {
-  padding: 14px 16px;
-  border: 1px solid var(--accent-line);
-  border-radius: var(--radius-lg);
-  background:
-    linear-gradient(135deg, var(--accent-soft), transparent 70%),
-    var(--surface);
-  box-shadow: var(--shadow-sm);
-  animation: rise 0.4s var(--ease);
-}
-
-.head {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-}
-
-.headIcon {
+/* 与教学记录同一套左右栏对齐 */
+.row {
   display: grid;
-  flex-shrink: 0;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  background: var(--accent);
-  color: #ffffff;
+  grid-template-columns: 5rem minmax(0, 1fr);
+  gap: var(--space-4);
+  padding: var(--space-5) 0 0;
+}
+
+.label,
+.labelActive {
+  padding-top: 2px;
+  color: var(--ink-dim);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.labelActive {
+  color: var(--accent-ink);
+}
+
+.none {
+  color: var(--ink-dim);
+  font-size: var(--text-sm);
 }
 
 .title {
-  font-size: 14px;
-  font-weight: 700;
+  color: var(--ink);
+  font-size: var(--text-ui);
+}
+
+.title strong {
+  color: var(--accent-ink);
 }
 
 .note {
-  color: var(--text-secondary);
-  font-size: 12.5px;
+  margin-top: 2px;
+  color: var(--ink-dim);
+  font-size: var(--text-xs);
 }
 
-.chips {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 12px;
+.list {
+  margin-top: var(--space-2);
 }
 
-.chip {
+.link {
   display: flex;
   align-items: center;
   gap: 10px;
   width: 100%;
-  padding: 8px 10px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
+  min-height: 36px;
+  padding: 6px 8px;
+  margin-left: -8px;
+  border-radius: var(--radius-control);
+  background: var(--accent-soft);
   text-align: left;
-  transition:
-    border-color 0.15s var(--ease),
-    box-shadow 0.15s var(--ease);
+  transition: background-color var(--duration) var(--ease);
 }
 
-.chip:hover {
-  border-color: var(--accent-line);
-  box-shadow: var(--shadow-sm);
+.link:hover {
+  background: color-mix(in srgb, var(--accent) 16%, var(--bg));
 }
 
-.chipText {
+.summary {
   flex: 1;
   min-width: 0;
   overflow: hidden;
-  font-size: 13px;
+  color: var(--ink);
+  font-family: var(--font-content);
+  font-size: var(--text-base);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.chipArrow {
+.arrow {
   flex-shrink: 0;
-  color: var(--text-muted);
+  color: var(--accent-ink);
 }
 
-.chipGone {
-  display: block;
-  padding: 8px 10px;
-  border: 1px dashed var(--line);
-  border-radius: var(--radius-sm);
-  color: var(--text-muted);
-  font-size: 13px;
+.gone {
+  color: var(--ink-dim);
+  font-size: var(--text-sm);
+  text-decoration: line-through;
 }
 
-@keyframes rise {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
+@media (max-width: 640px) {
+  .row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-1);
   }
 }

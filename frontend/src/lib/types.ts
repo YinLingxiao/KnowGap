@@ -20,6 +20,9 @@ export interface Problem {
   difficulty?: string;
   /** 题干，可用反引号标记 `代码片段` */
   statement: string;
+  /** 入栈顺序与待判断序列（后端题目提供时用于排版，不含参考答案） */
+  inputSequence?: number[];
+  outputSequence?: number[];
 }
 
 export interface AnswerSubmission {
@@ -51,6 +54,8 @@ export interface ChatMessage {
   content: string;
   createdAt: string;
   phase?: TutorPhase;
+  /** 学生消息：后端对这条回答的诊断（每轮评价当前回答） */
+  diagnosis?: Diagnosis;
 }
 
 export interface MemoryChange {
@@ -105,6 +110,8 @@ export interface SessionSnapshot {
   problemId: string;
   turn: number;
   submission: { answer: string; reasoning: string };
+  /** 首次作答的诊断；diagnosis 为最新一轮 */
+  submissionDiagnosis?: Diagnosis;
   diagnosis: Diagnosis;
   usedMemoryIds: string[];
   messages: ChatMessage[];

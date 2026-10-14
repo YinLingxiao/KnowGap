@@ -7,7 +7,7 @@ import { AnswerForm } from "./AnswerForm";
 import { AppHeader } from "./AppHeader";
 import { ChatComposer } from "./ChatComposer";
 import { ChatThread } from "./ChatThread";
-import { DiagnosisCard, DiagnosisSkeleton } from "./DiagnosisCard";
+import { DiagnosisPending } from "./DiagnosisNote";
 import { ErrorNotice } from "./ErrorNotice";
 import type { LoopStep } from "./LoopStepper";
 import { MemoryPanel } from "./MemoryPanel";
@@ -86,7 +86,11 @@ export function Workbench() {
         </aside>
 
         <div ref={centerRef} className={styles.center}>
-          {wb.restoring && <p role="status">正在恢复服务器中的学习会话…</p>}
+          {wb.restoring && (
+            <p className={styles.restoring} role="status">
+              正在恢复服务器中的学习会话…
+            </p>
+          )}
           {!selectedProblem ? (
             <WelcomeHero
               canStart={wb.problems.data.length > 0}
@@ -97,7 +101,7 @@ export function Workbench() {
             />
           ) : (
             <>
-              <ProblemStatement problem={selectedProblem} submission={session?.submission} />
+              <ProblemStatement problem={selectedProblem} />
 
               {!session ? (
                 <>
@@ -108,17 +112,28 @@ export function Workbench() {
                     onSubmit={wb.submitForProblem}
                   />
                   {wb.submitError && (
-                    <ErrorNotice error={wb.submitError} onRetry={wb.retrySubmit} onDismiss={wb.dismissSubmitError} reveal />
+                    <ErrorNotice
+                      error={wb.submitError}
+                      onRetry={wb.retrySubmit}
+                      onDismiss={wb.dismissSubmitError}
+                      reveal
+                      className={styles.notice}
+                    />
                   )}
-                  {wb.submitting && <DiagnosisSkeleton />}
+                  {wb.submitting && <DiagnosisPending />}
                 </>
               ) : (
                 <>
                   <div ref={sessionTopRef}>
                     <UsedMemories usedIds={session.usedMemoryIds} memoriesById={memoriesById} onFocus={wb.focusMemory} />
                   </div>
-                  <DiagnosisCard diagnosis={session.diagnosis} />
-                  <ChatThread messages={session.messages} sending={wb.sending} onRetry={wb.retryMessage} />
+                  <ChatThread
+                    submission={session.submission}
+                    submissionDiagnosis={session.submissionDiagnosis}
+                    messages={session.messages}
+                    sending={wb.sending}
+                    onRetry={wb.retryMessage}
+                  />
                   {wb.chatError && (
                     <ErrorNotice
                       error={wb.chatError}
@@ -128,7 +143,7 @@ export function Workbench() {
                       onRestart={wb.chatError.kind === "not_found" ? wb.startNewSession : undefined}
                       onDismiss={wb.dismissChatError}
                       reveal
-                      className={styles.chatError}
+                      className={styles.notice}
                     />
                   )}
                   <div className={styles.composerDock}>

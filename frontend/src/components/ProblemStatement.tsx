@@ -1,37 +1,40 @@
-import { PenLine } from "lucide-react";
-import { cx } from "@/lib/cx";
 import { topicLabel } from "@/lib/labels";
 import type { Problem } from "@/lib/types";
 import { RichText } from "./ui/RichText";
 import styles from "./ProblemStatement.module.css";
 
-interface ProblemStatementProps {
-  problem: Problem;
-  submission?: { answer: string; reasoning: string };
-}
+/** 题目：像试卷一样排版；后端提供序列时，额外排成对照表方便逐位比对 */
+export function ProblemStatement({ problem }: { problem: Problem }) {
+  const hasSequences = Boolean(problem.inputSequence?.length && problem.outputSequence?.length);
 
-export function ProblemStatement({ problem, submission }: ProblemStatementProps) {
   return (
-    <article className={cx(styles.card, submission && styles.withSubmission)}>
-      <div className={styles.meta}>
-        <span className={styles.topic}>{topicLabel(problem.topicKey, problem.topicLabel)}</span>
-        {problem.difficulty && <span className={styles.difficulty}>{problem.difficulty}</span>}
+    <article className={styles.problem} aria-labelledby="problem-title">
+      <p className={styles.meta}>
+        <span>{topicLabel(problem.topicKey, problem.topicLabel)}</span>
+        {problem.difficulty && <span>{problem.difficulty}</span>}
         <span className={styles.id}>{problem.id}</span>
-      </div>
-      <h2 className={styles.title}>{problem.title}</h2>
+      </p>
+      <h2 id="problem-title" className={styles.title}>
+        {problem.title}
+      </h2>
       <p className={styles.statement}>
         <RichText text={problem.statement} />
       </p>
 
-      {submission && (
-        <div className={styles.submission}>
-          <div className={styles.subLabel}>
-            <PenLine size={13} aria-hidden />
-            你的作答
-          </div>
-          <p className={styles.answer}>{submission.answer}</p>
-          {submission.reasoning && <p className={styles.reasoning}>{submission.reasoning}</p>}
-        </div>
+      {hasSequences && (
+        <table className={styles.sequences}>
+          <caption className="sr-only">序列对照</caption>
+          <tbody>
+            <tr>
+              <th scope="row">入栈顺序</th>
+              {problem.inputSequence?.map((value, index) => <td key={`in-${index}`}>{value}</td>)}
+            </tr>
+            <tr>
+              <th scope="row">待判序列</th>
+              {problem.outputSequence?.map((value, index) => <td key={`out-${index}`}>{value}</td>)}
+            </tr>
+          </tbody>
+        </table>
       )}
     </article>
   );

@@ -1,14 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
-import { Lightbulb, Send, BookOpenCheck } from "lucide-react";
+import { Send } from "lucide-react";
 import { Button } from "./ui/Button";
 import styles from "./ChatComposer.module.css";
 
-const QUICK_REPLIES = [
-  { text: "我需要一点提示", icon: Lightbulb },
-  { text: "我想看完整解答", icon: BookOpenCheck },
-];
+const QUICK_REPLIES = ["我需要一点提示", "我想看完整解答"];
 
 interface ChatComposerProps {
   sending: boolean;
@@ -52,14 +49,6 @@ export function ChatComposer({ sending, onSend }: ChatComposerProps) {
 
   return (
     <div className={styles.composer}>
-      <div className={styles.quick}>
-        {QUICK_REPLIES.map(({ text: reply, icon: Icon }) => (
-          <button key={reply} className={styles.quickButton} onClick={() => onSend(reply)} disabled={sending}>
-            <Icon size={13} aria-hidden />
-            {reply}
-          </button>
-        ))}
-      </div>
       <div className={styles.box}>
         <label htmlFor="chat-input" className="sr-only">
           回复导师
@@ -77,14 +66,24 @@ export function ChatComposer({ sending, onSend }: ChatComposerProps) {
           }}
           onKeyDown={handleKeyDown}
           placeholder="回答导师的问题…"
+          aria-invalid={emptyHint || undefined}
         />
-        <Button variant="primary" onClick={send} loading={sending} icon={<Send size={15} />} aria-label="发送">
+        <Button variant="primary" size="md" onClick={send} loading={sending} icon={<Send size={15} />}>
           发送
         </Button>
       </div>
       <div className={styles.foot}>
+        <div className={styles.quick}>
+          {QUICK_REPLIES.map((reply) => (
+            <button key={reply} className={styles.quickButton} onClick={() => onSend(reply)} disabled={sending}>
+              {reply}
+            </button>
+          ))}
+        </div>
         {emptyHint ? (
-          <span className={styles.warn}>先写下你的想法再发送</span>
+          <span className={styles.warn} role="alert">
+            先写下你的想法再发送
+          </span>
         ) : (
           <span className={styles.hint}>Enter 发送 · Shift + Enter 换行</span>
         )}

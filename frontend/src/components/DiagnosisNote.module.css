@@ -1,0 +1,125 @@
+/* 批注：左侧 1px 强调色细线 + 缩进，批语用宋体，标签与数字用无衬线 */
+.note {
+  --verdict: var(--verdict-uncertain);
+  margin-top: var(--space-3);
+  padding: 2px 0 2px var(--space-4);
+  border-left: 1px solid var(--accent);
+  animation: enter 400ms var(--ease-reveal);
+}
+
+.incorrect {
+  --verdict: var(--verdict-incorrect);
+}
+
+.correct {
+  --verdict: var(--verdict-correct);
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  font-size: var(--text-xs);
+}
+
+.mark {
+  color: var(--accent-ink);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.verdict {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: center;
+  color: var(--verdict);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.topic {
+  color: var(--ink-dim);
+}
+
+.head > :last-child {
+  margin-left: auto;
+}
+
+.finding {
+  margin-top: 6px;
+  color: var(--ink-strong);
+  font-family: var(--font-content);
+  font-size: var(--text-lead);
+  line-height: 1.6;
+}
+
+.evidence {
+  margin-top: 6px;
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+}
+
+.quote {
+  color: var(--ink);
+  font-family: var(--font-content);
+  quotes: "「" "」";
+}
+
+.compact {
+  margin-top: var(--space-2);
+}
+
+.compact .finding {
+  margin-top: 4px;
+  font-size: var(--text-base);
+}
+
+.compact .evidence {
+  margin-top: 2px;
+  font-size: var(--text-xs);
+}
+
+.pending {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: var(--space-5) 0;
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+}
+
+.pendingLine {
+  position: relative;
+  display: block;
+  height: 1px;
+  overflow: hidden;
+  background: var(--rule);
+}
+
+.pendingLine::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 30%;
+  background: var(--accent);
+  animation: travel 1.6s var(--ease) infinite;
+}
+
+@keyframes travel {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(340%);
+  }
+}
+
+@keyframes enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}

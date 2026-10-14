@@ -55,4 +55,4 @@ npm run build
 
 ## 设计约定
 
-颜色、圆角和阴影集中在 `src/app/globals.css`，支持系统深色模式。组件使用 CSS Modules，图标使用 `lucide-react`。≥1241px 三栏，901–1240px 两栏，≤900px 单栏。
+视觉遵循墨浅设计系统（Quiet Utility）：中性灰阶 + 一个强调色（朱砂橙），内容用宋体、界面用无衬线，细线分栏、不用卡片阴影。完整规范、令牌和组件约定见 [DESIGN.md](DESIGN.md)；令牌集中在 `src/app/globals.css`，换强调色只改 `--accent` 三个变量。组件使用 CSS Modules，图标使用 `lucide-react`。≥1241px 三栏，901–1240px 两栏，≤900px 单栏。

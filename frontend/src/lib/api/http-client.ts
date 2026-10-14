@@ -92,10 +92,12 @@ function mapSession(data: WireSession): SessionSnapshot {
       answer: initial.content.slice(0, separator),
       reasoning: initial.content.slice(separator + REASONING_SEPARATOR.length),
     },
+    submissionDiagnosis: initial.diagnosis ? mapDiagnosis(initial.diagnosis) : undefined,
     diagnosis: mapDiagnosis(latest.diagnosis), usedMemoryIds: tutor?.used_memory_ids ?? [],
     messages: data.messages.filter((message) => message.id !== initial.id).map((message) => ({
       id: message.id, role: message.role === "user" ? "student" : "tutor",
       content: message.content, createdAt: message.created_at,
+      diagnosis: message.role === "user" && message.diagnosis ? mapDiagnosis(message.diagnosis) : undefined,
     })),
   };
 }
@@ -109,9 +111,11 @@ export function createHttpClient(baseUrl: string): KnowGapClient {
       if (data.status !== "ok") throw new ApiError("server", "后端健康检查未通过");
     },
     async listProblems() {
-      const data = await request<Array<{ id: string; title: string; topic_key: string; prompt: string }>>(root, "/api/problems");
+      const data = await request<Array<{ id: string; title: string; topic_key: string; prompt: string;
+        input_sequence?: number[]; output_sequence?: number[] }>>(root, "/api/problems");
       return data.map((problem) => ({ id: problem.id, title: problem.title,
-        topicKey: problem.topic_key, statement: problem.prompt }));
+        topicKey: problem.topic_key, statement: problem.prompt,
+        inputSequence: problem.input_sequence, outputSequence: problem.output_sequence }));
     },
     async startSession(input: AnswerSubmission) {
       const reasoning = input.reasoning.trim();

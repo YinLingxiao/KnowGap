@@ -1,52 +1,14 @@
+/* 吸底输入区：白底 + 顶部细线，不做浮起的卡片 */
 .composer {
-  padding: 12px 14px 8px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
-  background: color-mix(in srgb, var(--surface) 92%, transparent);
-  box-shadow: var(--shadow-lg);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-}
-
-.quick {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 10px;
-}
-
-.quickButton {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: 28px;
-  padding: 0 11px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--surface-muted);
-  color: var(--text-secondary);
-  font-size: 12.5px;
-  font-weight: 550;
-  transition:
-    border-color 0.15s var(--ease),
-    color 0.15s var(--ease),
-    background-color 0.15s var(--ease);
-}
-
-.quickButton:hover:not(:disabled) {
-  border-color: var(--primary-line);
-  background: var(--primary-soft);
-  color: var(--primary-text);
-}
-
-.quickButton:disabled {
-  opacity: 0.5;
+  padding: var(--space-3) 0 var(--space-3);
+  border-top: 1px solid var(--rule);
+  background: var(--bg);
 }
 
 .box {
   display: flex;
   align-items: flex-end;
-  gap: 10px;
+  gap: var(--space-2);
 }
 
 .input {
@@ -54,44 +16,89 @@
   min-height: 40px;
   max-height: 180px;
   padding: 8px 12px;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
-  background: var(--surface);
-  font-size: 15px;
-  line-height: 1.55;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+  color: var(--ink-strong);
+  font-family: var(--font-content);
+  font-size: var(--text-read);
+  line-height: 1.5;
   resize: none;
   transition:
-    border-color 0.15s var(--ease),
-    box-shadow 0.15s var(--ease);
+    border-color var(--duration) var(--ease),
+    box-shadow var(--duration) var(--ease);
 }
 
 .input::placeholder {
-  color: var(--text-muted);
+  color: var(--ink-dim);
+  font-family: var(--font-ui);
+  font-size: var(--text-ui);
 }
 
 .input:focus {
   outline: none;
-  border-color: var(--primary);
-  box-shadow: var(--ring);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.input[aria-invalid="true"] {
+  border-color: var(--danger);
 }
 
 .box button {
-  height: 40px;
+  min-height: 40px;
 }
 
 .foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px var(--space-3);
   margin-top: 6px;
-  color: var(--text-muted);
-  font-size: 11.5px;
+  font-size: var(--text-xs);
+}
+
+.quick {
+  display: flex;
+  gap: var(--space-3);
+}
+
+/* 快捷回复：第三级的文字按钮 */
+.quickButton {
+  min-height: 28px;
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+  text-decoration: underline;
+  text-decoration-color: var(--rule-strong);
+  text-underline-offset: 4px;
+  transition: color var(--duration) var(--ease);
+}
+
+.quickButton:hover:not(:disabled) {
+  color: var(--accent-ink);
+  text-decoration-color: var(--accent);
+}
+
+.quickButton:disabled {
+  opacity: 0.5;
+}
+
+.hint {
+  color: var(--ink-dim);
 }
 
 .warn {
-  color: var(--danger-text);
+  color: var(--danger);
   font-weight: 600;
 }
 
 @media (max-width: 640px) {
   .hint {
     display: none;
+  }
+
+  .quickButton {
+    min-height: 36px;
   }
 }

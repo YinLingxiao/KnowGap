@@ -1,88 +1,68 @@
 .stepper {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 0;
-  padding: 4px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--surface-muted);
+  font-size: var(--text-ui);
 }
 
 .step {
   display: flex;
   align-items: center;
+  gap: 6px;
+  color: var(--ink-dim);
+}
+
+/* 步骤之间用一段短细线连接 */
+.step + .step::before {
+  content: "";
+  width: 28px;
+  height: 1px;
+  margin: 0 12px;
+  background: var(--rule);
 }
 
 .index {
-  display: grid;
+  display: inline-grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  border: 1px solid var(--line-strong);
-  background: var(--surface);
-  color: var(--text-muted);
-  font-size: 11px;
-  font-weight: 700;
-  transition: all 0.25s var(--ease);
+  min-width: 14px;
+  font-size: var(--text-xs);
+  font-weight: 600;
 }
 
 .label {
-  margin: 0 10px 0 6px;
-  color: var(--text-muted);
-  font-size: 13px;
-  font-weight: 600;
-  white-space: nowrap;
-  transition: color 0.25s var(--ease);
+  padding: 2px 0;
+  border-bottom: 1px solid transparent;
+  transition:
+    color var(--duration) var(--ease),
+    border-color 220ms var(--ease-reveal);
 }
 
-.connector {
-  width: 18px;
-  height: 2px;
-  margin-right: 10px;
-  border-radius: 2px;
-  background: var(--line-strong);
+.done {
+  color: var(--ink-muted);
 }
 
 .done .index {
-  border-color: var(--primary);
-  background: var(--primary);
-  color: var(--on-primary);
+  color: var(--verdict-correct);
 }
 
-.done .label {
-  color: var(--text-secondary);
-}
-
-.done .connector {
-  background: var(--primary-line);
+.active {
+  color: var(--ink-strong);
 }
 
 .active .index {
-  border-color: var(--primary);
-  color: var(--primary-text);
-  box-shadow: 0 0 0 4px var(--primary-soft);
-  animation: pulse 2.2s var(--ease) infinite;
+  color: var(--accent-ink);
 }
 
+/* 当前步骤：强调色下划线 */
 .active .label {
-  color: var(--text);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
 }
 
-@keyframes pulse {
-  50% {
-    box-shadow: 0 0 0 6px var(--primary-soft);
-  }
-}
-
-@media (max-width: 520px) {
-  .label {
-    margin: 0 6px 0 4px;
-    font-size: 12px;
-  }
-
-  .connector {
-    width: 8px;
-    margin-right: 6px;
+@media (max-width: 480px) {
+  .step + .step::before {
+    width: 12px;
+    margin: 0 8px;
   }
 }

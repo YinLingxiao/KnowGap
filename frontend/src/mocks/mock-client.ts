@@ -22,7 +22,7 @@ import type {
   TutorPhase,
 } from "@/lib/types";
 import { consumeFault, getMockControls, type MockOperation } from "@/mocks/mock-controls";
-import { MOCK_SCRIPTS, excerpt, findScript, type MockProblemScript } from "@/mocks/mock-data";
+import { MOCK_SCRIPTS, excerpt, findScript, quoteFrom, type MockProblemScript } from "@/mocks/mock-data";
 
 const STORAGE_KEY = "knowgap.mock.v1";
 
@@ -278,11 +278,11 @@ export function createMockClient(): KnowGapClient {
         });
         memoryChanges.push(change);
         record.issueMemoryId = change.memoryId;
-        const historyNote = usesMemory ? "历史记忆显示此前在同一知识点上出现过类似情况（仅用于调整提问方式）。" : "";
         diagnosis = {
           ...base,
+          assessment: "incorrect",
           issue: script.issue,
-          evidence: script.incorrectEvidence(input.answer, input.reasoning) + historyNote,
+          evidence: script.incorrectEvidence(input.answer, input.reasoning),
           confidence: usesMemory ? 0.78 : 0.64,
         };
         reply = tutorMessage((usesMemory ? script.memoryHints : script.hints)[0], "hint");
@@ -290,6 +290,7 @@ export function createMockClient(): KnowGapClient {
         record.stage = "correct";
         diagnosis = {
           ...base,
+          assessment: "correct",
           issue: null,
           evidence: script.correctEvidence(input.answer, input.reasoning),
           confidence: 0.82,
@@ -311,9 +312,10 @@ export function createMockClient(): KnowGapClient {
         record.stage = "unclear";
         diagnosis = {
           ...base,
+          assessment: "uncertain",
           issue: null,
-          evidence: "回答中没有给出明确的结论，暂时无法判断是否存在误区。",
-          confidence: null,
+          evidence: quoteFrom(input.answer) ?? input.answer.trim(),
+          confidence: 0.3,
         };
         reply = tutorMessage(script.unclearReply, "hint");
       }
@@ -342,6 +344,16 @@ export function createMockClient(): KnowGapClient {
       const memoryChanges: MemoryChange[] = [];
       let reply: string;
       let phase: TutorPhase | undefined = "hint";
+      // 只有能判断的回答才给出本轮诊断；中间步骤的回答不做评价
+      let turnDiagnosis: Diagnosis | undefined;
+      const judged = (assessment: "correct" | "incorrect" | "uncertain", confidence: number): Diagnosis => ({
+        topicKey: script.problem.topicKey,
+        topicLabel: script.problem.topicLabel,
+        assessment,
+        issue: assessment === "incorrect" ? script.issue : null,
+        evidence: quoteFrom(text) ?? text,
+        confidence,
+      });
 
       const startGuiding = (prefix: string) => {
         record.stage = "guiding";
@@ -369,10 +381,12 @@ export function createMockClient(): KnowGapClient {
             });
             memoryChanges.push(change);
             record.issueMemoryId = change.memoryId;
+            turnDiagnosis = judged("incorrect", 0.62);
             reply = startGuiding(`明白了，你的结论是「${excerpt(text, 24)}」。我们一起来验证一下。`);
           } else if (verdict === "correct") {
             record.stage = "correct";
             phase = undefined;
+            turnDiagnosis = judged("correct", 0.8);
             reply = `${script.correctPraise}${script.correctFollowUp}`;
           } else if (ASK_FOR_HINT.test(text) || record.unclearCount >= 1) {
             reply = startGuiding("没关系，我们先不下结论，从第一步开始模拟。");
@@ -386,6 +400,7 @@ export function createMockClient(): KnowGapClient {
           if (script.reachedInsight(text)) {
             record.stage = "confirmed";
             phase = undefined;
+            turnDiagnosis = judged("correct", 0.8);
             reply = script.confirmation;
             const change = reinforce(db, record, { label: "经引导后自行纠正", sessionId, excerpt: excerpt(text) });
             if (change) memoryChanges.push(change);
@@ -403,7 +418,7 @@ export function createMockClient(): KnowGapClient {
       }
 
       saveDb(db);
-      return { reply: tutorMessage(reply, phase), memoryChanges };
+      return { reply: tutorMessage(reply, phase), memoryChanges, diagnosis: turnDiagnosis };
     },
 
     async listMemories(studentId) {

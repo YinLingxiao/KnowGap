@@ -1,105 +1,87 @@
+/* 错误：原因 + 下一步。颜色、图标、文字一起表达，不单靠颜色 */
 .notice {
   --tone: var(--danger);
-  --tone-soft: var(--danger-soft);
-  --tone-line: var(--danger-line);
-  --tone-text: var(--danger-text);
-
   position: relative;
   display: flex;
-  gap: 12px;
-  padding: 14px 16px;
-  border: 1px solid var(--tone-line);
-  border-radius: var(--radius);
-  background: var(--tone-soft);
-  animation: enter 0.25s var(--ease);
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--danger-line);
+  border-radius: var(--radius-control);
+  background: var(--danger-surface);
+  animation: enter 220ms var(--ease-reveal);
 }
 
+/* 接口未接入不是故障，用中性提示 */
 .neutral {
-  --tone: var(--accent);
-  --tone-soft: var(--accent-soft);
-  --tone-line: var(--accent-line);
-  --tone-text: var(--accent-text);
+  --tone: var(--accent-ink);
+  border-color: var(--rule-strong);
+  background: var(--surface-soft);
 }
 
 .compact {
-  padding: 12px 14px;
+  padding: 10px 12px;
 }
 
 .icon {
-  display: grid;
   flex-shrink: 0;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 10px;
-  background: var(--surface);
+  padding-top: 2px;
   color: var(--tone);
-  box-shadow: var(--shadow-xs);
-}
-
-.compact .icon {
-  width: 28px;
-  height: 28px;
 }
 
 .body {
   flex: 1;
   min-width: 0;
-  padding-right: 20px;
+  padding-right: 24px;
 }
 
 .title {
-  color: var(--tone-text);
-  font-size: 14px;
-  font-weight: 650;
+  color: var(--tone);
+  font-size: var(--text-ui);
+  font-weight: 600;
 }
 
 .hint {
   margin-top: 2px;
-  color: var(--text-secondary);
-  font-size: 13px;
-  line-height: 1.55;
+  color: var(--ink);
+  font-size: var(--text-sm);
+  line-height: 1.6;
 }
 
 .detail {
-  margin-top: 6px;
-  color: var(--text-muted);
+  margin-top: 4px;
+  color: var(--ink-muted);
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--text-xs);
   word-break: break-word;
 }
 
 .actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-2);
   margin-top: 10px;
 }
 
 .close {
   position: absolute;
-  top: 10px;
-  right: 10px;
+  top: 6px;
+  right: 6px;
   display: grid;
   place-items: center;
-  width: 24px;
-  height: 24px;
-  border-radius: var(--radius-xs);
-  color: var(--text-muted);
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-control);
+  color: var(--ink-muted);
 }
 
 .close:hover {
-  background: var(--surface);
-  color: var(--text);
+  background: rgb(0 0 0 / 5%);
+  color: var(--ink);
 }
 
 @keyframes enter {
   from {
     opacity: 0;
-    transform: translateY(-4px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
+    transform: translateY(-3px);
   }
 }

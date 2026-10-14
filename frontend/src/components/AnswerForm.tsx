@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, type FormEvent, type KeyboardEvent } from "react";
-import { History, Sparkles, TriangleAlert } from "lucide-react";
+import { History, TriangleAlert } from "lucide-react";
 import { Button } from "./ui/Button";
 import styles from "./AnswerForm.module.css";
 
@@ -44,8 +44,8 @@ export function AnswerForm({ relatedMemoryCount, submitting, onSubmit }: AnswerF
   return (
     <form ref={formRef} className={styles.form} onSubmit={handleSubmit} noValidate aria-busy={submitting}>
       <div className={styles.header}>
-        <h3 className={styles.title}>写下你的答案和思路</h3>
-        <p className={styles.sub}>提交后，导师会先做认知诊断，再用提问一步步引导你。</p>
+        <h3 className={styles.title}>你的作答</h3>
+        <p className={styles.sub}>提交后，导师先在你的原文上做诊断批注，再用提问一步步引导。</p>
       </div>
 
       <div className={styles.field}>
@@ -87,7 +87,7 @@ export function AnswerForm({ relatedMemoryCount, submitting, onSubmit }: AnswerF
           readOnly={submitting}
           onChange={(event) => setReasoning(event.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="说说你是怎么想的——哪怕不确定也没关系。思路写得越具体，诊断越准确。"
+          placeholder="说说你是怎么想的，哪怕不确定也没关系。思路写得越具体，诊断越准确。"
         />
         <span className={styles.counter}>
           {reasoning.length} / {MAX_LENGTH}
@@ -107,8 +107,8 @@ export function AnswerForm({ relatedMemoryCount, submitting, onSubmit }: AnswerF
         <span className={styles.shortcut}>
           <kbd>Ctrl</kbd> + <kbd>Enter</kbd> 提交
         </span>
-        <Button variant="primary" size="lg" type="submit" loading={submitting} icon={<Sparkles size={16} />}>
-          {submitting ? "诊断中…" : "提交并诊断"}
+        <Button variant="primary" size="lg" type="submit" loading={submitting}>
+          {submitting ? "正在诊断…" : "提交并诊断"}
         </Button>
       </div>
     </form>
