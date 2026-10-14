@@ -2,6 +2,9 @@
 
 目录：`D:\黑客松\KnowGap-backend`；分支：`feat/backend`。
 
+后续已修复 Cursor 报告的明确结论与标准答案冲突问题；双方合跑最新结果为 **67 passed, 1 warning**。
+详见 `docs/reference-guard-status.md`，下文 35 项为首次交付时的历史记录。
+
 ## 本轮已实现
 
 - 七个路径：健康检查、题目列表、首次诊断、后续消息、会话恢复、记忆列表、记忆删除。
