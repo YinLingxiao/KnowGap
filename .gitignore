@@ -38,3 +38,10 @@ Thumbs.db
 coverage/
 .coverage
 htmlcov/
+
+# Local learning records
+backend/data/
+*.sqlite3
+*.sqlite3-*
+*.db
+*.db-*
