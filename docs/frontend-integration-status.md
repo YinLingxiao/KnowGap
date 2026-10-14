@@ -1,7 +1,7 @@
 # 前后端联调状态（2026-10-14）
 
-前端目录：`D:\黑客松\KnowGap\frontend`，分支 `frontend`。
-后端目录：`D:\黑客松\KnowGap-backend\backend`，分支 `feat/backend`。
+合并后前端目录：`D:\黑客松\KnowGap\frontend`，分支 `main`。
+合并后后端目录：`D:\黑客松\KnowGap\backend`，分支 `main`。
 
 ## 已完成
 
@@ -28,6 +28,6 @@
 
 ## 协作交接
 
-Claude 的前端和这次联调修改仍在 `frontend` 工作区中，未替 Claude 提交，也未合并或推送。Cursor 的验收文件保留在后端工作区中，不包含在 GPT 的后端提交里。
+按用户要求，Claude 前端、GPT 后端、接口联调修改和 Cursor 验收文件均已提交，并合并到本地 `main`。原 `frontend` 和 `feat/backend` 分支保留；尚未推送到 GitHub。此次合并没有重新运行测试。
 
 联调修改主要位于 `frontend/src/lib/api/http-client.ts`、`src/lib/types.ts`、`src/lib/config.ts`、`src/lib/api/errors.ts`、`src/hooks/useWorkbench.ts`、`src/components/{Workbench,ProblemPanel,DiagnosisCard,UsedMemories,ErrorNotice}.tsx`，以及客户端测试、检查配置和 README。
