@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronRight } from "lucide-react";
 import { useWorkbench } from "@/hooks/useWorkbench";
 import { topicLabel } from "@/lib/labels";
@@ -20,6 +20,7 @@ import { UsedMemories } from "./UsedMemories";
 import { WelcomeHero } from "./WelcomeHero";
 import { Toaster, useToasts } from "./ui/Toaster";
 import styles from "./Workbench.module.css";
+import { WebSearchPanel } from "./WebSearchPanel";
 
 function isTyping(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
@@ -29,6 +30,7 @@ function isTyping(target: EventTarget | null): boolean {
 export function Workbench() {
   const { toasts, push, dismiss } = useToasts();
   const wb = useWorkbench(push);
+  const [searchOpen, setSearchOpen] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
   const sessionTopRef = useRef<HTMLDivElement>(null);
 
@@ -74,6 +76,7 @@ export function Workbench() {
   const startNewSession = wb.startNewSession;
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (searchOpen) return;
       if (event.metaKey || event.ctrlKey || event.altKey || isTyping(event.target)) return;
       if (event.key === "n" || event.key === "N") {
         if (!canStartNew) return;
@@ -88,7 +91,7 @@ export function Workbench() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [canStartNew, startNewSession]);
+  }, [canStartNew, startNewSession, searchOpen]);
 
   const CrumbIcon = selectedProblem ? topicIcon(selectedProblem.topicKey) : null;
 
@@ -107,6 +110,9 @@ export function Workbench() {
           disabled={busy}
           canStartNew={canStartNew}
           onNewSession={wb.startNewSession}
+          onOpenWebSearch={() => setSearchOpen(true)}
+          webSearch={wb.webSearch}
+          onWebSearchChange={wb.setWebSearch}
           mockConsole={wb.source === "mock" ? <MockConsole onReset={wb.resetDemo} /> : null}
         />
       </aside>
@@ -225,6 +231,7 @@ export function Workbench() {
       </aside>
 
       <Toaster toasts={toasts} onDismiss={dismiss} />
+      <WebSearchPanel open={searchOpen} onClose={() => setSearchOpen(false)} />
     </div>
   );
 }

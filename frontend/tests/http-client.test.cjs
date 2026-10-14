@@ -115,3 +115,24 @@ test('request timeout covers reading the response body, not just receiving heade
   });
   await assert.rejects(request('http://backend.example', '/health', { timeoutMs: 5 }), error => error.kind === 'timeout');
 });
+
+const webSource={id:'web-1',label:'网页1',title:'Stack',url:'https://docs.example/stack',snippet:'LIFO'};
+test('AnySearch teaching toggle is explicit in initial and followup requests and keeps sources',async()=>{
+  global.fetch=async(_url,options)=>{
+    assert.equal(JSON.parse(options.body).web_search,true);
+    return json({...turn,web_sources:[webSource]});
+  };
+  const client=createHttpClient('http://backend.example');
+  const initial=await client.startSession({studentId:'demo-student-001',problemId:'stack-sequence-001',answer:'合法',reasoning:'',webSearch:true});
+  assert.equal(initial.reply.webSources[0].url,webSource.url);
+  const followup=await client.sendMessage('session-1','仍然合法',true);
+  assert.equal(followup.reply.webSources[0].id,'web-1');
+});
+test('web citations survive session recovery',async()=>{
+  global.fetch=async()=>json({id:'session-1',problem_id:'stack-sequence-001',turn:1,messages:[
+    {id:'u1',role:'user',content:'合法',created_at:'t1',diagnosis,used_memory_ids:[]},
+    {id:'a1',role:'assistant',content:'检查栈顶。[网页1]',created_at:'t1',diagnosis:null,web_sources:[webSource],used_memory_ids:[]},
+  ]});
+  const session=await createHttpClient('http://backend.example').getSession('session-1');
+  assert.deepEqual(session.messages[0].webSources,[webSource]);
+});

@@ -302,3 +302,10 @@
     display: none;
   }
 }
+
+.webSearch { display: flex; align-items: center; gap: 8px; margin: 0 12px; padding: 9px 12px; border: 0; border-radius: var(--radius); color: var(--text-secondary); background: transparent; font: inherit; font-size: var(--text-md); cursor: pointer; text-align: left; }
+.webSearch:hover { background: var(--bg-hover); }
+.webSearch span { margin-left: auto; color: var(--text-tertiary); font-size: var(--text-xs); }
+.webSearch:focus-visible { outline: 2px solid var(--accent); }
+.webToggle { display: flex; align-items: center; gap: 8px; padding: 8px 24px 14px; color: var(--text-tertiary); font-size: var(--text-sm); cursor: pointer; }
+.webToggle input { accent-color: var(--accent); }

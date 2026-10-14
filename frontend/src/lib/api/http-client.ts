@@ -3,7 +3,7 @@ import { ApiError, type ApiErrorKind } from "./errors";
 import { DEMO_STUDENT_ID, REQUEST_TIMEOUT_MS } from "../config";
 import type {
   AnswerSubmission, ChatMessage, Diagnosis, KnowGapClient, LearningMemory,
-  MemoryChange, MemoryStatus, SessionSnapshot,
+  MemoryChange, MemoryStatus, SessionSnapshot, WebSource,
 } from "../types";
 
 interface WireDiagnosis {
@@ -35,6 +35,7 @@ interface WireTurn {
   reply: string;
   used_memory_ids: string[];
   memory_changes: Array<{ action: "created" | "updated"; memory: WireMemory }>;
+  web_sources?: WebSource[];
 }
 interface WireSession {
   id: string;
@@ -45,6 +46,7 @@ interface WireSession {
   messages: Array<{
     id: string; role: "user" | "assistant"; content: string; created_at: string;
     diagnosis: WireDiagnosis | null; used_memory_ids: string[];
+    web_sources?: WebSource[];
   }>;
 }
 
@@ -71,6 +73,7 @@ function mapTurn(data: WireTurn) {
   const reply: ChatMessage = {
     id: `${data.session_id}-tutor-${data.turn}`, role: "tutor", content: data.reply,
     createdAt: new Date().toISOString(),
+    webSources: data.web_sources ?? [],
     // The API does not report a hint/answer phase. Do not invent one.
   };
   const memoryChanges: MemoryChange[] = data.memory_changes.map(({ action, memory }) => ({
@@ -98,6 +101,7 @@ function mapSession(data: WireSession): SessionSnapshot {
       id: message.id, role: message.role === "user" ? "student" : "tutor",
       content: message.content, createdAt: message.created_at,
       diagnosis: message.role === "user" && message.diagnosis ? mapDiagnosis(message.diagnosis) : undefined,
+      webSources: message.web_sources ?? [],
     })),
   };
 }
@@ -121,12 +125,14 @@ export function createHttpClient(baseUrl: string): KnowGapClient {
       const reasoning = input.reasoning.trim();
       const answer = input.answer.trim() + (reasoning ? REASONING_SEPARATOR + reasoning : "");
       return mapTurn(await request<WireTurn>(root, "/api/diagnosis", {
-        method: "POST", body: JSON.stringify({ student_id: input.studentId, problem_id: input.problemId, answer }),
+        method: "POST", body: JSON.stringify({ student_id: input.studentId, problem_id: input.problemId, answer,
+          ...(input.webSearch ? { web_search: true } : {}) }), timeoutMs: input.webSearch ? 100_000 : REQUEST_TIMEOUT_MS,
       }));
     },
-    async sendMessage(sessionId, content) {
+    async sendMessage(sessionId, content, webSearch) {
       return mapTurn(await request<WireTurn>(root, `/api/sessions/${encodeURIComponent(sessionId)}/messages`, {
-        method: "POST", body: JSON.stringify({ content: content.trim() }),
+        method: "POST", body: JSON.stringify({ content: content.trim(), ...(webSearch ? { web_search: true } : {}) }),
+        timeoutMs: webSearch ? 100_000 : REQUEST_TIMEOUT_MS,
       }));
     },
     async getSession(sessionId) {

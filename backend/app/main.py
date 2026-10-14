@@ -5,7 +5,7 @@ import sqlite3
 from contextlib import asynccontextmanager
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import FastAPI, HTTPException, Request, Response, Query
 from fastapi.exceptions import RequestValidationError
 from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,16 +20,19 @@ from app.models.schemas import (
 from app.services.problems import PROBLEMS
 from app.services.teaching import teach
 from app.services.ai_settings import AISettings
+from app.services.anysearch import AnySearchClient, SearchService
+from app.models.schemas import WebSearchResponse
 
 logger = logging.getLogger(__name__)
 DemoStudent = Literal["demo-student-001"]
 
 
-def create_app(settings: Settings | None = None, tutor: Tutor | None = None) -> FastAPI:
+def create_app(settings: Settings | None = None, tutor: Tutor | None = None, search_service: SearchService | None = None) -> FastAPI:
     settings = settings or Settings()
     store = Store(settings.resolved_database_path())
     ai_settings = AISettings(settings)
     model = tutor if tutor is not None else ChatCompletionsTutor(ai_settings.current)
+    search = search_service if search_service is not None else AnySearchClient(settings)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -39,6 +42,7 @@ def create_app(settings: Settings | None = None, tutor: Tutor | None = None) -> 
     app = FastAPI(title="KnowGap API", version="0.2.0", lifespan=lifespan)
     app.state.store = store
     app.state.tutor = model
+    app.state.search = search
     app.add_middleware(
         CORSMiddleware, allow_origins=settings.cors_origins,
         allow_credentials=False, allow_methods=["GET", "POST", "PUT", "DELETE"], allow_headers=["Content-Type"],
@@ -107,9 +111,16 @@ def create_app(settings: Settings | None = None, tutor: Tutor | None = None) -> 
     def problems():
         return list(PROBLEMS.values())
 
+    @app.get('/api/search', response_model=WebSearchResponse)
+    async def web_search(q: str = Query(min_length=1, max_length=600), limit: int = Query(default=5, ge=1, le=10)):
+        query = q.strip()
+        if not query:
+            raise HTTPException(422, '请输入搜索关键词。')
+        return await search.search(query, limit)
+
     @app.post("/api/diagnosis", response_model=TeachingResponse)
     async def diagnosis(body: DiagnosisRequest):
-        return await teach(store, model, body)
+        return await teach(store, model, body, search_service=search)
 
     @app.get("/api/sessions/{session_id}", response_model=Session)
     def get_session(session_id: str, student_id: DemoStudent = DEMO_STUDENT):
@@ -122,8 +133,8 @@ def create_app(settings: Settings | None = None, tutor: Tutor | None = None) -> 
     async def message(session_id: str, body: MessageRequest):
         session = get_session(session_id)
         return await teach(store, model, DiagnosisRequest(
-            student_id=session.student_id, problem_id=session.problem_id, answer=body.content,
-        ), session)
+            student_id=session.student_id, problem_id=session.problem_id, answer=body.content, web_search=body.web_search,
+        ), session, search_service=search)
 
     @app.get("/api/memories", response_model=list[Memory])
     def memories(student_id: DemoStudent = DEMO_STUDENT):
@@ -139,4 +150,3 @@ def create_app(settings: Settings | None = None, tutor: Tutor | None = None) -> 
 
 
 app = create_app()
-

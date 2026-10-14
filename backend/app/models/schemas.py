@@ -18,10 +18,27 @@ class DiagnosisRequest(StrictModel):
     student_id: Literal["demo-student-001"] = DEMO_STUDENT
     problem_id: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
     answer: TextInput
+    web_search: bool = False
 
 
 class MessageRequest(StrictModel):
     content: TextInput
+    web_search: bool = False
+
+
+class WebSource(BaseModel):
+    id: str
+    label: str
+    title: str
+    url: str
+    snippet: str
+
+
+class WebSearchResponse(BaseModel):
+    provider: Literal['anysearch'] = 'anysearch'
+    query: str
+    results: list[WebSource]
+    request_id: str | None = None
 
 
 class Problem(BaseModel):
@@ -39,6 +56,7 @@ class TutorOutput(StrictModel):
     confidence: float = Field(ge=0, le=1, allow_inf_nan=False)
     evidence: ShortText
     reply: ShortText
+    web_source_ids: list[str] = Field(default_factory=list, max_length=5)
 
     @model_validator(mode="after")
     def consistent_issue(self):
@@ -92,6 +110,7 @@ class TeachingResponse(BaseModel):
     reply: str
     used_memory_ids: list[str]
     memory_changes: list[MemoryChange]
+    web_sources: list[WebSource] = Field(default_factory=list)
 
 
 class SessionMessage(BaseModel):
@@ -101,6 +120,7 @@ class SessionMessage(BaseModel):
     created_at: str
     diagnosis: Diagnosis | None = None
     used_memory_ids: list[str] = []
+    web_sources: list[WebSource] = Field(default_factory=list)
 
 
 class Session(BaseModel):

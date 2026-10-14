@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import Image from "next/image";
-import { SquarePen } from "lucide-react";
+import { SquarePen, Search } from "lucide-react";
 import type { HealthState, Resource } from "@/hooks/useWorkbench";
 import type { DataSource } from "@/lib/config";
 import { cx } from "@/lib/cx";
@@ -23,6 +23,9 @@ interface SidebarProps {
   disabled: boolean;
   canStartNew: boolean;
   onNewSession: () => void;
+  onOpenWebSearch: () => void;
+  webSearch: boolean;
+  onWebSearchChange: (enabled: boolean) => void;
   /** Mock 模式下的 Mock 控制台入口 */
   mockConsole?: ReactNode;
 }
@@ -46,6 +49,9 @@ export function Sidebar({
   canStartNew,
   onNewSession,
   mockConsole,
+  onOpenWebSearch,
+  webSearch,
+  onWebSearchChange,
 }: SidebarProps) {
   const { data, loading, error } = problems;
 
@@ -67,6 +73,12 @@ export function Sidebar({
         新会话
         <kbd className={styles.kbd}>N</kbd>
       </button>
+
+      <button className={styles.webSearch} onClick={onOpenWebSearch}><Search size={15} aria-hidden />联网搜索<span>AnySearch</span></button>
+      <label className={styles.webToggle} title={source === 'mock' ? '演示导师暂不支持联网参考' : '开启后，导师通过 AnySearch 检索相关网页作为参考'}>
+        <input type="checkbox" checked={webSearch} disabled={disabled || source === 'mock'} onChange={(event) => onWebSearchChange(event.target.checked)} />
+        导师联网参考
+      </label>
 
       <div className={styles.source}>
         {source === "mock" ? (
