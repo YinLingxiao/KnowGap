@@ -71,6 +71,8 @@ export interface WebSearchResponse {
 export interface CourseMaterial {
   id: string; title: string; kind: "pdf" | "txt" | "md";
   pageCount: number; chunkCount: number; createdAt: string;
+  /** null：未归入任何 Subject */
+  subjectId?: string | null;
 }
 
 export interface SourceReference {

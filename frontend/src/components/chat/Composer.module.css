@@ -1,0 +1,153 @@
+/* 输入框：圆角卡片，上方输入，下方一行工具（参照 Claude 桌面端） */
+.composer {
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.box {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-strong);
+  border-radius: 18px;
+  background: var(--bg-elevated);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 4%), 0 6px 20px rgb(0 0 0 / 5%);
+  transition: border-color var(--duration-fast) var(--ease), box-shadow var(--duration-fast) var(--ease);
+}
+
+.box:focus-within {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border-strong));
+}
+
+.locked .input {
+  color: var(--text-secondary);
+}
+
+.input {
+  width: 100%;
+  min-height: 48px;
+  padding: 14px 16px 2px;
+  border: 0;
+  outline: none;
+  background: transparent;
+  font-size: var(--text-lg);
+  line-height: 1.6;
+  resize: none;
+}
+
+.hero .input {
+  min-height: 76px;
+}
+
+.input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px 10px;
+}
+
+.menuAnchor {
+  position: relative;
+}
+
+.tool {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  color: var(--text-secondary);
+}
+
+.tool:hover:not(:disabled),
+.tool[aria-expanded="true"] {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.tool:disabled {
+  opacity: 0.4;
+}
+
+.menu {
+  position: absolute;
+  z-index: 20;
+  bottom: calc(100% + 6px);
+  left: 0;
+  width: min(300px, calc(100vw - 32px));
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-popover);
+}
+
+.hero .menu {
+  top: calc(100% + 6px);
+  bottom: auto;
+}
+
+.menuLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px 6px;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.menuItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 8px;
+  border-radius: 8px;
+  font-size: var(--text-sm);
+  text-align: left;
+}
+
+.menuItem:hover {
+  background: var(--bg-hover);
+}
+
+.menuItem code {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.send {
+  display: inline-grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: var(--accent-solid);
+  color: var(--on-accent);
+  transition: background var(--duration-fast) var(--ease), opacity var(--duration-fast) var(--ease);
+}
+
+.send:hover:not(:disabled) {
+  background: var(--accent-solid-hover);
+}
+
+.send:disabled {
+  background: var(--bg-active);
+  color: var(--text-tertiary);
+}
+
+.stop {
+  background: var(--text);
+  color: var(--bg);
+}
+
+.stop:hover:not(:disabled) {
+  background: var(--text-secondary);
+}

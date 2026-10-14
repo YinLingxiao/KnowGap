@@ -5,7 +5,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "知隙 KnowGap",
   icons: { icon: "/brand/knowgap-logo-v1.png", apple: "/brand/knowgap-logo-v1.png" },
-  description: "认知诊断 → 苏格拉底式引导 → 长期学习记忆：发现知识漏洞，引导学生自主纠错。",
+  description: "以对话为核心的学习 Agent：解释、追问、举例与练习，并从有依据的对话中积累学习记忆。",
 };
 
 export const viewport: Viewport = {
@@ -13,7 +13,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#ffffff" },
-    { media: "(prefers-color-scheme: dark)", color: "#111214" },
+    { media: "(prefers-color-scheme: dark)", color: "#1b1b1d" },
   ],
 };
 

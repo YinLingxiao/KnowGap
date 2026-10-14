@@ -6,7 +6,7 @@ from pathlib import PurePosixPath
 from fastapi import HTTPException
 from pypdf import PdfReader
 
-from app.memory.store import Store, new_id, now
+from app.memory.store import Store, ensure_column, new_id, now
 from app.models.schemas import Material, SourceReference
 
 MAX_UPLOAD_BYTES = 5 * 1024 * 1024
@@ -101,8 +101,10 @@ class MaterialStore:
                 );
                 CREATE VIRTUAL TABLE IF NOT EXISTS course_index USING fts5(chunk_id UNINDEXED, terms);
             ''')
+            # NULL = not filed under a Subject ("未归类").
+            ensure_column(db, 'course_materials', 'subject_id', 'TEXT')
 
-    def add(self, student_id: str, filename: str, data: bytes) -> Material:
+    def add(self, student_id: str, filename: str, data: bytes, subject_id: str | None = None) -> Material:
         if len(data) > MAX_UPLOAD_BYTES:
             raise HTTPException(413, '单份资料不能超过 5 MB。')
         title = PurePosixPath(filename.replace('\\', '/')).name
@@ -114,22 +116,28 @@ class MaterialStore:
                    for page, content in pages for text, start, end in chunks(content) if text.strip()]
         material = Material(id=document_id, title=title, kind=kind,
                             page_count=len(pages) if kind == 'pdf' else 0,
-                            chunk_count=len(records), created_at=now())
+                            chunk_count=len(records), created_at=now(), subject_id=subject_id)
         with self.store.connection() as db:
             db.execute('BEGIN IMMEDIATE')
             count = db.execute('SELECT COUNT(*) FROM course_materials WHERE student_id = ?', (student_id,)).fetchone()[0]
             if count >= MAX_DOCUMENTS:
                 raise HTTPException(409, '最多保存 30 份资料，请删除不需要的资料后再上传。')
-            db.execute('INSERT INTO course_materials VALUES (?, ?, ?, ?, ?, ?, ?)',
-                       (document_id, student_id, title, kind, material.page_count, len(records), material.created_at))
+            db.execute('INSERT INTO course_materials(id, student_id, title, kind, page_count, chunk_count, created_at, '
+                       'subject_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                       (document_id, student_id, title, kind, material.page_count, len(records), material.created_at,
+                        subject_id))
             db.executemany('INSERT INTO course_chunks VALUES (?, ?, ?, ?, ?, ?)', records)
             db.executemany('INSERT INTO course_index(chunk_id, terms) VALUES (?, ?)',
                            [(record[0], ' '.join(terms(record[2]))) for record in records])
         return material
 
-    def list_materials(self, student_id: str) -> list[Material]:
+    def list_materials(self, student_id: str, subject_id: str | None = None, unassigned: bool = False) -> list[Material]:
+        """All materials by default; one Subject's, or only unassigned ones, when asked."""
         with self.store.connection() as db:
-            rows = db.execute('SELECT * FROM course_materials WHERE student_id = ? ORDER BY created_at DESC', (student_id,)).fetchall()
+            rows = db.execute('''
+                SELECT * FROM course_materials WHERE student_id = ?
+                AND (? = 0 OR subject_id IS NULL) AND (? IS NULL OR subject_id = ?) ORDER BY created_at DESC
+            ''', (student_id, int(unassigned), subject_id, subject_id)).fetchall()
             return [Material(**dict(row)) for row in rows]
 
     def delete(self, document_id: str, student_id: str) -> bool:
@@ -141,7 +149,15 @@ class MaterialStore:
             db.execute('DELETE FROM course_materials WHERE id = ?', (document_id,))
             return True
 
-    def search(self, student_id: str, query: str, limit: int = 5) -> list[SourceReference]:
+    def search_scoped(self, student_id: str, query: str, limit: int, subject_id: str | None) -> list[SourceReference]:
+        """A Subject's own knowledge first, then unassigned materials; other Subjects' files are never mixed in."""
+        found = self.search(student_id, query, limit, scope=subject_id) if subject_id else []
+        if len(found) < limit:
+            found += self.search(student_id, query, limit - len(found), scope=None)
+        return [source.model_copy(update={'label': f'资料{index}'}) for index, source in enumerate(found, 1)]
+
+    def search(self, student_id: str, query: str, limit: int = 5, scope: str | None | bool = True) -> list[SourceReference]:
+        """scope: True = every material (legacy behaviour), None = unassigned only, str = that Subject only."""
         tokens = terms(query)
         # Retain only useful single-character terms; bigrams cover normal Chinese text.
         tokens = [t for t in tokens if len(t) > 1 or t in {'栈', '图', '树'}][:64]
@@ -154,8 +170,10 @@ class MaterialStore:
                 JOIN course_chunks c ON c.id = i.chunk_id
                 JOIN course_materials d ON d.id = c.document_id
                 WHERE course_index MATCH ? AND d.student_id = ?
+                AND (? = 1 OR (? IS NULL AND d.subject_id IS NULL) OR d.subject_id = ?)
                 ORDER BY bm25(course_index), c.id LIMIT ?
-            ''', (match, student_id, limit)).fetchall()
+            ''', (match, student_id, int(scope is True), None if scope is True else scope,
+                  None if scope is True else scope, limit)).fetchall()
             return [SourceReference(id=row['id'], document_id=row['document_id'], title=row['title'],
                                     label=f'资料{index}', page=row['page'], start_line=row['start_line'],
                                     end_line=row['end_line'], excerpt=row['content'])

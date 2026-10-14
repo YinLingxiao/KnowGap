@@ -8,7 +8,8 @@ import type { CourseMaterial, SourceReference } from "@/lib/types";
 import { sourceLocation } from "./SourceReferences";
 import styles from "./MaterialLibrary.module.css";
 
-export function MaterialLibrary({ enabled, onBack }: { enabled: boolean; onBack: () => void }) {
+/** unassigned：只管理未归入 Subject 的资料（所有对话都会检索）；Subject 自己的资料在 Subject 页 */
+export function MaterialLibrary({ enabled, onBack, unassigned = false }: { enabled: boolean; onBack: () => void; unassigned?: boolean }) {
   const client = useMemo(() => createMaterialClient(), []);
   const [documents, setDocuments] = useState<CourseMaterial[]>([]);
   const [results, setResults] = useState<SourceReference[]>([]);
@@ -25,10 +26,10 @@ export function MaterialLibrary({ enabled, onBack }: { enabled: boolean; onBack:
 
   const refresh = useCallback(async () => {
     setLoading(true);
-    try { setDocuments(await client.list()); }
+    try { setDocuments(await client.list({ unassigned })); }
     catch (failure) { setError(toApiError(failure).message); }
     finally { setLoading(false); }
-  }, [client]);
+  }, [client, unassigned]);
   useEffect(() => { if (enabled) void refresh(); }, [enabled, refresh]);
   useEffect(() => () => { generation.current += 1; }, []);
 
@@ -77,7 +78,7 @@ export function MaterialLibrary({ enabled, onBack }: { enabled: boolean; onBack:
       <button onClick={onBack} className={styles.back}><ArrowLeft size={14} aria-hidden />返回学习</button>
     </header>
     <div className={styles.body}>
-      <p className={styles.intro}>找到课程中的原文，让每次解释都有出处。</p>
+      <p className={styles.intro}>{unassigned ? "这里的资料不属于任何学习空间，所有对话都会检索；某个空间专用的资料请放到对应学习空间里。" : "找到课程中的原文，让每次解释都有出处。"}</p>
       {!enabled ? <p className={styles.empty}>当前为演示模式。连接真实后端后，可上传和检索自己的课程资料。</p> : <>
         <form className={styles.search} onSubmit={(event) => void search(event)} role="search">
           <Search size={16} aria-hidden />

@@ -1,0 +1,334 @@
+/* 整体：左侧栏 + 无边框主区域，中间一条细分隔线（参照 Claude 桌面端） */
+.app {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.sidebarClosed {
+  grid-template-columns: 0 minmax(0, 1fr);
+}
+
+.sidebar {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-right: 1px solid var(--border);
+}
+
+.sidebarClosed .sidebar {
+  visibility: hidden;
+  border-right: 0;
+}
+
+.narrow {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.narrow .sidebar {
+  position: fixed;
+  z-index: 40;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: min(300px, 86vw);
+  box-shadow: var(--shadow-popover);
+  transform: translateX(0);
+  transition: transform var(--duration) var(--ease), visibility var(--duration);
+}
+
+.narrow.sidebarClosed .sidebar {
+  transform: translateX(-100%);
+}
+
+.backdrop {
+  position: fixed;
+  z-index: 35;
+  inset: 0;
+  border: 0;
+  background: rgb(0 0 0 / 35%);
+}
+
+.main {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+/* ---------------------------------------------------------------- 对话页 */
+
+.topbar {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+  height: 52px;
+  padding: 0 12px 0 16px;
+}
+
+.title {
+  display: flex;
+  overflow: hidden;
+  flex: 1;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  font-size: var(--text-md);
+  font-weight: 500;
+}
+
+.titleText {
+  overflow: hidden;
+  min-width: 0;
+  color: var(--text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.crumb {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 5px;
+  overflow: hidden;
+  max-width: 40%;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 8px;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.crumb:hover {
+  background: var(--bg-hover);
+}
+
+.crumb > svg {
+  flex-shrink: 0;
+  color: var(--accent);
+}
+
+.crumbSep {
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+}
+
+.iconButton {
+  display: inline-grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  color: var(--text-secondary);
+}
+
+.iconButton:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.iconButtonOn,
+.iconButtonOn:hover {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.center {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+  text-align: center;
+}
+
+.muted {
+  color: var(--text-tertiary);
+}
+
+.loadError {
+  color: var(--red);
+}
+
+.textButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--accent-text);
+}
+
+.dock {
+  flex-shrink: 0;
+  padding: 0 20px 12px;
+}
+
+.disclaimer {
+  margin-top: 8px;
+  color: var(--text-tertiary);
+  font-size: 11.5px;
+  text-align: center;
+}
+
+.sendFailure {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 720px;
+  margin: 0 auto 10px;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--red) 30%, var(--border));
+  border-radius: 12px;
+  background: var(--red-soft);
+  font-size: var(--text-sm);
+}
+
+.sendFailure > svg {
+  flex-shrink: 0;
+  color: var(--red);
+}
+
+.sendFailureText {
+  flex: 1;
+  min-width: 0;
+}
+
+.sendFailure button {
+  flex-shrink: 0;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  font-size: var(--text-sm);
+}
+
+.sendFailure .dismiss {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-tertiary);
+}
+
+/* ---------------------------------------------------------------- 首页 */
+
+.home {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  padding: 24px 20px 12vh;
+  overflow-y: auto;
+}
+
+.floatingToggle {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+}
+
+.homeInner {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+  max-width: 680px;
+}
+
+.greeting {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 28px;
+  font-size: 32px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  text-align: center;
+}
+
+.greetingLogo {
+  border-radius: 7px;
+}
+
+.homeMeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 0 6px;
+}
+
+.modelChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 8px;
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+}
+
+.modelChip:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.modelMissing {
+  color: var(--orange);
+}
+
+/* ---------------------------------------------------------------- 抽屉与其他 */
+
+.drawer {
+  position: fixed;
+  z-index: 40;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(400px, 100vw);
+  border-left: 1px solid var(--border);
+  background: var(--bg);
+  box-shadow: var(--shadow-popover);
+}
+
+.mockNotice {
+  max-width: 560px;
+  margin: 15vh auto 0;
+  padding: 0 20px;
+  line-height: 1.8;
+}
+
+.mockNotice h1 {
+  margin-bottom: 8px;
+  font-size: var(--text-xl);
+}
+
+@media (max-width: 560px) {
+  .greeting {
+    font-size: 26px;
+  }
+
+  .dock {
+    padding: 0 10px 8px;
+  }
+
+  .disclaimer {
+    display: none;
+  }
+}

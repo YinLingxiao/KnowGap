@@ -1,0 +1,352 @@
+.drawer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+  padding: 14px 14px 20px;
+  overflow-y: auto;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.title {
+  flex: 1;
+  font-size: var(--text-lg);
+  font-weight: 600;
+}
+
+.iconButton {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius);
+  color: var(--text-tertiary);
+}
+
+.iconButton:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.intro {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  line-height: 1.6;
+}
+
+.error {
+  color: var(--red);
+  font-size: var(--text-sm);
+}
+
+.empty {
+  padding: 16px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+}
+
+.emptyTitle {
+  margin-bottom: 4px;
+  color: var(--text);
+  font-weight: 500;
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.groupLabel {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  font-weight: 500;
+}
+
+.item {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
+  transition: border-color var(--duration) var(--ease), box-shadow var(--duration) var(--ease);
+}
+
+.focused {
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+}
+
+.kind {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  font-weight: 500;
+}
+
+.misconception {
+  background: color-mix(in srgb, var(--orange) 12%, transparent);
+  color: var(--orange);
+}
+
+.mastery {
+  background: color-mix(in srgb, var(--green) 12%, transparent);
+  color: var(--green);
+}
+
+.preference {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.topic {
+  overflow: hidden;
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status {
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.chevron {
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+  transition: transform var(--duration-fast) var(--ease);
+}
+
+.chevronOpen {
+  transform: rotate(90deg);
+}
+
+.summary {
+  margin-top: 6px;
+  font-size: var(--text-sm);
+  line-height: 1.6;
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-top: 6px;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.corrected {
+  color: var(--accent-text);
+}
+
+.evidence {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.evidenceHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--text-xs);
+}
+
+.signal {
+  padding: 0 5px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-active);
+  color: var(--text-secondary);
+}
+
+.counter {
+  background: color-mix(in srgb, var(--green) 12%, transparent);
+  color: var(--green);
+}
+
+.source {
+  overflow: hidden;
+  max-width: 180px;
+  color: var(--accent-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.source:hover {
+  text-decoration: underline;
+}
+
+.sourceGone {
+  color: var(--text-tertiary);
+}
+
+.when {
+  margin-left: auto;
+  color: var(--text-tertiary);
+}
+
+.quote {
+  margin-top: 4px;
+  padding: 4px 8px;
+  border-left: 2px solid var(--border-strong);
+  background: var(--bg-subtle);
+  font-size: var(--text-sm);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.reason {
+  margin-top: 3px;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+}
+
+.actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+}
+
+.actions button:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.actions .deleteAction:hover {
+  background: var(--red-soft);
+  color: var(--red);
+}
+
+.edit {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.fieldLabel {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.textarea,
+.select {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg);
+  font-size: var(--text-sm);
+}
+
+.textarea {
+  resize: vertical;
+}
+
+.editActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.confirm {
+  margin-top: 8px;
+  padding: 8px;
+  border-radius: var(--radius);
+  background: var(--red-soft);
+  font-size: var(--text-xs);
+}
+
+.scope {
+  overflow: hidden;
+  flex-shrink: 1;
+  max-width: 96px;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  font-size: 10.5px;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scopeGeneral {
+  border-style: dashed;
+  color: var(--text-tertiary);
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.filter {
+  overflow: hidden;
+  max-width: 160px;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.filter:hover {
+  background: var(--bg-hover);
+}
+
+.filterOn,
+.filterOn:hover {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}

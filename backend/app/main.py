@@ -10,8 +10,9 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.concurrency import run_in_threadpool
 
-from app.agents.llm import ChatCompletionsTutor, ProviderError, Tutor
+from app.agents.llm import shared_ssl_context, ChatCompletionsChat, ChatCompletionsTutor, ChatModel, ProviderError, Tutor
 from app.config import Settings
 from app.memory.store import StateConflict, Store
 from app.models.schemas import (
@@ -24,23 +25,35 @@ from app.services.anysearch import AnySearchClient, SearchService
 from app.models.schemas import WebSearchResponse
 from app.services.materials import MaterialStore
 from app.api.materials import material_router
+from app.chat.router import chat_router
+from app.chat.subjects import subject_router
+from app.chat.service import ChatService
+from app.chat.store import ChatStore
 
 logger = logging.getLogger(__name__)
 DemoStudent = Literal["demo-student-001"]
 
 
-def create_app(settings: Settings | None = None, tutor: Tutor | None = None, search_service: SearchService | None = None) -> FastAPI:
+def create_app(
+    settings: Settings | None = None, tutor: Tutor | None = None, search_service: SearchService | None = None,
+    chat_model: ChatModel | None = None,
+) -> FastAPI:
     settings = settings or Settings()
     store = Store(settings.resolved_database_path())
     library = MaterialStore(store)
     ai_settings = AISettings(settings)
     model = tutor if tutor is not None else ChatCompletionsTutor(ai_settings.current)
     search = search_service if search_service is not None else AnySearchClient(settings)
+    chat = chat_model if chat_model is not None else ChatCompletionsChat(ai_settings.current)
+    chat_store = ChatStore(store)
+    chat_service = ChatService(chat_store, lambda: chat, library)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         store.initialize()
         library.initialize()
+        chat_store.initialize()
+        await run_in_threadpool(shared_ssl_context)
         yield
 
     app = FastAPI(title="KnowGap API", version="0.2.0", lifespan=lifespan)
@@ -48,10 +61,12 @@ def create_app(settings: Settings | None = None, tutor: Tutor | None = None, sea
     app.state.tutor = model
     app.state.search = search
     app.state.materials = library
-    app.include_router(material_router(library))
+    app.include_router(material_router(library, lambda subject_id: chat_store.subject(subject_id, DEMO_STUDENT) is not None))
+    app.include_router(chat_router(chat_store, chat_service))
+    app.include_router(subject_router(chat_store, chat_service))
     app.add_middleware(
         CORSMiddleware, allow_origins=settings.cors_origins,
-        allow_credentials=False, allow_methods=["GET", "POST", "PUT", "DELETE"], allow_headers=["Content-Type"],
+        allow_credentials=False, allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"], allow_headers=["Content-Type"],
     )
 
     @app.exception_handler(ProviderError)
@@ -98,6 +113,8 @@ def create_app(settings: Settings | None = None, tutor: Tutor | None = None, sea
         status = ai_settings.save(body)
         if tutor is None:
             model.settings = ai_settings.current
+        if chat_model is None:
+            chat.settings = ai_settings.current
         return status
 
     @app.post("/api/ai/test")

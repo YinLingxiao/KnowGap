@@ -48,6 +48,7 @@ class Material(BaseModel):
     page_count: int
     chunk_count: int
     created_at: str
+    subject_id: str | None = None
 
 
 class SourceReference(BaseModel):

@@ -1,5 +1,5 @@
-import { Workbench } from "@/components/Workbench";
+import { ChatApp } from "@/components/chat/ChatApp";
 
 export default function Home() {
-  return <Workbench />;
+  return <ChatApp />;
 }

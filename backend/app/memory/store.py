@@ -24,6 +24,12 @@ def new_id(prefix: str) -> str:
     return f"{prefix}-{uuid4().hex}"
 
 
+def ensure_column(db: sqlite3.Connection, table: str, column: str, declaration: str) -> None:
+    """Additive, repeatable migration for databases created before the column existed."""
+    if column not in {row["name"] for row in db.execute(f"PRAGMA table_info({table})")}:
+        db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {declaration}")
+
+
 class Store:
     def __init__(self, path: Path):
         self.path = path
