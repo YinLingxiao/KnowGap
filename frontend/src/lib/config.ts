@@ -9,9 +9,8 @@ export type DataSource = "mock" | "api";
 export const DATA_SOURCE: DataSource =
   process.env.NEXT_PUBLIC_DATA_SOURCE === "api" ? "api" : "mock";
 
-export const API_BASE_URL = (
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000"
-).replace(/\/+$/, "");
+const configuredBase = process.env.NEXT_PUBLIC_API_BASE_URL;
+export const API_BASE_URL = (configuredBase === undefined ? "http://localhost:8000" : configuredBase).replace(/\/+$/, "");
 
 /** MVP 固定使用的演示身份（合成数据，不对应真实学生） */
 export const DEMO_STUDENT_ID = "demo-student-001";

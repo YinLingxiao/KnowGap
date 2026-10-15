@@ -172,9 +172,23 @@ def shared_ssl_context():
 class ChatModel(Protocol):
     """Free-form chat: incremental text, plus a separate JSON call for learning bookkeeping."""
 
-    def stream(self, messages: list[dict]) -> AsyncIterator[tuple[str, str]]: ...
+    def stream(self, messages: list[dict], tools: list[dict] | None = None) -> AsyncIterator[tuple[str, object]]: ...
 
     async def complete_json(self, messages: list[dict]) -> dict: ...
+
+
+def _tool_calls_from(raw: list) -> list[dict]:
+    calls = []
+    for call in raw:
+        if not isinstance(call, dict):
+            continue
+        function = call.get("function") or {}
+        calls.append({
+            "id": str(call.get("id") or ""),
+            "name": str(function.get("name") or ""),
+            "arguments": str(function.get("arguments") or ""),
+        })
+    return calls
 
 
 class ChatCompletionsChat:
@@ -184,10 +198,13 @@ class ChatCompletionsChat:
         self.settings = settings
         self.transport = transport
 
-    async def stream(self, messages: list[dict]) -> AsyncIterator[tuple[str, str]]:
+    async def stream(self, messages: list[dict], tools: list[dict] | None = None) -> AsyncIterator[tuple[str, object]]:
         settings = self.settings
         base_url, api_key = provider_endpoint(settings)
         payload = {"model": settings.llm_model, "messages": messages, "stream": True}
+        if tools:
+            payload["tools"] = tools
+            payload["tool_choice"] = "auto"
         # The read timeout applies between chunks, so long answers are not cut by a total deadline.
         timeout = httpx.Timeout(settings.llm_timeout_seconds, read=settings.llm_timeout_seconds)
         try:
@@ -203,11 +220,16 @@ class ChatCompletionsChat:
                     if response.headers.get("content-type", "").startswith("application/json"):
                         # The provider ignored stream=true: forward its real, complete output once.
                         choice = json.loads(await response.aread())["choices"][0]
-                        if choice["message"].get("content"):
-                            yield "text", choice["message"]["content"]
+                        message = choice.get("message") or {}
+                        if message.get("content"):
+                            yield "text", message["content"]
+                        calls = _tool_calls_from(message.get("tool_calls") or [])
+                        if calls:
+                            yield "tool_calls", calls
                         yield "finish", choice.get("finish_reason") or "stop"
                         return
                     finish = "stop"
+                    pending: dict[int, dict] = {}
                     async for line in response.aiter_lines():
                         line = line.strip()
                         if not line.startswith("data:"):
@@ -221,11 +243,24 @@ class ChatCompletionsChat:
                         if chunk.get("error"):
                             raise ProviderError(502, "模型服务在生成过程中返回错误，请重试。")
                         for choice in chunk.get("choices") or []:
-                            delta = (choice.get("delta") or {}).get("content")
-                            if delta:
-                                yield "text", delta
+                            delta = choice.get("delta") or {}
+                            text = delta.get("content")
+                            if text:
+                                yield "text", text
+                            for call in delta.get("tool_calls") or []:
+                                index = call.get("index", 0)
+                                slot = pending.setdefault(index, {"id": "", "name": "", "arguments": ""})
+                                if call.get("id"):
+                                    slot["id"] = call["id"]
+                                function = call.get("function") or {}
+                                if function.get("name"):
+                                    slot["name"] += function["name"]
+                                if function.get("arguments"):
+                                    slot["arguments"] += function["arguments"]
                             if choice.get("finish_reason"):
                                 finish = choice["finish_reason"]
+                    if pending:
+                        yield "tool_calls", [pending[index] for index in sorted(pending)]
                     yield "finish", finish
         except ProviderError:
             raise

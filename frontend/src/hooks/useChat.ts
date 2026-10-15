@@ -272,6 +272,25 @@ export function useChat(notify: Notify) {
           patchMessages(id, (messages) => upsert(upsert(messages, event.userMessage), event.assistantMessage));
           if (event.userMessage?.memoryChanges.length) void loadMemories();
           break;
+        case "tool_approval":
+          patchMessages(id, (messages) => messages.map((m) => (m.id === assistantId ? { ...m, pendingApproval: event } : m)));
+          break;
+        case "tool_start":
+        case "tool_end":
+          patchMessages(id, (messages) => messages.map((m) => {
+            if (m.id !== assistantId) return m;
+            const current = m.toolCalls.find((call) => call.id === event.id);
+            const next = {
+              id: event.id,
+              name: event.name,
+              arguments: event.type === "tool_start" ? event.arguments : current?.arguments ?? "",
+              output: event.type === "tool_end" ? event.output : current?.output ?? "",
+              ok: event.type === "tool_end" ? event.ok : current?.ok ?? true,
+            };
+            const toolCalls = current ? m.toolCalls.map((call) => (call.id === event.id ? next : call)) : [...m.toolCalls, next];
+            return { ...m, pendingApproval: null, toolCalls };
+          }));
+          break;
       }
     };
     try {
@@ -487,6 +506,26 @@ export function useChat(notify: Notify) {
     }
   }, [loadSubjects, notify]);
 
+  const decideTool = useCallback(async (approvalId: string, allow: boolean) => {
+    setThreads((all) => {
+      const next: Record<string, Thread> = {};
+      for (const [key, thread] of Object.entries(all)) {
+        next[key] = {
+          ...thread,
+          messages: thread.messages.map((message) => (
+            message.pendingApproval?.id === approvalId ? { ...message, pendingApproval: null } : message
+          )),
+        };
+      }
+      return next;
+    });
+    try {
+      await chatApi.decideTool(approvalId, allow);
+    } catch (error) {
+      notify({ tone: "error", title: "审批失败", description: toApiError(error).message });
+    }
+  }, [notify]);
+
   const deleteMemory = useCallback(async (id: string) => {
     try {
       await chatApi.deleteMemory(id);
@@ -533,7 +572,7 @@ export function useChat(notify: Notify) {
     followNonceFor: (id: string | null) => (id ? follows[id] ?? 0 : 0),
     sendFailure, dismissSendFailure: () => setSendFailure(null),
     problems,
-    memories, memoriesLoading, memoriesError, loadMemories, updateMemory, deleteMemory,
+    memories, memoriesLoading, memoriesError, loadMemories, updateMemory, deleteMemory, decideTool,
     newChat, openConversation, loadConversation, sendMessage, sendTo, regenerate, stop, startExercise, startExerciseOn,
     renameConversation, deleteConversation,
   };

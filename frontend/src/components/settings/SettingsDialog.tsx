@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { Database, Palette, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Database, FolderOpen, Palette, X } from "lucide-react";
+import { chatApi } from "@/lib/chat/api";
 import type { HealthState } from "@/hooks/useWorkbench";
 import { API_BASE_URL, type DataSource } from "@/lib/config";
 import { cx } from "@/lib/cx";
@@ -10,7 +11,80 @@ import type { AIConfigStatus } from "@/lib/api/ai-config";
 import { ModelAccessCard, type ModelSignal } from "./ModelAccessCard";
 import styles from "./Settings.module.css";
 
+declare global {
+  interface Window {
+    knowgap?: { selectFolder: () => Promise<string | null> };
+  }
+}
+
 const THEME_OPTIONS: ThemeChoice[] = ["system", "light", "dark"];
+
+function WorkspaceCard() {
+  const [workspace, setWorkspace] = useState("");
+  const [autoApprove, setAutoApprove] = useState(false);
+  const [memoryApproval, setMemoryApproval] = useState(false);
+  const [note, setNote] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    void chatApi.agentSettings().then((settings) => {
+      setWorkspace(settings.workspace);
+      setAutoApprove(settings.autoApprove);
+      setMemoryApproval(settings.memoryWriteApproval);
+    }).catch(() => setNote("读不到工作区设置"));
+  }, []);
+
+  async function save() {
+    setSaving(true);
+    try {
+      const saved = await chatApi.saveAgentSettings({ workspace, autoApprove, memoryWriteApproval: memoryApproval });
+      setWorkspace(saved.workspace);
+      setAutoApprove(saved.autoApprove);
+      setMemoryApproval(saved.memoryWriteApproval);
+      setNote("已保存");
+    } catch (error) {
+      setNote(error instanceof Error ? error.message : "保存失败");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <section className={styles.card} aria-labelledby="settings-workspace">
+      <header className={styles.cardHead}>
+        <span className={styles.cardIcon} aria-hidden>
+          <FolderOpen size={16} />
+        </span>
+        <div className={styles.cardTitleBlock}>
+          <h3 id="settings-workspace" className={styles.cardTitle}>工作区</h3>
+          <p className={styles.cardDesc}>文件工具只读写这个文件夹。命令可以访问文件夹外的内容，每次执行前都需确认。</p>
+        </div>
+      </header>
+      <div className={styles.fields}>
+        <label className={styles.fieldFull}>
+          <span className={styles.fieldLabel}>文件夹</span>
+          <input className={styles.input} value={workspace} onChange={(event) => setWorkspace(event.target.value)} placeholder="选择或粘贴路径" />
+        </label>
+      </div>
+      <div className={styles.segmented}>
+        <button type="button" className={styles.segment} onClick={async () => {
+          const picked = await window.knowgap?.selectFolder();
+          if (picked) setWorkspace(picked);
+        }}>选择文件夹</button>
+        <button type="button" className={styles.segment} onClick={() => void save()} disabled={saving}>{saving ? "保存中" : "保存"}</button>
+      </div>
+      <label className={styles.fieldHint}>
+        <input type="checkbox" checked={autoApprove} onChange={(event) => setAutoApprove(event.target.checked)} />
+        {" "}自动批准写文件（命令仍需逐次确认）
+      </label>
+      <label className={styles.fieldHint}>
+        <input type="checkbox" checked={memoryApproval} onChange={(event) => setMemoryApproval(event.target.checked)} />
+        {" "}记忆写入需确认
+      </label>
+      {note && <p className={styles.fieldHint}>{note}</p>}
+    </section>
+  );
+}
 
 interface SettingsDialogProps {
   source: DataSource;
@@ -66,6 +140,8 @@ export function SettingsDialog({ source, health, studentId, modelSignal, onCheck
               onCheckHealth={onCheckHealth}
               onConfigChange={onConfigChange}
             />
+
+            <WorkspaceCard />
 
             <section className={styles.card} aria-labelledby="settings-theme">
               <header className={styles.cardHead}>

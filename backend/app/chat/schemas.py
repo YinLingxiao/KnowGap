@@ -182,6 +182,14 @@ class MemoryChange(BaseModel):
     memory: LearnerMemory
 
 
+class ToolCallRecord(BaseModel):
+    id: str
+    name: str
+    arguments: str = ""
+    output: str = ""
+    ok: bool = True
+
+
 class ChatMessage(BaseModel):
     id: str
     conversation_id: str
@@ -200,6 +208,7 @@ class ChatMessage(BaseModel):
     suggested_problem_id: str | None = None
     sources: list[SourceReference] = Field(default_factory=list)
     truncated: bool = False
+    tool_calls: list[ToolCallRecord] = Field(default_factory=list)
     thread_summary: ThreadSummary | None = None
     created_at: str
     updated_at: str

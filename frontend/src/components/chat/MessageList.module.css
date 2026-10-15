@@ -406,6 +406,56 @@
   color: var(--text);
 }
 
+.tools {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.tool {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+  font-size: var(--text-xs);
+}
+
+.tool summary {
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+.tool pre,
+.approval pre {
+  margin: 0;
+  padding: 0 8px 8px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-secondary);
+}
+
+.approval {
+  margin-bottom: 8px;
+  padding: 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+  font-size: var(--text-sm);
+}
+
+.approval div {
+  display: flex;
+  gap: 8px;
+}
+
+.approval button {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
 @media (max-width: 640px) {
   .list {
     padding: 16px 14px 20px;

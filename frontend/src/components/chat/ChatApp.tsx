@@ -360,6 +360,7 @@ export function ChatApp() {
                   onRegenerate={() => void chat.regenerate(chat.activeId!)}
                   onStartExercise={(problemId) => void chat.startExercise(problemId)}
                   onOpenMemories={openMemories}
+                  onDecideTool={(approvalId, allow) => void chat.decideTool(approvalId, allow)}
                 />
               )
             ) : (

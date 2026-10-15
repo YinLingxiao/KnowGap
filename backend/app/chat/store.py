@@ -12,8 +12,12 @@ import unicodedata
 
 from app.chat.schemas import (
     ChatMessage, Conversation, ConversationSummary, ExerciseAttempt, LearnerMemory, MemoryChange, MemoryEvidence,
+    ToolCallRecord,
     MessageAnchor, SpaceProgress, Subject, ThreadSummary,
 )
+from app.memory.curated import LIMITS, apply as apply_note, bump_turns, decide, pending
+from app.memory.curated import ensure as ensure_notes
+from app.memory.curated import ensure_fts, read_all, search as search_notes, snapshot_text, write as write_note
 from app.memory.store import Store, ensure_column, new_id, now
 from app.models.schemas import Problem, SourceReference
 from app.services.materials import terms
@@ -145,7 +149,10 @@ class ChatStore:
             ensure_column(db, "subjects", "deadline", "TEXT")
             ensure_column(db, "subjects", "color", "TEXT NOT NULL DEFAULT '#3d6fdb'")
             ensure_column(db, "subjects", "main_conversation_id", "TEXT")
+            ensure_column(db, "conversations", "notes_snapshot", "TEXT")
             self._migrate_spaces(db)
+            ensure_notes(db)
+            ensure_fts(db)
             # A process that died mid-generation leaves "streaming" rows; they can never finish.
             db.execute(
                 "UPDATE conversation_messages SET status = 'failed', error = ?, updated_at = ? WHERE status = 'streaming'",
@@ -662,7 +669,9 @@ class ChatStore:
             used_memory_ids=[i for i in meta.get("used_memory_ids", []) if i in memories],
             suggested_problem_id=meta.get("suggested_problem_id"),
             sources=[SourceReference(**source) for source in meta.get("sources", [])],
-            truncated=bool(meta.get("truncated")), thread_summary=self._thread_summary(meta.get("thread_summary")),
+            truncated=bool(meta.get("truncated")),
+            tool_calls=[ToolCallRecord(**item) for item in meta.get("tool_calls", []) if isinstance(item, dict) and item.get("id") and item.get("name")],
+            thread_summary=self._thread_summary(meta.get("thread_summary")),
             created_at=row["created_at"], updated_at=row["updated_at"],
         )
 
@@ -802,6 +811,48 @@ class ChatStore:
                 ) for e in evidence],
             ))
         return result
+
+    def _notes_view(self, notes: dict[str, str]) -> dict:
+        return {**notes, "limits": dict(LIMITS)}
+
+    def agent_notes(self, student_id: str) -> dict[str, str]:
+        with self.connection() as db:
+            return read_all(db, student_id)
+
+    def agent_notes_view(self, student_id: str) -> dict:
+        return self._notes_view(self.agent_notes(student_id))
+
+    def save_agent_note(self, student_id: str, target: str, content: str) -> dict:
+        with self.connection() as db:
+            write_note(db, student_id, target, content, now())
+            return self._notes_view(read_all(db, student_id))
+
+    def apply_agent_memory(self, student_id: str, action: str, target: str, content, old_text, approve: bool = False) -> str:
+        with self.connection() as db:
+            return apply_note(db, student_id, action, target, content, old_text, now(), approve)
+
+    def pending_notes(self, student_id: str) -> list[dict]:
+        with self.connection() as db:
+            return pending(db, student_id)
+
+    def decide_pending(self, student_id: str, pending_id: str, allow: bool) -> str | None:
+        with self.connection() as db:
+            return decide(db, student_id, pending_id, allow, now())
+
+    def bump_note_turns(self, student_id: str, reset: bool, conversation_id: str) -> int:
+        with self.connection() as db:
+            return bump_turns(db, student_id, reset, conversation_id)
+
+    def frozen_notes(self, conversation_id: str, student_id: str) -> str:
+        with self.connection() as db:
+            text = snapshot_text(read_all(db, student_id))
+            db.execute("UPDATE conversations SET notes_snapshot = ? WHERE id = ? AND student_id = ?",
+                       (text, conversation_id, student_id))
+            return text
+
+    def search_messages(self, student_id: str, query: str, limit: int = 5, exclude_conversation_id: str | None = None) -> str:
+        with self.connection() as db:
+            return search_notes(db, student_id, query, limit, exclude_conversation_id)
 
     def memories(self, student_id: str) -> list[LearnerMemory]:
         self.import_legacy()

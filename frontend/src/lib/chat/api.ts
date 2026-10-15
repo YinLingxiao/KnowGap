@@ -40,6 +40,11 @@ function mapMessage(data: Wire): ChatMessage {
     suggestedProblemId: data.suggested_problem_id ?? null,
     sources: (data.sources ?? []).map((source: WireSource) => mapSource(source)),
     truncated: Boolean(data.truncated),
+    toolCalls: (data.tool_calls ?? []).map((call: Wire) => ({
+      id: String(call.id), name: String(call.name), arguments: String(call.arguments ?? ""),
+      output: String(call.output ?? ""), ok: call.ok !== false,
+    })),
+    pendingApproval: null,
     threadSummary: data.thread_summary ? {
       threadId: data.thread_summary.thread_id, title: data.thread_summary.title, summary: data.thread_summary.summary,
       takeaways: data.thread_summary.takeaways ?? [], memoryIds: data.thread_summary.memory_ids ?? [],
@@ -109,6 +114,12 @@ function mapEvent(type: string, data: Wire): StreamEvent | null {
     case "analysis":
       return { type, userMessage: maybe(data.user_message, mapMessage),
         assistantMessage: maybe(data.assistant_message, mapMessage), skipped: Boolean(data.skipped) };
+    case "tool_start":
+      return { type: "tool_start", id: String(data.id), name: String(data.name ?? ""), arguments: String(data.arguments ?? "") };
+    case "tool_approval":
+      return { type: "tool_approval", id: String(data.id), name: String(data.name ?? ""), arguments: String(data.arguments ?? "") };
+    case "tool_end":
+      return { type: "tool_end", id: String(data.id), name: String(data.name ?? ""), ok: Boolean(data.ok), output: String(data.output ?? "") };
     default:
       return null;
   }
@@ -210,6 +221,44 @@ export const chatApi = {
   },
   async deleteMemory(id: string): Promise<void> {
     await request(root, `/api/learner-memories/${encodeURIComponent(id)}`, { method: "DELETE" });
+  },
+  async agentNotes(): Promise<{ user: string; memory: string; limits: { user: number; memory: number } }> {
+    const data = await request<Wire>(root, "/api/agent-memory", { cache: "no-store" });
+    return { user: data.user ?? "", memory: data.memory ?? "", limits: { user: data.limits?.user ?? 1375, memory: data.limits?.memory ?? 2200 } };
+  },
+  async saveAgentNote(target: "user" | "memory", content: string): Promise<{ user: string; memory: string; limits: { user: number; memory: number } }> {
+    const data = await request<Wire>(root, "/api/agent-memory", {
+      method: "PUT", body: JSON.stringify({ target, content }),
+    });
+    return { user: data.user ?? "", memory: data.memory ?? "", limits: { user: data.limits?.user ?? 1375, memory: data.limits?.memory ?? 2200 } };
+  },
+  async pendingNotes(): Promise<Array<{ id: string; action: string; target: string; content: string; oldText: string }>> {
+    const data = await request<Wire[]>(root, "/api/agent-memory/pending", { cache: "no-store" });
+    return data.map((item) => ({
+      id: item.id, action: item.action, target: item.target, content: item.content ?? "", oldText: item.old_text ?? "",
+    }));
+  },
+  async decidePending(id: string, allow: boolean): Promise<void> {
+    await request(root, `/api/agent-memory/pending/${encodeURIComponent(id)}`, {
+      method: "POST", body: JSON.stringify({ allow }),
+    });
+  },
+  async agentSettings(): Promise<{ workspace: string; autoApprove: boolean; memoryWriteApproval: boolean }> {
+    const data = await request<Wire>(root, "/api/agent/settings", { cache: "no-store" });
+    return { workspace: data.workspace ?? "", autoApprove: Boolean(data.auto_approve), memoryWriteApproval: Boolean(data.memory_write_approval) };
+  },
+  async saveAgentSettings(input: { workspace: string; autoApprove: boolean; memoryWriteApproval: boolean }): Promise<{ workspace: string; autoApprove: boolean; memoryWriteApproval: boolean }> {
+    const data = await request<Wire>(root, "/api/agent/settings", {
+      method: "PUT", body: JSON.stringify({
+        workspace: input.workspace, auto_approve: input.autoApprove, memory_write_approval: input.memoryWriteApproval,
+      }),
+    });
+    return { workspace: data.workspace ?? "", autoApprove: Boolean(data.auto_approve), memoryWriteApproval: Boolean(data.memory_write_approval) };
+  },
+  async decideTool(approvalId: string, allow: boolean): Promise<void> {
+    await request(root, `/api/chat/tool-approvals/${encodeURIComponent(approvalId)}`, {
+      method: "POST", body: JSON.stringify({ allow }),
+    });
   },
   sendMessage(id: string, content: string, clientRequestId: string, onEvent: (event: StreamEvent) => void, signal: AbortSignal) {
     return stream(`${path(id)}/messages`, JSON.stringify({ content, client_request_id: clientRequestId }), onEvent, signal);

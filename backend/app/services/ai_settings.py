@@ -27,8 +27,10 @@ class AISettings:
         self.current = settings
         if self.path.exists():
             try:
-                self.current = self.candidate(json.loads(self.path.read_text(encoding="utf-8")))
-            except (OSError, ValueError, HTTPException):
+                raw = json.loads(self.path.read_text(encoding="utf-8"))
+                if isinstance(raw, dict) and raw.get("base_url") and raw.get("model"):
+                    self.current = self.candidate({key: raw[key] for key in ("base_url", "model", "api_key") if key in raw})
+            except (OSError, ValueError, HTTPException, KeyError, TypeError):
                 raise RuntimeError("无法读取本地 AI 配置，请检查 ai-settings.json。") from None
 
     def candidate(self, body: dict) -> Settings:
@@ -54,6 +56,56 @@ class AISettings:
             "llm_base_url": base, "llm_model": model, "llm_api_key": SecretStr(key),
         })
 
+    def _raw(self) -> dict:
+        if not self.path.exists():
+            return {}
+        try:
+            data = json.loads(self.path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return {}
+        return data if isinstance(data, dict) else {}
+
+    def _write(self, payload: dict) -> None:
+        temporary = None
+        try:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            fd, temporary = tempfile.mkstemp(dir=self.path.parent, prefix=".ai-settings-")
+            with os.fdopen(fd, "w", encoding="utf-8") as output:
+                json.dump(payload, output, ensure_ascii=False)
+                output.flush()
+                os.fsync(output.fileno())
+            os.replace(temporary, self.path)
+        except OSError:
+            raise HTTPException(503, "AI 配置保存失败，请检查后端数据目录权限。") from None
+        finally:
+            if temporary and Path(temporary).exists():
+                Path(temporary).unlink()
+
+    def agent_config(self) -> dict:
+        raw = self._raw()
+        return {
+            "workspace": raw.get("workspace") or "",
+            "auto_approve": bool(raw.get("auto_approve")),
+            "memory_write_approval": bool(raw.get("memory_write_approval")),
+        }
+
+    def save_agent(self, body: dict) -> dict:
+        workspace = body.get("workspace", "")
+        if not isinstance(workspace, str) or len(workspace) > 500:
+            raise HTTPException(422, "工作区路径无效。")
+        workspace = workspace.strip()
+        if workspace and not Path(workspace).is_dir():
+            raise HTTPException(422, "工作区必须是已存在的文件夹。")
+        auto_approve = bool(body.get("auto_approve"))
+        memory_write_approval = bool(body.get("memory_write_approval"))
+        with self.lock:
+            payload = self._raw()
+            payload["workspace"] = workspace
+            payload["auto_approve"] = auto_approve
+            payload["memory_write_approval"] = memory_write_approval
+            self._write(payload)
+        return self.agent_config()
+
     def status(self) -> dict:
         with self.lock:
             settings = self.current
@@ -65,21 +117,9 @@ class AISettings:
     def save(self, body: dict) -> dict:
         with self.lock:
             candidate = self.candidate(body)
-            payload = {"base_url": candidate.llm_base_url, "model": candidate.llm_model,
-                       "api_key": candidate.llm_api_key.get_secret_value()}
-            temporary = None
-            try:
-                self.path.parent.mkdir(parents=True, exist_ok=True)
-                fd, temporary = tempfile.mkstemp(dir=self.path.parent, prefix=".ai-settings-")
-                with os.fdopen(fd, "w", encoding="utf-8") as output:
-                    json.dump(payload, output, ensure_ascii=False)
-                    output.flush()
-                    os.fsync(output.fileno())
-                os.replace(temporary, self.path)
-            except OSError:
-                raise HTTPException(503, "AI 配置保存失败，请检查后端数据目录权限。") from None
-            finally:
-                if temporary and Path(temporary).exists():
-                    Path(temporary).unlink()
+            payload = self._raw()
+            payload.update({"base_url": candidate.llm_base_url, "model": candidate.llm_model,
+                            "api_key": candidate.llm_api_key.get_secret_value()})
+            self._write(payload)
             self.current = candidate
             return self.status()

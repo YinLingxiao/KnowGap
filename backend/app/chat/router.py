@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, HTTPException, Response
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
 
 from app.agents.llm import ProviderError
 from app.chat.schemas import (
@@ -14,6 +15,19 @@ from app.models.schemas import DEMO_STUDENT
 from app.services.problems import PROBLEMS
 
 STREAM_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+
+
+class ToolApprovalBody(BaseModel):
+    allow: bool
+
+
+class AgentNoteBody(BaseModel):
+    target: str = Field(pattern="^(user|memory)$")
+    content: str = ""
+
+
+class PendingDecision(BaseModel):
+    allow: bool
 
 
 def chat_router(store: ChatStore, service: ChatService) -> APIRouter:
@@ -124,6 +138,34 @@ def chat_router(store: ChatStore, service: ChatService) -> APIRouter:
             raise HTTPException(409, "最后一条消息之后已有新内容，无法重新生成。")
         replies = [row["id"] for row in store.replies(user_id)]
         return stream(service.events(service.begin(student, conversation_id, user_id, replies)))
+
+    @router.post("/chat/tool-approvals/{approval_id}")
+    def approve_tool(approval_id: str, body: ToolApprovalBody):
+        if not service.resolve_approval(approval_id, body.allow):
+            raise HTTPException(404, "这次审批已经结束。")
+        return {"ok": True}
+
+    @router.get("/agent-memory")
+    def agent_memory():
+        return store.agent_notes_view(student)
+
+    @router.put("/agent-memory")
+    def save_agent_memory(body: AgentNoteBody):
+        try:
+            return store.save_agent_note(student, body.target, body.content)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from None
+
+    @router.get("/agent-memory/pending")
+    def pending_memory():
+        return store.pending_notes(student)
+
+    @router.post("/agent-memory/pending/{pending_id}")
+    def decide_memory(pending_id: str, body: PendingDecision):
+        result = store.decide_pending(student, pending_id, body.allow)
+        if result is None:
+            raise HTTPException(404, "这条待确认已经处理过。")
+        return {"result": result, **store.agent_notes_view(student)}
 
     @router.post("/conversations/{conversation_id}/stop")
     def stop(conversation_id: str):

@@ -250,6 +250,7 @@ export function SubjectPage({
               onOpenMemories={() => showPanel({ mode: "info", section: "memory" })}
               onOpenThread={(messageId) => void branch(messageId)}
               onOpenSummary={openThread}
+              onDecideTool={(approvalId, allow) => void chat.decideTool(approvalId, allow)}
             />
           )
         ) : (
@@ -314,6 +315,7 @@ export function SubjectPage({
                   onRegenerate={() => void chat.regenerate(threadId)}
                   onStartExercise={(problemId) => void chat.startExerciseOn(threadId, problemId)}
                   onOpenMemories={() => showPanel({ mode: "info", section: "memory" })}
+                  onDecideTool={(approvalId, allow) => void chat.decideTool(approvalId, allow)}
                 />
               )}
               <div className={styles.dock}>

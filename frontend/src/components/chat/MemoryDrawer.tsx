@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronRight, RefreshCw, Trash2, X } from "lucide-react";
 import type { ApiError } from "@/lib/api/errors";
+import { chatApi } from "@/lib/chat/api";
 import type { LearnerMemory, LearnerMemoryStatus, MemoryKind, Subject } from "@/lib/chat/types";
 import { cx } from "@/lib/cx";
 import { formatRelativeTime } from "@/lib/labels";
@@ -209,6 +210,79 @@ function MemoryItem({
   );
 }
 
+function splitEntries(text: string): string[] {
+  return text.split(/\s*§\s*/).map((item) => item.trim()).filter(Boolean);
+}
+
+function AgentNotes() {
+  const [notes, setNotes] = useState({ user: "", memory: "", limits: { user: 1375, memory: 2200 } });
+  const [pending, setPending] = useState<Array<{ id: string; action: string; target: string; content: string; oldText: string }>>([]);
+  const [note, setNote] = useState("");
+
+  const load = () => {
+    void chatApi.agentNotes().then(setNotes).catch(() => setNote("读不到长期笔记"));
+    void chatApi.pendingNotes().then(setPending).catch(() => setPending([]));
+  };
+  useEffect(load, []);
+
+  async function remove(target: "user" | "memory", entry: string) {
+    const next = splitEntries(notes[target]).filter((item) => item !== entry);
+    try {
+      setNotes(await chatApi.saveAgentNote(target, next.join("\n§\n")));
+      setNote("已删除，下一轮对话生效");
+    } catch (error) {
+      setNote(error instanceof Error ? error.message : "删除失败");
+    }
+  }
+
+  async function decide(id: string, allow: boolean) {
+    try {
+      await chatApi.decidePending(id, allow);
+      load();
+    } catch (error) {
+      setNote(error instanceof Error ? error.message : "处理失败");
+    }
+  }
+
+  const blocks: Array<{ key: "user" | "memory"; label: string }> = [
+    { key: "user", label: "用户" },
+    { key: "memory", label: "笔记" },
+  ];
+  return (
+    <div className={styles.notes}>
+      <p>改动会立刻保存，下一轮对话进入提示。</p>
+      {blocks.map((block) => {
+        const items = splitEntries(notes[block.key]);
+        return (
+          <div key={block.key}>
+            <span>{block.label} {notes[block.key].length}/{notes.limits[block.key]}</span>
+            {items.length === 0 && <p>还没有条目</p>}
+            {items.map((entry) => (
+              <div key={entry} className={styles.entry}>
+                <span>{entry}</span>
+                <button type="button" onClick={() => void remove(block.key, entry)}>删除</button>
+              </div>
+            ))}
+          </div>
+        );
+      })}
+      {pending.length > 0 && (
+        <div>
+          <span>待确认</span>
+          {pending.map((item) => (
+            <div key={item.id} className={styles.entry}>
+              <span>{item.target} · {item.action} · {item.content || item.oldText}</span>
+              <button type="button" onClick={() => void decide(item.id, true)}>批准</button>
+              <button type="button" onClick={() => void decide(item.id, false)}>拒绝</button>
+            </div>
+          ))}
+        </div>
+      )}
+      {note && <p>{note}</p>}
+    </div>
+  );
+}
+
 type Filter = "all" | "general" | "subject";
 
 export function MemoryDrawer(props: MemoryDrawerProps) {
@@ -237,6 +311,7 @@ export function MemoryDrawer(props: MemoryDrawerProps) {
           <X size={16} />
         </button>
       </header>
+      <AgentNotes />
       <p className={styles.intro}>
         只有在对话里出现明确依据时才会记录，例如你说出的某个理解、完成的练习或明确的学习偏好。只问问题不会被记成薄弱点。
         对话会优先参考本学习空间和通用记录，不够时才参考其他学习空间；不准确的可以纠正归属、内容或直接删除。

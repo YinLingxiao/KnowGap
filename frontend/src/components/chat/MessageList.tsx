@@ -30,6 +30,7 @@ interface MessageListProps {
   onOpenMemories: (ids: string[]) => void;
   onOpenThread?: (messageId: string) => void;
   onOpenSummary?: (threadId: string) => void;
+  onDecideTool?: (approvalId: string, allow: boolean) => void;
 }
 
 function ExerciseCard({ problem, fallback }: { problem: Problem | undefined; fallback: string }) {
@@ -66,7 +67,7 @@ function ExerciseCard({ problem, fallback }: { problem: Problem | undefined; fal
 
 export function MessageList({
   conversationId, messages, problems, memoriesById, conversationSubjectId, subjectNames, phase, followNonce,
-  onRegenerate, onStartExercise, onOpenMemories, onOpenThread, onOpenSummary,
+  onRegenerate, onStartExercise, onOpenMemories, onOpenThread, onOpenSummary, onDecideTool,
 }: MessageListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const following = useRef(true);
@@ -179,6 +180,27 @@ export function MessageList({
             const suggested = message.suggestedProblemId ? problems[message.suggestedProblemId] : undefined;
             return (
               <div key={message.id} className={cx(styles.row, styles.assistantRow)}>
+                {message.toolCalls.length > 0 && (
+                  <div className={styles.tools}>
+                    {message.toolCalls.map((call) => (
+                      <details key={call.id} className={styles.tool} open={!call.output}>
+                        <summary>{call.name}{call.output ? (call.ok ? "" : " · 未成功") : " · 进行中"}</summary>
+                        {call.arguments && <pre>{call.arguments}</pre>}
+                        {call.output && <pre>{call.output}</pre>}
+                      </details>
+                    ))}
+                  </div>
+                )}
+                {message.pendingApproval && onDecideTool && (
+                  <div className={styles.approval}>
+                    <p>允许执行 {message.pendingApproval.name}？</p>
+                    <pre>{message.pendingApproval.arguments}</pre>
+                    <div>
+                      <button onClick={() => onDecideTool(message.pendingApproval!.id, false)}>拒绝</button>
+                      <button onClick={() => onDecideTool(message.pendingApproval!.id, true)}>允许</button>
+                    </div>
+                  </div>
+                )}
                 {message.content ? (
                   <div className={cx(streaming && styles.streaming)}>
                     <Markdown text={message.content} />

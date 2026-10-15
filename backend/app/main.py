@@ -4,6 +4,7 @@ import logging
 import sqlite3
 from contextlib import asynccontextmanager
 from typing import Literal
+from urllib.parse import urlsplit
 
 from fastapi import FastAPI, HTTPException, Request, Response, Query
 from fastapi.exceptions import RequestValidationError
@@ -34,6 +35,11 @@ logger = logging.getLogger(__name__)
 DemoStudent = Literal["demo-student-001"]
 
 
+def _local_page(origin: str) -> bool:
+    host = urlsplit(origin).hostname
+    return host in {"127.0.0.1", "localhost", "::1"}
+
+
 def create_app(
     settings: Settings | None = None, tutor: Tutor | None = None, search_service: SearchService | None = None,
     chat_model: ChatModel | None = None,
@@ -46,7 +52,7 @@ def create_app(
     search = search_service if search_service is not None else AnySearchClient(settings)
     chat = chat_model if chat_model is not None else ChatCompletionsChat(ai_settings.current)
     chat_store = ChatStore(store)
-    chat_service = ChatService(chat_store, lambda: chat, library)
+    chat_service = ChatService(chat_store, lambda: chat, library, ai_settings)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -98,7 +104,7 @@ def create_app(
         if not request.client or request.client.host not in {"127.0.0.1", "::1", "testclient"}:
             raise HTTPException(403, "AI 配置仅允许从本机访问。")
         origin = request.headers.get("origin")
-        if origin and origin not in settings.cors_origins:
+        if origin and not _local_page(origin) and origin not in settings.cors_origins:
             raise HTTPException(403, "此页面无权访问 AI 配置。")
 
     @app.get("/api/ai/config")
@@ -116,6 +122,16 @@ def create_app(
         if chat_model is None:
             chat.settings = ai_settings.current
         return status
+
+    @app.get("/api/agent/settings")
+    def get_agent_settings(request: Request):
+        require_local_configuration(request)
+        return ai_settings.agent_config()
+
+    @app.put("/api/agent/settings")
+    def save_agent_settings(request: Request, body: dict):
+        require_local_configuration(request)
+        return ai_settings.save_agent(body)
 
     @app.post("/api/ai/test")
     async def test_ai_config(request: Request, body: dict | None = None):

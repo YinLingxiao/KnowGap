@@ -15,20 +15,36 @@ import json
 import logging
 from collections.abc import AsyncIterator, Callable
 
+from app.agent_tools import DEFINITIONS, NEEDS_APPROVAL, parse_arguments, run as run_tool, workspace_of
+from app.agent_tools.guard import ToolError
 from app.agents.llm import ChatModel, ProviderError
 from app.chat.agent import (
-    active_exercise, analysis_messages, chat_messages, dialogue, resolution_messages, validate_analysis,
-    validate_resolution,
+    active_exercise, analysis_messages, chat_messages, dialogue, resolution_messages, review_messages,
+    validate_analysis, validate_resolution,
 )
 from app.chat.store import ChatStore
+from app.memory.store import new_id
 from app.services.materials import MaterialStore
 
 logger = logging.getLogger(__name__)
 ANALYSIS_TIMEOUT = 60
+MAX_TOOL_ROUNDS = 8
 
 
 def sse(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+def close_tool_batch(messages: list[dict]) -> None:
+    """Keep a cancelled batch valid without claiming unfinished operations succeeded."""
+    last_call = next((i for i in range(len(messages) - 1, -1, -1) if messages[i].get("tool_calls")), None)
+    if last_call is None:
+        return
+    finished = {m["tool_call_id"] for m in messages[last_call + 1:] if m["role"] == "tool"}
+    for call in messages[last_call]["tool_calls"]:
+        if call["id"] not in finished:
+            messages.append({"role": "tool", "tool_call_id": call["id"],
+                             "content": "本轮操作已中断，未取得此工具的结果；不能据此判断操作是否完成。"})
 
 
 class Generation:
@@ -41,15 +57,57 @@ class Generation:
         self.task: asyncio.Task | None = None
 
 
+class ToolContext:
+    def __init__(self, workspace, store: ChatStore, student_id: str, conversation_id: str, approve_memory: bool = False):
+        self.workspace = workspace
+        self.store = store
+        self.student_id = student_id
+        self.conversation_id = conversation_id
+        self.approve_memory = approve_memory
+
+
 class ChatService:
-    def __init__(self, store: ChatStore, model: Callable[[], ChatModel], library: MaterialStore | None = None):
+    def __init__(self, store: ChatStore, model: Callable[[], ChatModel], library: MaterialStore | None = None, settings=None):
         self.store = store
         self.model = model
         self.library = library
+        self.settings = settings
         self.active: dict[str, Generation] = {}
+        self.approvals: dict[str, asyncio.Future] = {}
+        self.reviews: set[asyncio.Task] = set()
 
     def is_generating(self, conversation_id: str) -> bool:
         return conversation_id in self.active
+
+    def resolve_approval(self, approval_id: str, allow: bool) -> bool:
+        future = self.approvals.get(approval_id)
+        if future is None or future.done():
+            return False
+        future.set_result(allow)
+        return True
+
+    def _agent_flag(self, key: str) -> bool:
+        if self.settings is None:
+            return False
+        return bool(self.settings.agent_config().get(key))
+
+    def _auto_approve(self) -> bool:
+        return self._agent_flag("auto_approve")
+
+    async def _await_approval(self, generation: Generation, name: str, arguments: str) -> bool:
+        # A working directory is not a shell sandbox. Commands always require consent.
+        if name != "bash" and self._auto_approve():
+            return True
+        approval_id = new_id("approval")
+        future: asyncio.Future = asyncio.get_running_loop().create_future()
+        self.approvals[approval_id] = future
+        generation.queue.put_nowait(("tool_approval", {"id": approval_id, "name": name, "arguments": arguments}))
+        try:
+            return bool(await asyncio.wait_for(future, 600))
+        except TimeoutError:
+            return False
+        finally:
+            self.approvals.pop(approval_id, None)
 
     def stop(self, conversation_id: str) -> bool:
         generation = self.active.get(conversation_id)
@@ -114,6 +172,8 @@ class ChatService:
         queue = generation.queue
         assistant_id = generation.assistant_message_id
         parts: list[str] = []
+        tool_log: list[dict] = []
+        tool_messages: list[dict] = []
         try:
             await asyncio.sleep(0)  # let the queued "start" event reach the client before any blocking work
             history = [row for row in self.store.history(generation.conversation_id) if row["id"] != assistant_id]
@@ -130,21 +190,96 @@ class ChatService:
             model = self.model()
             finish = "stop"
             role = self.store.role_context(generation.conversation_id)
-            async for kind, value in model.stream(chat_messages(history, memories, exercise, sources, subject, role)):
-                if kind == "text":
-                    parts.append(value)
-                    queue.put_nowait(("delta", {"text": value}))
-                elif kind == "finish":
-                    finish = value
+            snapshot = self.store.frozen_notes(generation.conversation_id, student_id)
+            messages = chat_messages(history, memories, exercise, sources, subject, role, snapshot)
+            ctx = ToolContext(
+                workspace_of(self.settings), self.store, student_id, generation.conversation_id,
+                self._agent_flag("memory_write_approval"),
+            )
+            for _ in range(MAX_TOOL_ROUNDS):
+                calls = None
+                round_text: list[str] = []
+                try:
+                    stream = model.stream(messages, DEFINITIONS)
+                except TypeError:
+                    stream = model.stream(messages)
+                async for kind, value in stream:
+                    if kind == "text":
+                        parts.append(value)
+                        round_text.append(value)
+                        queue.put_nowait(("delta", {"text": value}))
+                    elif kind == "tool_calls":
+                        calls = value
+                    elif kind == "finish":
+                        finish = value
+                if not calls:
+                    break
+                assistant_calls = []
+                for call in calls:
+                    if not call.get("id"):
+                        call["id"] = new_id("tool")
+                    assistant_calls.append({
+                        "id": call["id"], "type": "function",
+                        "function": {"name": call.get("name") or "", "arguments": call.get("arguments") or "{}"},
+                    })
+                batch = [{"role": "assistant", "content": "".join(round_text), "tool_calls": assistant_calls}]
+                messages.extend(batch)
+                tool_messages.extend(batch)
+                for call in calls:
+                    name = call.get("name") or ""
+                    raw_args = call.get("arguments") or "{}"
+                    allowed = True
+                    if name in NEEDS_APPROVAL:
+                        allowed = await self._await_approval(generation, name, raw_args)
+                    output = "用户拒绝了这次操作。"
+                    ok = False
+                    if allowed:
+                        queue.put_nowait(("tool_start", {"id": call["id"], "name": name, "arguments": raw_args}))
+                        try:
+                            output = await run_tool(name, parse_arguments(raw_args), ctx)
+                            ok = True
+                        except (ToolError, json.JSONDecodeError, ValueError) as exc:
+                            output = str(exc) or "工具参数无效。"
+                        queue.put_nowait(("tool_end", {"id": call["id"], "name": name, "ok": ok, "output": output}))
+                    else:
+                        queue.put_nowait(("tool_end", {"id": call["id"], "name": name, "ok": False, "output": output}))
+                    tool_log.append({"id": call["id"], "name": name, "arguments": raw_args, "output": output, "ok": ok})
+                    result = {"role": "tool", "tool_call_id": call["id"], "content": output}
+                    messages.append(result)
+                    tool_messages.append(result)
+                ctx.workspace = workspace_of(self.settings)
+            else:
+                raise ProviderError(502, "工具调用已达到本轮上限，请缩小任务范围后重试。")
             text = "".join(parts)
             if not text.strip():
                 raise ProviderError(502, "模型返回了空回复，请重试。")
             cited = [source.model_dump() for source in sources if f"[{source.label}]" in text]
             self.store.finish_reply(assistant_id, content=text, status="complete", meta={
                 "context_memory_ids": [m.id for m, _ in memories], "sources": cited, "truncated": finish == "length",
+                "tool_calls": tool_log, "tool_messages": tool_messages,
             })
             self._release(generation)
             queue.put_nowait(("done", {"message": self._message(student_id, assistant_id)}))
+            if text.strip():
+                # A regenerated reply must not count the same user turn twice.
+                already_counted = self.store.message_meta(generation.user_message_id).get("note_counted")
+                reset = any(item.get("name") == "memory" and item.get("ok") and
+                            item.get("output", "").startswith("已更新") for item in tool_log)
+                count = 0 if already_counted else self.store.bump_note_turns(
+                    student_id, reset, generation.conversation_id,
+                )
+                self.store.merge_meta(generation.user_message_id, {"note_counted": True})
+                if count >= 10:
+                    self.store.bump_note_turns(student_id, True, generation.conversation_id)
+                    # Ten counted turns from this conversation, including long messages in full.
+                    user_rows = [row for row in history if row["role"] == "user" and
+                                 self.store.message_meta(row["id"]).get("note_counted")]
+                    start_seq = user_rows[-10]["seq"]
+                    turns = dialogue([row for row in history if row["seq"] >= start_seq], bounded=False)
+                    turns.append({"role": "assistant", "content": text})
+                    task = asyncio.create_task(self._review(student_id, model, turns))
+                    self.reviews.add(task)
+                    task.add_done_callback(self.reviews.discard)
             await asyncio.sleep(0)
             try:
                 await self._analyze(student_id, generation, history, user_text, text, memories, exercise, model,
@@ -155,10 +290,14 @@ class ChatService:
                 queue.put_nowait(("analysis", {"skipped": True}))
         except asyncio.CancelledError:
             if generation.streaming:
-                self.store.finish_reply(assistant_id, content="".join(parts), status="cancelled")
+                close_tool_batch(tool_messages)
+                self.store.finish_reply(assistant_id, content="".join(parts), status="cancelled",
+                                        meta={"tool_calls": tool_log, "tool_messages": tool_messages})
                 queue.put_nowait(("cancelled", {"message": self._message(student_id, assistant_id)}))
         except ProviderError as exc:
-            self.store.finish_reply(assistant_id, content="".join(parts), status="failed", error=exc.detail)
+            close_tool_batch(tool_messages)
+            self.store.finish_reply(assistant_id, content="".join(parts), status="failed", error=exc.detail,
+                                    meta={"tool_calls": tool_log, "tool_messages": tool_messages})
             queue.put_nowait(("error", {
                 "detail": exc.detail, "status_code": exc.status_code,
                 "message": self._message(student_id, assistant_id),
@@ -167,13 +306,31 @@ class ChatService:
             logger.exception("Chat generation failed")
             detail = "生成回复时发生内部错误，请重试。"
             try:
-                self.store.finish_reply(assistant_id, content="".join(parts), status="failed", error=detail)
+                close_tool_batch(tool_messages)
+                self.store.finish_reply(assistant_id, content="".join(parts), status="failed", error=detail,
+                                        meta={"tool_calls": tool_log, "tool_messages": tool_messages})
             except Exception:
                 logger.exception("Could not record the failed reply")
             queue.put_nowait(("error", {"detail": detail, "status_code": 500, "message": None}))
         finally:
             self._release(generation)
             queue.put_nowait(None)
+
+    async def _review(self, student_id: str, model: ChatModel, turns: list[dict]) -> None:
+        try:
+            raw = await model.complete_json(review_messages(self.store.agent_notes(student_id), turns))
+        except Exception:
+            logger.exception("Background memory review failed")
+            return
+        ops = raw.get("ops") if isinstance(raw, dict) else None
+        approve = self._agent_flag("memory_write_approval")
+        for op in ops if isinstance(ops, list) else []:
+            if not isinstance(op, dict):
+                continue
+            self.store.apply_agent_memory(
+                student_id, str(op.get("action") or ""), str(op.get("target") or ""),
+                op.get("content"), op.get("old_text"), approve,
+            )
 
     async def _analyze(
         self, student_id, generation, history, user_text, reply, memories, exercise, model, subject_id=None,

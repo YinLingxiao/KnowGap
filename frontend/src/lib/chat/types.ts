@@ -102,8 +102,24 @@ export interface ChatMessage {
   suggestedProblemId: string | null;
   sources: SourceReference[];
   truncated: boolean;
+  toolCalls: ToolCallView[];
+  pendingApproval: ToolApproval | null;
   threadSummary: ThreadSummary | null;
   createdAt: string;
+}
+
+export interface ToolCallView {
+  id: string;
+  name: string;
+  arguments: string;
+  output: string;
+  ok: boolean;
+}
+
+export interface ToolApproval {
+  id: string;
+  name: string;
+  arguments: string;
 }
 
 export interface ThreadSummary {
@@ -150,4 +166,7 @@ export type StreamEvent =
   | { type: "done"; message: ChatMessage | null }
   | { type: "cancelled"; message: ChatMessage | null }
   | { type: "error"; detail: string; statusCode: number; message: ChatMessage | null }
-  | { type: "analysis"; userMessage: ChatMessage | null; assistantMessage: ChatMessage | null; skipped: boolean };
+  | { type: "analysis"; userMessage: ChatMessage | null; assistantMessage: ChatMessage | null; skipped: boolean }
+  | { type: "tool_start"; id: string; name: string; arguments: string }
+  | { type: "tool_end"; id: string; name: string; ok: boolean; output: string }
+  | { type: "tool_approval"; id: string; name: string; arguments: string };
