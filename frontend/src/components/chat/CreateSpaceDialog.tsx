@@ -79,7 +79,7 @@ export function CreateSpaceDialog({ subject, onClose, onCreate, onUpdate }: Crea
             <X size={16} />
           </button>
         </header>
-        <p className={styles.hint}>先说清想学会什么。遇到具体卡点时再开 Thread，解决后合并回主对话。</p>
+        <p className={styles.hint}>先说清想学会什么。AI 会在主对话协调，在右侧 Thread 中开始具体任务，并同步进展。</p>
         <label className={styles.nameRow}>
           <button type="button" className={styles.swatch} style={{ background: color }} onClick={cycleColor} aria-label="更换颜色" />
           <input

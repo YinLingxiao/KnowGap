@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Brain, FileText, MoreHorizontal, PanelLeftOpen, Plus, Trash2, Upload, X } from "lucide-react";
+import { Brain, FileText, MoreHorizontal, PanelLeftOpen, Trash2, Upload, X } from "lucide-react";
 import type { ChatController } from "@/hooks/useChat";
 import { createMaterialClient } from "@/lib/api/material-client";
 import { toApiError } from "@/lib/api/errors";
@@ -20,12 +20,6 @@ type Panel =
   | { mode: "list" }
   | { mode: "thread"; id: string }
   | { mode: "info"; section: "about" | "files" | "memory" };
-
-function requestId(): string {
-  return typeof crypto !== "undefined" && "randomUUID" in crypto
-    ? crypto.randomUUID()
-    : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
-}
 
 function readPanel(subjectId: string): Panel {
   try {
@@ -54,7 +48,7 @@ export function SubjectPage({
   onDelete: () => Promise<boolean>;
 }) {
   const mainId = subject.mainConversationId;
-  const { loadConversation } = chat;
+  const { loadConversation, loadSubjects, loadMemories, threadDispatch } = chat;
   const [panel, setPanel] = useState<Panel>({ mode: "list" });
   const [panelReady, setPanelReady] = useState(false);
   const [overlay, setOverlay] = useState(false);
@@ -112,6 +106,42 @@ export function SubjectPage({
   const thread = threadId ? chat.messagesFor(threadId) : null;
   const threadSummary = threads.find((item) => item.id === threadId) ?? null;
   const mainPhase = mainId ? chat.streamFor(mainId)?.phase ?? null : null;
+  const localThreadPhase = threadId ? chat.streamFor(threadId)?.phase ?? null : null;
+  const threadPhase = localThreadPhase ?? (
+    threadSummary?.executionStatus === "working" || threadSummary?.executionStatus === "queued" ||
+    thread?.messages.some((message) => message.status === "streaming") ? "streaming" : null
+  );
+  const threadStateKey = threads.map((item) => `${item.id}:${item.executionStatus}:${item.threadStatus}`).join("|");
+
+  useEffect(() => {
+    if (!threadDispatch || threadDispatch.mainId !== mainId) return;
+    setPanel({ mode: "thread", id: threadDispatch.threadId });
+    setOverlay(true);
+    void refreshThreads();
+  }, [mainId, refreshThreads, threadDispatch]);
+
+  useEffect(() => {
+    void loadSubjects();
+    void loadMemories();
+  }, [threadStateKey, loadSubjects, loadMemories]);
+
+  // Dispatched workers continue independently of this page's streaming connection.
+  useEffect(() => {
+    if (!mainId) return;
+    let fetching = false;
+    const timer = window.setInterval(async () => {
+      if (fetching || document.hidden) return;
+      fetching = true;
+      try {
+        await Promise.all([
+          refreshThreads(),
+          ...(!mainPhase ? [loadConversation(mainId)] : []),
+          ...(threadId && !localThreadPhase ? [loadConversation(threadId)] : []),
+        ]);
+      } finally { fetching = false; }
+    }, 1500);
+    return () => window.clearInterval(timer);
+  }, [mainId, mainPhase, threadId, localThreadPhase, loadConversation, refreshThreads]);
 
   useEffect(() => {
     if (!mainId || mainPhase) return;
@@ -123,20 +153,6 @@ export function SubjectPage({
   const openThread = (id: string) => {
     showPanel({ mode: "thread", id });
     void chat.loadConversation(id);
-  };
-
-  const branch = async (messageId: string) => {
-    const created = await chatApi.createThread(subject.id, { anchorMessageId: messageId, clientRequestId: requestId() });
-    await refreshThreads();
-    void chat.loadSubjects();
-    openThread(created.id);
-  };
-
-  const newThread = async () => {
-    const created = await chatApi.createThread(subject.id, { clientRequestId: requestId() });
-    await refreshThreads();
-    void chat.loadSubjects();
-    openThread(created.id);
   };
 
   const beginResolve = async (id: string) => {
@@ -234,7 +250,7 @@ export function SubjectPage({
         )}
         {mainId && main ? (
           main.messages.length === 0 && !main.loading ? (
-            <div className={styles.center}><p>从这里开始主线。遇到一道具体的题，把鼠标放在消息上，开一个 Thread。</p></div>
+            <div className={styles.center}><p>告诉我你的学习需求。我会安排学习路线，并在右侧 Thread 中展开具体讲解和练习。</p></div>
           ) : (
             <MessageList
               conversationId={mainId}
@@ -246,9 +262,8 @@ export function SubjectPage({
               phase={chat.streamFor(mainId)?.phase ?? null}
               followNonce={chat.followNonceFor(mainId)}
               onRegenerate={() => void chat.regenerate(mainId)}
-              onStartExercise={(problemId) => void chat.startExerciseOn(mainId, problemId)}
+              onStartExercise={(problemId) => void chat.sendTo(mainId, `请安排练习「${problemsById[problemId]?.title ?? problemId}」，在 Thread 中带我完成。`)}
               onOpenMemories={() => showPanel({ mode: "info", section: "memory" })}
-              onOpenThread={(messageId) => void branch(messageId)}
               onOpenSummary={openThread}
               onDecideTool={(approvalId, allow) => void chat.decideTool(approvalId, allow)}
             />
@@ -266,10 +281,10 @@ export function SubjectPage({
               onStop={() => void chat.stop(mainId)}
               phase={chat.streamFor(mainId)?.phase ?? null}
               busy={false}
-              problems={chat.problems}
-              onStartExercise={(problemId) => void chat.startExerciseOn(mainId, problemId)}
+              problems={[]}
+              onStartExercise={(problemId) => void chat.sendTo(mainId, `请安排练习「${problemsById[problemId]?.title ?? problemId}」，在 Thread 中带我完成。`)}
               autoFocusKey={mainId}
-              placeholder={`在「${subject.name}」里继续学`}
+              placeholder="描述学习需求、补充条件，或查看整体进展"
             />
           </div>
         )}
@@ -283,7 +298,6 @@ export function SubjectPage({
               narrow={narrow}
               onClose={() => setOverlay(false)}
               onOpen={openThread}
-              onCreate={() => void newThread()}
             />
           )}
           {panel.mode === "thread" && threadId && (
@@ -291,12 +305,13 @@ export function SubjectPage({
               <header className={styles.threadHead}>
                 <div>
                   <strong>{threadSummary?.title ?? "Thread"}</strong>
+                  {threadSummary?.executionStatus && <small role="status">{executionLabel[threadSummary.executionStatus]}</small>}
                   {threadSummary?.anchor && <p className={styles.anchor}>{plainText(threadSummary.anchor.excerpt)}</p>}
                 </div>
                 {threadSummary?.threadStatus === "resolved" ? (
                   <button onClick={() => void reopen(threadId)}>重新打开</button>
                 ) : (
-                  <button onClick={() => void beginResolve(threadId)}>已解决</button>
+                  <button disabled={Boolean(threadPhase)} onClick={() => void beginResolve(threadId)}>已解决</button>
                 )}
                 <button className={styles.icon} aria-label="关闭" onClick={() => { setPanel({ mode: "list" }); if (narrow) setOverlay(false); }}>
                   <X size={16} />
@@ -310,7 +325,7 @@ export function SubjectPage({
                   memoriesById={memoriesById}
                   conversationSubjectId={subject.id}
                   subjectNames={subjectNames}
-                  phase={chat.streamFor(threadId)?.phase ?? null}
+                  phase={threadPhase}
                   followNonce={chat.followNonceFor(threadId)}
                   onRegenerate={() => void chat.regenerate(threadId)}
                   onStartExercise={(problemId) => void chat.startExerciseOn(threadId, problemId)}
@@ -326,7 +341,7 @@ export function SubjectPage({
                   onChange={(value) => chat.setDraftFor(threadId, value)}
                   onSend={() => void chat.sendTo(threadId, chat.draftFor(threadId))}
                   onStop={() => void chat.stop(threadId)}
-                  phase={chat.streamFor(threadId)?.phase ?? null}
+                  phase={threadPhase}
                   busy={false}
                   problems={chat.problems}
                   onStartExercise={(problemId) => void chat.startExerciseOn(threadId, problemId)}
@@ -392,15 +407,16 @@ export function SubjectPage({
   );
 }
 
+const executionLabel = { queued: "已排队", working: "正在执行", waiting: "等待你", idle: "本轮完成", failed: "执行失败", cancelled: "已停止" };
+
 function ThreadList({
-  openThreads, doneThreads, narrow, onClose, onOpen, onCreate,
+  openThreads, doneThreads, narrow, onClose, onOpen,
 }: {
   openThreads: ConversationSummary[];
   doneThreads: ConversationSummary[];
   narrow: boolean;
   onClose: () => void;
   onOpen: (id: string) => void;
-  onCreate: () => void;
 }) {
   return (
     <div className={styles.listPane}>
@@ -408,14 +424,24 @@ function ThreadList({
         <strong>Thread</strong>
         {narrow && <button className={styles.icon} aria-label="关闭" onClick={onClose}><X size={16} /></button>}
       </header>
-      <button className={styles.add} onClick={onCreate}><Plus size={14} aria-hidden />新建 Thread</button>
-      <p className={styles.group}>未解决</p>
-      <ul>
-        {openThreads.map((item) => (
-          <li key={item.id}><button onClick={() => onOpen(item.id)}>{item.title}</button></li>
-        ))}
-        {openThreads.length === 0 && <li className={styles.muted}>没有未解决的 Thread。</li>}
-      </ul>
+      <p className={styles.muted}>在主对话描述需求，AI 会创建或续接 Thread 并开始执行。</p>
+      {[
+        { label: "等待你", items: openThreads.filter((item) => item.executionStatus === "waiting" || item.executionStatus === "failed") },
+        { label: "正在执行", items: openThreads.filter((item) => item.executionStatus === "working" || item.executionStatus === "queued") },
+        { label: "空闲", items: openThreads.filter((item) => !item.executionStatus || item.executionStatus === "idle" || item.executionStatus === "cancelled") },
+      ].map((group) => (
+        <section key={group.label}>
+          <p className={styles.group}>{group.label} · {group.items.length}</p>
+          <ul>{group.items.map((item) => (
+            <li key={item.id}>
+              <button onClick={() => onOpen(item.id)}>
+                <span>{item.title}</span>
+                <small>{item.executionStatus ? executionLabel[item.executionStatus] : "空闲"}{item.preview ? ` · ${plainText(item.preview)}` : ""}</small>
+              </button>
+            </li>
+          ))}</ul>
+        </section>
+      ))}
       <p className={styles.group}>已解决</p>
       <ul>
         {doneThreads.map((item) => (

@@ -82,6 +82,7 @@ export function useChat(notify: Notify) {
   const [follows, setFollows] = useState<Record<string, number>>({});
   const [restored, setRestored] = useState(false);
   const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [threadDispatch, setThreadDispatch] = useState<{ mainId: string; threadId: string; nonce: number } | null>(null);
   /** 空白新对话发出第一条消息时归入的 Subject（在 Subject 页里开始的对话） */
   const [draftSubjectId, setDraftSubjectId] = useState<string | null>(null);
 
@@ -240,6 +241,11 @@ export function useChat(notify: Notify) {
     let acked = false;
     const onEvent = (event: StreamEvent) => {
       switch (event.type) {
+        case "thread_dispatched":
+          setThreadDispatch((previous) => ({ mainId: id, threadId: event.threadId, nonce: (previous?.nonce ?? 0) + 1 }));
+          void loadConversation(event.threadId);
+          void loadSubjects();
+          break;
         case "start":
           acked = true;
           onAck?.();
@@ -301,7 +307,7 @@ export function useChat(notify: Notify) {
       endStream(id, controller);
       void refreshList();
     }
-  }, [endStream, loadConversation, loadMemories, notify, patchMessages, refreshList, setPhase, upsertSummary]);
+  }, [endStream, loadConversation, loadMemories, loadSubjects, notify, patchMessages, refreshList, setPhase, upsertSummary]);
 
   const sendTo = useCallback(async (id: string, text: string) => {
     const trimmed = text.trim();
@@ -374,7 +380,12 @@ export function useChat(notify: Notify) {
 
   const stop = useCallback(async (id: string) => {
     const handle = streamsRef.current[id];
-    if (!handle) return;
+    if (!handle) {
+      try { await chatApi.stop(id); }
+      catch (error) { notify({ tone: "error", title: "未能停止", description: toApiError(error).message }); }
+      finally { void loadConversation(id); }
+      return;
+    }
     if (handle.phase === "connecting") {
       handle.controller.abort();
       return;
@@ -386,7 +397,7 @@ export function useChat(notify: Notify) {
       handle.controller.abort();
       void loadConversation(id);
     }
-  }, [loadConversation]);
+  }, [loadConversation, notify]);
 
   const startExerciseOn = useCallback(async (id: string | null, problemId: string) => {
     if (id && streamsRef.current[id] && streamsRef.current[id].phase !== "analyzing") {
@@ -560,7 +571,7 @@ export function useChat(notify: Notify) {
   const activeStream = activeId ? streams[activeId] ?? null : null;
 
   return {
-    subjects, loadSubjects, createSubject, updateSubject, deleteSubject, draftSubjectId, moveConversation,
+    subjects, loadSubjects, createSubject, updateSubject, deleteSubject, draftSubjectId, moveConversation, threadDispatch,
     conversations, listLoading, listError, refreshList,
     activeId, activeConversation, activeThread: activeThread ?? null, restored,
     streams, activeStream, creating,

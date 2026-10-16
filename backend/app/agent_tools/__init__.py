@@ -14,6 +14,37 @@ DEFINITIONS = [
     {
         "type": "function",
         "function": {
+            "name": "exercise_reference",
+            "description": "获取当前练习经程序校验的结论、操作过程和判据。仅在本轮用户作答、要提示或要求解答当前题目时调用；打招呼或换话题时不要调用。",
+            "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "dispatch_thread",
+            "description": "主对话将具体学习任务交给 Thread 并立即执行。相关补充传已有 thread_id，新任务省略 thread_id。每次只交办一件事，不要只创建空对话。",
+            "parameters": {"type": "object", "properties": {
+                "title": {"type": "string", "description": "60 字以内的具体任务标题"},
+                "task": {"type": "string", "description": "任务范围、目标和本轮需要做的事，保持用户原意"},
+                "thread_id": {"type": "string", "description": "续接时填 conversation_role.threads 中的 id；新建时省略"},
+            }, "required": ["title", "task"], "additionalProperties": False},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "report_progress",
+            "description": "Thread 向主对话回报重要进展或本轮结果。summary 简明写明实际进展、结论或阻塞；需要用户作答、补充或决策时 needs_user=true。",
+            "parameters": {"type": "object", "properties": {
+                "summary": {"type": "string", "description": "600 字以内的进展或结果"},
+                "needs_user": {"type": "boolean"},
+            }, "required": ["summary"], "additionalProperties": False},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "read",
             "description": "读取工作区内的文本文件，返回带行号的内容。大文件用 offset 和 limit 分段读。",
             "parameters": {
@@ -127,7 +158,22 @@ def _clip(text: str) -> str:
 
 async def run(name: str, arguments: dict, ctx) -> str:
     try:
-        if name == "read":
+        if name == "exercise_reference":
+            from app.services.problems import reference_for
+
+            exercise = getattr(ctx, "exercise", None)
+            if exercise is None or arguments:
+                raise ToolError("当前没有可查询的练习，且此工具不接受参数。")
+            text = json.dumps({"problem_id": exercise.id, **reference_for(exercise)}, ensure_ascii=False)
+        elif name == "dispatch_thread":
+            if not getattr(ctx, "dispatch_thread", None):
+                raise ToolError("当前对话不能分派 Thread。")
+            text = ctx.dispatch_thread(arguments)
+        elif name == "report_progress":
+            if not getattr(ctx, "report_progress", None):
+                raise ToolError("当前对话不是 Thread。")
+            text = ctx.report_progress(arguments)
+        elif name == "read":
             text = await asyncio.to_thread(files.read_file, ctx.workspace, arguments)
         elif name == "write":
             text = await asyncio.to_thread(files.write_file, ctx.workspace, arguments)

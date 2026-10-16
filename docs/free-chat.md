@@ -63,7 +63,7 @@
 - 新建：`POST /api/subjects` 接受 `goal`、`level`（`beginner` 零基础 / `some` 学过一些 / `fluent` 比较熟练 / `exam` 冲刺备考）、`deadline`、`color`。名称必填。同一个事务里创建主对话，返回 `main_conversation_id` 和 `progress`。`PATCH` 可以改这些字段。
 - Thread：`GET / POST /api/subjects/{id}/threads`。创建参数 `title?`、`anchor_message_id?`、`client_request_id`（重复提交返回同一条）。未解决的排在前面。
 - 合并：`POST /api/conversations/{id}/resolve/draft` 只起草，不写库，返回 `{title, summary, takeaways}`。小结必须是 2–4 句，要点最多 4 条；模型失败或格式不对时返回真实错误，Thread 状态不变。`POST /api/conversations/{id}/resolve` 用用户确认后的正文把 Thread 标为已解决，并在主对话追加一条 `kind = text` 的助手消息，细节在 `meta.thread_summary`（Thread id、标题、要点、相关记忆 id）。已解决时再次提交不追加。`POST /api/conversations/{id}/reopen` 重新打开，之后再次解决会再追加一条。
-- 上下文：主对话负责路线，可以口头建议开 Thread。Thread 只处理当前问题，并附上锚点消息和主对话最近 6 条（截断）。`goal` / `level` / `deadline` 有值时才放进 `subject`，用来调整讲解深度和节奏。
+- 上下文：主对话负责协调，通过 `dispatch_thread` 主动新建或续接 Thread 并开始执行；简单问题直接回答。模型能看到空间内已有 Thread 的 id、标题、状态与最近内容。Thread 接收用户原话、交办任务、锚点与主对话最近 6 条（截断），通过 `report_progress` 回报进展与本轮结果。`goal` / `level` / `deadline` 有值时才放进 `subject`，用来调整讲解深度和节奏。详见 [协调与执行设计](thread-coordination.md)。
 - 进度：`progress.to_review` 是疑似和需巩固的误区，`improving` 是改善中，`mastered` 是掌握记录加已解决的误区，另有未解决 / 已解决 Thread 数，以及空间内对话的最近更新时间。
 - 删除空间：主对话和 Thread 变回普通对话（清空 `parent_id`、锚点和状态），记忆改为通用，资料移到未归类。
 - 迁移：启动时给没有主对话的旧空间补一条，并把当时已经在空间里的其他对话转成未解决 Thread。之后新建的普通对话不会被这次迁移改掉。
@@ -93,7 +93,9 @@
 
 ## 练习
 
-练习题以 `kind: "exercise"` 消息出现在对话中。最近一道题及程序校验过的参考推导（`simulate_stack`）会作为上下文传给模型。当学生明确给出的结论与参考推导矛盾，而模型却判为正确时，该判定会被丢弃（复用 `reference_guard`）。
+练习题以 `kind: "exercise"` 消息出现在对话中。最近一道题只作为背景，用户最新原文另外以 `latest_user_message` 标明；不会把界面上的题目当成本轮请求，也不把完整标准解答预先塞入每轮聊天。用户确实在作答、要提示或要解答时，模型通过只读工具 `exercise_reference` 获取当前题由 `simulate_stack` 校验的结论和过程。工具不接受题号参数，也不会在没有当前题目时提供。学情分析仍使用程序参考；当学生明确给出的结论与参考推导矛盾，而模型却判为正确时，该判定会被丢弃（复用 `reference_guard`）。
+
+聊天记忆检索以用户本轮原文为查询，不因为会话挂着某道题，就把题目标题和话题键强行加入每轮召回。意图边界问题的排查与验证见 [练习背景抢占聊天](evaluation/2026-10-16-chat-intent.md)。
 
 ## 旧数据兼容
 

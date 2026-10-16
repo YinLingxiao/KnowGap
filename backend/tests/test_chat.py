@@ -247,7 +247,8 @@ def test_exercise_in_chat_uses_reference_and_guard(tmp_path):
         assert conversation["active_problem_id"] == "stack-sequence-001"
 
         events = send(client, conversation["id"], "合法，因为每个元素都能出栈", "req-ex-00001")
-        assert context_of(model.calls[0])["active_exercise"]["reference"]["possible"] is False
+        assert context_of(model.calls[0])["active_exercise"]["id"] == "stack-sequence-001"
+        assert "reference" not in context_of(model.calls[0])["active_exercise"]
         # The model called an impossible sequence "correct": the checked reference vetoes that verdict.
         assert events[-1][1]["user_message"]["attempt"] is None
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
-import { ArrowDown, BookOpenCheck, Brain, CircleAlert, CircleStop, Dumbbell, FileText, GitBranch, RotateCcw } from "lucide-react";
+import { ArrowDown, BookOpenCheck, Brain, CircleAlert, CircleStop, Dumbbell, FileText, RotateCcw } from "lucide-react";
 import type { StreamPhase } from "@/hooks/useChat";
 import type { ChatMessage, LearnerMemory } from "@/lib/chat/types";
 import { cx } from "@/lib/cx";
@@ -28,7 +28,6 @@ interface MessageListProps {
   onRegenerate: () => void;
   onStartExercise: (problemId: string) => void;
   onOpenMemories: (ids: string[]) => void;
-  onOpenThread?: (messageId: string) => void;
   onOpenSummary?: (threadId: string) => void;
   onDecideTool?: (approvalId: string, allow: boolean) => void;
 }
@@ -67,7 +66,7 @@ function ExerciseCard({ problem, fallback }: { problem: Problem | undefined; fal
 
 export function MessageList({
   conversationId, messages, problems, memoriesById, conversationSubjectId, subjectNames, phase, followNonce,
-  onRegenerate, onStartExercise, onOpenMemories, onOpenThread, onOpenSummary, onDecideTool,
+  onRegenerate, onStartExercise, onOpenMemories, onOpenSummary, onDecideTool,
 }: MessageListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const following = useRef(true);
@@ -139,13 +138,20 @@ export function MessageList({
                       </button>
                     )}
                     <CopyButton text={message.content} className={styles.action} />
-                    {onOpenThread && message.status === "complete" && (
-                      <button className={styles.action} onClick={() => onOpenThread(message.id)}>
-                        <GitBranch size={13} aria-hidden />
-                        开 Thread
-                      </button>
-                    )}
                   </div>
+                </div>
+              );
+            }
+            if (message.threadUpdate) {
+              const card = message.threadUpdate;
+              const label = { queued: "已排队", working: "正在执行", waiting: "等待你", idle: "本轮完成", failed: "执行失败", cancelled: "已停止" }[card.status];
+              return (
+                <div key={message.id} className={styles.row}>
+                  <button className={styles.summary} onClick={() => onOpenSummary?.(card.threadId)}>
+                    <span className={styles.summaryTitle}>{card.title} · {label}</span>
+                    <span className={styles.summaryBody}>{card.summary}</span>
+                    <small>打开 Thread 查看详情</small>
+                  </button>
                 </div>
               );
             }
@@ -173,6 +179,7 @@ export function MessageList({
             }
             const streaming = message.status === "streaming";
             const isLast = message === last && message.replyTo === lastUser?.id;
+            const visibleTools = message.toolCalls.filter((call) => !["dispatch_thread", "report_progress", "exercise_reference"].includes(call.name));
             const used = message.usedMemoryIds.filter((id) => memoriesById[id]);
             const outside = [...new Set(used.map((id) => memoriesById[id].subjectId)
               .filter((id): id is string => Boolean(id) && id !== conversationSubjectId))];
@@ -180,9 +187,9 @@ export function MessageList({
             const suggested = message.suggestedProblemId ? problems[message.suggestedProblemId] : undefined;
             return (
               <div key={message.id} className={cx(styles.row, styles.assistantRow)}>
-                {message.toolCalls.length > 0 && (
+                {visibleTools.length > 0 && (
                   <div className={styles.tools}>
-                    {message.toolCalls.map((call) => (
+                    {visibleTools.map((call) => (
                       <details key={call.id} className={styles.tool} open={!call.output}>
                         <summary>{call.name}{call.output ? (call.ok ? "" : " · 未成功") : " · 进行中"}</summary>
                         {call.arguments && <pre>{call.arguments}</pre>}
@@ -269,12 +276,6 @@ export function MessageList({
                       >
                         <Dumbbell size={12} aria-hidden />
                         做这道练习：{suggested.title}
-                      </button>
-                    )}
-                    {onOpenThread && message.status === "complete" && (
-                      <button className={styles.action} onClick={() => onOpenThread(message.id)}>
-                        <GitBranch size={13} aria-hidden />
-                        开 Thread
                       </button>
                     )}
                     {message.content && message.status !== "failed" && <CopyButton text={message.content} className={styles.action} />}

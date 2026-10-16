@@ -105,6 +105,7 @@ export interface ChatMessage {
   toolCalls: ToolCallView[];
   pendingApproval: ToolApproval | null;
   threadSummary: ThreadSummary | null;
+  threadUpdate?: { threadId: string; title: string; status: ExecutionStatus; summary: string } | null;
   createdAt: string;
 }
 
@@ -144,6 +145,7 @@ export interface ConversationSummary {
   kind: ConversationKind;
   parentId: string | null;
   threadStatus: ThreadStatus | null;
+  executionStatus?: ExecutionStatus | null;
   anchor: MessageAnchor | null;
   activeProblemId: string | null;
   legacySessionId: string | null;
@@ -158,8 +160,11 @@ export interface Conversation extends ConversationSummary {
   messages: ChatMessage[];
 }
 
+export type ExecutionStatus = "queued" | "working" | "waiting" | "idle" | "failed" | "cancelled";
+
 /** 一次发送 / 重新生成的流式事件，已映射为视图模型 */
 export type StreamEvent =
+  | { type: "thread_dispatched"; threadId: string }
   | { type: "start"; conversation: ConversationSummary | null; userMessage: ChatMessage | null;
       assistantMessage: ChatMessage | null; discardedIds: string[]; replayed: boolean }
   | { type: "delta"; text: string }

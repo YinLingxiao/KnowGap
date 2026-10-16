@@ -20,6 +20,7 @@ Deadline = Annotated[str, StringConstraints(strip_whitespace=True, pattern=r"^\d
 Color = Annotated[str, StringConstraints(strip_whitespace=True, pattern=r"^#[0-9A-Fa-f]{6}$")]
 ConversationKind = Literal["chat", "main", "thread"]
 ThreadStatus = Literal["open", "resolved"]
+ExecutionStatus = Literal["queued", "working", "waiting", "idle", "failed", "cancelled"]
 MemoryKind = Literal["misconception", "mastery", "preference"]
 MemoryStatus = Literal["suspected", "needs_review", "improving", "resolved", "observed", "uncertain"]
 MessageStatus = Literal["complete", "streaming", "failed", "cancelled"]
@@ -82,6 +83,17 @@ class CreateThread(StrictModel):
     client_request_id: RequestId
 
 
+class DispatchThread(StrictModel):
+    title: Title
+    task: MessageText
+    thread_id: str | None = None
+
+
+class ReportProgress(StrictModel):
+    summary: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=600)]
+    needs_user: bool = False
+
+
 class ResolveThread(StrictModel):
     title: Title
     summary: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=800)]
@@ -103,6 +115,13 @@ class ThreadSummary(BaseModel):
     summary: str
     takeaways: list[str] = Field(default_factory=list)
     memory_ids: list[str] = Field(default_factory=list)
+
+
+class ThreadUpdate(BaseModel):
+    thread_id: str
+    title: str
+    status: ExecutionStatus
+    summary: str
 
 
 class MessageAnchor(BaseModel):
@@ -210,6 +229,8 @@ class ChatMessage(BaseModel):
     truncated: bool = False
     tool_calls: list[ToolCallRecord] = Field(default_factory=list)
     thread_summary: ThreadSummary | None = None
+    thread_update: ThreadUpdate | None = None
+    pending_approval: dict | None = None
     created_at: str
     updated_at: str
 
@@ -222,6 +243,7 @@ class ConversationSummary(BaseModel):
     kind: ConversationKind = "chat"
     parent_id: str | None = None
     thread_status: ThreadStatus | None = None
+    execution_status: ExecutionStatus | None = None
     anchor: MessageAnchor | None = None
     active_problem_id: str | None
     legacy_session_id: str | None

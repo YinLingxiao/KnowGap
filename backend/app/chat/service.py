@@ -13,6 +13,7 @@ Message lifecycle:
 import asyncio
 import json
 import logging
+import time
 from collections.abc import AsyncIterator, Callable
 
 from app.agent_tools import DEFINITIONS, NEEDS_APPROVAL, parse_arguments, run as run_tool, workspace_of
@@ -23,6 +24,8 @@ from app.chat.agent import (
     validate_analysis, validate_resolution,
 )
 from app.chat.store import ChatStore
+from app.chat.schemas import DispatchThread, ReportProgress
+from app.chat.coordination import cancel_deliveries, dispatch, next_delivery, report
 from app.memory.store import new_id
 from app.services.materials import MaterialStore
 
@@ -55,6 +58,8 @@ class Generation:
         self.queue: asyncio.Queue[tuple[str, dict] | None] = asyncio.Queue()
         self.streaming = True
         self.task: asyncio.Task | None = None
+        self.detached = False
+        self.student_id = ""
 
 
 class ToolContext:
@@ -64,6 +69,9 @@ class ToolContext:
         self.student_id = student_id
         self.conversation_id = conversation_id
         self.approve_memory = approve_memory
+        self.dispatch_thread = None
+        self.report_progress = None
+        self.exercise = None
 
 
 class ChatService:
@@ -75,6 +83,33 @@ class ChatService:
         self.active: dict[str, Generation] = {}
         self.approvals: dict[str, asyncio.Future] = {}
         self.reviews: set[asyncio.Task] = set()
+        self.tasks: set[asyncio.Task] = set()
+        self.closing = False
+
+    async def close(self) -> None:
+        self.closing = True
+        tasks = [*self.tasks, *self.reviews]
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+    def recover(self) -> None:
+        with self.store.connection() as db:
+            interrupted = db.execute(
+                "SELECT m.id, m.reply_to, m.conversation_id, c.student_id FROM conversation_messages m "
+                "JOIN conversations c ON c.id = m.conversation_id WHERE c.kind = 'thread' AND m.status = 'failed' "
+                "AND m.error = ?", ("服务重启，生成被中断。可以重新生成这条回复。",),
+            ).fetchall()
+            queued = db.execute(
+                "SELECT DISTINCT c.id, c.student_id FROM conversations c JOIN thread_dispatches d ON d.thread_id = c.id "
+                "WHERE c.kind = 'thread'",
+            ).fetchall()
+        for row in interrupted:
+            self.store.merge_meta(row["id"], {"pending_approval": None})
+            report(self.store, row["student_id"], row["conversation_id"], row["reply_to"], "failed",
+                   "服务重启中断了任务，请在 Thread 中检查已有进展后重试。")
+        for row in queued:
+            self._start_delivery(row["student_id"], row["id"])
 
     def is_generating(self, conversation_id: str) -> bool:
         return conversation_id in self.active
@@ -101,6 +136,9 @@ class ChatService:
         approval_id = new_id("approval")
         future: asyncio.Future = asyncio.get_running_loop().create_future()
         self.approvals[approval_id] = future
+        approval = {"id": approval_id, "name": name, "arguments": arguments}
+        self.store.merge_meta(generation.assistant_message_id, {"pending_approval": approval})
+        self._report(generation, "waiting", "需要你在 Thread 中确认操作后继续。")
         generation.queue.put_nowait(("tool_approval", {"id": approval_id, "name": name, "arguments": arguments}))
         try:
             return bool(await asyncio.wait_for(future, 600))
@@ -108,10 +146,46 @@ class ChatService:
             return False
         finally:
             self.approvals.pop(approval_id, None)
+            self.store.merge_meta(generation.assistant_message_id, {"pending_approval": None})
+            self._report(generation, "working", "已结束本次确认，正在继续处理。")
+
+    def _report(self, generation: Generation, status: str, summary: str) -> None:
+        report(self.store, generation.student_id, generation.conversation_id, generation.user_message_id, status, summary)
+
+    def _start_delivery(self, student_id: str, thread_id: str) -> None:
+        if self.closing or self.is_generating(thread_id):
+            return
+        user_id = next_delivery(self.store, thread_id)
+        if user_id:
+            self.begin(student_id, thread_id, user_id, [], detached=True)
+
+    def _dispatch_thread(self, student_id: str, generation: Generation, arguments: dict) -> str:
+        body = DispatchThread(**arguments)
+        thread_id, message_id = dispatch(
+            self.store, student_id, generation.conversation_id, generation.user_message_id,
+            body.title, body.task, body.thread_id,
+        )
+        if not self.store.replies(message_id):
+            report(self.store, student_id, thread_id, message_id, "queued", "已收到主对话交办的任务，等待执行。")
+        self._start_delivery(student_id, thread_id)
+        generation.queue.put_nowait(("thread_dispatched", {"thread_id": thread_id}))
+        return json.dumps({"thread_id": thread_id, "delivered": True,
+                           "status": "queued" if not self.store.replies(message_id) else
+                           self.store.conversation(thread_id, student_id).execution_status}, ensure_ascii=False)
+
+    def _progress(self, student_id: str, generation: Generation, ctx: ToolContext, arguments: dict) -> str:
+        body = ReportProgress(**arguments)
+        self.store.merge_meta(generation.assistant_message_id, {"needs_user": body.needs_user,
+                                                               "progress_summary": body.summary})
+        report(self.store, student_id, generation.conversation_id, generation.user_message_id,
+               "working", body.summary)
+        return "已将进展同步到主对话。"
 
     def stop(self, conversation_id: str) -> bool:
         generation = self.active.get(conversation_id)
         if generation and generation.streaming and generation.task and not generation.task.done():
+            for message_id in cancel_deliveries(self.store, conversation_id):
+                report(self.store, generation.student_id, conversation_id, message_id, "cancelled", "这条排队的补充已停止执行。")
             generation.task.cancel()
             return True
         return False
@@ -124,11 +198,14 @@ class ChatService:
         conversation = self.store.conversation(conversation_id, student_id)
         return conversation.model_dump(mode="json", exclude={"messages"}) if conversation else None
 
-    def begin(self, student_id: str, conversation_id: str, user_message_id: str, discard: list[str]) -> Generation:
+    def begin(self, student_id: str, conversation_id: str, user_message_id: str, discard: list[str], *, detached: bool = False) -> Generation:
         # Called without awaiting in between the caller's is_generating() check, so registration is atomic.
         assistant_id = self.store.start_reply(conversation_id, user_message_id, discard)
         generation = Generation(conversation_id, user_message_id, assistant_id)
+        generation.student_id = student_id
+        generation.detached = detached
         self.active[conversation_id] = generation
+        self._report(generation, "working", "正在处理这项任务，详细过程可在 Thread 中查看。")
         generation.queue.put_nowait(("start", {
             "conversation": self._conversation(student_id, conversation_id),
             "user_message": self._message(student_id, user_message_id),
@@ -136,6 +213,8 @@ class ChatService:
             "discarded_ids": discard,
         }))
         generation.task = asyncio.create_task(self._run(student_id, generation))
+        self.tasks.add(generation.task)
+        generation.task.add_done_callback(self.tasks.discard)
         return generation
 
     async def events(self, generation: Generation) -> AsyncIterator[str]:
@@ -147,7 +226,7 @@ class ChatService:
                 yield sse(*item)
         finally:
             # Client went away mid-reply: treat it like Stop so the reply is not left "streaming".
-            if generation.streaming and generation.task and not generation.task.done():
+            if not generation.detached and generation.streaming and generation.task and not generation.task.done():
                 generation.task.cancel()
 
     async def replay(self, student_id: str, conversation_id: str, user_id: str, assistant_id: str) -> AsyncIterator[str]:
@@ -174,40 +253,62 @@ class ChatService:
         parts: list[str] = []
         tool_log: list[dict] = []
         tool_messages: list[dict] = []
+        last_flush = 0.0
         try:
             await asyncio.sleep(0)  # let the queued "start" event reach the client before any blocking work
             history = [row for row in self.store.history(generation.conversation_id) if row["id"] != assistant_id]
             user_row = next(row for row in history if row["id"] == generation.user_message_id)
+            # Queued inputs can be inserted before an earlier turn's reply. Keep those
+            # replies with their own user turn, while excluding later queued inputs.
+            user_seqs = {row["id"]: row["seq"] for row in history if row["role"] == "user"}
+            history = [row for row in history if user_seqs.get(row["reply_to"], row["seq"]) <= user_row["seq"]]
+            history.sort(key=lambda row: (user_seqs.get(row["reply_to"], row["seq"]), row["seq"]))
             user_text = user_row["content"]
             exercise = active_exercise(history)
             subject = self.store.conversation_subject(generation.conversation_id)
             subject_id = subject.id if subject else None
-            query = f"{user_text} {exercise.title if exercise else ''}"
             memories = self.store.relevant_memories(
-                student_id, query, exercise.topic_key if exercise else None, subject_id,
+                student_id, user_text, None, subject_id,
             )
             sources = self.library.search_scoped(student_id, user_text[:600], 3, subject_id) if self.library else []
             model = self.model()
             finish = "stop"
             role = self.store.role_context(generation.conversation_id)
+            role["delegated_task"] = self.store.message_meta(generation.user_message_id).get("delegated_task")
             snapshot = self.store.frozen_notes(generation.conversation_id, student_id)
             messages = chat_messages(history, memories, exercise, sources, subject, role, snapshot)
             ctx = ToolContext(
                 workspace_of(self.settings), self.store, student_id, generation.conversation_id,
                 self._agent_flag("memory_write_approval"),
             )
+            ctx.exercise = exercise
+            if role["role"] == "main":
+                ctx.dispatch_thread = lambda arguments: self._dispatch_thread(student_id, generation, arguments)
+            if role["role"] == "thread":
+                ctx.report_progress = lambda arguments: self._progress(student_id, generation, ctx, arguments)
+            definitions = [tool for tool in DEFINITIONS if (
+                tool["function"]["name"] in {"dispatch_thread", "session_search", "memory"}
+                if role["role"] == "main" else tool["function"]["name"] != "dispatch_thread"
+                and (role["role"] == "thread" or tool["function"]["name"] != "report_progress")
+            )]
+            if exercise is None:
+                definitions = [tool for tool in definitions if tool["function"]["name"] != "exercise_reference"]
             for _ in range(MAX_TOOL_ROUNDS):
                 calls = None
                 round_text: list[str] = []
                 try:
-                    stream = model.stream(messages, DEFINITIONS)
+                    stream = model.stream(messages, definitions)
                 except TypeError:
                     stream = model.stream(messages)
                 async for kind, value in stream:
                     if kind == "text":
                         parts.append(value)
                         round_text.append(value)
-                        queue.put_nowait(("delta", {"text": value}))
+                        if not generation.detached:
+                            queue.put_nowait(("delta", {"text": value}))
+                        elif time.monotonic() - last_flush >= 0.3:
+                            self.store.finish_reply(assistant_id, content="".join(parts), status="streaming")
+                            last_flush = time.monotonic()
                     elif kind == "tool_calls":
                         calls = value
                     elif kind == "finish":
@@ -229,13 +330,15 @@ class ChatService:
                     name = call.get("name") or ""
                     raw_args = call.get("arguments") or "{}"
                     allowed = True
-                    if name in NEEDS_APPROVAL:
+                    if name in NEEDS_APPROVAL and any(t["function"]["name"] == name for t in definitions):
                         allowed = await self._await_approval(generation, name, raw_args)
                     output = "用户拒绝了这次操作。"
                     ok = False
                     if allowed:
                         queue.put_nowait(("tool_start", {"id": call["id"], "name": name, "arguments": raw_args}))
                         try:
+                            if not any(t["function"]["name"] == name for t in definitions):
+                                raise ToolError("当前对话不支持这个工具。")
                             output = await run_tool(name, parse_arguments(raw_args), ctx)
                             ok = True
                         except (ToolError, json.JSONDecodeError, ValueError) as exc:
@@ -244,6 +347,8 @@ class ChatService:
                     else:
                         queue.put_nowait(("tool_end", {"id": call["id"], "name": name, "ok": False, "output": output}))
                     tool_log.append({"id": call["id"], "name": name, "arguments": raw_args, "output": output, "ok": ok})
+                    if generation.detached:
+                        self.store.merge_meta(assistant_id, {"tool_calls": tool_log})
                     result = {"role": "tool", "tool_call_id": call["id"], "content": output}
                     messages.append(result)
                     tool_messages.append(result)
@@ -282,8 +387,11 @@ class ChatService:
                     task.add_done_callback(self.reviews.discard)
             await asyncio.sleep(0)
             try:
-                await self._analyze(student_id, generation, history, user_text, text, memories, exercise, model,
-                                    subject_id)
+                if role["role"] == "main" and any(item["name"] == "dispatch_thread" and item["ok"] for item in tool_log):
+                    queue.put_nowait(("analysis", {"skipped": True}))
+                else:
+                    await self._analyze(student_id, generation, history, user_text, text, memories, exercise, model,
+                                        subject_id)
             except Exception:
                 # The reply is already complete and stored; note-taking problems must not mark it failed.
                 logger.exception("Learning analysis failed")
@@ -314,6 +422,19 @@ class ChatService:
             queue.put_nowait(("error", {"detail": detail, "status_code": 500, "message": None}))
         finally:
             self._release(generation)
+            try:
+                result = self.store.message(assistant_id, student_id)
+                if result:
+                    meta = self.store.message_meta(assistant_id)
+                    status = result.status if result.status in {"failed", "cancelled"} else (
+                        "waiting" if meta.get("needs_user") else "idle")
+                    summary = result.error if result.status == "failed" else (
+                        "任务已停止，可在 Thread 中继续。" if result.status == "cancelled" else
+                        meta.get("progress_summary") or f"本轮回复节选：{result.content[:500]}")
+                    self._report(generation, status, summary or "请打开 Thread 查看。")
+                self._start_delivery(student_id, generation.conversation_id)
+            except Exception:
+                logger.exception("Could not publish thread status or start its next delivery")
             queue.put_nowait(None)
 
     async def _review(self, student_id: str, model: ChatModel, turns: list[dict]) -> None:
@@ -344,9 +465,10 @@ class ChatService:
             }))
             return
         given = [m.id for m, _ in memories]
+        is_thread = self.store.role_context(generation.conversation_id)["role"] == "thread"
         try:
             raw = await asyncio.wait_for(
-                model.complete_json(analysis_messages(history, user_text, reply, memories, given, exercise)),
+                model.complete_json(analysis_messages(history, user_text, reply, memories, given, exercise, is_thread)),
                 ANALYSIS_TIMEOUT,
             )
         except (ProviderError, TimeoutError) as exc:
@@ -355,6 +477,15 @@ class ChatService:
             generation.queue.put_nowait(("analysis", {"skipped": True}))
             return
         result = validate_analysis(raw, user_text, exercise, given)
+        if is_thread and isinstance(raw, dict) and isinstance(raw.get("thread_report"), dict):
+            try:
+                summary = ReportProgress(**raw["thread_report"])
+            except ValueError:
+                logger.warning("Ignored invalid thread report")
+            else:
+                self.store.merge_meta(generation.assistant_message_id, {
+                    "progress_summary": summary.summary, "needs_user": summary.needs_user,
+                })
         topic_key = exercise.topic_key if exercise and result["attempt"] else None
         changes = []
         for observation in result["observations"]:

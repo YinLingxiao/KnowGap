@@ -44,7 +44,14 @@ function mapMessage(data: Wire): ChatMessage {
       id: String(call.id), name: String(call.name), arguments: String(call.arguments ?? ""),
       output: String(call.output ?? ""), ok: call.ok !== false,
     })),
-    pendingApproval: null,
+    pendingApproval: data.pending_approval ? {
+      id: String(data.pending_approval.id), name: String(data.pending_approval.name),
+      arguments: String(data.pending_approval.arguments ?? ""),
+    } : null,
+    threadUpdate: data.thread_update ? {
+      threadId: data.thread_update.thread_id, title: data.thread_update.title,
+      status: data.thread_update.status, summary: data.thread_update.summary,
+    } : null,
     threadSummary: data.thread_summary ? {
       threadId: data.thread_summary.thread_id, title: data.thread_summary.title, summary: data.thread_summary.summary,
       takeaways: data.thread_summary.takeaways ?? [], memoryIds: data.thread_summary.memory_ids ?? [],
@@ -57,6 +64,7 @@ function mapSummary(data: Wire): ConversationSummary {
   return {
     id: data.id, title: data.title, titleSource: data.title_source, subjectId: data.subject_id ?? null,
     kind: data.kind ?? "chat", parentId: data.parent_id ?? null, threadStatus: data.thread_status ?? null,
+    executionStatus: data.execution_status ?? null,
     anchor: data.anchor ? { messageId: data.anchor.message_id, role: data.anchor.role, excerpt: data.anchor.excerpt } : null,
     activeProblemId: data.active_problem_id,
     legacySessionId: data.legacy_session_id, messageCount: data.message_count, preview: data.preview,
@@ -99,6 +107,8 @@ const maybe = <T,>(value: Wire, map: (data: Wire) => T): T | null => (value ? ma
 
 function mapEvent(type: string, data: Wire): StreamEvent | null {
   switch (type) {
+    case "thread_dispatched":
+      return { type, threadId: String(data.thread_id) };
     case "start":
       return { type, conversation: maybe(data.conversation, mapSummary), userMessage: maybe(data.user_message, mapMessage),
         assistantMessage: maybe(data.assistant_message, mapMessage), discardedIds: data.discarded_ids ?? [],

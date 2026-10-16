@@ -13,7 +13,7 @@ import unicodedata
 from app.chat.schemas import (
     ChatMessage, Conversation, ConversationSummary, ExerciseAttempt, LearnerMemory, MemoryChange, MemoryEvidence,
     ToolCallRecord,
-    MessageAnchor, SpaceProgress, Subject, ThreadSummary,
+    MessageAnchor, SpaceProgress, Subject, ThreadSummary, ThreadUpdate,
 )
 from app.memory.curated import LIMITS, apply as apply_note, bump_turns, decide, pending
 from app.memory.curated import ensure as ensure_notes
@@ -84,6 +84,13 @@ class ChatStore:
     def initialize(self) -> None:
         with self.connection() as db:
             db.executescript("""
+                CREATE TABLE IF NOT EXISTS thread_dispatches (
+                    source_message_id TEXT NOT NULL REFERENCES conversation_messages(id) ON DELETE CASCADE,
+                    task_key TEXT NOT NULL,
+                    thread_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+                    message_id TEXT NOT NULL REFERENCES conversation_messages(id) ON DELETE CASCADE,
+                    PRIMARY KEY(source_message_id, task_key)
+                );
                 CREATE TABLE IF NOT EXISTS conversations (
                     id TEXT PRIMARY KEY, student_id TEXT NOT NULL,
                     title TEXT NOT NULL,
@@ -270,6 +277,23 @@ class ChatStore:
     # ---------------------------------------------------------- conversations
 
     def _summary(self, db: sqlite3.Connection, row: sqlite3.Row) -> dict:
+        latest = db.execute(
+            "SELECT role, status, meta_json FROM conversation_messages WHERE conversation_id = ? ORDER BY seq DESC LIMIT 1",
+            (row["id"],),
+        ).fetchone()
+        execution = None
+        if row["kind"] == "thread":
+            execution = "idle"
+            if latest:
+                meta = json.loads(latest["meta_json"])
+                if latest["role"] == "user":
+                    execution = "queued"
+                elif latest["status"] == "streaming":
+                    execution = "waiting" if meta.get("pending_approval") else "working"
+                elif latest["status"] in {"failed", "cancelled"}:
+                    execution = latest["status"]
+                elif meta.get("needs_user"):
+                    execution = "waiting"
         stats = db.execute("""
             SELECT COUNT(*) AS n,
               (SELECT content FROM conversation_messages WHERE conversation_id = ? AND kind = 'text'
@@ -284,6 +308,7 @@ class ChatStore:
             "subject_id": row["subject_id"],
             "kind": row["kind"] or "chat", "parent_id": row["parent_id"],
             "thread_status": row["thread_status"], "anchor": self._anchor(db, row["anchor_message_id"]),
+            "execution_status": execution,
             "active_problem_id": json.loads(stats["exercise"])["problem_id"] if stats["exercise"] else None,
             "legacy_session_id": row["legacy_session_id"], "message_count": stats["n"],
             "preview": preview[:80], "created_at": row["created_at"], "updated_at": row["updated_at"],
@@ -545,7 +570,15 @@ class ChatStore:
             if row is None or (row["kind"] or "chat") == "chat":
                 return {"role": "chat"}
             if row["kind"] == "main":
-                return {"role": "main"}
+                threads = db.execute(
+                    "SELECT * FROM conversations WHERE parent_id = ? AND kind = 'thread' ORDER BY updated_at DESC",
+                    (conversation_id,),
+                ).fetchall()
+                return {"role": "main", "threads": [
+                    {key: value for key, value in self._summary(db, item).items()
+                     if key in {"id", "title", "preview", "thread_status", "execution_status"}}
+                    for item in threads
+                ]}
             anchor = None
             if row["anchor_message_id"]:
                 message = db.execute(
@@ -672,6 +705,8 @@ class ChatStore:
             truncated=bool(meta.get("truncated")),
             tool_calls=[ToolCallRecord(**item) for item in meta.get("tool_calls", []) if isinstance(item, dict) and item.get("id") and item.get("name")],
             thread_summary=self._thread_summary(meta.get("thread_summary")),
+            thread_update=ThreadUpdate(**meta["thread_update"]) if meta.get("thread_update") else None,
+            pending_approval=meta.get("pending_approval"),
             created_at=row["created_at"], updated_at=row["updated_at"],
         )
 

@@ -60,7 +60,11 @@ def create_app(
         library.initialize()
         chat_store.initialize()
         await run_in_threadpool(shared_ssl_context)
-        yield
+        chat_service.recover()
+        try:
+            yield
+        finally:
+            await chat_service.close()
 
     app = FastAPI(title="KnowGap API", version="0.2.0", lifespan=lifespan)
     app.state.store = store

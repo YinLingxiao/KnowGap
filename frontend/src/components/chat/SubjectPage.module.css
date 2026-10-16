@@ -1,7 +1,7 @@
 .page {
   display: grid;
   flex: 1;
-  grid-template-columns: minmax(0, 1fr) 340px;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 40%);
   min-height: 0;
 }
 
@@ -199,6 +199,19 @@
 
 .listPane {
   padding-bottom: 12px;
+  overflow-y: auto;
+}
+
+.listPane > .muted {
+  padding: 12px;
+  line-height: 1.6;
+}
+
+.threadHead small {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
 }
 
 .add {

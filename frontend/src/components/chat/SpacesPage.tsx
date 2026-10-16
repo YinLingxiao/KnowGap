@@ -64,7 +64,7 @@ export function SpacesPage(props: SpacesPageProps) {
       {props.subjects.length === 0 ? (
         <div className={styles.empty}>
           <h2>还没有学习空间</h2>
-          <p>每个空间只有一条主对话，负责整体路线。遇到具体卡点时在右侧开 Thread，解决后把小结合并回主对话。</p>
+          <p>在主对话描述需求，AI 会创建或续接右侧 Thread 并开始执行。你可以在侧栏深入交流，进展和结果会同步回主对话。</p>
           <button className={styles.create} onClick={props.onCreate}>
             <Plus size={14} aria-hidden />
             新建学习空间
