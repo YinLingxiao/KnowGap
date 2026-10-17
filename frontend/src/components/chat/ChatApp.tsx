@@ -11,6 +11,7 @@ import { cx } from "@/lib/cx";
 import type { Problem } from "@/lib/types";
 import { createMaterialClient } from "@/lib/api/material-client";
 import type { SpaceInput } from "@/lib/chat/types";
+import { studiedLabel } from "@/lib/chat/space";
 import { MaterialLibrary } from "../MaterialLibrary";
 import type { ModelSignal } from "../settings/ModelAccessCard";
 import { SettingsDialog } from "../settings/SettingsDialog";
@@ -166,6 +167,14 @@ export function ChatApp() {
   const generatingIds = useMemo(
     () => Object.entries(chat.streams).filter(([, handle]) => handle.phase !== "analyzing").map(([id]) => id),
     [chat.streams],
+  );
+
+  // 首页「继续学习」：最近学过的三个学习空间
+  const recentSpaces = useMemo(
+    () => [...chat.subjects]
+      .sort((a, b) => (b.progress.lastStudiedAt ?? b.updatedAt).localeCompare(a.progress.lastStudiedAt ?? a.updatedAt))
+      .slice(0, 3),
+    [chat.subjects],
   );
 
   const messages = chat.activeThread?.messages ?? [];
@@ -437,6 +446,26 @@ export function ChatApp() {
                   )}
                 </button>
               </div>
+              {!chat.draftSubjectId && recentSpaces.length > 0 && (
+                <section className={styles.resume} aria-labelledby="resume-title">
+                  <h3 id="resume-title" className={styles.resumeTitle}>继续学习</h3>
+                  <ul className={styles.resumeList}>
+                    {recentSpaces.map((subject) => (
+                      <li key={subject.id}>
+                        <button className={styles.resumeItem} onClick={() => openSpace(subject.id)}>
+                          <span className={styles.resumeDot} style={{ background: subject.color }} aria-hidden />
+                          <span className={styles.resumeName}>{subject.name}</span>
+                          <span className={styles.resumeMeta}>
+                            {subject.progress.toReview > 0 && `${subject.progress.toReview} 个待巩固 · `}
+                            {studiedLabel(subject.progress.lastStudiedAt)}
+                          </span>
+                          <ChevronRight size={14} className={styles.resumeArrow} aria-hidden />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
             </div>
           </div>
         )}

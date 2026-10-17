@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { MoreHorizontal, PanelLeftOpen, Plus, Search } from "lucide-react";
+import { useMemo, useState, type CSSProperties } from "react";
+import { ArrowRight, MoreHorizontal, PanelLeftOpen, Plus, Search } from "lucide-react";
 import { levelLabel, progressLine } from "@/lib/chat/space";
 import type { Subject } from "@/lib/chat/types";
 import { cx } from "@/lib/cx";
@@ -74,20 +74,27 @@ export function SpacesPage(props: SpacesPageProps) {
         <p className={styles.muted}>没有匹配的学习空间。</p>
       ) : (
         <div className={styles.grid}>
-          {shown.map((subject) => {
+          {shown.map((subject, index) => {
             const total = subject.progress.mastered + subject.progress.toReview;
             const width = total ? Math.round((subject.progress.mastered / total) * 100) : 0;
             return (
-              <article key={subject.id} className={styles.card}>
+              <article
+                key={subject.id}
+                className={cx(styles.card, menuId === subject.id && styles.cardMenuOpen)}
+                style={{ "--i": Math.min(index, 8), "--space": subject.color } as CSSProperties}
+              >
                 <button className={styles.cardMain} onClick={() => props.onOpen(subject.id)}>
-                  <span className={styles.dot} style={{ background: subject.color }} />
+                  <span className={styles.dot} aria-hidden />
                   <span className={styles.name}>{subject.name}</span>
                   {levelLabel(subject.level) && <span className={styles.tag}>{levelLabel(subject.level)}</span>}
                   <span className={styles.goal}>{subject.goal || "还没有写下目标"}</span>
                   <span className={styles.bar} aria-hidden>
                     <i style={{ width: `${width}%` }} />
                   </span>
-                  <span className={styles.meta}>{progressLine(subject.progress)}</span>
+                  <span className={styles.meta}>
+                    {progressLine(subject.progress)}
+                    <ArrowRight size={14} className={styles.arrow} aria-hidden />
+                  </span>
                 </button>
                 <button
                   className={styles.more}

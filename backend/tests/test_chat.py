@@ -54,7 +54,14 @@ def send(client, conversation_id, content, request_id):
 
 
 def context_of(call):
-    return json.loads(call[1]["content"])
+    from app.chat.agent import learning_context
+    return learning_context(call)
+
+
+def transcript_of(call):
+    """Model input without the prompt and the JSON context blocks."""
+    from app.chat.agent import learning_context
+    return [m for m in call[1:] if not (m["role"] == "system" and learning_context([m]))]
 
 
 def test_free_chat_streams_persists_and_continues(tmp_path):
@@ -72,7 +79,7 @@ def test_free_chat_streams_persists_and_continues(tmp_path):
 
         send(client, conversation["id"], "能举个例子吗", "req-00000002")
         # The follow-up carries the earlier turn as real chat history.
-        assert [m["role"] for m in model.calls[1][2:]] == ["user", "assistant", "user"]
+        assert [m["role"] for m in transcript_of(model.calls[1])] == ["user", "assistant", "user"]
         assert model.calls[1][3]["content"] == "栈是后进先出，队列是先进先出。"
 
         restored = client.get(f"/api/conversations/{conversation['id']}").json()
@@ -114,7 +121,7 @@ def test_failures_keep_input_and_retry_replaces_failed_reply(tmp_path):
             ("user", "complete", "解释一下递归"), ("assistant", "complete", "恢复后的回复"),
         ]
         # The failed attempt is not part of the model-facing history.
-        assert [m["role"] for m in model.calls[1][2:]] == ["user"]
+        assert [m["role"] for m in transcript_of(model.calls[1])] == ["user"]
 
 
 def test_unconfigured_model_reports_real_error(tmp_path):
@@ -134,8 +141,8 @@ def test_conversations_do_not_share_context(tmp_path):
         send(client, first, "关于栈", "req-ctx-0001")
         send(client, second, "关于哈希表", "req-ctx-0002")
         send(client, first, "继续", "req-ctx-0003")
-        assert [m["content"] for m in model.calls[1][2:]] == ["关于哈希表"]
-        assert [m["content"] for m in model.calls[2][2:]] == ["关于栈", "A1", "继续"]
+        assert [m["content"] for m in transcript_of(model.calls[1])] == ["关于哈希表"]
+        assert [m["content"] for m in transcript_of(model.calls[2])] == ["关于栈", "A1", "继续"]
 
 
 def test_regenerate_and_busy_guard(tmp_path):
@@ -262,7 +269,7 @@ def test_exercise_in_chat_uses_reference_and_guard(tmp_path):
                               json={"problem_id": "stack-sequence-002"}).json()
         assert updated["messages"][-1]["kind"] == "exercise" and updated["active_problem_id"] == "stack-sequence-002"
         send(client, conversation["id"], "先换个话题，讲讲队列", "req-ex-00003")
-        assert model.calls[2][-2]["content"].startswith("【练习题 · 栈的出栈序列 · 2】")
+        assert transcript_of(model.calls[2])[-2]["content"].startswith("【练习题 · 栈的出栈序列 · 2】")
 
 
 def test_rename_delete_and_missing(tmp_path):
@@ -334,3 +341,19 @@ def test_openai_compatible_stream_parsing(tmp_path):
         assert exc.status_code == 503 and "拒绝访问" in exc.detail
     else:
         raise AssertionError("401 must surface as a provider error")
+
+
+def test_prompt_prefix_stays_stable_across_turns(tmp_path):
+    # Provider prefix caches only help if each request starts with the previous one's history, unchanged.
+    model = FakeChat(["A1", "A2", "A3"])
+    with TestClient(create_app(isolated_settings(tmp_path), chat_model=model)) as client:
+        conversation = client.post("/api/conversations", json={}).json()
+        for index, text in enumerate(["第一问", "第二问", "第三问"]):
+            send(client, conversation["id"], text, f"req-prefix-{index:04d}")
+    second, third = model.calls[1], model.calls[2]
+    turn_at = next(i for i, m in enumerate(second) if m["role"] == "system" and '"turn_context"' in m["content"])
+    assert third[:turn_at] == second[:turn_at]
+    assert [m["content"] for m in third[:turn_at] if m["role"] != "system"] == ["第一问", "A1"]
+    assert third[-1] == {"role": "user", "content": "第三问"}
+    assert '"turn_context"' in third[-2]["content"] and '"today"' in third[-2]["content"]
+    assert '"today"' not in third[1]["content"]

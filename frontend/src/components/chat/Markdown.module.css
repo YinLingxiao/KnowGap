@@ -1,8 +1,10 @@
 .markdown {
   min-width: 0;
-  font-size: var(--text-md);
-  line-height: 1.7;
+  max-width: 68ch;
+  font-size: var(--text-read);
+  line-height: 1.75;
   overflow-wrap: anywhere;
+  text-wrap: pretty;
 }
 
 .markdown > :first-child {
@@ -19,17 +21,18 @@
 .markdown blockquote,
 .markdown .codeBlock,
 .markdown .tableWrap {
-  margin: 0 0 10px;
+  margin: 0 0 14px;
 }
 
 .markdown h1,
 .markdown h2,
 .markdown h3,
 .markdown h4 {
-  margin: 16px 0 8px;
-  font-size: var(--text-lg);
+  margin: 22px 0 8px;
+  font-size: 16px;
   font-weight: 600;
   line-height: 1.4;
+  letter-spacing: -0.005em;
 }
 
 .markdown h1 {
@@ -50,7 +53,7 @@
 }
 
 .markdown li + li {
-  margin-top: 3px;
+  margin-top: 5px;
 }
 
 .markdown li > ul,
@@ -77,6 +80,7 @@
 }
 
 .markdown strong {
+  color: var(--text);
   font-weight: 600;
 }
 
@@ -145,15 +149,23 @@
   font-size: var(--text-sm);
 }
 
+/* 表格：只留横向分隔，表头用底色，比满格线更易读 */
 .tableWrap th,
 .tableWrap td {
-  padding: 6px 10px;
-  border: 1px solid var(--border);
+  padding: 8px 14px 8px 0;
+  border-bottom: 1px solid var(--border);
   text-align: left;
   vertical-align: top;
 }
 
 .tableWrap th {
-  background: var(--bg-subtle);
+  border-bottom-color: var(--border-strong);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
   font-weight: 600;
+}
+
+.tableWrap tr > :first-child {
+  padding-left: 0;
+  font-weight: 500;
 }

@@ -98,6 +98,15 @@
   background: var(--accent);
 }
 
+/* 普通对话用空心圆，和学习空间的实心色点对齐 */
+.chatMark {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 50%;
+}
+
 .navItem {
   display: flex;
   align-items: center;

@@ -101,12 +101,61 @@
   gap: 12px;
 }
 
+/* 卡片动效：依次入场 → 悬停时左缘亮起空间色并轻微抬起 → 按下回落；进度条入场时生长 */
 .card {
   position: relative;
   min-height: 148px;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--bg-elevated);
+  animation: card-in var(--t-enter) var(--ease-out) both;
+  animation-delay: calc(var(--i, 0) * 45ms);
+  transition:
+    transform var(--t-hover) var(--ease-out),
+    border-color var(--t-hover) var(--ease-out),
+    box-shadow var(--t-hover) var(--ease-out);
+}
+
+.card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+  border-radius: 11px 0 0 11px;
+  background: var(--space);
+  transform: scaleY(0);
+  transform-origin: top;
+  transition: transform var(--t-ui) var(--ease-out);
+  pointer-events: none;
+}
+
+.card:hover,
+.card:focus-within,
+.cardMenuOpen {
+  z-index: 1;
+  border-color: color-mix(in srgb, var(--space) 35%, var(--border));
+  box-shadow: 0 6px 20px color-mix(in srgb, var(--space) 12%, transparent);
+  transform: translateY(-2px);
+}
+
+.card:hover::before,
+.card:focus-within::before,
+.cardMenuOpen::before {
+  transform: scaleY(1);
+}
+
+.card:has(.cardMain:active) {
+  transform: translateY(0) scale(0.99);
+  transition-duration: var(--t-press);
+}
+
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
 }
 
 .cardMain {
@@ -116,13 +165,20 @@
   gap: 8px;
   width: 100%;
   padding: 14px 14px 12px;
+  border-radius: 12px;
   text-align: left;
 }
 
 .dot {
   width: 12px;
   height: 12px;
-  border-radius: 50%;
+  border-radius: 4px;
+  background: var(--space);
+  transition: transform var(--t-hover) var(--ease-out);
+}
+
+.card:hover .dot {
+  transform: scale(1.15);
 }
 
 .tag {
@@ -162,13 +218,53 @@
 .bar i {
   display: block;
   height: 100%;
+  border-radius: inherit;
   background: var(--green);
+  transform-origin: left;
+  animation: bar-grow 700ms var(--ease-out) both;
+  animation-delay: calc(var(--i, 0) * 45ms + 180ms);
+}
+
+@keyframes bar-grow {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+
+.arrow {
+  flex-shrink: 0;
+  margin-left: auto;
+  color: var(--space);
+  opacity: 0;
+  transform: translateX(-4px);
+  transition: opacity var(--t-hover) var(--ease-out), transform var(--t-hover) var(--ease-out);
+}
+
+.card:hover .arrow,
+.cardMain:focus-visible .arrow {
+  opacity: 1;
+  transform: none;
 }
 
 .more {
   position: absolute;
   top: 8px;
   right: 8px;
+  opacity: 0.55;
+  transition: opacity var(--t-hover) var(--ease-out), background var(--t-hover) var(--ease-out);
+}
+
+.card:hover .more,
+.card:focus-within .more,
+.cardMenuOpen .more {
+  opacity: 1;
 }
 
 .menu {
@@ -184,6 +280,15 @@
   border-radius: 8px;
   background: var(--bg-elevated);
   box-shadow: var(--shadow-popover);
+  transform-origin: top right;
+  animation: menu-in var(--t-ui) var(--ease-out);
+}
+
+@keyframes menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.97);
+  }
 }
 
 .menu button {

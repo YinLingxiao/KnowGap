@@ -1,7 +1,7 @@
 /* 输入框：圆角卡片，上方输入，下方一行工具（参照 Claude 桌面端） */
 .composer {
   width: 100%;
-  max-width: 720px;
+  max-width: 760px;
   margin: 0 auto;
 }
 

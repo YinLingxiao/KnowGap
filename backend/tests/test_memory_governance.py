@@ -148,3 +148,69 @@ def test_memory_writes_wait_for_approval(tmp_path):
         decided = client.post(f"/api/agent-memory/pending/{pending[0]['id']}", json={"allow": True}).json()
         assert "喜欢先看例子" in decided["user"]
         assert client.get("/api/agent-memory/pending").json() == []
+
+
+def test_rejected_pending_note_never_changes_snapshot_and_cannot_be_replayed(tmp_path):
+    base = Store(tmp_path / "rejected.sqlite3")
+    base.initialize()
+    store = ChatStore(base)
+    store.initialize()
+    store.apply_agent_memory(STUDENT, "add", "user", "喜欢简短回答", None)
+    store.apply_agent_memory(STUDENT, "patch", "user", "喜欢详细回答", "喜欢简短回答", True)
+    pending = store.pending_notes(STUDENT)[0]
+    assert store.decide_pending("other-student", pending["id"], True) is None
+    assert len(store.pending_notes(STUDENT)) == 1
+    assert store.decide_pending(STUDENT, pending["id"], False) == "已拒绝。"
+    assert store.agent_notes(STUDENT)["user"] == "喜欢简短回答"
+    assert store.pending_notes(STUDENT) == []
+    assert store.decide_pending(STUDENT, pending["id"], True) is None
+
+
+def test_stale_approval_does_not_overwrite_a_newer_user_correction(tmp_path):
+    base = Store(tmp_path / "stale.sqlite3")
+    base.initialize()
+    store = ChatStore(base)
+    store.initialize()
+    store.save_agent_note(STUDENT, "memory", "资料在旧目录")
+    store.apply_agent_memory(STUDENT, "patch", "memory", "资料在待确认目录", "资料在旧目录", True)
+    pending = store.pending_notes(STUDENT)[0]
+    store.save_agent_note(STUDENT, "memory", "资料在用户更正后的目录")
+    assert "没有找到" in store.decide_pending(STUDENT, pending["id"], True)
+    assert store.agent_notes(STUDENT)["memory"] == "资料在用户更正后的目录"
+
+
+def test_search_excludes_incomplete_messages_and_removes_deleted_history(tmp_path):
+    base = Store(tmp_path / "search-lifecycle.sqlite3")
+    base.initialize()
+    store = ChatStore(base)
+    store.initialize()
+    conversation = store.create_conversation(STUDENT, title=None, problem=None, client_request_id=None)
+    message = store.add_user_message(conversation, "资料在特殊资料夹里", "req-search-lifecycle")
+    assert "特殊资料夹" in store.search_messages(STUDENT, "特殊资料夹")
+    for status in ("streaming", "failed", "cancelled"):
+        with store.connection() as db:
+            db.execute("UPDATE conversation_messages SET status = ? WHERE id = ?", (status, message))
+        assert store.search_messages(STUDENT, "特殊资料夹") == "没有找到相关对话。"
+    with store.connection() as db:
+        db.execute("UPDATE conversation_messages SET status = 'complete', content = ? WHERE id = ?",
+                   ("资料已移到全新资料夹", message))
+    assert store.search_messages(STUDENT, "特殊资料夹") == "没有找到相关对话。"
+    assert "全新资料夹" in store.search_messages(STUDENT, "全新资料夹")
+    assert store.delete_conversation(conversation, STUDENT)
+    assert store.search_messages(STUDENT, "全新资料夹") == "没有找到相关对话。"
+
+
+def test_note_deletion_survives_restart_without_erasing_searchable_history(tmp_path):
+    base = Store(tmp_path / "delete.sqlite3")
+    base.initialize()
+    store = ChatStore(base)
+    store.initialize()
+    conversation = store.create_conversation(STUDENT, title=None, problem=None, client_request_id=None)
+    store.add_user_message(conversation, "我的项目代号是蓝鲸742", "req-delete-fact")
+    store.apply_agent_memory(STUDENT, "add", "user", "项目代号是蓝鲸742", None)
+    assert "已更新" in store.apply_agent_memory(STUDENT, "remove", "user", "", "项目代号是蓝鲸742")
+    restarted = ChatStore(Store(base.path))
+    restarted.initialize()
+    assert restarted.agent_notes(STUDENT)["user"] == ""
+    assert "蓝鲸742" not in restarted.frozen_notes(conversation, STUDENT)
+    assert "蓝鲸742" in restarted.search_messages(STUDENT, "蓝鲸742")

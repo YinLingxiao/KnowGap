@@ -15,17 +15,20 @@
   min-height: 0;
 }
 
+/* 一行：标识点 + 标题/元信息（两行，省略） + 右侧分段工具，不再换行挤压 */
 .header {
   position: relative;
   display: flex;
-  flex-wrap: wrap;
+  flex-shrink: 0;
   align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
+  gap: 10px;
+  min-height: 56px;
+  padding: 8px 12px 8px 16px;
   border-bottom: 1px solid var(--border);
 }
 
 .heading {
+  flex: 1;
   min-width: 0;
 }
 
@@ -43,22 +46,40 @@
   font-size: var(--text-xs);
 }
 
-.heading p {
+.heading h1 {
   overflow: hidden;
-  max-width: 360px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.35;
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin-top: 2px;
+}
+
+.metaText {
+  overflow: hidden;
+  min-width: 0;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .dot {
+  flex-shrink: 0;
   width: 10px;
   height: 10px;
-  border-radius: 50%;
+  border-radius: 3px;
 }
 
 .tag {
-  padding: 1px 6px;
-  border-radius: 999px;
+  flex-shrink: 0;
+  padding: 0 6px;
+  border-radius: 4px;
+  line-height: 18px;
   background: var(--bg-subtle);
   color: var(--text-secondary);
   font-size: var(--text-xs);
@@ -66,9 +87,15 @@
 
 .tools {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
-  gap: 4px;
-  margin-left: auto;
+  gap: 2px;
+}
+
+.tools > .toolOn,
+.tools > .toolOn:hover {
+  background: var(--bg-active);
+  color: var(--text);
 }
 
 .tools > button,
@@ -222,7 +249,97 @@
 }
 
 .group {
-  padding: 4px 12px;
+  padding: 14px 16px 4px;
+  color: var(--text-tertiary);
+  font-weight: 500;
+}
+
+.threadHead .headAction {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+}
+
+.threadHead .headAction:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--green) 45%, var(--border-strong));
+  background: color-mix(in srgb, var(--green) 10%, transparent);
+  color: var(--green);
+}
+
+.threadHead .headAction:disabled {
+  opacity: 0.45;
+}
+
+.emptyPane {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 16px 12px;
+  padding: 16px;
+  border-radius: 10px;
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  line-height: 1.65;
+}
+
+.emptyTitle {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.threadTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--text-md);
+}
+
+.state {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--grey);
+}
+
+.state_waiting,
+.state_failed {
+  background: var(--orange);
+}
+
+.state_working,
+.state_queued {
+  background: var(--accent);
+  animation: breathe 1.6s var(--ease) infinite;
+}
+
+@keyframes breathe {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.done li button {
+  color: var(--text-secondary);
+}
+
+.listPane li button small {
+  overflow: hidden;
+  display: -webkit-box;
+  max-width: 100%;
+  margin-top: 2px;
+  padding-left: 15px;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  line-height: 1.5;
+}
+
+.done li button small {
+  padding-left: 0;
 }
 
 .listPane ul + .group {

@@ -13,7 +13,7 @@ from app.chat.store import ChatStore
 from app.main import create_app
 from app.services.problems import PROBLEMS, reference_for
 from tests.test_acceptance_support import isolated_settings
-from tests.test_chat import FakeChat, context_of, send
+from tests.test_chat import FakeChat, context_of, send, transcript_of
 
 
 def test_greeting_keeps_exercise_as_background_and_does_not_force_its_memories(tmp_path):
@@ -37,7 +37,7 @@ def test_greeting_keeps_exercise_as_background_and_does_not_force_its_memories(t
         assert "reference" not in context["active_exercise"]
         assert context["learner_memories"] == []
         assert all(set(item) == {"id", "title"} for item in context["available_exercises"])
-        assert "仅为背景，不是本轮用户请求" in messages[-2]["content"]
+        assert "仅为背景，不是本轮用户请求" in transcript_of(messages)[-2]["content"]
         assert client.get(f"/api/conversations/{conversation['id']}").json()["active_problem_id"] == "stack-sequence-003"
 
 

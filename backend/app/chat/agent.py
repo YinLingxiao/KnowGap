@@ -33,7 +33,8 @@ CHAT_PROMPT = """你是 KnowGap（知隙），一位耐心、直接的学习伙�
 不要给每条消息打"正确/错误"的标签；只有用户真的给出了答案或理解时才评价。
 默认用中文，用户用其他语言提问时用相同语言回答；使用 Markdown，涉及代码时用标注语言的代码块；篇幅与问题匹配，简单问题简短回答。
 
-下一条 system 消息是 JSON 学习上下文：
+学习上下文分两条 JSON system 消息提供：对话历史之前是 stable_context（subject、available_exercises，很少变化），
+最新一条用户消息之前是 turn_context（today 及其余字段，每轮更新，以它为准）。各字段含义：
 - subject：本对话所属的学习空间及用户为它写的说明 instructions。instructions 是用户本人的偏好，
   在不违背本段规则的前提下遵循；为 null 表示对话不属于任何学习空间。
   goal 是想学会什么，level 是现在的基础（beginner 零基础 / some 学过一些 / fluent 比较熟练 / exam 冲刺备考），
@@ -199,22 +200,48 @@ def chat_messages(
     sources: list[SourceReference], subject: Subject | None = None, conversation_role: dict | None = None,
     snapshot: str | None = None,
 ) -> list[dict]:
-    context = {
+    # Ordered from stable to volatile so provider prefix caches cover the prompt and the whole history;
+    # only the trailing turn context (and the new message) is fresh input each turn.
+    stable = {
+        "subject": subject_context(subject) if subject else None,
+        "available_exercises": [{"id": p.id, "title": p.title} for p in PROBLEMS.values()],
+    }
+    turn = {
         "today": date.today().isoformat(),
         "latest_user_message": next((row["content"] for row in reversed(history) if row["role"] == "user"), ""),
-        "subject": subject_context(subject) if subject else None,
         "conversation_role": conversation_role or {"role": "chat"},
         "learner_memories": [memory_brief(m, scope) for m, scope in memories],
         "active_exercise": problem_brief(exercise) if exercise else None,
-        "available_exercises": [{"id": p.id, "title": p.title} for p in PROBLEMS.values()],
         "course_sources": [s.model_dump(include={"id", "label", "title", "page", "excerpt"}) for s in sources],
     }
     system = CHAT_PROMPT if not snapshot else f"{CHAT_PROMPT}\n\n{snapshot}"
+    transcript = dialogue(history, include_tools=True)
+    # Turn context sits just before the latest user message: the conversation still ends on the
+    # user's turn, and everything earlier stays byte-identical to the previous request's prefix.
+    cut = next((i for i in range(len(transcript) - 1, -1, -1) if transcript[i]["role"] == "user"), len(transcript))
     return [
         {"role": "system", "content": system},
-        {"role": "system", "content": json.dumps(context, ensure_ascii=False)},
-        *dialogue(history, include_tools=True),
+        {"role": "system", "content": json.dumps({"stable_context": stable}, ensure_ascii=False)},
+        *transcript[:cut],
+        {"role": "system", "content": json.dumps({"turn_context": turn}, ensure_ascii=False)},
+        *transcript[cut:],
     ]
+
+
+def learning_context(messages: list[dict]) -> dict:
+    """Merged view of the stable and per-turn context blocks (for inspection and tests)."""
+    merged: dict = {}
+    for message in messages:
+        if message.get("role") != "system" or not message.get("content", "").startswith("{"):
+            continue
+        try:
+            block = json.loads(message["content"])
+        except ValueError:
+            continue
+        for key in ("stable_context", "turn_context"):
+            if isinstance(block, dict) and isinstance(block.get(key), dict):
+                merged.update(block[key])
+    return merged
 
 
 REVIEW_PROMPT = """你在对话结束之后复盘，决定要不要更新长期笔记。只写稳定事实，禁止写成某一次报错、某一次对话的过程。

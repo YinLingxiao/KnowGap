@@ -47,6 +47,8 @@
   --text-sm: 12.5px;
   --text-md: 13.5px;
   --text-lg: 15px;
+  /* 对话正文：学习场景以阅读为主，比界面文字大一档 */
+  --text-read: 15px;
   --text-xl: 18px;
   --text-2xl: 22px;
 
@@ -57,6 +59,12 @@
   --duration-fast: 120ms;
   --duration: 180ms;
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  /* 动效：进入用 ease-out；按压 140ms、悬停 180ms、浮层 240ms、入场 520ms */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --t-press: 140ms;
+  --t-hover: 180ms;
+  --t-ui: 240ms;
+  --t-enter: 520ms;
 
   --sidebar-w: 248px;
   --panel-w: 340px;

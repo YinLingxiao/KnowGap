@@ -127,6 +127,7 @@ function ConversationItem({
   return (
     <li ref={menuRef} className={cx(styles.item, active && styles.active, mode === "menu" && styles.menuOpen)}>
       <button className={styles.itemButton} onClick={onOpen} aria-current={active ? "page" : undefined} title={conversation.title}>
+        <span className={styles.chatMark} aria-hidden />
         <span className={styles.itemTitle}>{conversation.title}</span>
         {generating && <Loader size={12} className={styles.spin} aria-label="正在生成" />}
       </button>

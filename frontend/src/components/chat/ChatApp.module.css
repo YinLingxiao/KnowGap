@@ -293,6 +293,79 @@
   color: var(--orange);
 }
 
+.resume {
+  margin-top: 40px;
+}
+
+.resumeTitle {
+  padding: 0 12px 6px;
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+.resumeList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.resumeItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 10px;
+  text-align: left;
+  transition: background var(--duration-fast) var(--ease);
+}
+
+.resumeItem:hover {
+  background: var(--bg-hover);
+}
+
+.resumeItem:active {
+  transform: scale(0.995);
+}
+
+.resumeDot {
+  flex-shrink: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+
+.resumeName {
+  overflow: hidden;
+  flex: 1;
+  min-width: 0;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resumeMeta {
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+}
+
+.resumeArrow {
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+  opacity: 0;
+  transform: translateX(-3px);
+  transition: opacity var(--duration-fast) var(--ease), transform var(--duration-fast) var(--ease);
+}
+
+.resumeItem:hover .resumeArrow,
+.resumeItem:focus-visible .resumeArrow {
+  opacity: 1;
+  transform: none;
+}
+
 /* ---------------------------------------------------------------- 抽屉与其他 */
 
 .drawer {

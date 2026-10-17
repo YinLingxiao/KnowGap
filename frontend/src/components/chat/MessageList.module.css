@@ -15,9 +15,9 @@
 .list {
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  gap: 28px;
   width: 100%;
-  max-width: 720px;
+  max-width: 760px;
   margin: 0 auto;
   padding: 12px 20px 28px;
 }
@@ -37,7 +37,7 @@
   padding: 10px 14px;
   border-radius: 18px 18px 6px 18px;
   background: var(--bg-active);
-  font-size: var(--text-md);
+  font-size: var(--text-read);
   line-height: 1.65;
   white-space: pre-wrap;
   overflow-wrap: anywhere;

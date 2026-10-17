@@ -43,7 +43,7 @@
 
 ## 字体与字号
 
-全部无衬线：`Inter Variable`（本地依赖 `@fontsource-variable/inter`，不走外网）+ 苹方 / 微软雅黑 UI 作为中文回退。字号 11.5 / 12.5 / 13.5（正文）/ 15 / 18 / 22px；数字统一 `tabular-nums`。
+全部无衬线：`Inter Variable`（本地依赖 `@fontsource-variable/inter`，不走外网）+ 苹方 / 微软雅黑 UI 作为中文回退。字号 11.5 / 12.5 / 13.5（界面）/ 15 / 18 / 22px；对话正文与用户气泡用 `--text-read`（15px，行高 1.75，最大约 68 字符宽），表格只留横向分隔线；数字统一 `tabular-nums`。
 
 ## 组件约定
 

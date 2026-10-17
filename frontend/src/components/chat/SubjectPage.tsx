@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Brain, FileText, MoreHorizontal, PanelLeftOpen, Trash2, Upload, X } from "lucide-react";
+import { Brain, Check, FileText, MoreHorizontal, PanelLeftOpen, Trash2, Upload, X } from "lucide-react";
 import type { ChatController } from "@/hooks/useChat";
 import { createMaterialClient } from "@/lib/api/material-client";
 import { toApiError } from "@/lib/api/errors";
@@ -218,18 +218,33 @@ export function SubjectPage({
               <PanelLeftOpen size={16} />
             </button>
           )}
-          <span className={styles.dot} style={{ background: subject.color }} />
+          <span className={styles.dot} style={{ background: subject.color }} aria-hidden />
           <div className={styles.heading}>
             <h1>{subject.name}</h1>
-            <p>{subject.goal || "还没有写下目标"}</p>
+            <p className={styles.meta}>
+              {levelLabel(subject.level) && <span className={styles.tag}>{levelLabel(subject.level)}</span>}
+              <span className={styles.metaText} title={subject.goal || undefined}>
+                {subject.goal ? `${subject.goal} · ` : ""}{progressLine(subject.progress)}
+              </span>
+            </p>
           </div>
-          {levelLabel(subject.level) && <span className={styles.tag}>{levelLabel(subject.level)}</span>}
-          <span className={styles.progress}>{progressLine(subject.progress)}</span>
-          <div className={styles.tools}>
-            <button onClick={() => showPanel({ mode: "info", section: "about" })}>说明</button>
-            <button onClick={() => showPanel({ mode: "info", section: "files" })}>资料</button>
-            <button onClick={() => showPanel({ mode: "info", section: "memory" })}>记忆</button>
-            {narrow && <button onClick={() => showPanel({ mode: "list" })}>Thread</button>}
+          <div className={styles.tools} role="group" aria-label="侧栏内容">
+            {(narrow
+              ? [["list", "Thread"], ["about", "说明"], ["files", "资料"], ["memory", "记忆"]] as const
+              : [["about", "说明"], ["files", "资料"], ["memory", "记忆"]] as const
+            ).map(([key, label]) => {
+              const on = panelVisible && (key === "list" ? panel.mode === "list" : panel.mode === "info" && panel.section === key);
+              return (
+                <button
+                  key={key}
+                  className={cx(on && styles.toolOn)}
+                  aria-pressed={on}
+                  onClick={() => (on && !narrow ? setPanel({ mode: "list" }) : showPanel(key === "list" ? { mode: "list" } : { mode: "info", section: key }))}
+                >
+                  {label}
+                </button>
+              );
+            })}
             <button className={styles.icon} aria-label="更多" onClick={() => setMenu((open) => !open)}>
               <MoreHorizontal size={16} />
             </button>
@@ -309,9 +324,12 @@ export function SubjectPage({
                   {threadSummary?.anchor && <p className={styles.anchor}>{plainText(threadSummary.anchor.excerpt)}</p>}
                 </div>
                 {threadSummary?.threadStatus === "resolved" ? (
-                  <button onClick={() => void reopen(threadId)}>重新打开</button>
+                  <button className={styles.headAction} onClick={() => void reopen(threadId)}>重新打开</button>
                 ) : (
-                  <button disabled={Boolean(threadPhase)} onClick={() => void beginResolve(threadId)}>已解决</button>
+                  <button className={styles.headAction} disabled={Boolean(threadPhase)} onClick={() => void beginResolve(threadId)}>
+                    <Check size={13} aria-hidden />
+                    标记已解决
+                  </button>
                 )}
                 <button className={styles.icon} aria-label="关闭" onClick={() => { setPanel({ mode: "list" }); if (narrow) setOverlay(false); }}>
                   <X size={16} />
@@ -424,26 +442,34 @@ function ThreadList({
         <strong>Thread</strong>
         {narrow && <button className={styles.icon} aria-label="关闭" onClick={onClose}><X size={16} /></button>}
       </header>
-      <p className={styles.muted}>在主对话描述需求，AI 会创建或续接 Thread 并开始执行。</p>
+      {openThreads.length + doneThreads.length === 0 && (
+        <div className={styles.emptyPane}>
+          <p className={styles.emptyTitle}>还没有 Thread</p>
+          <p>在左边的主对话里说出想学什么，具体讲解和练习会在这里各开一个 Thread。</p>
+        </div>
+      )}
       {[
         { label: "等待你", items: openThreads.filter((item) => item.executionStatus === "waiting" || item.executionStatus === "failed") },
         { label: "正在执行", items: openThreads.filter((item) => item.executionStatus === "working" || item.executionStatus === "queued") },
         { label: "空闲", items: openThreads.filter((item) => !item.executionStatus || item.executionStatus === "idle" || item.executionStatus === "cancelled") },
-      ].map((group) => (
+      ].filter((group) => group.items.length > 0).map((group) => (
         <section key={group.label}>
           <p className={styles.group}>{group.label} · {group.items.length}</p>
           <ul>{group.items.map((item) => (
             <li key={item.id}>
               <button onClick={() => onOpen(item.id)}>
-                <span>{item.title}</span>
+                <span className={styles.threadTitle}>
+                  <i className={cx(styles.state, styles[`state_${item.executionStatus ?? "idle"}`])} aria-hidden />
+                  {item.title}
+                </span>
                 <small>{item.executionStatus ? executionLabel[item.executionStatus] : "空闲"}{item.preview ? ` · ${plainText(item.preview)}` : ""}</small>
               </button>
             </li>
           ))}</ul>
         </section>
       ))}
-      <p className={styles.group}>已解决</p>
-      <ul>
+      {doneThreads.length > 0 && <p className={styles.group}>已解决 · {doneThreads.length}</p>}
+      <ul className={styles.done}>
         {doneThreads.map((item) => (
           <li key={item.id}>
             <button onClick={() => onOpen(item.id)}>
