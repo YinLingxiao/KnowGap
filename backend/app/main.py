@@ -26,6 +26,9 @@ from app.services.anysearch import AnySearchClient, SearchService
 from app.models.schemas import WebSearchResponse
 from app.services.materials import MaterialStore
 from app.api.materials import material_router
+from app.auth.deps import current_student, reset_student, set_student
+from app.auth.router import auth_router
+from app.auth.store import AuthStore
 from app.chat.router import chat_router
 from app.chat.subjects import subject_router
 from app.chat.service import ChatService
@@ -53,10 +56,12 @@ def create_app(
     chat = chat_model if chat_model is not None else ChatCompletionsChat(ai_settings.current)
     chat_store = ChatStore(store)
     chat_service = ChatService(chat_store, lambda: chat, library, ai_settings)
+    auth_store = AuthStore(store)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         store.initialize()
+        auth_store.ensure()
         library.initialize()
         chat_store.initialize()
         await run_in_threadpool(shared_ssl_context)
@@ -71,12 +76,29 @@ def create_app(
     app.state.tutor = model
     app.state.search = search
     app.state.materials = library
-    app.include_router(material_router(library, lambda subject_id: chat_store.subject(subject_id, DEMO_STUDENT) is not None))
+    app.state.chat_service = chat_service
+    app.state.auth = auth_store
+    app.include_router(material_router(library, lambda subject_id: chat_store.subject(subject_id, current_student()) is not None))
     app.include_router(chat_router(chat_store, chat_service))
     app.include_router(subject_router(chat_store, chat_service))
+    app.include_router(auth_router(auth_store, chat_store, settings))
+
+    @app.middleware("http")
+    async def bind_student(request: Request, call_next):
+        try:
+            student_id = auth_store.student_from_request(request)
+        except HTTPException as exc:
+            return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+        token = set_student(student_id)
+        try:
+            return await call_next(request)
+        finally:
+            reset_student(token)
+
     app.add_middleware(
         CORSMiddleware, allow_origins=settings.cors_origins,
-        allow_credentials=False, allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"], allow_headers=["Content-Type"],
+        allow_credentials=False, allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+        allow_headers=["Content-Type", "Authorization"],
     )
 
     @app.exception_handler(ProviderError)

@@ -28,6 +28,11 @@ class Settings(BaseSettings):
     anysearch_api_key: SecretStr = SecretStr('')
     anysearch_timeout_seconds: float = Field(default=20, gt=0, le=60)
     cors_origins: list[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
+    smtp_host: str = ""
+    smtp_port: int = 465
+    smtp_user: str = ""
+    smtp_password: SecretStr = SecretStr("")
+    smtp_from: str = ""
 
     def resolved_database_path(self) -> Path:
         path = self.database_path.expanduser()

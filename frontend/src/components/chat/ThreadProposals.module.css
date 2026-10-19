@@ -1,0 +1,130 @@
+.proposals {
+  margin-top: 16px;
+}
+
+.proposals header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 0 2px 8px;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.proposals header span {
+  color: var(--text-tertiary);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.proposals ul {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.proposals li {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 15px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-card);
+  transition:
+    border-color 160ms var(--ease-out),
+    background-color 160ms var(--ease-out),
+    transform 200ms var(--ease-spring),
+    box-shadow 200ms var(--ease-out);
+}
+
+.proposals li:hover {
+  border-color: color-mix(in srgb, var(--text) 22%, var(--border-strong));
+  background: var(--bg-hover);
+  transform: translateY(-1.5px);
+  box-shadow: var(--shadow-elevated);
+}
+
+.body {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.body strong {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.body p {
+  margin-top: 3px;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  line-height: 1.6;
+}
+
+.body small {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
+.proposals button {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: var(--text-xs);
+  font-weight: 500;
+  transition: background-color var(--t-hover) var(--ease-out), transform var(--t-press) var(--ease-out);
+}
+
+.start {
+  background: var(--ink-solid);
+  color: var(--on-ink);
+}
+
+.start:hover:not(:disabled) {
+  background: var(--ink-solid-hover);
+}
+
+.open {
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+  background: var(--bg-subtle);
+}
+
+.open:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.proposals button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.proposals button:disabled {
+  opacity: 0.55;
+}
+
+.body .error {
+  color: var(--red);
+  font-size: var(--text-sm);
+}
+
+@media (max-width: 560px) {
+  .proposals li {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+}

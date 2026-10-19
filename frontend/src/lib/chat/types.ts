@@ -85,6 +85,27 @@ export interface MemoryChange {
   memory: LearnerMemory;
 }
 
+export interface TokenUsage {
+  requests: number;
+  reportedRequests: number;
+  inputTokens: number;
+  outputTokens: number;
+  cachedTokens: number | null;
+}
+
+export interface SpaceUsage {
+  total: TokenUsage;
+  conversations: Record<string, TokenUsage>;
+}
+
+export interface ThreadProposal {
+  id: string;
+  title: string;
+  task: string;
+  reason: string;
+  threadId: string | null;
+}
+
 export interface ChatMessage {
   id: string;
   conversationId: string;
@@ -105,6 +126,9 @@ export interface ChatMessage {
   toolCalls: ToolCallView[];
   pendingApproval: ToolApproval | null;
   threadSummary: ThreadSummary | null;
+  checkpointAvailable?: boolean;
+  checkpointBlockedReason?: string | null;
+  threadProposals?: ThreadProposal[];
   threadUpdate?: { threadId: string; title: string; status: ExecutionStatus; summary: string } | null;
   createdAt: string;
 }

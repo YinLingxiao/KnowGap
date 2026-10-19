@@ -28,8 +28,9 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--static", default="")
     args = parser.parse_args()
-    settings = Settings()
     data = os.environ.get("KNOWGAP_DATA_DIR", "").strip()
+    user_env = Path(data) / ".env" if data else None
+    settings = Settings(_env_file=user_env) if user_env and user_env.is_file() else Settings()
     if data:
         settings = settings.model_copy(update={"database_path": Path(data) / "knowgap.sqlite3"})
     configure_logging(settings.resolved_database_path().parent / "logs")

@@ -1,0 +1,734 @@
+/* 初识访谈居中剧场式舞台：高定微光卡片 + 实时已捕获画像胶囊 + 逐字打字机 */
+.stageWrap {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  background:
+    radial-gradient(ellipse 68% 42% at 50% 0%, rgb(91 141 239 / 6%), transparent 70%),
+    var(--bg);
+}
+
+.topBar {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 16px;
+  min-height: 56px;
+  padding: 12px 28px;
+}
+
+.topBarLeft {
+  display: flex;
+  align-items: center;
+}
+
+.topBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 11px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-card);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.topBadgeIcon {
+  color: var(--accent);
+}
+
+.progressTrack {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.progressStep {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.progressBar {
+  width: 28px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--border-strong);
+  transition: background-color 240ms var(--ease-out), width 240ms var(--ease-spring);
+}
+
+.progressBarActive {
+  width: 42px;
+  background: var(--accent);
+}
+
+.progressBarDone {
+  background: var(--green);
+}
+
+.progressLabel {
+  color: var(--text-tertiary);
+  font-size: 11px;
+  transition: color 200ms var(--ease-out);
+}
+
+.progressLabelLit {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.topBarRight {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.topBtn,
+.skipBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 11px;
+  border-radius: 8px;
+  font-size: var(--text-xs);
+}
+
+.topBtn {
+  border: 1px solid var(--border-strong);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-card);
+  color: var(--text-secondary);
+}
+
+.topBtn:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.topBtnWarn {
+  border-color: color-mix(in srgb, var(--orange) 45%, var(--border-strong));
+  color: var(--orange);
+}
+
+.skipBtn {
+  color: var(--text-tertiary);
+}
+
+.skipBtn:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+/* 居中舞台核心区 */
+.centerStage {
+  display: flex;
+  flex: 1;
+  align-items: safe center;
+  justify-content: center;
+  padding: 20px 24px 44px;
+}
+
+.stageInner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 610px;
+  text-align: center;
+}
+
+/* 已捕获的画像胶囊条 */
+.capturedBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.capturedChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 260px;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid color-mix(in srgb, var(--green) 35%, var(--border-strong));
+  border-radius: 999px;
+  background: var(--green-soft);
+  color: var(--text);
+  font-size: 12px;
+  animation: chip-in 220ms var(--ease-spring);
+}
+
+@keyframes chip-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.95);
+  }
+}
+
+.capturedIcon {
+  flex-shrink: 0;
+  color: var(--green);
+}
+
+.capturedChip strong {
+  flex-shrink: 0;
+  color: var(--green);
+  font-weight: 600;
+}
+
+.capturedChip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.logoBadge {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  margin-bottom: 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 6%), var(--shadow-elevated);
+}
+
+.logoImg {
+  border-radius: 8px;
+}
+
+.logoPulse {
+  animation: pulse-ring 1.6s ease-in-out infinite;
+}
+
+@keyframes pulse-ring {
+  50% {
+    transform: scale(0.94);
+    opacity: 0.7;
+  }
+}
+
+.stepEyebrow {
+  margin-bottom: 8px;
+  color: var(--accent-text);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+
+.promptBox {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 78px;
+  margin-bottom: 24px;
+}
+
+.leadLine {
+  max-width: 54ch;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.65;
+  text-align: center;
+}
+
+.questionHeadline {
+  display: grid;
+  max-width: 34ch;
+  color: var(--text);
+  font-size: 22px;
+  font-weight: 500;
+  line-height: 1.48;
+  letter-spacing: -0.015em;
+  text-align: center;
+  text-wrap: balance;
+}
+
+.questionHeadline > span {
+  grid-area: 1 / 1;
+}
+
+.reserveQuestion {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.thinkingText {
+  color: var(--text-secondary);
+  font-size: 17px;
+  font-weight: 500;
+}
+
+.cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1.05em;
+  margin-left: 3px;
+  vertical-align: -0.15em;
+  background: var(--accent);
+  animation: cursor-blink 0.9s steps(2) infinite;
+}
+
+@keyframes cursor-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+.revealBtn {
+  padding: 3px 8px;
+  border-radius: 6px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
+.revealBtn:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.errorBanner {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 14px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: var(--red-soft);
+  color: var(--red);
+  font-size: 13px;
+}
+
+.modelWarnBanner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 8px 14px;
+  border: 1px solid color-mix(in srgb, var(--orange) 40%, var(--border-strong));
+  border-radius: var(--radius-lg);
+  background: var(--orange-soft);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.modelWarnBanner button {
+  color: var(--orange);
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+/* 选项卡片与独立输入框 */
+.optionsSection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  opacity: 0.3;
+  transform: translateY(6px);
+  transition:
+    opacity 240ms var(--ease-out),
+    transform 260ms var(--ease-spring);
+}
+
+.optionsVisible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.optionsList {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  width: 100%;
+}
+
+.optionCard {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 48px;
+  padding: 11px 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 4%), 0 2px 8px rgb(0 0 0 / 14%);
+  color: var(--text);
+  font-size: 14px;
+  text-align: left;
+  transition:
+    background-color 160ms var(--ease-out),
+    border-color 160ms var(--ease-out),
+    transform 200ms var(--ease-spring),
+    box-shadow 200ms var(--ease-out);
+}
+
+.optionCard:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border-strong));
+  background: var(--bg-hover);
+  transform: translateY(-1.5px);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 6%), var(--shadow-elevated);
+}
+
+.optionKey {
+  display: inline-grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--border-strong);
+  border-bottom-width: 2px;
+  border-radius: 6px;
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  transition: border-color 160ms var(--ease-out), color 160ms var(--ease-out), background-color 160ms var(--ease-out);
+}
+
+.optionCard:hover:not(:disabled) .optionKey {
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--border-strong));
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.optionText {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.45;
+}
+
+.optionAction {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 4px;
+  color: var(--accent-text);
+  font-size: 12px;
+  font-weight: 500;
+  opacity: 0;
+  transform: translateX(-4px);
+  transition: opacity 160ms var(--ease-out), transform 180ms var(--ease-spring);
+}
+
+.optionCard:hover:not(:disabled) .optionAction {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.orDivider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 2px 0;
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+
+.orDivider::before,
+.orDivider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.customForm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 44px;
+  padding: 0 7px 0 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--bg-subtle);
+  transition: border-color 160ms var(--ease-out), box-shadow 160ms var(--ease-out), background-color 160ms var(--ease-out);
+}
+
+.customForm:focus-within {
+  border-color: var(--accent);
+  background: var(--bg-elevated);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.customInput {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.customInput::placeholder {
+  color: var(--text-tertiary);
+}
+
+.customSendBtn {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  background: var(--ink-solid);
+  color: var(--on-ink);
+}
+
+.customSendBtn:disabled {
+  background: transparent;
+  color: var(--text-tertiary);
+}
+
+.privacyNote {
+  color: var(--text-tertiary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.privacyNote kbd {
+  padding: 1px 5px;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: var(--bg-subtle);
+  font-size: 10.5px;
+}
+
+/* 核对画像 Bento 舞台 */
+.reviewStage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  animation: stage-rise 260ms var(--ease-spring);
+}
+
+@keyframes stage-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+}
+
+.reviewHead {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.reviewCard {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  padding: 18px;
+  border: 1px solid var(--border-strong);
+  border-radius: 16px;
+  background: var(--bg-elevated);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 5%), var(--shadow-elevated);
+  text-align: left;
+}
+
+.bentoList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.bentoItem {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 11px 13px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-subtle);
+  transition: border-color 160ms var(--ease-out), background-color 160ms var(--ease-out);
+}
+
+.bentoItem:focus-within {
+  border-color: var(--accent);
+  background: var(--bg-elevated);
+}
+
+.bentoItemHead {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.bentoIcon {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.reviewLabel {
+  flex: 1;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.reviewCheck {
+  color: var(--green);
+}
+
+.reviewInput {
+  width: 100%;
+  height: 30px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.reviewInput::placeholder {
+  color: var(--text-tertiary);
+}
+
+.reviewFooter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.reviewPrimaryGroup {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.ghostBtn {
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 8px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
+.ghostBtn:hover {
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+}
+
+.secondaryBtn,
+.primaryBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: var(--radius);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.secondaryBtn {
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--text);
+}
+
+.secondaryBtn:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.primaryBtn {
+  background: var(--ink-solid);
+  color: var(--on-ink);
+}
+
+.primaryBtn:hover:not(:disabled) {
+  background: var(--ink-solid-hover);
+}
+
+@media (max-width: 640px) {
+  .topBar {
+    grid-template-columns: 1fr auto;
+    gap: 10px;
+    padding: 12px 16px;
+  }
+
+  .progressTrack {
+    grid-row: 2;
+    grid-column: 1 / -1;
+    justify-content: center;
+  }
+
+  .topBarRight {
+    gap: 4px;
+  }
+
+  .topBtn {
+    padding: 0 8px;
+  }
+
+  .centerStage {
+    padding: 24px 16px;
+  }
+
+  .questionHeadline {
+    font-size: 20px;
+  }
+
+  .reviewCard {
+    padding: 14px;
+  }
+
+  .reviewPrimaryGroup,
+  .reviewFooter {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+  }
+
+  .primaryBtn,
+  .secondaryBtn {
+    justify-content: center;
+    height: auto;
+    min-height: 38px;
+    padding: 8px 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .logoPulse,
+  .cursor {
+    animation: none;
+  }
+}

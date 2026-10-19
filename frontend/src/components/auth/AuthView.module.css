@@ -1,0 +1,335 @@
+.canvas {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background:
+    radial-gradient(700px 420px at 50% 0%, var(--accent-soft-strong), transparent 70%),
+    linear-gradient(var(--border-subtle) 1px, transparent 1px) 0 0 / 48px 48px,
+    linear-gradient(90deg, var(--border-subtle) 1px, transparent 1px) 0 0 / 48px 48px,
+    var(--bg);
+}
+
+.card {
+  width: min(400px, 100%);
+  padding: 30px 28px 24px;
+  border: 1px solid var(--border-strong);
+  border-radius: 16px;
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-elevated);
+  animation: auth-card-in 320ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.brandHead {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.logo {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-lg);
+  box-shadow: 0 8px 22px color-mix(in srgb, var(--accent) 32%, transparent);
+}
+
+.brandHead h1 {
+  margin-top: 14px;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.brandHead p {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+/* 登录 / 注册滑动切换器 */
+.modeSwitch {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  margin-top: 20px;
+  padding: 3px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--bg-subtle);
+}
+
+.modeThumb {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 3px;
+  width: calc(50% - 3px);
+  border-radius: 7px;
+  background: var(--bg-active);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 16%);
+  transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.modeThumbRight {
+  transform: translateX(100%);
+}
+
+.modeBtn {
+  position: relative;
+  z-index: 1;
+  height: 30px;
+  border-radius: 7px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.modeBtn:active {
+  transform: none;
+}
+
+.modeBtnActive {
+  color: var(--text);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fieldLabelRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.fieldLabel {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.fieldLabel small {
+  margin-left: 4px;
+  color: var(--text-tertiary);
+  font-weight: 400;
+}
+
+.inlineSwitchBtn {
+  color: var(--accent-text);
+  font-size: 12px;
+}
+
+.inlineSwitchBtn:hover {
+  text-decoration: underline;
+}
+
+.input {
+  width: 100%;
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg-subtle);
+  color: var(--text);
+  font-size: 14px;
+  transition:
+    border-color var(--t-hover) var(--ease-out),
+    box-shadow var(--t-hover) var(--ease-out),
+    background-color var(--t-hover) var(--ease-out);
+}
+
+.input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.input:focus {
+  border-color: var(--accent);
+  background: var(--bg-elevated);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* 验证码行 */
+.codeRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.codeRow .input {
+  flex: 1;
+  letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums;
+}
+
+.sendCodeBtn {
+  flex-shrink: 0;
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg-subtle);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.sendCodeBtn:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.sendCodeBtn:disabled {
+  opacity: 0.45;
+}
+
+.demoMailToast {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 2px;
+  padding: 7px 10px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border-strong));
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--text);
+  font-size: 12px;
+  text-align: left;
+  animation: auth-card-in 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.demoMailToast strong {
+  font-family: var(--font-mono);
+  color: var(--accent-text);
+  letter-spacing: 0.06em;
+}
+
+.codeHint {
+  color: var(--green);
+  font-size: 12px;
+}
+
+/* 字段平滑展开/收起 */
+.collapseField {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  margin-top: -12px;
+  pointer-events: none;
+  transition:
+    grid-template-rows 220ms cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 160ms var(--ease-out),
+    margin-top 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.collapseFieldOpen {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  margin-top: 0;
+  pointer-events: auto;
+}
+
+.collapseInner {
+  overflow: hidden;
+  padding: 2px;
+  margin: -2px;
+}
+
+.passwordWrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.passwordWrap .input {
+  padding-right: 38px;
+}
+
+.eyeBtn {
+  position: absolute;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  color: var(--text-tertiary);
+}
+
+.eyeBtn:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.submitBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 38px;
+  width: 100%;
+  margin-top: 4px;
+  border-radius: var(--radius);
+  background: var(--ink-solid);
+  color: var(--on-ink);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.submitBtn:hover:not(:disabled) {
+  background: var(--ink-solid-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.submitBtn:disabled {
+  background: var(--bg-active);
+  color: var(--text-tertiary);
+}
+
+.error {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--red-soft);
+  color: var(--red);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.demoBtn {
+  display: block;
+  width: 100%;
+  margin-top: 16px;
+  padding: 6px 0;
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.demoBtn:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.loading {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+@keyframes auth-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.97);
+  }
+}

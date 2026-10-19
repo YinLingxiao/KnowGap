@@ -1,46 +1,73 @@
-/* 输入框：圆角卡片，上方输入，下方一行工具（参照 Claude 桌面端） */
+/* 输入框：支持首页大卡片（Hero）与会话底栏（Dock，参照 Claude Project 双层结构） */
 .composer {
   width: 100%;
-  max-width: 760px;
+  max-width: min(var(--chat-w), 100%);
   margin: 0 auto;
+}
+
+.hero {
+  max-width: 640px;
 }
 
 .box {
   display: flex;
   flex-direction: column;
   border: 1px solid var(--border-strong);
-  border-radius: 18px;
+  border-radius: var(--radius-xl);
   background: var(--bg-elevated);
-  box-shadow: 0 1px 2px rgb(0 0 0 / 4%), 0 6px 20px rgb(0 0 0 / 5%);
-  transition: border-color var(--duration-fast) var(--ease), box-shadow var(--duration-fast) var(--ease);
+  box-shadow: var(--shadow-elevated);
+  transition: border-color var(--t-hover) var(--ease-out), box-shadow var(--t-ui) var(--ease-out);
+}
+
+.hero .box {
+  border-radius: 16px;
 }
 
 .box:focus-within {
-  border-color: color-mix(in srgb, var(--accent) 45%, var(--border-strong));
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border-strong));
+  box-shadow: var(--shadow-elevated), 0 0 0 3px var(--accent-soft);
 }
 
 .locked .input {
   color: var(--text-secondary);
 }
 
-.input {
-  width: 100%;
-  min-height: 48px;
+.inputRow {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 8px 10px 4px 14px;
+}
+
+.hero .inputRow {
   padding: 14px 16px 2px;
+}
+
+.input {
+  flex: 1;
+  width: 100%;
+  min-height: 28px;
+  padding: 2px 0;
   border: 0;
   outline: none;
   background: transparent;
-  font-size: var(--text-lg);
-  line-height: 1.6;
+  font-size: var(--text-md);
+  line-height: 1.55;
   resize: none;
 }
 
 .hero .input {
-  min-height: 76px;
+  min-height: 64px;
+  font-size: var(--text-lg);
+  line-height: 1.6;
 }
 
 .input::placeholder {
   color: var(--text-tertiary);
+}
+
+.inlineSend {
+  margin-bottom: 1px;
 }
 
 .toolbar {
@@ -48,20 +75,43 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 6px 10px 10px;
+  padding: 2px 10px 7px;
 }
 
-.menuAnchor {
+.hero .toolbar {
+  padding: 4px 10px 10px;
+}
+
+.rightTools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.menuAnchor,
+.effortAnchor {
   position: relative;
 }
 
 .tool {
   display: inline-grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 10px;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius);
   color: var(--text-secondary);
+  transition:
+    background-color var(--t-hover) var(--ease-out),
+    color var(--t-hover) var(--ease-out),
+    transform var(--t-hover) var(--ease-spring);
+}
+
+.tool > svg {
+  transition: transform 200ms var(--ease-spring);
+}
+
+.tool[aria-expanded="true"] > svg {
+  transform: rotate(90deg);
 }
 
 .tool:hover:not(:disabled),
@@ -74,22 +124,90 @@
   opacity: 0.4;
 }
 
-.menu {
-  position: absolute;
-  z-index: 20;
-  bottom: calc(100% + 6px);
-  left: 0;
-  width: min(300px, calc(100vw - 32px));
-  padding: 6px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--bg-elevated);
-  box-shadow: var(--shadow-popover);
+/* 右下角模型与思考深度选择器（参照 Claude: Sonnet 5.5 High ◔） */
+.effortBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: var(--radius);
+  color: var(--text-secondary);
+  font-size: 12px;
+  transition:
+    background-color var(--t-hover) var(--ease-out),
+    color var(--t-hover) var(--ease-out);
 }
 
-.hero .menu {
+.effortBtn:hover,
+.effortBtn[aria-expanded="true"] {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.effortModel {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.effortLevel {
+  color: var(--text-tertiary);
+}
+
+.effortBtn:hover .effortLevel,
+.effortBtn[aria-expanded="true"] .effortLevel {
+  color: var(--text-secondary);
+}
+
+.gaugeSvg {
+  flex-shrink: 0;
+}
+
+.menu,
+.effortMenu {
+  position: absolute;
+  z-index: 30;
+  bottom: calc(100% + 6px);
+  padding: 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-popover);
+  animation: popover-up 180ms var(--ease-spring);
+}
+
+.menu {
+  left: 0;
+  width: min(300px, calc(100vw - 32px));
+  transform-origin: bottom left;
+}
+
+.effortMenu {
+  right: 0;
+  width: min(270px, calc(100vw - 32px));
+  transform-origin: bottom right;
+}
+
+.hero .menu,
+.hero .effortMenu {
   top: calc(100% + 6px);
   bottom: auto;
+  transform-origin: top center;
+  animation: popover-down 180ms var(--ease-spring);
+}
+
+@keyframes popover-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.96);
+  }
+}
+
+@keyframes popover-down {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.96);
+  }
 }
 
 .menuLabel {
@@ -98,23 +216,56 @@
   gap: 6px;
   padding: 4px 8px 6px;
   color: var(--text-tertiary);
-  font-size: var(--text-xs);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.menuItem,
+.effortOption {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 8px;
+  border-radius: var(--radius);
+  text-align: left;
+  transition: background-color var(--t-hover) var(--ease-out);
 }
 
 .menuItem {
-  display: flex;
-  align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  width: 100%;
-  padding: 8px;
-  border-radius: 8px;
   font-size: var(--text-sm);
-  text-align: left;
 }
 
-.menuItem:hover {
+.menuItem:hover,
+.effortOption:hover,
+.effortOptionOn {
   background: var(--bg-hover);
+}
+
+.effortOptionBody {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.effortOptionTitle {
+  color: var(--text);
+  font-size: var(--text-xs);
+  font-weight: 500;
+}
+
+.effortOptionDesc {
+  color: var(--text-tertiary);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.effortCheck {
+  flex-shrink: 0;
+  color: var(--accent);
 }
 
 .menuItem code {
@@ -126,28 +277,154 @@
   display: inline-grid;
   flex-shrink: 0;
   place-items: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 10px;
-  background: var(--accent-solid);
-  color: var(--on-accent);
-  transition: background var(--duration-fast) var(--ease), opacity var(--duration-fast) var(--ease);
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: var(--ink-solid);
+  color: var(--on-ink);
+  transition:
+    background-color var(--t-hover) var(--ease-out),
+    transform var(--t-press) var(--ease-out),
+    opacity var(--t-hover) var(--ease-out);
+}
+
+.hero .send {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
 }
 
 .send:hover:not(:disabled) {
-  background: var(--accent-solid-hover);
+  background: var(--ink-solid-hover);
+  transform: translateY(-1px);
+}
+
+.send:active:not(:disabled) {
+  transform: scale(0.95);
 }
 
 .send:disabled {
-  background: var(--bg-active);
+  background: transparent;
   color: var(--text-tertiary);
 }
 
 .stop {
-  background: var(--text);
-  color: var(--bg);
+  background: var(--ink-solid);
+  color: var(--on-ink);
 }
 
-.stop:hover:not(:disabled) {
-  background: var(--text-secondary);
+/* LobeHub 风格底部微型环境状态栏（工作区 / 费曼自测 / 自动批准） */
+.envStrip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 4px 0;
+}
+
+.envStripLeft,
+.envStripRight {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.envPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 6px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.envPill:hover {
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+}
+
+.envPillActive {
+  color: var(--accent-text);
+}
+
+.envPillText {
+  overflow: hidden;
+  max-width: 140px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wsPopover {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(310px, calc(100vw - 32px));
+  padding: 10px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-popover);
+  transform-origin: bottom left;
+  animation: popover-up 180ms var(--ease-spring);
+}
+
+.wsInput {
+  width: 100%;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  background: var(--bg-subtle);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.wsInput:focus {
+  border-color: var(--accent);
+}
+
+.wsError {
+  color: var(--red);
+  font-size: 11px;
+}
+
+.wsActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.wsBtn,
+.wsBtnPrimary {
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.wsBtn {
+  border: 1px solid var(--border-strong);
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+}
+
+.wsBtn:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.wsBtnPrimary {
+  background: var(--ink-solid);
+  color: var(--on-ink);
 }

@@ -4,6 +4,7 @@ import { isValidElement, memo, useState, type ReactNode } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Check, Copy } from "lucide-react";
+import { LearningWidget } from "./LearningWidget";
 import styles from "./Markdown.module.css";
 
 export async function copyText(text: string): Promise<boolean> {
@@ -58,6 +59,9 @@ const components: Components = {
     const className = isValidElement<{ className?: string }>(child) ? child.props.className ?? "" : "";
     const language = /language-([\w+-]+)/.exec(className)?.[1] ?? "";
     const code = textOf(children).replace(/\n$/, "");
+    if (language === "knowgap-widget" || language === "widget") {
+      return <LearningWidget rawCode={code} />;
+    }
     return (
       <div className={styles.codeBlock}>
         <div className={styles.codeHead}>

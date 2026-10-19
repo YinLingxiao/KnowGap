@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ChevronRight, RefreshCw, Trash2, X } from "lucide-react";
+import { ChevronDown, ChevronRight, RefreshCw, Trash2, X } from "lucide-react";
 import type { ApiError } from "@/lib/api/errors";
 import { chatApi } from "@/lib/chat/api";
 import type { LearnerMemory, LearnerMemoryStatus, MemoryKind, Subject } from "@/lib/chat/types";
@@ -31,7 +31,7 @@ const STATUS_OPTIONS: Record<MemoryKind, LearnerMemoryStatus[]> = {
   preference: ["observed", "uncertain"],
 };
 
-type MemoryPatch = { summary?: string; status?: LearnerMemoryStatus; subjectId?: string | null };
+export type MemoryPatch = { summary?: string; status?: LearnerMemoryStatus; subjectId?: string | null };
 
 interface MemoryDrawerProps {
   memories: LearnerMemory[];
@@ -47,14 +47,15 @@ interface MemoryDrawerProps {
   onUpdate: (id: string, patch: MemoryPatch) => Promise<boolean>;
   onDelete: (id: string) => Promise<boolean>;
   onOpenConversation: (id: string) => void;
+  onStartOnboarding?: () => void;
 }
 
-function MemoryItem({
-  memory, subjects, focused, conversationTitles, onUpdate, onDelete, onOpenConversation,
+export function MemoryItem({
+  memory, subjects, focused = false, conversationTitles, onUpdate, onDelete, onOpenConversation,
 }: {
   memory: LearnerMemory;
   subjects: Subject[];
-  focused: boolean;
+  focused?: boolean;
   conversationTitles: Record<string, string>;
   onUpdate: MemoryDrawerProps["onUpdate"];
   onDelete: MemoryDrawerProps["onDelete"];
@@ -80,7 +81,6 @@ function MemoryItem({
       <button className={styles.head} onClick={() => setOpen((value) => !value)} aria-expanded={open}>
         <span className={cx(styles.kind, styles[memory.kind])}>{KIND_LABEL[memory.kind]}</span>
         <span className={styles.topic}>{memory.topic}</span>
-        <span className={cx(styles.scope, !memory.subjectId && styles.scopeGeneral)}>{scopeName}</span>
         <span className={styles.status}>{STATUS_LABEL[memory.status]}</span>
         <ChevronRight size={13} className={cx(styles.chevron, open && styles.chevronOpen)} aria-hidden />
       </button>
@@ -145,11 +145,22 @@ function MemoryItem({
         <p className={styles.summary}>{memory.summary}</p>
       )}
 
-      <div className={styles.meta}>
-        <span>{memory.origin === "diagnosis" ? "来自旧版作答诊断" : "来自对话"}</span>
-        <span>依据 {memory.evidence.length}</span>
-        {memory.userCorrected && <span className={styles.corrected}>你修正过</span>}
-        <span>{formatRelativeTime(memory.updatedAt)}</span>
+      <div className={styles.metaRow}>
+        <div className={styles.meta}>
+          <span className={cx(styles.scope, !memory.subjectId && styles.scopeGeneral)}>{scopeName}</span>
+          <span>依据 {memory.evidence.length}</span>
+          {memory.userCorrected && <span className={styles.corrected}>已修正</span>}
+          <span>{formatRelativeTime(memory.updatedAt)}</span>
+        </div>
+        {mode === "view" && (
+          <div className={styles.actions}>
+            <button onClick={() => { setSummary(memory.summary); setStatus(memory.status); setScope(memory.subjectId ?? ""); setMode("edit"); }}>纠正</button>
+            <button className={styles.deleteAction} onClick={() => setMode("confirm")}>
+              <Trash2 size={12} aria-hidden />
+              删除
+            </button>
+          </div>
+        )}
       </div>
 
       {open && (
@@ -176,7 +187,7 @@ function MemoryItem({
         </ol>
       )}
 
-      {mode === "confirm" ? (
+      {mode === "confirm" && (
         <div className={styles.confirm}>
           <span>删除后不会再用于之后的对话。</span>
           <div className={styles.editActions}>
@@ -197,14 +208,6 @@ function MemoryItem({
             </Button>
           </div>
         </div>
-      ) : mode === "view" && (
-        <div className={styles.actions}>
-          <button onClick={() => { setSummary(memory.summary); setStatus(memory.status); setScope(memory.subjectId ?? ""); setMode("edit"); }}>纠正</button>
-          <button className={styles.deleteAction} onClick={() => setMode("confirm")}>
-            <Trash2 size={12} aria-hidden />
-            删除
-          </button>
-        </div>
       )}
     </article>
   );
@@ -218,10 +221,17 @@ function AgentNotes() {
   const [notes, setNotes] = useState({ user: "", memory: "", limits: { user: 1375, memory: 2200 } });
   const [pending, setPending] = useState<Array<{ id: string; action: string; target: string; content: string; oldText: string }>>([]);
   const [note, setNote] = useState("");
+  const [open, setOpen] = useState(false);
 
   const load = () => {
-    void chatApi.agentNotes().then(setNotes).catch(() => setNote("读不到长期笔记"));
-    void chatApi.pendingNotes().then(setPending).catch(() => setPending([]));
+    void chatApi.agentNotes().then((data) => {
+      setNotes(data);
+      if (data.user.trim() || data.memory.trim()) setOpen(true);
+    }).catch(() => setNote("读不到长期笔记"));
+    void chatApi.pendingNotes().then((items) => {
+      setPending(items);
+      if (items.length > 0) setOpen(true);
+    }).catch(() => setPending([]));
   };
   useEffect(load, []);
 
@@ -245,40 +255,62 @@ function AgentNotes() {
   }
 
   const blocks: Array<{ key: "user" | "memory"; label: string }> = [
-    { key: "user", label: "用户" },
-    { key: "memory", label: "笔记" },
+    { key: "user", label: "用户画像" },
+    { key: "memory", label: "环境笔记" },
   ];
+
   return (
     <div className={styles.notes}>
-      <p>改动会立刻保存，下一轮对话进入提示。</p>
-      {blocks.map((block) => {
-        const items = splitEntries(notes[block.key]);
-        return (
-          <div key={block.key}>
-            <span>{block.label} {notes[block.key].length}/{notes.limits[block.key]}</span>
-            {items.length === 0 && <p>还没有条目</p>}
-            {items.map((entry) => (
-              <div key={entry} className={styles.entry}>
-                <span>{entry}</span>
-                <button type="button" onClick={() => void remove(block.key, entry)}>删除</button>
+      <button type="button" className={styles.notesToggle} onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+        <span className={styles.notesLabel}>长期笔记</span>
+        <span className={styles.notesCount}>
+          用户 {notes.user.length}/{notes.limits.user} · 笔记 {notes.memory.length}/{notes.limits.memory}
+        </span>
+        {pending.length > 0 && <span className={styles.pendingTag}>{pending.length} 待确认</span>}
+        <ChevronDown size={13} className={cx(styles.chevron, open && styles.notesOpen)} aria-hidden />
+      </button>
+
+      {open && (
+        <div className={styles.notesBody}>
+          <p className={styles.notesHint}>改动会立刻保存，下一轮对话进入提示。</p>
+          {blocks.map((block) => {
+            const items = splitEntries(notes[block.key]);
+            return (
+              <div key={block.key} className={styles.noteSection}>
+                <div className={styles.noteHead}>
+                  <span>{block.label}</span>
+                  <span>{notes[block.key].length}/{notes.limits[block.key]}</span>
+                </div>
+                {items.length === 0 ? (
+                  <p className={styles.noteEmpty}>还没有条目</p>
+                ) : (
+                  items.map((entry) => (
+                    <div key={entry} className={styles.entry}>
+                      <span>{entry}</span>
+                      <button type="button" onClick={() => void remove(block.key, entry)}>删除</button>
+                    </div>
+                  ))
+                )}
               </div>
-            ))}
-          </div>
-        );
-      })}
-      {pending.length > 0 && (
-        <div>
-          <span>待确认</span>
-          {pending.map((item) => (
-            <div key={item.id} className={styles.entry}>
-              <span>{item.target} · {item.action} · {item.content || item.oldText}</span>
-              <button type="button" onClick={() => void decide(item.id, true)}>批准</button>
-              <button type="button" onClick={() => void decide(item.id, false)}>拒绝</button>
+            );
+          })}
+          {pending.length > 0 && (
+            <div className={styles.noteSection}>
+              <div className={styles.noteHead}><span>待确认</span></div>
+              {pending.map((item) => (
+                <div key={item.id} className={styles.entry}>
+                  <span>{item.target} · {item.action} · {item.content || item.oldText}</span>
+                  <div className={styles.entryBtns}>
+                    <button type="button" onClick={() => void decide(item.id, true)}>批准</button>
+                    <button type="button" onClick={() => void decide(item.id, false)}>拒绝</button>
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
+          )}
+          {note && <p className={styles.notesHint}>{note}</p>}
         </div>
       )}
-      {note && <p>{note}</p>}
     </div>
   );
 }
@@ -304,6 +336,11 @@ export function MemoryDrawer(props: MemoryDrawerProps) {
     <section className={styles.drawer} aria-labelledby="memory-title">
       <header className={styles.header}>
         <h2 id="memory-title" className={styles.title}>学习记忆</h2>
+        {props.onStartOnboarding && (
+          <button type="button" className={styles.profileInterviewBtn} onClick={props.onStartOnboarding}>
+            初识访谈
+          </button>
+        )}
         <button className={styles.iconButton} onClick={props.onRefresh} disabled={loading} aria-label="刷新" title="刷新">
           <RefreshCw size={14} className={cx(loading && styles.spinning)} />
         </button>
@@ -313,8 +350,7 @@ export function MemoryDrawer(props: MemoryDrawerProps) {
       </header>
       <AgentNotes />
       <p className={styles.intro}>
-        只有在对话里出现明确依据时才会记录，例如你说出的某个理解、完成的练习或明确的学习偏好。只问问题不会被记成薄弱点。
-        对话会优先参考本学习空间和通用记录，不够时才参考其他学习空间；不准确的可以纠正归属、内容或直接删除。
+        只有在对话里出现明确依据时才会记录。只问问题不会被记成薄弱点；不准确的记录可以随时纠正或删除。
       </p>
       <div className={styles.filters} role="radiogroup" aria-label="按归属筛选">
         {filters.map((item) => (

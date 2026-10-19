@@ -50,6 +50,14 @@ const SESSION_POINTERS = `knowgap.api.sessions.v1:${API_BASE_URL}`;
 const LEGACY_SESSION_POINTER = `knowgap.api.session.v1:${API_BASE_URL}`;
 const DRAFTS_KEY = "knowgap.drafts.v1";
 
+function draftsKey() {
+  try {
+    return `${localStorage.getItem("knowgap.auth.user.v1") || "demo-student-001"}:${DRAFTS_KEY}`;
+  } catch {
+    return DRAFTS_KEY;
+  }
+}
+
 interface SessionPointers {
   active: string | null;
   byProblem: Record<string, string>;
@@ -118,7 +126,7 @@ function activateProblem(problemId: string) {
 
 function readDrafts(): Record<string, AnswerDraft> {
   try {
-    const parsed: unknown = JSON.parse(localStorage.getItem(DRAFTS_KEY) ?? "null");
+    const parsed: unknown = JSON.parse(localStorage.getItem(draftsKey()) ?? "null");
     if (!parsed || typeof parsed !== "object") return {};
     const drafts: Record<string, AnswerDraft> = {};
     for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
@@ -137,7 +145,7 @@ function readDrafts(): Record<string, AnswerDraft> {
 
 function writeDrafts(drafts: Record<string, AnswerDraft>) {
   try {
-    localStorage.setItem(DRAFTS_KEY, JSON.stringify(drafts));
+    localStorage.setItem(draftsKey(), JSON.stringify(drafts));
   } catch { /* Disabled browser storage must not prevent learning. */ }
 }
 

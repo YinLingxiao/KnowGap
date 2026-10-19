@@ -23,8 +23,10 @@ from app.chat.agent import (
     active_exercise, analysis_messages, chat_messages, dialogue, resolution_messages, review_messages,
     validate_analysis, validate_resolution,
 )
-from app.chat.store import ChatStore
-from app.chat.schemas import DispatchThread, ReportProgress
+from app.chat.store import ChatStore, INTERRUPTED
+from app.chat.checkpoints import resume_state
+from app.chat.usage import normalize_usage
+from app.chat.schemas import DispatchThread, ProposeThreads, ReportProgress
 from app.chat.coordination import cancel_deliveries, dispatch, next_delivery, report
 from app.memory.store import new_id
 from app.services.materials import MaterialStore
@@ -32,6 +34,7 @@ from app.services.materials import MaterialStore
 logger = logging.getLogger(__name__)
 ANALYSIS_TIMEOUT = 60
 MAX_TOOL_ROUNDS = 8
+THREAD_CONCURRENCY = 2
 
 
 def sse(event: str, data: dict) -> str:
@@ -60,6 +63,8 @@ class Generation:
         self.task: asyncio.Task | None = None
         self.detached = False
         self.student_id = ""
+        self.parent_id: str | None = None
+        self.checkpoint: dict | None = None
 
 
 class ToolContext:
@@ -70,6 +75,7 @@ class ToolContext:
         self.conversation_id = conversation_id
         self.approve_memory = approve_memory
         self.dispatch_thread = None
+        self.propose_threads = None
         self.report_progress = None
         self.exercise = None
 
@@ -106,8 +112,11 @@ class ChatService:
             ).fetchall()
         for row in interrupted:
             self.store.merge_meta(row["id"], {"pending_approval": None})
+            checkpoint = self.store.message_meta(row["id"]).get("last_checkpoint")
+            available, blocked = resume_state(checkpoint, "failed")
+            detail = blocked or ("已保存断点，可在 Thread 中点击「从断点继续」。" if available else "请检查已有进展后重试。")
             report(self.store, row["student_id"], row["conversation_id"], row["reply_to"], "failed",
-                   "服务重启中断了任务，请在 Thread 中检查已有进展后重试。")
+                   f"服务重启中断了任务。{detail}")
         for row in queued:
             self._start_delivery(row["student_id"], row["id"])
 
@@ -128,6 +137,27 @@ class ChatService:
 
     def _auto_approve(self) -> bool:
         return self._agent_flag("auto_approve")
+
+    def _usage(self, request_id, model, conversation_id, message_id, purpose, raw=None) -> None:
+        usage = normalize_usage(raw)
+        if raw is not None and usage is None:
+            return  # A malformed later chunk must not erase a valid earlier usage record.
+        self.store.record_usage(request_id, conversation_id, message_id, purpose,
+                                getattr(getattr(model, "settings", None), "llm_model", "unknown"), usage)
+
+    async def _complete_json(self, model, messages, conversation_id, message_id, purpose):
+        request_id = new_id("usage")
+        self._usage(request_id, model, conversation_id, message_id, purpose)
+        try:
+            if hasattr(model, "complete_json_with_usage"):
+                result, raw = await model.complete_json_with_usage(messages)
+                self._usage(request_id, model, conversation_id, message_id, purpose, raw)
+                return result
+            return await model.complete_json(messages)
+        except ProviderError as exc:
+            if exc.usage is not None:
+                self._usage(request_id, model, conversation_id, message_id, purpose, exc.usage)
+            raise
 
     async def _await_approval(self, generation: Generation, name: str, arguments: str) -> bool:
         # A working directory is not a shell sandbox. Commands always require consent.
@@ -155,15 +185,61 @@ class ChatService:
     def _start_delivery(self, student_id: str, thread_id: str) -> None:
         if self.closing or self.is_generating(thread_id):
             return
+        # Enforce per-space concurrency limit: max 2 threads running at once
+        thread = self.store.conversation(thread_id, student_id)
+        if thread and thread.parent_id:
+            running = self._count_running_threads(student_id, thread.parent_id)
+            if running >= THREAD_CONCURRENCY:
+                return  # Stay queued until a slot opens
         user_id = next_delivery(self.store, thread_id)
         if user_id:
             self.begin(student_id, thread_id, user_id, [], detached=True)
+
+    def _thread_parent_id(self, student_id: str, conversation_id: str) -> str | None:
+        # Bind the scheduler to its space before deletion can remove the worker's row.
+        with self.store.connection() as db:
+            row = db.execute(
+                "SELECT parent_id FROM conversations WHERE id = ? AND student_id = ? AND kind = 'thread'",
+                (conversation_id, student_id),
+            ).fetchone()
+        return row["parent_id"] if row else None
+
+    def _count_running_threads(self, student_id: str, main_id: str) -> int:
+        # The single-process runtime is authoritative. A persisted streaming row is the same
+        # generation, not another slot (and may be stale after a crash).
+        with self.store.connection() as db:
+            ids = {row["id"] for row in db.execute(
+                "SELECT id FROM conversations WHERE student_id = ? AND parent_id = ? AND kind = 'thread'",
+                (student_id, main_id),
+            )}
+        return sum(cid in ids and gen.streaming for cid, gen in self.active.items())
+
+    def has_thread_slot(self, student_id: str, conversation_id: str) -> bool:
+        with self.store.connection() as db:
+            row = db.execute("SELECT kind, parent_id FROM conversations WHERE id = ? AND student_id = ?",
+                             (conversation_id, student_id)).fetchone()
+        return not row or row["kind"] != "thread" or not row["parent_id"] or (
+            self._count_running_threads(student_id, row["parent_id"]) < THREAD_CONCURRENCY)
+
+    def _start_next_queued_thread(self, student_id: str, main_id: str) -> None:
+        """Fill all free slots, oldest undelivered input first; skip already-running workers."""
+        with self.store.connection() as db:
+            queued = db.execute("""
+                SELECT c.id, MIN(m.created_at) AS oldest FROM conversations c
+                JOIN thread_dispatches d ON d.thread_id = c.id
+                JOIN conversation_messages m ON m.id = d.message_id
+                WHERE c.student_id = ? AND c.parent_id = ? AND c.kind = 'thread'
+                  AND NOT EXISTS (SELECT 1 FROM conversation_messages r WHERE r.reply_to = m.id)
+                GROUP BY c.id ORDER BY oldest, c.id
+            """, (student_id, main_id)).fetchall()
+        for row in queued:
+            self._start_delivery(student_id, row["id"])
 
     def _dispatch_thread(self, student_id: str, generation: Generation, arguments: dict) -> str:
         body = DispatchThread(**arguments)
         thread_id, message_id = dispatch(
             self.store, student_id, generation.conversation_id, generation.user_message_id,
-            body.title, body.task, body.thread_id,
+            body.title, body.task, body.thread_id, skill=body.skill,
         )
         if not self.store.replies(message_id):
             report(self.store, student_id, thread_id, message_id, "queued", "已收到主对话交办的任务，等待执行。")
@@ -172,6 +248,48 @@ class ChatService:
         return json.dumps({"thread_id": thread_id, "delivered": True,
                            "status": "queued" if not self.store.replies(message_id) else
                            self.store.conversation(thread_id, student_id).execution_status}, ensure_ascii=False)
+
+    def _propose_threads(self, student_id: str, generation: Generation, arguments: dict) -> str:
+        """Suggest threads to the user without creating them immediately."""
+        body = ProposeThreads(**arguments)
+        proposals = self.store.message_meta(generation.assistant_message_id).get("thread_proposals", [])
+        for item in body.proposals:
+            data = item.model_dump()
+            if not any(p["title"] == item.title and p["task"] == item.task for p in proposals):
+                if len(proposals) >= 8:
+                    raise ValueError("每条回复最多建议 8 个 Thread。")
+                proposals.append({"id": new_id("proposal"), **data, "thread_id": None})
+        self.store.merge_meta(generation.assistant_message_id, {"thread_proposals": proposals})
+        return "已展示建议卡片，尚未创建或执行 Thread；等待用户选择。"
+
+    def confirm_proposal(self, student_id: str, conversation_id: str, message_id: str, proposal_id: str) -> str:
+        # Never trust client-supplied titles/tasks or the *latest* user input. Older cards stay
+        # tied to their original source. dispatch's durable task_key also makes crash retries safe.
+        message = self.store.message(message_id, student_id)
+        if message is None or message.conversation_id != conversation_id:
+            raise LookupError("建议不存在或不属于当前对话。")
+        if self.store.role_context(conversation_id)["role"] != "main":
+            raise ValueError("只有学习空间主对话可以确认建议。")
+        if message.role != "assistant" or message.status != "complete" or not message.reply_to:
+            raise ValueError("请等待建议回复完成后再确认。")
+        proposals = self.store.message_meta(message_id).get("thread_proposals", [])
+        proposal = next((p for p in proposals if p["id"] == proposal_id), None)
+        if proposal is None:
+            raise LookupError("建议不存在。")
+        if proposal.get("thread_id"):
+            if not self.store.conversation(proposal["thread_id"], student_id):
+                raise ValueError("这个建议对应的 Thread 已删除，请重新规划。")
+            return proposal["thread_id"]
+        thread_id, delivery = dispatch(
+            self.store, student_id, conversation_id, message.reply_to, proposal["title"], proposal["task"], None,
+            task_key=f"proposal:{proposal_id}",
+        )
+        proposal["thread_id"] = thread_id
+        self.store.merge_meta(message_id, {"thread_proposals": proposals})
+        if not self.store.replies(delivery):
+            report(self.store, student_id, thread_id, delivery, "queued", "你已确认这项建议，等待执行。")
+        self._start_delivery(student_id, thread_id)
+        return thread_id
 
     def _progress(self, student_id: str, generation: Generation, ctx: ToolContext, arguments: dict) -> str:
         body = ReportProgress(**arguments)
@@ -183,12 +301,15 @@ class ChatService:
 
     def stop(self, conversation_id: str) -> bool:
         generation = self.active.get(conversation_id)
+        with self.store.connection() as db:
+            row = db.execute("SELECT student_id FROM conversations WHERE id = ?", (conversation_id,)).fetchone()
+        pending = cancel_deliveries(self.store, conversation_id) if row else []
+        for message_id in pending:
+            report(self.store, row["student_id"], conversation_id, message_id, "cancelled", "这条排队的任务已停止执行。")
         if generation and generation.streaming and generation.task and not generation.task.done():
-            for message_id in cancel_deliveries(self.store, conversation_id):
-                report(self.store, generation.student_id, conversation_id, message_id, "cancelled", "这条排队的补充已停止执行。")
             generation.task.cancel()
             return True
-        return False
+        return bool(pending)
 
     def _message(self, student_id: str, message_id: str) -> dict | None:
         message = self.store.message(message_id, student_id)
@@ -203,6 +324,7 @@ class ChatService:
         assistant_id = self.store.start_reply(conversation_id, user_message_id, discard)
         generation = Generation(conversation_id, user_message_id, assistant_id)
         generation.student_id = student_id
+        generation.parent_id = self._thread_parent_id(student_id, conversation_id)
         generation.detached = detached
         self.active[conversation_id] = generation
         self._report(generation, "working", "正在处理这项任务，详细过程可在 Thread 中查看。")
@@ -216,6 +338,85 @@ class ChatService:
         self.tasks.add(generation.task)
         generation.task.add_done_callback(self.tasks.discard)
         return generation
+
+    def resume(self, student_id: str, conversation_id: str, message_id: str) -> Generation:
+        message = self.store.message(message_id, student_id)
+        if message is None or message.conversation_id != conversation_id:
+            raise LookupError("断点不存在或不属于当前对话。")
+        if self.store.role_context(conversation_id)["role"] != "thread":
+            raise ValueError("目前仅执行 Thread 支持从断点继续。")
+        existing = self.active.get(conversation_id)
+        if existing:
+            if existing.assistant_message_id == message_id:
+                return existing  # A lost HTTP response must not launch a second worker.
+            raise ValueError("Thread 正在执行，请稍候。")
+        if self.closing or not self.has_thread_slot(student_id, conversation_id):
+            raise ValueError("当前没有空闲执行槽位，请稍候。")
+        checkpoint = self.store.message_meta(message_id).get("last_checkpoint")
+        available, blocked = resume_state(checkpoint, message.status)
+        if not available:
+            raise ValueError(blocked or "此回复没有可以继续的断点。")
+        latest, intervening = self.store.last_user_message(conversation_id)
+        if message.reply_to != latest or intervening:
+            raise ValueError("这条回复之后已有新内容，请在最新对话中继续。")
+        workspace = workspace_of(self.settings)
+        if checkpoint.get("workspace") != (str(workspace) if workspace else None):
+            raise ValueError("工作区设置已变化，请恢复原设置后再从断点继续。")
+        self.store.finish_reply(message_id, content="".join(checkpoint["parts"]), status="streaming",
+                                meta={"pending_approval": None})
+        generation = Generation(conversation_id, message.reply_to, message_id)
+        generation.student_id = student_id
+        generation.parent_id = self._thread_parent_id(student_id, conversation_id)
+        generation.detached = True
+        generation.checkpoint = checkpoint
+        self.active[conversation_id] = generation
+        self._report(generation, "working", "正在从已保存的工具断点继续。")
+        generation.task = asyncio.create_task(self._run(student_id, generation))
+        self.tasks.add(generation.task)
+        generation.task.add_done_callback(self.tasks.discard)
+        return generation
+
+    def _save_checkpoint(self, generation: Generation, state: dict) -> None:
+        self.store.merge_meta(generation.assistant_message_id, {"last_checkpoint": state})
+
+    async def _execute_tools(self, generation, state, definitions, ctx) -> None:
+        # Commit the intent before external execution, then commit each result before proceeding.
+        # If a crash lands between a write and its result commit, resume_state rejects replay.
+        queue = generation.queue
+        pending = state["pending"]
+        for index in range(state["next_call"], len(pending)):
+            call = pending[index]
+            name, raw_args = call.get("name") or "", call.get("arguments") or "{}"
+            state.update(next_call=index, in_flight=False)
+            self._save_checkpoint(generation, state)
+            supported = any(t["function"]["name"] == name for t in definitions)
+            allowed = True
+            if name in NEEDS_APPROVAL and supported:
+                allowed = await self._await_approval(generation, name, raw_args)
+            output, ok = "用户拒绝了这次操作。", False
+            if allowed:
+                queue.put_nowait(("tool_start", {"id": call["id"], "name": name, "arguments": raw_args}))
+                try:
+                    if not supported:
+                        raise ToolError("当前对话不支持这个工具。")
+                    arguments = parse_arguments(raw_args)
+                    state["in_flight"] = True
+                    self._save_checkpoint(generation, state)
+                    output = await run_tool(name, arguments, ctx)
+                    ok = (output.startswith(("已更新", "已存在")) if name == "memory" else True)
+                except (ToolError, json.JSONDecodeError, ValueError) as exc:
+                    output = str(exc) or "工具参数无效。"
+            record = {"id": call["id"], "name": name, "arguments": raw_args, "output": output, "ok": ok}
+            state["tool_log"].append(record)
+            result = {"role": "tool", "tool_call_id": call["id"], "content": output}
+            state["messages"].append(result)
+            state["tool_messages"].append(result)
+            state.update(next_call=index + 1, in_flight=False)
+            self._save_checkpoint(generation, state)
+            self.store.merge_meta(generation.assistant_message_id, {"tool_calls": state["tool_log"]})
+            queue.put_nowait(("tool_end", record))
+        state.update(phase="model", pending=[], next_call=0, in_flight=False)
+        self._save_checkpoint(generation, state)
 
     async def events(self, generation: Generation) -> AsyncIterator[str]:
         try:
@@ -264,6 +465,30 @@ class ChatService:
             history = [row for row in history if user_seqs.get(row["reply_to"], row["seq"]) <= user_row["seq"]]
             history.sort(key=lambda row: (user_seqs.get(row["reply_to"], row["seq"]), row["seq"]))
             user_text = user_row["content"]
+            interview = self.store.onboarding_status(student_id)
+            if interview["conversation_id"] == generation.conversation_id:
+                from app.chat.onboarding import EXTRACTION_PROMPT, QUESTIONS, apply_answer
+                if interview["status"] != "in_progress":
+                    raise ProviderError(409, "这段访谈已结束或暂停，请从学习记忆继续完善画像。")
+                model = self.model()
+                result = await self._complete_json(model, [
+                    {"role": "system", "content": EXTRACTION_PROMPT},
+                    {"role": "user", "content": json.dumps({"stage": interview["stage"],
+                        "draft": interview["draft"], "answer": user_text}, ensure_ascii=False)},
+                ], generation.conversation_id, assistant_id, "onboarding")
+                if not isinstance(result.get("answers"), list):
+                    raise ProviderError(502, "访谈响应格式无效，请重试；回答尚未计入进度。")
+                with self.store.connection() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    updated = apply_answer(db, student_id, generation.user_message_id, user_text, result, interview["version"])
+                    text = (str(result.get("reply") or "")[:500] + "\n\n" + (
+                        "谢谢，下面是我整理的候选画像。请核对或修改后确认；确认前不会写入长期画像。"
+                        if updated["ready"] else QUESTIONS[updated["stage"]])).strip()
+                    # State advancement and its visible reply commit together.
+                    db.execute("UPDATE conversation_messages SET content=?, status='complete', error=NULL WHERE id=?", (text, assistant_id))
+                queue.put_nowait(("done", {"message": self._message(student_id, assistant_id)}))
+                queue.put_nowait(("analysis", {"skipped": True}))
+                return
             exercise = active_exercise(history)
             subject = self.store.conversation_subject(generation.conversation_id)
             subject_id = subject.id if subject else None
@@ -274,9 +499,19 @@ class ChatService:
             model = self.model()
             finish = "stop"
             role = self.store.role_context(generation.conversation_id)
-            role["delegated_task"] = self.store.message_meta(generation.user_message_id).get("delegated_task")
+            user_meta = self.store.message_meta(generation.user_message_id)
+            role["delegated_task"] = user_meta.get("delegated_task")
+            role["delegated_skill"] = user_meta.get("delegated_skill")
+            conv_info = self._conversation(student_id, generation.conversation_id) or {}
+            conv_title = conv_info.get("title") or ""
             snapshot = self.store.frozen_notes(generation.conversation_id, student_id)
-            messages = chat_messages(history, memories, exercise, sources, subject, role, snapshot)
+            thinking_depth = (self.settings.agent_config().get("reasoning_effort", "medium")
+                              if self.settings is not None else "medium")
+            custom_skills = self.store.list_custom_skills(student_id)
+            messages = chat_messages(
+                history, memories, exercise, sources, subject, role, snapshot, thinking_depth, conv_title,
+                custom_skills=custom_skills,
+            )
             ctx = ToolContext(
                 workspace_of(self.settings), self.store, student_id, generation.conversation_id,
                 self._agent_flag("memory_write_approval"),
@@ -284,16 +519,32 @@ class ChatService:
             ctx.exercise = exercise
             if role["role"] == "main":
                 ctx.dispatch_thread = lambda arguments: self._dispatch_thread(student_id, generation, arguments)
+                ctx.propose_threads = lambda arguments: self._propose_threads(student_id, generation, arguments)
             if role["role"] == "thread":
                 ctx.report_progress = lambda arguments: self._progress(student_id, generation, ctx, arguments)
             definitions = [tool for tool in DEFINITIONS if (
-                tool["function"]["name"] in {"dispatch_thread", "session_search", "memory"}
-                if role["role"] == "main" else tool["function"]["name"] != "dispatch_thread"
+                tool["function"]["name"] in {"dispatch_thread", "propose_threads", "session_search", "memory"}
+                if role["role"] == "main" else tool["function"]["name"] not in {"dispatch_thread", "propose_threads"}
                 and (role["role"] == "thread" or tool["function"]["name"] != "report_progress")
             )]
             if exercise is None:
                 definitions = [tool for tool in definitions if tool["function"]["name"] != "exercise_reference"]
-            for _ in range(MAX_TOOL_ROUNDS):
+            state = generation.checkpoint or {
+                "version": 1, "role": role["role"], "phase": "model", "rounds": 0, "messages": messages,
+                "parts": parts, "tool_log": tool_log, "tool_messages": tool_messages,
+                "pending": [], "next_call": 0, "in_flight": False,
+                "workspace": str(ctx.workspace) if ctx.workspace else None,
+            }
+            if generation.checkpoint:
+                messages, parts = state["messages"], state["parts"]
+                tool_log, tool_messages = state["tool_log"], state["tool_messages"]
+                if state["phase"] == "tools":
+                    await self._execute_tools(generation, state, definitions, ctx)
+            for round_index in range(state["rounds"], MAX_TOOL_ROUNDS):
+                state.update(phase="model", rounds=round_index)
+                self._save_checkpoint(generation, state)
+                request_id = new_id("usage")
+                self._usage(request_id, model, generation.conversation_id, assistant_id, "chat")
                 calls = None
                 round_text: list[str] = []
                 try:
@@ -309,6 +560,8 @@ class ChatService:
                         elif time.monotonic() - last_flush >= 0.3:
                             self.store.finish_reply(assistant_id, content="".join(parts), status="streaming")
                             last_flush = time.monotonic()
+                    elif kind == "usage":
+                        self._usage(request_id, model, generation.conversation_id, assistant_id, "chat", value)
                     elif kind == "tool_calls":
                         calls = value
                     elif kind == "finish":
@@ -326,32 +579,9 @@ class ChatService:
                 batch = [{"role": "assistant", "content": "".join(round_text), "tool_calls": assistant_calls}]
                 messages.extend(batch)
                 tool_messages.extend(batch)
-                for call in calls:
-                    name = call.get("name") or ""
-                    raw_args = call.get("arguments") or "{}"
-                    allowed = True
-                    if name in NEEDS_APPROVAL and any(t["function"]["name"] == name for t in definitions):
-                        allowed = await self._await_approval(generation, name, raw_args)
-                    output = "用户拒绝了这次操作。"
-                    ok = False
-                    if allowed:
-                        queue.put_nowait(("tool_start", {"id": call["id"], "name": name, "arguments": raw_args}))
-                        try:
-                            if not any(t["function"]["name"] == name for t in definitions):
-                                raise ToolError("当前对话不支持这个工具。")
-                            output = await run_tool(name, parse_arguments(raw_args), ctx)
-                            ok = True
-                        except (ToolError, json.JSONDecodeError, ValueError) as exc:
-                            output = str(exc) or "工具参数无效。"
-                        queue.put_nowait(("tool_end", {"id": call["id"], "name": name, "ok": ok, "output": output}))
-                    else:
-                        queue.put_nowait(("tool_end", {"id": call["id"], "name": name, "ok": False, "output": output}))
-                    tool_log.append({"id": call["id"], "name": name, "arguments": raw_args, "output": output, "ok": ok})
-                    if generation.detached:
-                        self.store.merge_meta(assistant_id, {"tool_calls": tool_log})
-                    result = {"role": "tool", "tool_call_id": call["id"], "content": output}
-                    messages.append(result)
-                    tool_messages.append(result)
+                state.update(phase="tools", pending=calls, next_call=0, in_flight=False, rounds=round_index + 1)
+                self._save_checkpoint(generation, state)
+                await self._execute_tools(generation, state, definitions, ctx)
                 ctx.workspace = workspace_of(self.settings)
             else:
                 raise ProviderError(502, "工具调用已达到本轮上限，请缩小任务范围后重试。")
@@ -362,6 +592,7 @@ class ChatService:
             self.store.finish_reply(assistant_id, content=text, status="complete", meta={
                 "context_memory_ids": [m.id for m, _ in memories], "sources": cited, "truncated": finish == "length",
                 "tool_calls": tool_log, "tool_messages": tool_messages,
+                "last_checkpoint": {"version": 1, "phase": "done"},
             })
             self._release(generation)
             queue.put_nowait(("done", {"message": self._message(student_id, assistant_id)}))
@@ -382,7 +613,8 @@ class ChatService:
                     start_seq = user_rows[-10]["seq"]
                     turns = dialogue([row for row in history if row["seq"] >= start_seq], bounded=False)
                     turns.append({"role": "assistant", "content": text})
-                    task = asyncio.create_task(self._review(student_id, model, turns))
+                    task = asyncio.create_task(self._review(student_id, model, turns,
+                                                            generation.conversation_id, assistant_id))
                     self.reviews.add(task)
                     task.add_done_callback(self.reviews.discard)
             await asyncio.sleep(0)
@@ -399,7 +631,9 @@ class ChatService:
         except asyncio.CancelledError:
             if generation.streaming:
                 close_tool_batch(tool_messages)
-                self.store.finish_reply(assistant_id, content="".join(parts), status="cancelled",
+                self.store.finish_reply(assistant_id, content="".join(parts),
+                                        status="failed" if self.closing else "cancelled",
+                                        error=INTERRUPTED if self.closing else None,
                                         meta={"tool_calls": tool_log, "tool_messages": tool_messages})
                 queue.put_nowait(("cancelled", {"message": self._message(student_id, assistant_id)}))
         except ProviderError as exc:
@@ -432,14 +666,21 @@ class ChatService:
                         "任务已停止，可在 Thread 中继续。" if result.status == "cancelled" else
                         meta.get("progress_summary") or f"本轮回复节选：{result.content[:500]}")
                     self._report(generation, status, summary or "请打开 Thread 查看。")
-                self._start_delivery(student_id, generation.conversation_id)
             except Exception:
-                logger.exception("Could not publish thread status or start its next delivery")
+                logger.exception("Could not publish thread status")
+            try:
+                # A deleted worker or failed status report must still release its space's slot.
+                if generation.parent_id and not self.closing:
+                    self._start_next_queued_thread(student_id, generation.parent_id)
+            except Exception:
+                logger.exception("Could not start the next queued thread")
             queue.put_nowait(None)
 
-    async def _review(self, student_id: str, model: ChatModel, turns: list[dict]) -> None:
+    async def _review(self, student_id: str, model: ChatModel, turns: list[dict],
+                      conversation_id: str, message_id: str) -> None:
         try:
-            raw = await model.complete_json(review_messages(self.store.agent_notes(student_id), turns))
+            raw = await self._complete_json(model, review_messages(self.store.agent_notes(student_id), turns),
+                                            conversation_id, message_id, "review")
         except Exception:
             logger.exception("Background memory review failed")
             return
@@ -468,7 +709,8 @@ class ChatService:
         is_thread = self.store.role_context(generation.conversation_id)["role"] == "thread"
         try:
             raw = await asyncio.wait_for(
-                model.complete_json(analysis_messages(history, user_text, reply, memories, given, exercise, is_thread)),
+                self._complete_json(model, analysis_messages(history, user_text, reply, memories, given, exercise, is_thread),
+                                    generation.conversation_id, generation.assistant_message_id, "analysis"),
                 ANALYSIS_TIMEOUT,
             )
         except (ProviderError, TimeoutError) as exc:
@@ -515,7 +757,8 @@ class ChatService:
             raise ValueError("只有 Thread 可以整理成小结。")
         subject = self.store.conversation_subject(conversation_id)
         role = self.store.role_context(conversation_id)
-        raw = await self.model().complete_json(
-            resolution_messages(subject, role.get("anchor"), dialogue(self.store.history(conversation_id))),
+        raw = await self._complete_json(
+            self.model(), resolution_messages(subject, role.get("anchor"), dialogue(self.store.history(conversation_id))),
+            conversation_id, None, "resolution",
         )
         return validate_resolution(raw)

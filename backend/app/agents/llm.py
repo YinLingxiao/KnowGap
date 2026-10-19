@@ -13,10 +13,11 @@ from app.models.schemas import TutorOutput
 
 
 class ProviderError(Exception):
-    def __init__(self, status_code: int, detail: str):
+    def __init__(self, status_code: int, detail: str, *, usage: dict | None = None):
         super().__init__(detail)
         self.status_code = status_code
         self.detail = detail
+        self.usage = usage
 
 
 class Tutor(Protocol):
@@ -201,7 +202,8 @@ class ChatCompletionsChat:
     async def stream(self, messages: list[dict], tools: list[dict] | None = None) -> AsyncIterator[tuple[str, object]]:
         settings = self.settings
         base_url, api_key = provider_endpoint(settings)
-        payload = {"model": settings.llm_model, "messages": messages, "stream": True}
+        payload = {"model": settings.llm_model, "messages": messages, "stream": True,
+                   "stream_options": {"include_usage": True}}
         if tools:
             payload["tools"] = tools
             payload["tool_choice"] = "auto"
@@ -219,7 +221,10 @@ class ChatCompletionsChat:
                         raise error
                     if response.headers.get("content-type", "").startswith("application/json"):
                         # The provider ignored stream=true: forward its real, complete output once.
-                        choice = json.loads(await response.aread())["choices"][0]
+                        body = json.loads(await response.aread())
+                        if isinstance(body.get("usage"), dict):
+                            yield "usage", body["usage"]
+                        choice = body["choices"][0]
                         message = choice.get("message") or {}
                         if message.get("content"):
                             yield "text", message["content"]
@@ -242,6 +247,8 @@ class ChatCompletionsChat:
                             raise ValueError("Invalid chunk")
                         if chunk.get("error"):
                             raise ProviderError(502, "模型服务在生成过程中返回错误，请重试。")
+                        if isinstance(chunk.get("usage"), dict):
+                            yield "usage", chunk["usage"]
                         for choice in chunk.get("choices") or []:
                             delta = choice.get("delta") or {}
                             text = delta.get("content")
@@ -270,6 +277,10 @@ class ChatCompletionsChat:
             raise ProviderError(502, "模型流式响应格式无法解析，请检查接口兼容性后重试。") from None
 
     async def complete_json(self, messages: list[dict]) -> dict:
+        result, _ = await self.complete_json_with_usage(messages)
+        return result
+
+    async def complete_json_with_usage(self, messages: list[dict]) -> tuple[dict, dict | None]:
         settings = self.settings
         base_url, api_key = provider_endpoint(settings)
         payload = {"model": settings.llm_model, "messages": messages, "response_format": {"type": "json_object"}}
@@ -285,10 +296,13 @@ class ChatCompletionsChat:
         error = status_error(response.status_code)
         if error:
             raise error
+        usage = None
         try:
-            result = json.loads(response.json()["choices"][0]["message"]["content"])
+            body = response.json()
+            usage = body.get("usage") if isinstance(body, dict) else None
+            result = json.loads(body["choices"][0]["message"]["content"])
             if not isinstance(result, dict):
                 raise ValueError("Not an object")
-            return result
+            return result, usage
         except (ValueError, KeyError, IndexError, TypeError):
-            raise ProviderError(502, "模型输出不是有效的 JSON。") from None
+            raise ProviderError(502, "模型输出不是有效的 JSON。", usage=usage) from None

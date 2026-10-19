@@ -1,0 +1,85 @@
+.usage {
+  position: relative;
+  display: inline-block;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  transition: background-color var(--t-hover) var(--ease-out), color var(--t-hover) var(--ease-out);
+}
+
+.trigger::-webkit-details-marker {
+  display: none;
+}
+
+.trigger:hover,
+.usage[open] .trigger {
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+}
+
+.detail {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 30;
+  width: 280px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-popover); /* taste-skill-ignore */
+  color: var(--text-secondary);
+  transform-origin: top left;
+  animation: usage-pop 180ms var(--ease-spring);
+}
+
+.alignRight .detail {
+  right: 0;
+  left: auto;
+  transform-origin: top right;
+}
+
+@keyframes usage-pop {
+  from {
+    opacity: 0;
+    transform: translateY(-5px) scale(0.96);
+  }
+}
+
+.detail dl {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.detail dl div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.detail dd {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.detail p {
+  margin-top: 8px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  line-height: 1.55;
+}

@@ -27,7 +27,9 @@ def new_chat(client, subject_id=None):
 
 
 def recalled(model, call_index):
-    return [(m["summary"], m["scope"]) for m in context_of(model.calls[call_index])["learner_memories"]]
+    context = context_of(model.calls[call_index])
+    # Preferences remain recallable as evidence, separate from authoritative USER policy.
+    return [(m["summary"], m["scope"]) for m in context.get("preference_evidence", []) + context["learner_memories"]]
 
 
 def test_subject_crud_and_conversation_membership(tmp_path):

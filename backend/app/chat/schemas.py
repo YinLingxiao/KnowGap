@@ -87,6 +87,27 @@ class DispatchThread(StrictModel):
     title: Title
     task: MessageText
     thread_id: str | None = None
+    skill: Literal["deep_explain", "socratic_practice", "study_note_builder", "feynman_challenge", "general"] | None = None
+
+
+class ProposalInput(StrictModel):
+    title: Title
+    task: MessageText
+    reason: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=400)]
+
+
+class ProposeThreads(StrictModel):
+    proposals: list[ProposalInput] = Field(min_length=1, max_length=4)
+
+
+class ThreadProposal(ProposalInput):
+    id: str
+    thread_id: str | None = None
+
+
+class ConfirmProposal(StrictModel):
+    message_id: str
+    proposal_id: str
 
 
 class ReportProgress(StrictModel):
@@ -230,7 +251,10 @@ class ChatMessage(BaseModel):
     tool_calls: list[ToolCallRecord] = Field(default_factory=list)
     thread_summary: ThreadSummary | None = None
     thread_update: ThreadUpdate | None = None
+    thread_proposals: list[ThreadProposal] = Field(default_factory=list)
     pending_approval: dict | None = None
+    checkpoint_available: bool = False
+    checkpoint_blocked_reason: str | None = None
     created_at: str
     updated_at: str
 

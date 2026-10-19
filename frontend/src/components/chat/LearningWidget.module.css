@@ -1,0 +1,433 @@
+/* 可交互学习微件（GPT-6 Intelligent UI / A2UI 风格：原生主题、60fps 本地响应、双向语义回流） */
+.skeletonCard {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0;
+  padding: 12px 16px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 12px;
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+}
+
+.skeletonIcon {
+  color: var(--accent);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.widgetCard {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 14px 0;
+  padding: 14px 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-xl);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-elevated);
+  animation: widget-enter 220ms var(--ease-spring);
+}
+
+@keyframes widget-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.985);
+  }
+}
+
+.widgetHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.widgetTitleWrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.widgetBadge {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.widgetTitle {
+  color: var(--text);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.stepCounter,
+.formulaBadge {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 1. step_simulator 状态网格 */
+.stateGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 8px;
+}
+
+.stateCell {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-subtle);
+  transition: border-color 180ms var(--ease-out), background-color 180ms var(--ease-out), transform 180ms var(--ease-spring);
+}
+
+.stateCellActive {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  transform: translateY(-1px);
+}
+
+.stateKey {
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+
+.stateVal {
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.stepBody {
+  padding: 10px 12px;
+  border-radius: var(--radius-lg);
+  background: var(--bg-subtle);
+}
+
+.stepLabel {
+  color: var(--text);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+.stepDetail {
+  margin-top: 3px;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  line-height: 1.6;
+}
+
+.widgetFoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.stepControls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ctrlBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  background: var(--bg-subtle);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.ctrlBtn:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.ctrlBtn:disabled {
+  opacity: 0.4;
+}
+
+.stepDots {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.stepDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--border-strong);
+  transition: width 180ms var(--ease-spring), background-color 180ms var(--ease-out);
+}
+
+.stepDotOn {
+  width: 18px;
+  background: var(--accent);
+}
+
+.askAiBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border-strong));
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.askAiBtn:hover {
+  background: var(--accent-soft-strong);
+  color: var(--text);
+}
+
+.footHint {
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+
+/* 2. comparison_matrix 交互对比卡 */
+.dimFilterRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.dimPill {
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.dimPill:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.dimPillOn {
+  border-color: var(--border-strong);
+  background: var(--bg-active);
+  color: var(--text);
+  font-weight: 500;
+}
+
+.matrixScroll {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.matrixTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-xs);
+}
+
+.matrixTable th,
+.matrixTable td {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  text-align: left;
+  vertical-align: top;
+}
+
+.matrixTable th {
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.dimCell {
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.matrixTakeaway {
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  line-height: 1.55;
+}
+
+/* 3. parameter_lab 参数实验室 */
+.labGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sliderRow {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 9px 12px;
+  border-radius: var(--radius);
+  background: var(--bg-subtle);
+}
+
+.sliderHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: var(--text-xs);
+}
+
+.sliderHeader strong {
+  font-family: var(--font-mono);
+  color: var(--accent-text);
+}
+
+.sliderRow input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.barMeter {
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--border);
+}
+
+.barMeter span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+  transition: width 80ms linear;
+}
+
+/* 4. micro_quiz 随堂微测 */
+.quizOptions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.quizOptionBtn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--bg-subtle);
+  color: var(--text);
+  font-size: var(--text-xs);
+  text-align: left;
+}
+
+.quizOptionBtn:hover {
+  background: var(--bg-hover);
+}
+
+.quizOptionRight {
+  border-color: var(--green);
+  background: var(--green-soft);
+}
+
+.quizOptionWrong {
+  border-color: var(--orange);
+  background: var(--orange-soft);
+}
+
+.quizOptionLetter {
+  display: inline-grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.quizOptionText {
+  flex: 1;
+  line-height: 1.5;
+}
+
+.iconRight {
+  flex-shrink: 0;
+  color: var(--green);
+}
+
+.iconWrong {
+  flex-shrink: 0;
+  color: var(--orange);
+}
+
+.quizFeedback {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-xs);
+  line-height: 1.55;
+}
+
+.feedbackRight {
+  background: var(--green-soft);
+  color: var(--text);
+}
+
+.feedbackWrong {
+  background: var(--orange-soft);
+  color: var(--text);
+}
+
+.quizFeedbackFoot {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
+}

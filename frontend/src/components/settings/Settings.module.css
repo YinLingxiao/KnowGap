@@ -1,28 +1,29 @@
 /* ---------- 对话框外壳 ---------- */
 .dialog {
-  width: min(760px, calc(100vw - 32px));
+  width: min(920px, calc(100vw - 40px));
+  height: min(680px, calc(100vh - 56px));
   max-width: none;
-  max-height: min(820px, calc(100vh - 48px));
+  max-height: none;
   margin: auto;
   padding: 0;
   overflow: hidden;
   border: 1px solid var(--border-strong);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   background: var(--bg);
   color: var(--text);
   box-shadow: var(--shadow-popover);
-  animation: dialog-in 200ms var(--ease);
+  animation: settings-pop 220ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .dialog::backdrop {
-  background: rgb(10 10 12 / 38%);
-  animation: fade-in 200ms var(--ease);
+  backdrop-filter: blur(4px);
+  background: rgb(0 0 0 / 50%);
+  animation: fade-in 180ms var(--ease-out);
 }
 
 .frame {
-  display: flex;
-  flex-direction: column;
-  max-height: inherit;
+  height: 100%;
+  min-height: 0;
 }
 
 .head {
@@ -545,10 +546,10 @@
   box-shadow: 0 1px 2px rgb(0 0 0 / 8%), 0 0 0 1px var(--border);
 }
 
-@keyframes dialog-in {
+@keyframes settings-pop {
   from {
     opacity: 0;
-    transform: translateY(6px) scale(0.985);
+    transform: translateY(8px) scale(0.975);
   }
 }
 
@@ -601,7 +602,669 @@
 @media (prefers-reduced-motion: reduce) {
   .dialog,
   .dialog::backdrop,
-  .guide {
+  .guide,
+  .tabPane {
     animation: none;
+  }
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+  padding: 14px 10px;
+  overflow-y: auto;
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--border-subtle);
+}
+
+.searchBox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--bg-subtle);
+  color: var(--text-tertiary);
+}
+
+.searchBox input {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+
+.navGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.groupTitle {
+  padding: 0 10px 4px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  text-align: left;
+}
+
+.navItem:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.navItemActive {
+  background: var(--bg-active);
+  color: var(--text);
+  font-weight: 500;
+}
+
+.content {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+}
+
+.contentScroll {
+  height: 100%;
+  padding: 28px 36px 40px;
+  overflow-y: auto;
+}
+
+.closeBtn {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  color: var(--text-tertiary);
+}
+
+.closeBtn:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.tabPane {
+  animation: pane-enter 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.sectionTitle {
+  margin-bottom: 6px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.sectionLabel {
+  margin: 18px 0 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+}
+
+.sectionHeaderRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.sectionHeaderRow .sectionLabel {
+  margin: 0;
+}
+
+.capacityTag {
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.reflectStats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 12px 0 6px;
+}
+
+.reflectStatCard {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--bg-subtle);
+}
+
+.reflectStatValue {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.reflectStatLabel {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.reflectBadge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--green-soft);
+  color: var(--green);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.quoteAfter {
+  margin-top: 3px;
+  color: var(--green);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.skillBadge {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.skillHeadRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.skillHeadActions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.skillNotice {
+  margin-top: 10px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-size: 12px;
+}
+
+.skillEditorCard {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-card);
+}
+
+.skillEditorGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 12px;
+}
+
+.skillField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.skillField > span {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.skillTextarea {
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--bg-subtle);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.55;
+  resize: vertical;
+}
+
+.skillTextarea:focus {
+  border-color: var(--accent);
+  background: var(--bg-elevated);
+}
+
+.skillEditorActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.skillBadgeInline {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.skillTriggerTag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--bg-subtle);
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.skillContentPreview {
+  display: -webkit-box;
+  overflow: hidden;
+  margin-top: 4px;
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.5;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.skillRowControls {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.settingRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.settingRowInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.settingRowTitle {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.settingRowDesc {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  line-height: 1.5;
+}
+
+.pillGroup {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  padding: 2px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--bg-subtle);
+}
+
+.pillOption {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 11px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  transition: background-color 160ms var(--ease-out), color 160ms var(--ease-out), box-shadow 160ms var(--ease-out);
+}
+
+.pillOptionActive {
+  background: var(--bg-active);
+  color: var(--text);
+  font-weight: 500;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 18%);
+}
+
+.switch {
+  position: relative;
+  flex-shrink: 0;
+  width: 36px;
+  height: 20px;
+  padding: 2px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--bg-active);
+}
+
+.switchOn {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.thumb {
+  display: block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.switchOn .thumb {
+  transform: translateX(16px);
+}
+
+.rowBtn,
+.textBtn {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--bg-subtle);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.rowBtn:hover:not(:disabled),
+.textBtn:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.rowBtnPrimary {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 8px;
+  background: var(--ink-solid);
+  color: var(--on-ink);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.rowBtnPrimary:hover:not(:disabled) {
+  background: var(--ink-solid-hover);
+}
+
+.rowBtnPrimary:disabled,
+.rowBtn:disabled {
+  opacity: 0.45;
+}
+
+.textBtnDanger {
+  color: var(--red);
+}
+
+.accountHead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+/* LobeHub 图 4 风格圆角分组容器与兴趣领域胶囊墙 */
+.groupCard {
+  overflow: hidden;
+  margin-top: 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 14px;
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-card);
+}
+
+.groupCardHead {
+  padding: 11px 18px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-subtle);
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.groupCardBody {
+  padding: 0 18px;
+}
+
+.groupCardBody > :last-child {
+  border-bottom: 0;
+}
+
+.domainRow {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.domainGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.domainTag {
+  display: inline-flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  transition:
+    background-color 150ms var(--ease-out),
+    border-color 150ms var(--ease-out),
+    color 150ms var(--ease-out);
+}
+
+.domainTag:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.domainTagActive {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.accountAvatar {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-lg);
+  background: var(--bg-active);
+  font-weight: 600;
+}
+
+.nameForm {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.nameForm input,
+.noteInput,
+.pathInput {
+  height: 32px;
+  min-width: 0;
+  padding: 0 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--bg-subtle);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+
+.nameForm input {
+  width: 180px;
+}
+
+.pathRow {
+  display: flex;
+  flex-shrink: 0;
+  gap: 8px;
+  align-items: center;
+}
+
+.pathInput {
+  width: min(240px, 34vw);
+}
+
+.quote {
+  margin-top: 4px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.entryList {
+  display: flex;
+  flex-direction: column;
+}
+
+.entry {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 13px;
+}
+
+.noteComposer {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.noteInput {
+  flex: 1;
+}
+
+.embed {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.emptyLine {
+  padding: 14px 0;
+  color: var(--text-tertiary);
+  font-size: 13px;
+}
+
+.skillMeta {
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
+@keyframes pane-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@media (max-width: 720px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .sidebar {
+    max-height: 168px;
+    border-right: 0;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .contentScroll {
+    padding: 24px 16px 32px;
+  }
+
+  .settingRow {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
   }
 }

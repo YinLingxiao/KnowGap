@@ -33,8 +33,8 @@ export interface SendFailure {
 }
 
 const NEW = "new";
-const ACTIVE_KEY = `knowgap.chat.active.v1:${API_BASE_URL}`;
-const DRAFTS_KEY = `knowgap.chat.drafts.v1:${API_BASE_URL}`;
+const ACTIVE_KEY_BASE = `knowgap.chat.active.v1:${API_BASE_URL}`;
+const DRAFTS_KEY_BASE = `knowgap.chat.drafts.v1:${API_BASE_URL}`;
 
 function newId(): string {
   return typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -65,7 +65,9 @@ function sortSummaries(items: ConversationSummary[]): ConversationSummary[] {
   return items.slice().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
-export function useChat(notify: Notify) {
+export function useChat(notify: Notify, userId: string) {
+  const activeKey = `${userId}:${ACTIVE_KEY_BASE}`;
+  const draftsKey = `${userId}:${DRAFTS_KEY_BASE}`;
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [listLoading, setListLoading] = useState(true);
   const [listError, setListError] = useState<ApiError | null>(null);
@@ -93,8 +95,8 @@ export function useChat(notify: Notify) {
 
   const setActiveId = useCallback((id: string | null) => {
     setActiveIdState(id);
-    storage(() => (id ? localStorage.setItem(ACTIVE_KEY, id) : localStorage.removeItem(ACTIVE_KEY)), undefined);
-  }, []);
+    storage(() => (id ? localStorage.setItem(activeKey, id) : localStorage.removeItem(activeKey)), undefined);
+  }, [activeKey]);
 
   const upsertSummary = useCallback((summary: ConversationSummary | null) => {
     if (!summary) return;
@@ -168,7 +170,7 @@ export function useChat(notify: Notify) {
         });
         setActiveIdState((current) => {
           if (current !== id) return current;
-          storage(() => localStorage.removeItem(ACTIVE_KEY), undefined);
+          storage(() => localStorage.removeItem(activeKey), undefined);
           return null;
         });
         notify({ tone: "info", title: "这个对话已不存在", description: "可能已在其他页面删除。" });
@@ -176,7 +178,7 @@ export function useChat(notify: Notify) {
       }
       setThreads((all) => ({ ...all, [id]: { messages: all[id]?.messages ?? [], loading: false, error: apiError } }));
     }
-  }, [notify, putConversation]);
+  }, [notify, putConversation, activeKey]);
 
   const openConversation = useCallback((id: string) => {
     setSendFailure(null);
@@ -188,13 +190,13 @@ export function useChat(notify: Notify) {
   // 首次加载：题目、会话列表、记忆；恢复刷新前打开的会话
   useEffect(() => {
     setDrafts(storage(() => {
-      const parsed: unknown = JSON.parse(localStorage.getItem(DRAFTS_KEY) ?? "{}");
+      const parsed: unknown = JSON.parse(localStorage.getItem(draftsKey) ?? "{}");
       return parsed && typeof parsed === "object" ? (parsed as Record<string, string>) : {};
     }, {}));
     void chatApi.listProblems().then(setProblems).catch(() => setProblems([]));
     void loadMemories();
     void refreshList();
-    const saved = storage(() => localStorage.getItem(ACTIVE_KEY), null);
+    const saved = storage(() => localStorage.getItem(activeKey), null);
     if (saved) {
       setActiveIdState(saved);
       void loadConversation(saved);
@@ -207,9 +209,9 @@ export function useChat(notify: Notify) {
     if (!restored) return;
     storage(() => {
       const kept = Object.fromEntries(Object.entries(drafts).filter(([, value]) => value));
-      localStorage.setItem(DRAFTS_KEY, JSON.stringify(kept));
+      localStorage.setItem(draftsKey, JSON.stringify(kept));
     }, undefined);
-  }, [drafts, restored]);
+  }, [drafts, restored, draftsKey]);
 
   const draftKey = activeId ?? NEW;
   const setDraft = useCallback((value: string) => {

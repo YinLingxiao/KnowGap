@@ -1,18 +1,32 @@
 "use client";
 
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
-import { ArrowDown, BookOpenCheck, Brain, CircleAlert, CircleStop, Dumbbell, FileText, RotateCcw } from "lucide-react";
+import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import {
+  ArrowDown, ArrowUpRight, BookOpenCheck, Brain, CheckCircle2,
+  Circle, CircleAlert, CircleDashed, CircleStop, CornerDownRight, Dumbbell, FileText, RotateCcw,
+} from "lucide-react";
 import type { StreamPhase } from "@/hooks/useChat";
+import { toApiError } from "@/lib/api/errors";
 import type { ChatMessage, LearnerMemory } from "@/lib/chat/types";
 import { cx } from "@/lib/cx";
 import type { Problem } from "@/lib/types";
 import { CopyButton, Markdown } from "./Markdown";
+import { ThreadProposals } from "./ThreadProposals";
 import styles from "./MessageList.module.css";
 
 const ASSESSMENT: Record<string, { label: string; tone: string }> = {
   correct: { label: "判断正确", tone: styles.good },
   incorrect: { label: "还有问题", tone: styles.warn },
   uncertain: { label: "依据还不够", tone: styles.muted },
+};
+
+const TOOL_LABELS: Record<string, string> = {
+  read: "读取工作区文件",
+  write: "写入工作区文件",
+  edit: "修改工作区文件",
+  bash: "执行终端命令",
+  session_search: "检索历史会话",
+  memory: "更新长期笔记",
 };
 
 interface MessageListProps {
@@ -25,10 +39,14 @@ interface MessageListProps {
   subjectNames: Record<string, string>;
   phase: StreamPhase | null;
   followNonce: number;
+  /** 会话流顶部插槽（如学习空间的 Today 分割线与开场引导） */
+  topSlot?: ReactNode;
   onRegenerate: () => void;
   onStartExercise: (problemId: string) => void;
   onOpenMemories: (ids: string[]) => void;
   onOpenSummary?: (threadId: string) => void;
+  onConfirmProposal?: (messageId: string, proposalId: string) => Promise<string>;
+  onResumeCheckpoint?: (messageId: string) => Promise<void>;
   onDecideTool?: (approvalId: string, allow: boolean) => void;
 }
 
@@ -36,7 +54,7 @@ function ExerciseCard({ problem, fallback }: { problem: Problem | undefined; fal
   return (
     <section className={styles.exercise} aria-label="练习题">
       <header className={styles.exerciseHead}>
-        <Dumbbell size={14} aria-hidden />
+        <Dumbbell size={13} aria-hidden />
         <span>练习</span>
         {problem && <strong>{problem.title}</strong>}
       </header>
@@ -64,9 +82,32 @@ function ExerciseCard({ problem, fallback }: { problem: Problem | undefined; fal
   );
 }
 
+function ResumeCheckpoint({ onResume }: { onResume: () => Promise<void> }) {
+  const busy = useRef(false);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState("");
+  const resume = async () => {
+    if (busy.current) return;
+    busy.current = true;
+    setPending(true);
+    setError("");
+    try { await onResume(); }
+    catch (error) { setError(toApiError(error).message); }
+    finally { busy.current = false; setPending(false); }
+  };
+  return (
+    <span>
+      <button className={styles.inlineButton} onClick={() => void resume()} disabled={pending} aria-busy={pending}>
+        <RotateCcw size={13} aria-hidden />{pending ? "正在恢复…" : "从断点继续"}
+      </button>
+      {error && <span className={styles.resumeError} role="alert">{error}</span>}
+    </span>
+  );
+}
+
 export function MessageList({
-  conversationId, messages, problems, memoriesById, conversationSubjectId, subjectNames, phase, followNonce,
-  onRegenerate, onStartExercise, onOpenMemories, onOpenSummary, onDecideTool,
+  conversationId, messages, problems, memoriesById, conversationSubjectId, subjectNames, phase, followNonce, topSlot,
+  onRegenerate, onStartExercise, onOpenMemories, onOpenSummary, onDecideTool, onConfirmProposal, onResumeCheckpoint,
 }: MessageListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const following = useRef(true);
@@ -85,12 +126,10 @@ export function MessageList({
     setShowJump(!near);
   };
 
-  // 只在用户停留在底部附近时跟随新内容；向上阅读时不抢位置
   useLayoutEffect(() => {
     if (following.current) toBottom();
   }, [messages, toBottom]);
 
-  // 发送新消息、切换会话：回到底部
   useLayoutEffect(() => {
     following.current = true;
     setShowJump(false);
@@ -99,12 +138,16 @@ export function MessageList({
 
   const last = messages[messages.length - 1];
   const lastUser = [...messages].reverse().find((message) => message.role === "user");
+  const firstLatestTurnIdx = lastUser
+    ? messages.findIndex((m, idx) => idx > messages.indexOf(lastUser) && m.role === "assistant")
+    : -1;
 
   return (
     <div className={styles.wrap}>
       <div ref={scrollRef} className={styles.scroll} onScroll={onScroll}>
         <div className={styles.list} role="log" aria-live="polite" aria-relevant="additions">
-          {messages.map((message) => {
+          {topSlot}
+          {messages.map((message, index) => {
             if (message.kind === "exercise") {
               return (
                 <div key={message.id} className={styles.row}>
@@ -114,10 +157,22 @@ export function MessageList({
             }
             if (message.role === "user") {
               const attempt = message.attempt ? ASSESSMENT[message.attempt.assessment] : null;
+              // 统计紧随这条用户消息之后的 Thread 进展更新数（参照 Claude: ↳ 1 reply / 2 replies）
+              let replyUpdates = 0;
+              for (let j = index + 1; j < messages.length; j += 1) {
+                if (messages[j].role === "user") break;
+                if (messages[j].threadUpdate || messages[j].threadSummary) replyUpdates += 1;
+              }
               return (
                 <div key={message.id} className={cx(styles.row, styles.userRow)}>
                   <div className={styles.userBubble}>{message.content}</div>
                   <div className={styles.userMeta}>
+                    {replyUpdates > 0 && (
+                      <span className={styles.replyCount}>
+                        <CornerDownRight size={11} aria-hidden />
+                        {replyUpdates} {replyUpdates === 1 ? "reply" : "replies"}
+                      </span>
+                    )}
                     {message.attempt && attempt && (
                       <span className={cx(styles.note, attempt.tone)} title={`依据：${message.attempt.evidence}`}>
                         <BookOpenCheck size={12} aria-hidden />
@@ -142,15 +197,26 @@ export function MessageList({
                 </div>
               );
             }
+            const showNewDivider = index === firstLatestTurnIdx && Boolean(conversationSubjectId);
             if (message.threadUpdate) {
               const card = message.threadUpdate;
-              const label = { queued: "已排队", working: "正在执行", waiting: "等待你", idle: "本轮完成", failed: "执行失败", cancelled: "已停止" }[card.status];
+              const isIdle = card.status === "idle";
               return (
                 <div key={message.id} className={styles.row}>
-                  <button className={styles.summary} onClick={() => onOpenSummary?.(card.threadId)}>
-                    <span className={styles.summaryTitle}>{card.title} · {label}</span>
-                    <span className={styles.summaryBody}>{card.summary}</span>
-                    <small>打开 Thread 查看详情</small>
+                  {showNewDivider && (
+                    <div className={styles.newLine} aria-hidden>
+                      <span>New</span>
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    className={styles.threadPill}
+                    onClick={() => onOpenSummary?.(card.threadId)}
+                    title={card.summary}
+                  >
+                    <i className={cx(styles.pillDot, isIdle ? styles.dot_hollow : styles[`dot_${card.status}`])} aria-hidden />
+                    <span className={styles.pillTitle}>{card.title}</span>
+                    {card.summary && <span className={styles.pillSummary}>{card.summary}</span>}
                   </button>
                 </div>
               );
@@ -160,8 +226,17 @@ export function MessageList({
               const related = card.memoryIds.map((id) => memoriesById[id]).filter(Boolean);
               return (
                 <div key={message.id} className={styles.row}>
-                  <button className={styles.summary} onClick={() => onOpenSummary?.(card.threadId)}>
-                    <span className={styles.summaryTitle}>Thread「{card.title}」已解决</span>
+                  {showNewDivider && (
+                    <div className={styles.newLine} aria-hidden>
+                      <span>New</span>
+                    </div>
+                  )}
+                  <button className={cx(styles.summary, styles.summaryResolved)} onClick={() => onOpenSummary?.(card.threadId)}>
+                    <span className={styles.summaryHead}>
+                      <i className={cx(styles.summaryDot, styles.dot_resolved)} aria-hidden />
+                      <span className={styles.summaryTitle}>Thread「{card.title}」已解决</span>
+                      <ArrowUpRight size={13} className={styles.summaryArrow} aria-hidden />
+                    </span>
                     <span className={styles.summaryBody}>{card.summary}</span>
                     {card.takeaways.length > 0 && (
                       <ul className={styles.takeaways}>
@@ -179,7 +254,20 @@ export function MessageList({
             }
             const streaming = message.status === "streaming";
             const isLast = message === last && message.replyTo === lastUser?.id;
-            const visibleTools = message.toolCalls.filter((call) => !["dispatch_thread", "report_progress", "exercise_reference"].includes(call.name));
+            const planCalls = message.toolCalls.filter((call) => call.name === "plan_steps");
+            let planSteps: Array<{ title: string; status: string }> = [];
+            if (planCalls.length > 0) {
+              const latestPlan = planCalls[planCalls.length - 1];
+              try {
+                const rawPlan = JSON.parse(latestPlan.output || latestPlan.arguments || "{}");
+                if (Array.isArray(rawPlan.steps)) {
+                  planSteps = rawPlan.steps.filter((s: unknown) => Boolean(s && typeof s === "object" && "title" in s));
+                }
+              } catch { /* ignore malformed partial JSON */ }
+            }
+            const visibleTools = message.toolCalls.filter((call) => ![
+              "dispatch_thread", "propose_threads", "report_progress", "exercise_reference", "plan_steps",
+            ].includes(call.name));
             const used = message.usedMemoryIds.filter((id) => memoriesById[id]);
             const outside = [...new Set(used.map((id) => memoriesById[id].subjectId)
               .filter((id): id is string => Boolean(id) && id !== conversationSubjectId))];
@@ -187,24 +275,62 @@ export function MessageList({
             const suggested = message.suggestedProblemId ? problems[message.suggestedProblemId] : undefined;
             return (
               <div key={message.id} className={cx(styles.row, styles.assistantRow)}>
-                {visibleTools.length > 0 && (
-                  <div className={styles.tools}>
-                    {visibleTools.map((call) => (
-                      <details key={call.id} className={styles.tool} open={!call.output}>
-                        <summary>{call.name}{call.output ? (call.ok ? "" : " · 未成功") : " · 进行中"}</summary>
-                        {call.arguments && <pre>{call.arguments}</pre>}
-                        {call.output && <pre>{call.output}</pre>}
-                      </details>
+                {showNewDivider && (
+                  <div className={styles.newLine} aria-hidden>
+                    <span>New</span>
+                  </div>
+                )}
+                {planSteps.length > 0 && (
+                  <div className={styles.planCard} role="status" aria-label="执行步骤">
+                    {planSteps.map((step, stepIdx) => (
+                      <div key={`${stepIdx}-${step.title}`} className={styles.planStepRow}>
+                        {step.status === "completed" ? (
+                          <CheckCircle2 size={14} className={styles.planIconDone} aria-hidden />
+                        ) : step.status === "in_progress" ? (
+                          <Circle size={14} className={styles.planIconActive} aria-hidden />
+                        ) : (
+                          <CircleDashed size={14} className={styles.planIconPending} aria-hidden />
+                        )}
+                        <span className={cx(styles.planStepText, step.status === "pending" && styles.planStepMuted)}>
+                          {step.title}
+                        </span>
+                      </div>
                     ))}
+                  </div>
+                )}
+                {visibleTools.length > 0 && (
+                  <div className={styles.toolChecklist}>
+                    {visibleTools.map((call) => {
+                      const done = Boolean(call.output);
+                      return (
+                        <details key={call.id} className={styles.toolCheckItem}>
+                          <summary>
+                            {done ? (
+                              call.ok ? (
+                                <CheckCircle2 size={14} className={styles.toolIconDone} aria-hidden />
+                              ) : (
+                                <CircleAlert size={14} className={styles.toolIconFail} aria-hidden />
+                              )
+                            ) : (
+                              <CircleDashed size={14} className={styles.toolIconSpin} aria-hidden />
+                            )}
+                            <span className={styles.toolName}>{TOOL_LABELS[call.name] ?? call.name}</span>
+                            <span className={styles.toolStatus}>{done ? (call.ok ? "已完成" : "未成功") : "执行中"}</span>
+                          </summary>
+                          {call.arguments && <pre>{call.arguments}</pre>}
+                          {call.output && <pre>{call.output}</pre>}
+                        </details>
+                      );
+                    })}
                   </div>
                 )}
                 {message.pendingApproval && onDecideTool && (
                   <div className={styles.approval}>
-                    <p>允许执行 {message.pendingApproval.name}？</p>
+                    <p>允许执行 {TOOL_LABELS[message.pendingApproval.name] ?? message.pendingApproval.name}？</p>
                     <pre>{message.pendingApproval.arguments}</pre>
                     <div>
                       <button onClick={() => onDecideTool(message.pendingApproval!.id, false)}>拒绝</button>
-                      <button onClick={() => onDecideTool(message.pendingApproval!.id, true)}>允许</button>
+                      <button className={styles.approvalPrimary} onClick={() => onDecideTool(message.pendingApproval!.id, true)}>允许</button>
                     </div>
                   </div>
                 )}
@@ -219,9 +345,18 @@ export function MessageList({
                       <i />
                       <i />
                     </span>
-                    正在思考
+                    正在思考…
                   </p>
                 ) : null}
+
+                {message.threadProposals && message.threadProposals.length > 0 && (
+                  <ThreadProposals
+                    proposals={message.threadProposals}
+                    disabled={message.status !== "complete"}
+                    onConfirm={onConfirmProposal ? (id) => onConfirmProposal(message.id, id) : undefined}
+                    onOpen={onOpenSummary}
+                  />
+                )}
 
                 {message.status === "failed" && (
                   <div className={styles.failure} role="alert">
@@ -229,8 +364,11 @@ export function MessageList({
                     <div>
                       <p className={styles.failureTitle}>{message.content ? "回复中断" : "没有拿到回复"}</p>
                       <p>{message.error ?? "模型请求失败。"}</p>
+                      {message.checkpointBlockedReason && <p>{message.checkpointBlockedReason}</p>}
                     </div>
-                    {isLast && (
+                    {message.checkpointAvailable && onResumeCheckpoint ? (
+                      <ResumeCheckpoint onResume={() => onResumeCheckpoint(message.id)} />
+                    ) : isLast && !message.checkpointBlockedReason && (
                       <button className={styles.inlineButton} onClick={onRegenerate} disabled={phase !== null && phase !== "analyzing"}>
                         <RotateCcw size={13} aria-hidden />
                         重试

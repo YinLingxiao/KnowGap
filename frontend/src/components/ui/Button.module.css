@@ -43,13 +43,12 @@
 }
 
 .primary {
-  background: var(--accent-solid);
-  color: var(--on-accent);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 12%);
+  background: var(--ink-solid);
+  color: var(--on-ink);
 }
 
 .primary:hover:not(:disabled) {
-  background: var(--accent-solid-hover);
+  background: var(--ink-solid-hover);
 }
 
 .secondary {

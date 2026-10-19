@@ -1,10 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Upload, X } from "lucide-react";
+import { GraduationCap, Plus, X } from "lucide-react";
 import { SPACE_COLORS, LEVELS } from "@/lib/chat/space";
 import type { Level, SpaceInput, Subject } from "@/lib/chat/types";
-import { Button } from "../ui/Button";
 import styles from "./CreateSpaceDialog.module.css";
 
 interface CreateSpaceDialogProps {
@@ -21,6 +20,7 @@ export function CreateSpaceDialog({ subject, onClose, onCreate, onUpdate }: Crea
   const [level, setLevel] = useState<Level | null>(subject?.level ?? null);
   const [deadline, setDeadline] = useState(subject?.deadline ?? "");
   const [color, setColor] = useState(subject?.color || SPACE_COLORS[0]);
+  const [colorOpen, setColorOpen] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
   const [working, setWorking] = useState(false);
   const [over, setOver] = useState(false);
@@ -35,11 +35,6 @@ export function CreateSpaceDialog({ subject, onClose, onCreate, onUpdate }: Crea
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
-
-  const cycleColor = () => {
-    const index = SPACE_COLORS.indexOf(color);
-    setColor(SPACE_COLORS[(index + 1) % SPACE_COLORS.length]);
-  };
 
   const addFiles = (list: FileList | null) => {
     if (!list) return;
@@ -79,68 +74,141 @@ export function CreateSpaceDialog({ subject, onClose, onCreate, onUpdate }: Crea
             <X size={16} />
           </button>
         </header>
-        <p className={styles.hint}>先说清想学会什么。AI 会在主对话协调，在右侧 Thread 中开始具体任务，并同步进展。</p>
-        <label className={styles.nameRow}>
-          <button type="button" className={styles.swatch} style={{ background: color }} onClick={cycleColor} aria-label="更换颜色" />
-          <input
-            ref={nameRef}
-            value={name}
-            maxLength={40}
-            placeholder="名称，例如日语"
-            aria-label="学习空间名称"
-            onChange={(event) => setName(event.target.value)}
-          />
-        </label>
+
+        <div className={styles.field}>
+          <label className={styles.label} htmlFor="space-name-input">
+            名称
+          </label>
+          <div className={styles.nameRow}>
+            <div className={styles.colorAnchor}>
+              <button
+                type="button"
+                className={styles.iconSwatch}
+                style={{ color }}
+                onClick={() => setColorOpen((v) => !v)}
+                aria-label="更换图标颜色"
+                title="更换颜色"
+              >
+                <GraduationCap size={15} />
+              </button>
+              {colorOpen && (
+                <div className={styles.colorPopover}>
+                  {SPACE_COLORS.map((item) => (
+                    <button
+                      key={item}
+                      type="button"
+                      className={color === item ? styles.dotOn : styles.dot}
+                      style={{ background: item }}
+                      onClick={() => {
+                        setColor(item);
+                        setColorOpen(false);
+                      }}
+                      aria-label={`颜色 ${item}`}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+            <input
+              id="space-name-input"
+              ref={nameRef}
+              value={name}
+              maxLength={40}
+              placeholder="例如：西班牙语学习、微积分、宏观经济学…"
+              onChange={(event) => setName(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.nativeEvent.isComposing && name.trim()) {
+                  event.preventDefault();
+                  void submit();
+                }
+              }}
+            />
+          </div>
+        </div>
+
         <label className={styles.field}>
-          <span>想学会什么</span>
+          <span className={styles.label}>
+            目标 <small className={styles.optional}>(可选)</small>
+          </span>
           <textarea
             value={goal}
             maxLength={400}
             rows={3}
-            placeholder="三个月后能用日语点餐和问路"
+            placeholder="描述你想在这个空间达成的学习目标，或希望重点攻克的内容…"
             onChange={(event) => setGoal(event.target.value)}
           />
         </label>
-        <div className={styles.field}>
-          <span>现在的基础</span>
-          <div className={styles.levels} role="radiogroup" aria-label="现在的基础">
-            {LEVELS.map((item) => (
+
+        {!editing ? (
+          <div className={styles.contextBox}>
+            <div className={styles.contextHead}>
+              <span className={styles.label}>
+                资料 <small className={styles.optional}>(可选)</small>
+              </span>
               <button
-                key={item.id}
                 type="button"
-                role="radio"
-                aria-checked={level === item.id}
-                className={level === item.id ? styles.levelOn : styles.level}
-                onClick={() => setLevel(level === item.id ? null : item.id)}
+                className={styles.addFileBtn}
+                onClick={() => fileRef.current?.click()}
+                aria-label="添加资料文件"
+                title="添加资料文件"
               >
-                {item.label}
+                <Plus size={15} />
               </button>
-            ))}
+            </div>
+            <div
+              className={over ? styles.dropOn : styles.drop}
+              onClick={() => fileRef.current?.click()}
+              onDragOver={(event) => { event.preventDefault(); setOver(true); }}
+              onDragLeave={() => setOver(false)}
+              onDrop={(event) => { event.preventDefault(); setOver(false); addFiles(event.dataTransfer.files); }}
+            >
+              <span>拖入文件，或点击手动添加</span>
+              <input ref={fileRef} type="file" accept=".pdf,.txt,.md" multiple hidden onChange={(event) => addFiles(event.target.files)} />
+            </div>
+            {files.length > 0 && (
+              <ul className={styles.fileList}>
+                {files.map((file) => <li key={file.name}>{file.name}</li>)}
+              </ul>
+            )}
           </div>
-        </div>
-        <label className={styles.field}>
-          <span>截止日期（可选）</span>
-          <input type="date" value={deadline} onChange={(event) => setDeadline(event.target.value)} />
-        </label>
-        {!editing && (
-          <div
-            className={over ? styles.dropOn : styles.drop}
-            onDragOver={(event) => { event.preventDefault(); setOver(true); }}
-            onDragLeave={() => setOver(false)}
-            onDrop={(event) => { event.preventDefault(); setOver(false); addFiles(event.dataTransfer.files); }}
-          >
-            <Upload size={14} aria-hidden />
-            <button type="button" onClick={() => fileRef.current?.click()}>拖入资料，或点此选择</button>
-            <span>PDF / TXT / Markdown，创建后上传</span>
-            <input ref={fileRef} type="file" accept=".pdf,.txt,.md" multiple hidden onChange={(event) => addFiles(event.target.files)} />
-            {files.length > 0 && <ul>{files.map((file) => <li key={file.name}>{file.name}</li>)}</ul>}
+        ) : (
+          <div className={styles.editExtra}>
+            <div className={styles.levels} role="radiogroup" aria-label="当前基础">
+              {LEVELS.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={level === item.id}
+                  className={level === item.id ? styles.levelOn : styles.level}
+                  onClick={() => setLevel(level === item.id ? null : item.id)}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+            <input
+              type="date"
+              className={styles.dateInput}
+              value={deadline}
+              aria-label="截止日期"
+              onChange={(event) => setDeadline(event.target.value)}
+            />
           </div>
         )}
+
         <footer className={styles.actions}>
-          <Button onClick={onClose} disabled={working}>取消</Button>
-          <Button variant="primary" onClick={() => void submit()} disabled={!name.trim()} loading={working}>
-            {editing ? "保存" : "创建"}
-          </Button>
+          <button type="button" className={styles.cancelBtn} onClick={onClose} disabled={working}>
+            取消
+          </button>
+          <button
+            type="button"
+            className={styles.submitBtn}
+            onClick={() => void submit()}
+            disabled={!name.trim() || working}
+          >
+            {working ? "处理中…" : editing ? "保存" : "创建空间"}
+          </button>
         </footer>
       </div>
     </div>

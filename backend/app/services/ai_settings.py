@@ -83,26 +83,36 @@ class AISettings:
 
     def agent_config(self) -> dict:
         raw = self._raw()
+        effort = raw.get("reasoning_effort")
+        if effort not in {"off", "low", "medium", "high"}:
+            effort = "medium"
         return {
             "workspace": raw.get("workspace") or "",
             "auto_approve": bool(raw.get("auto_approve")),
             "memory_write_approval": bool(raw.get("memory_write_approval")),
+            "reasoning_effort": effort,
         }
 
     def save_agent(self, body: dict) -> dict:
-        workspace = body.get("workspace", "")
-        if not isinstance(workspace, str) or len(workspace) > 500:
-            raise HTTPException(422, "工作区路径无效。")
-        workspace = workspace.strip()
-        if workspace and not Path(workspace).is_dir():
-            raise HTTPException(422, "工作区必须是已存在的文件夹。")
-        auto_approve = bool(body.get("auto_approve"))
-        memory_write_approval = bool(body.get("memory_write_approval"))
         with self.lock:
             payload = self._raw()
-            payload["workspace"] = workspace
-            payload["auto_approve"] = auto_approve
-            payload["memory_write_approval"] = memory_write_approval
+            if "workspace" in body:
+                workspace = body.get("workspace", "")
+                if not isinstance(workspace, str) or len(workspace) > 500:
+                    raise HTTPException(422, "工作区路径无效。")
+                workspace = workspace.strip()
+                if workspace and not Path(workspace).is_dir():
+                    raise HTTPException(422, "工作区必须是已存在的文件夹。")
+                payload["workspace"] = workspace
+            if "auto_approve" in body:
+                payload["auto_approve"] = bool(body.get("auto_approve"))
+            if "memory_write_approval" in body:
+                payload["memory_write_approval"] = bool(body.get("memory_write_approval"))
+            if "reasoning_effort" in body:
+                effort = body.get("reasoning_effort")
+                if effort not in {"off", "low", "medium", "high"}:
+                    raise HTTPException(422, "思考深度选项无效。")
+                payload["reasoning_effort"] = effort
             self._write(payload)
         return self.agent_config()
 

@@ -2,39 +2,73 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
-import { Brain, ChevronRight, CircleAlert, Folder, PanelLeftOpen, RotateCcw, X } from "lucide-react";
+import { Brain, ChevronRight, CircleAlert, Folder, Lightbulb, ListChecks, PanelLeftOpen, RotateCcw, Scale, X } from "lucide-react";
 import { useChat } from "@/hooks/useChat";
 import type { HealthState } from "@/hooks/useWorkbench";
 import { getAIConfig, type AIConfigStatus } from "@/lib/api/ai-config";
-import { API_BASE_URL, DATA_SOURCE, DEMO_STUDENT_ID } from "@/lib/config";
+import { API_BASE_URL, DATA_SOURCE } from "@/lib/config";
 import { cx } from "@/lib/cx";
 import type { Problem } from "@/lib/types";
 import { createMaterialClient } from "@/lib/api/material-client";
+import { chatApi } from "@/lib/chat/api";
 import type { SpaceInput } from "@/lib/chat/types";
 import { studiedLabel } from "@/lib/chat/space";
+import type { AuthUser } from "@/lib/api/auth";
+import { applyAppearance, readAppearance } from "@/lib/appearance";
+import { AuthView } from "../auth/AuthView";
+import authStyles from "../auth/AuthView.module.css";
+import { useAuth } from "../auth/useAuth";
 import { MaterialLibrary } from "../MaterialLibrary";
 import type { ModelSignal } from "../settings/ModelAccessCard";
-import { SettingsDialog } from "../settings/SettingsDialog";
+import { SettingsDialog, type SettingsTab } from "../settings/SettingsDialog";
 import { Toaster, useToasts } from "../ui/Toaster";
 import { COMPOSER_ID, Composer } from "./Composer";
 import { ConversationSidebar } from "./ConversationSidebar";
 import { MemoryDrawer } from "./MemoryDrawer";
 import { MessageList } from "./MessageList";
 import { CreateSpaceDialog } from "./CreateSpaceDialog";
+import { OnboardingStage } from "./OnboardingStage";
 import { SpacesPage } from "./SpacesPage";
 import { SubjectPage } from "./SubjectPage";
 import { SubjectPicker } from "./SubjectPicker";
 import styles from "./ChatApp.module.css";
 
 const NARROW = "(max-width: 860px)";
-const VIEW_KEY = `knowgap.chat.view.v1:${API_BASE_URL}`;
+function viewKey(userId: string) {
+  return `${userId}:knowgap.chat.view.v1:${API_BASE_URL}`;
+}
+
+const STARTERS = [
+  { icon: Lightbulb, label: "解释一个概念", text: "用直观的类比帮我理解：" },
+  { icon: ListChecks, label: "出一道练习题", text: "围绕下面的主题出一道题，先别给答案：" },
+  { icon: Scale, label: "对比两个概念", text: "对比这两个概念的区别与适用场景：" },
+];
+
+/** 首次登录前置破冰访谈的 3 轮辅助快捷回答胶囊 */
+const ONBOARDING_QUICK_REPLIES: string[][] = [
+  [
+    "我正在学一门课程，想把基础概念弄清楚",
+    "我正在准备考试，希望围绕薄弱点练习",
+    "我在自主探索新领域，目标还在慢慢明确",
+  ],
+  [
+    "先给我一个具体的例子或直观类比，顺着例子理解概念最容易懂",
+    "先给核心结论和对比表格，再展开细节，别铺垫太长",
+    "推导过程要严谨，把前因后果和适用边界一步步讲透",
+  ],
+  [
+    "做题时先给一小步提示让我自己想，别直接泄底完整答案",
+    "讲完核心概念后随手考我 1 道小题，帮我检验是不是真懂了",
+    "卡住时直接给我正误对比和完整解析，这样效率最高",
+  ],
+];
 
 /** 主区域显示什么：对话、学习空间总览、某个学习空间，或通用资料 */
 type View = { type: "chat" } | { type: "subject"; id: string } | { type: "materials" } | { type: "spaces" };
 
-function readView(): View {
+function readView(userId: string): View {
   try {
-    const parsed: unknown = JSON.parse(localStorage.getItem(VIEW_KEY) ?? "null");
+    const parsed: unknown = JSON.parse(localStorage.getItem(viewKey(userId)) ?? "null");
     if (parsed && typeof parsed === "object" && "type" in parsed) {
       if (parsed.type === "subject" && "id" in parsed && typeof parsed.id === "string") return { type: "subject", id: parsed.id };
       if (parsed.type === "materials") return { type: "materials" };
@@ -44,34 +78,48 @@ function readView(): View {
   return { type: "chat" };
 }
 
-function greeting(hour = new Date().getHours()): string {
-  if (hour < 5) return "夜深了，还在学习";
-  if (hour < 11) return "早上好";
-  if (hour < 13) return "中午好";
-  if (hour < 18) return "下午好";
-  return "晚上好";
+function greeting(name: string, hour = new Date().getHours()): string {
+  if (hour < 5) return `夜深了，${name}`;
+  if (hour < 11) return `早上好，${name}`;
+  if (hour < 13) return `中午好，${name}`;
+  if (hour < 18) return `下午好，${name}`;
+  return `晚上好，${name}`;
 }
 
 function isTyping(target: EventTarget | null) {
   return target instanceof HTMLElement && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
 }
 
-export function ChatApp() {
+function AuthenticatedChat({ user, onLogout, onRename }: {
+  user: AuthUser;
+  onLogout: () => void;
+  onRename: (name: string) => Promise<void>;
+}) {
   const { toasts, push, dismiss } = useToasts();
-  const chat = useChat(push);
+  const chat = useChat(push, user.id);
   const [narrow, setNarrow] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [memoryFocus, setMemoryFocus] = useState<string[]>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>("general");
+  const openSettings = useCallback((tab: SettingsTab = "general") => {
+    setSettingsTab(tab);
+    setSettingsOpen(true);
+  }, []);
   const [view, setViewState] = useState<View>({ type: "chat" });
   const [spaceDialog, setSpaceDialog] = useState<null | { editId?: string; select: boolean }>(null);
   const [viewRestored, setViewRestored] = useState(false);
   const [health, setHealth] = useState<HealthState>("checking");
   const [modelConfigured, setModelConfigured] = useState<boolean | null>(null);
   const [modelName, setModelName] = useState("");
+  const [onboardingMode, setOnboardingMode] = useState(false);
+  const [onboardingConvId, setOnboardingConvId] = useState<string | null>(null);
+  const [interview, setInterview] = useState<Awaited<ReturnType<typeof chatApi.onboardingStatus>> | null>(null);
+  const [profileEntries, setProfileEntries] = useState<Record<string, string>>({});
+  const [interviewError, setInterviewError] = useState("");
+  const [profileSaving, setProfileSaving] = useState(false);
 
-  // 窄窗口默认收起侧栏，打开后以浮层覆盖
   useEffect(() => {
     const query = window.matchMedia(NARROW);
     const apply = () => {
@@ -82,6 +130,10 @@ export function ChatApp() {
     query.addEventListener("change", apply);
     return () => query.removeEventListener("change", apply);
   }, []);
+
+  useEffect(() => {
+    applyAppearance(readAppearance(user.id));
+  }, [user.id]);
 
   const checkHealth = useCallback(async () => {
     setHealth("checking");
@@ -110,9 +162,9 @@ export function ChatApp() {
   const setView = useCallback((next: View) => {
     setViewState(next);
     try {
-      localStorage.setItem(VIEW_KEY, JSON.stringify(next));
+      localStorage.setItem(viewKey(user.id), JSON.stringify(next));
     } catch { /* per-viewer convenience only */ }
-  }, []);
+  }, [user.id]);
 
   const { openConversation } = chat;
   const openSpace = useCallback((id: string) => {
@@ -120,12 +172,66 @@ export function ChatApp() {
   }, [setView]);
 
   useEffect(() => {
-    const saved = readView();
+    const saved = readView(user.id);
     if (saved.type !== "chat") setViewState(saved);
     setViewRestored(true);
-  }, []);
+  }, [user.id]);
 
-  // The Subject shown was deleted (here or elsewhere): fall back to a blank chat.
+  // 首次登录检测：若尚未完成前置破冰引导（onboarded === false），自动进入 AI 主动发问的三问三答对话
+  useEffect(() => {
+    if (DATA_SOURCE !== "api") return;
+    let cancelled = false;
+    chatApi.onboardingStatus()
+      .then(async (status) => {
+        if (cancelled) return;
+        setInterview(status);
+        if (cancelled || status.status === "completed" || status.status === "skipped") return;
+        const conv = await chatApi.startOnboarding();
+        if (cancelled) return;
+        setOnboardingConvId(conv.id);
+        setOnboardingMode(true);
+        setSidebarOpen(false);
+        setView({ type: "chat" });
+        openConversation(conv.id);
+        void chat.refreshList();
+      })
+      .catch(() => setInterviewError("无法读取初识进度，请刷新重试。"));
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once per authenticated user
+  }, [user.id]);
+
+  const finishOnboarding = useCallback(async (openCreateSpace = false) => {
+    if (!interview || profileSaving) return;
+    setProfileSaving(true);
+    try {
+      if (interview.ready) await chatApi.completeOnboarding(interview.version, profileEntries);
+      else await chatApi.skipOnboarding();
+    } catch (error) {
+      setInterviewError(error instanceof Error ? error.message : "保存失败，请重试。");
+      setProfileSaving(false);
+      return;
+    }
+    setProfileSaving(false);
+    setOnboardingMode(false);
+    if (!narrow) setSidebarOpen(true);
+    chat.newChat();
+    if (openCreateSpace) {
+      setSpaceDialog({ select: false });
+    }
+  }, [chat, narrow, interview, profileEntries, profileSaving]);
+
+  useEffect(() => {
+    if (!onboardingMode || !onboardingConvId || chat.streams[onboardingConvId]) return;
+    let cancelled = false;
+    chatApi.onboardingStatus().then((next) => {
+      if (cancelled) return;
+      setInterview(next);
+      setProfileEntries(Object.fromEntries(Object.entries(next.draft)
+        .filter(([, item]) => !item.declined).map(([key, item]) => [key, item.value])));
+    }).catch(() => setInterviewError("进度同步失败，请刷新重试。"));
+    return () => { cancelled = true; };
+  }, [onboardingMode, onboardingConvId, chat.streams]);
+
   const subjectMissing = view.type === "subject" && viewRestored && !chat.listLoading
     && !chat.subjects.some((subject) => subject.id === view.id);
   useEffect(() => {
@@ -169,7 +275,6 @@ export function ChatApp() {
     [chat.streams],
   );
 
-  // 首页「继续学习」：最近学过的三个学习空间
   const recentSpaces = useMemo(
     () => [...chat.subjects]
       .sort((a, b) => (b.progress.lastStudiedAt ?? b.updatedAt).localeCompare(a.progress.lastStudiedAt ?? a.updatedAt))
@@ -177,9 +282,20 @@ export function ChatApp() {
     [chat.subjects],
   );
 
+  const recentTopics = useMemo(
+    () => chat.conversations
+      .filter((c) => (c.kind ?? "chat") === "chat" && c.title !== "初识引导 · 定制你的学习画像")
+      .slice(0, 5),
+    [chat.conversations],
+  );
+
+  const reviewTarget = useMemo(
+    () => chat.memories.find((m) => m.kind === "misconception" && (m.status === "suspected" || m.status === "needs_review")) ?? null,
+    [chat.memories],
+  );
+
   const messages = chat.activeThread?.messages ?? [];
   const lastAssistant = [...messages].reverse().find((message) => message.role === "assistant" && message.kind === "text");
-  // 设置里的模型卡片只比较「保存之后」的信号，所以用回复自身的时间
   const signalAt = lastAssistant ? Date.parse(lastAssistant.createdAt) : 0;
   const modelSignal: ModelSignal = lastAssistant?.status === "failed"
     ? { state: "unavailable", at: signalAt, detail: lastAssistant.error ?? undefined }
@@ -217,13 +333,24 @@ export function ChatApp() {
   const phase = chat.activeStream?.phase ?? null;
   const materialsOpen = view.type === "materials";
   const pageSubject = view.type === "subject" ? chat.subjects.find((subject) => subject.id === view.id) ?? null : null;
-  /** 当前所处的 Subject：Subject 页、所属 Subject 的对话，或在 Subject 中新建的空白对话 */
   const contextSubjectId = view.type === "subject"
     ? view.id
     : chat.activeId ? chat.activeConversation?.subjectId ?? null : chat.draftSubjectId;
   const contextSubjectName = contextSubjectId ? subjectNames[contextSubjectId] ?? null : null;
   const title = chat.activeConversation?.title ?? (chat.activeId ? "加载中…" : "新对话");
   const thread = chat.activeThread;
+  const isOnboardingChat = Boolean(
+    onboardingMode && chat.activeId && (chat.activeId === onboardingConvId || title.startsWith("初识引导")),
+  );
+  const lastThreadMsg = thread?.messages[thread.messages.length - 1];
+  const onboardingFinished = isOnboardingChat
+    && Boolean(interview?.ready)
+    && phase === null
+    && lastThreadMsg?.role === "assistant"
+    && lastThreadMsg?.status === "complete";
+  const quickReplies = isOnboardingChat && !onboardingFinished && phase === null
+    ? ONBOARDING_QUICK_REPLIES[["background", "explanation", "interaction"].indexOf(interview?.stage ?? "background")] ?? []
+    : [];
   const failure = chat.sendFailure && chat.sendFailure.conversationId === chat.activeId ? chat.sendFailure : null;
   const blankFailure = chat.sendFailure && !chat.activeId ? chat.sendFailure : null;
   const shownFailure = failure ?? blankFailure;
@@ -247,38 +374,57 @@ export function ChatApp() {
 
   return (
     <div className={cx(styles.app, !sidebarOpen && styles.sidebarClosed, narrow && styles.narrow)}>
-      {narrow && sidebarOpen && <button className={styles.backdrop} aria-label="关闭侧栏" onClick={() => setSidebarOpen(false)} />}
-      <aside className={styles.sidebar} aria-hidden={!sidebarOpen || undefined} inert={!sidebarOpen || undefined}>
-        <ConversationSidebar
-          conversations={chat.conversations}
-          loading={chat.listLoading}
-          error={chat.listError}
-          subjects={chat.subjects}
-          activeId={view.type === "chat" ? chat.activeId : null}
-          activeSubjectId={view.type === "subject" ? view.id : null}
-          generatingIds={generatingIds}
-          memoryCount={chat.memories.length}
-          modelIssue={modelConfigured === false}
-          materialsActive={materialsOpen}
-          onNewChat={() => { setView({ type: "chat" }); chat.newChat(); closeOverlays(); }}
-          onOpen={showConversation}
-          onOpenSubject={(id) => { openSpace(id); closeOverlays(); }}
-          onOpenSpaces={() => { setView({ type: "spaces" }); closeOverlays(); }}
-          onCreateSpace={() => setSpaceDialog({ select: false })}
-          spacesActive={view.type === "spaces"}
-          onRename={chat.renameConversation}
-          onDelete={chat.deleteConversation}
-          onRetry={() => void chat.refreshList()}
-          onOpenMemory={() => { openMemories(); closeOverlays(); }}
-          onOpenMaterials={() => { setView({ type: "materials" }); closeOverlays(); }}
-          onOpenSettings={() => { setSettingsOpen(true); closeOverlays(); }}
-          onCollapse={() => setSidebarOpen(false)}
+      {narrow && (
+        <button
+          className={cx(styles.backdrop, sidebarOpen && styles.backdropOpen)}
+          aria-label="关闭侧栏"
+          tabIndex={sidebarOpen ? 0 : -1}
+          onClick={() => setSidebarOpen(false)}
         />
+      )}
+      <aside className={styles.sidebar} aria-hidden={!sidebarOpen || undefined} inert={!sidebarOpen || undefined}>
+        <div className={styles.sidebarInner}>
+          <ConversationSidebar
+            conversations={chat.conversations}
+            loading={chat.listLoading}
+            error={chat.listError}
+            subjects={chat.subjects}
+            activeId={view.type === "chat" ? chat.activeId : null}
+            activeSubjectId={view.type === "subject" ? view.id : null}
+            generatingIds={generatingIds}
+            memoryCount={chat.memories.length}
+            modelIssue={modelConfigured === false}
+            materialsActive={materialsOpen}
+            onNewChat={() => { setView({ type: "chat" }); chat.newChat(); closeOverlays(); }}
+            onOpen={showConversation}
+            onOpenSubject={(id) => { openSpace(id); closeOverlays(); }}
+            onOpenSpaces={() => { setView({ type: "spaces" }); closeOverlays(); }}
+            onCreateSpace={() => setSpaceDialog({ select: false })}
+            spacesActive={view.type === "spaces"}
+            onRename={chat.renameConversation}
+            onDelete={chat.deleteConversation}
+            onRetry={() => void chat.refreshList()}
+            onOpenMemory={() => { openMemories(); closeOverlays(); }}
+            onOpenMaterials={() => { setView({ type: "materials" }); closeOverlays(); }}
+            onOpenSettings={() => { openSettings(modelConfigured === false ? "models" : "general"); closeOverlays(); }}
+            onCollapse={() => setSidebarOpen(false)}
+            displayName={user.displayName}
+            avatarText={user.avatarText}
+          />
+        </div>
       </aside>
 
       <main className={styles.main}>
+        {!onboardingMode && interviewError && <p role="alert">{interviewError}<button onClick={() => window.location.reload()}>刷新重试</button></p>}
         {materialsOpen ? (
-          <MaterialLibrary enabled unassigned onBack={() => setView({ type: "chat" })} />
+          <MaterialLibrary
+            enabled
+            unassigned
+            subjects={chat.subjects}
+            sidebarOpen={sidebarOpen}
+            onOpenSidebar={() => setSidebarOpen(true)}
+            onBack={() => setView({ type: "chat" })}
+          />
         ) : view.type === "spaces" ? (
           <SpacesPage
             subjects={chat.subjects}
@@ -312,37 +458,63 @@ export function ChatApp() {
               <p className={styles.muted}>{subjectMissing ? "这个学习空间已不存在。" : "正在读取学习空间…"}</p>
             </div>
           )
+        ) : chat.activeId && isOnboardingChat ? (
+          <OnboardingStage
+            messages={thread?.messages ?? []}
+            stage={interview?.stage ?? "background"}
+            ready={onboardingFinished}
+            phase={phase}
+            modelConfigured={modelConfigured}
+            quickReplies={quickReplies}
+            profileEntries={profileEntries}
+            profileSaving={profileSaving}
+            error={interviewError || shownFailure?.error.message || thread?.error?.message || ""}
+            onChangeProfile={(key, value) => setProfileEntries((old) => ({ ...old, [key]: value }))}
+            onSendAnswer={(text) => {
+              setInterviewError("");
+              return chat.sendTo(chat.activeId!, text);
+            }}
+            onConfirm={(createSpace) => void finishOnboarding(createSpace)}
+            onSkip={() => {
+              void chatApi.skipOnboarding().then(() => {
+                setOnboardingMode(false);
+                chat.newChat();
+                setSidebarOpen(!narrow);
+              }).catch(() => setInterviewError("跳过失败，请重试。"));
+            }}
+            onOpenModelSettings={() => openSettings("models")}
+            onOpenMemories={() => openMemories()}
+          />
         ) : chat.activeId ? (
           <>
-            <header className={styles.topbar}>
-              {!sidebarOpen && (
-                <button className={styles.iconButton} onClick={() => setSidebarOpen(true)} aria-label="展开侧栏" title="展开侧栏">
-                  <PanelLeftOpen size={16} />
-                </button>
-              )}
-              <h1 className={styles.title}>
-                {contextSubjectId && contextSubjectName && (
-                  <>
-                    <button className={styles.crumb} onClick={() => openSpace(contextSubjectId)} title="打开学习空间">
-                      <Folder size={13} aria-hidden />
-                      {contextSubjectName}
-                    </button>
-                    <ChevronRight size={13} className={styles.crumbSep} aria-hidden />
-                  </>
+              <header className={styles.topbar}>
+                {!sidebarOpen && (
+                  <button className={styles.iconButton} onClick={() => setSidebarOpen(true)} aria-label="展开侧栏" title="展开侧栏">
+                    <PanelLeftOpen size={16} />
+                  </button>
                 )}
-                <span className={styles.titleText}>{title}</span>
-              </h1>
-              <button
-                className={cx(styles.iconButton, memoryOpen && styles.iconButtonOn)}
-                onClick={() => (memoryOpen ? setMemoryOpen(false) : openMemories())}
-                aria-expanded={memoryOpen}
-                aria-label="学习记忆"
-                title="学习记忆"
-              >
-                <Brain size={16} aria-hidden />
-              </button>
-            </header>
-
+                <h1 className={styles.title}>
+                  {contextSubjectId && contextSubjectName && (
+                    <>
+                      <button className={styles.crumb} onClick={() => openSpace(contextSubjectId)} title="打开学习空间">
+                        <Folder size={13} aria-hidden />
+                        {contextSubjectName}
+                      </button>
+                      <ChevronRight size={13} className={styles.crumbSep} aria-hidden />
+                    </>
+                  )}
+                  <span className={styles.titleText}>{title}</span>
+                </h1>
+                <button
+                  className={cx(styles.iconButton, memoryOpen && styles.iconButtonOn)}
+                  onClick={() => (memoryOpen ? setMemoryOpen(false) : openMemories())}
+                  aria-expanded={memoryOpen}
+                  aria-label="学习记忆"
+                  title="学习记忆"
+                >
+                  <Brain size={16} aria-hidden />
+                </button>
+              </header>
             {thread && (thread.messages.length > 0 || !thread.loading) ? (
               thread.error && thread.messages.length === 0 ? (
                 <div className={styles.center}>
@@ -380,18 +552,18 @@ export function ChatApp() {
 
             <div className={styles.dock}>
               {failureBar}
-              <Composer
-                value={chat.draft}
-                onChange={chat.setDraft}
-                onSend={() => void chat.sendMessage()}
-                onStop={() => chat.activeId && void chat.stop(chat.activeId)}
-                phase={phase}
-                busy={chat.creating}
-                problems={chat.problems}
-                onStartExercise={(problemId) => void chat.startExercise(problemId)}
-                autoFocusKey={chat.activeId}
-              />
-              <p className={styles.disclaimer}>回答由模型生成，可能出错，重要内容请自行核实。</p>
+                  <Composer
+                    value={chat.draft}
+                    onChange={chat.setDraft}
+                    onSend={() => void chat.sendMessage()}
+                    onStop={() => chat.activeId && void chat.stop(chat.activeId)}
+                    phase={phase}
+                    busy={chat.creating}
+                    problems={chat.problems}
+                    onStartExercise={(problemId) => void chat.startExercise(problemId)}
+                    autoFocusKey={chat.activeId}
+                  />
+                  <p className={styles.disclaimer}>回答由模型生成，可能出错，重要内容请自行核实。</p>
             </div>
           </>
         ) : (
@@ -402,10 +574,15 @@ export function ChatApp() {
               </button>
             )}
             <div className={styles.homeInner}>
-              <h2 className={styles.greeting}>
-                <Image src="/brand/knowgap-logo-v1.png" alt="" width={30} height={30} className={styles.greetingLogo} />
-                {greeting()}
-              </h2>
+              <div className={styles.heroHead}>
+                <h2 className={styles.greeting}>
+                  <Image src="/brand/knowgap-logo-v1.png" alt="" width={28} height={28} className={styles.greetingLogo} />
+                  <span>{greeting(user.displayName)}</span>
+                </h2>
+                <p className={styles.greetingSub}>
+                  直接提问开启对话，或选择下方的学习空间与诊断题。对话中的关键认知会自动提取原话依据并沉淀为长期记忆。
+                </p>
+              </div>
               {failureBar}
               <Composer
                 hero
@@ -435,7 +612,7 @@ export function ChatApp() {
                   onChange={(subjectId) => chat.newChat(subjectId)}
                   onCreate={() => setSpaceDialog({ select: true })}
                 />
-                <button className={cx(styles.modelChip, modelConfigured === false && styles.modelMissing)} onClick={() => setSettingsOpen(true)}>
+                <button className={cx(styles.modelChip, modelConfigured === false && styles.modelMissing)} onClick={() => openSettings("models")}>
                   {modelConfigured === false ? (
                     <>
                       <CircleAlert size={13} aria-hidden />
@@ -446,20 +623,82 @@ export function ChatApp() {
                   )}
                 </button>
               </div>
+              {!chat.draft && (
+                <div className={styles.starters} data-stagger>
+                  {STARTERS.map(({ icon: Icon, label, text }) => (
+                    <button key={label} className={styles.starter} onClick={() => { chat.setDraft(text); document.getElementById(COMPOSER_ID)?.focus(); }}>
+                      <Icon size={13} aria-hidden />
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* 间隔重温微追问提醒（P1-5 Spaced Micro-Review） */}
+              {reviewTarget && !chat.draft && (
+                <div className={styles.spacedReviewBanner}>
+                  <div className={styles.spacedReviewBody}>
+                    <span className={styles.spacedReviewTag}>待巩固闪回</span>
+                    <span className={styles.spacedReviewText}>
+                      <strong>{reviewTarget.topic}</strong>：{reviewTarget.summary}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className={styles.spacedReviewBtn}
+                    onClick={() => {
+                      chat.setDraft(
+                        `针对我之前在「${reviewTarget.topic}」上的易错点（${reviewTarget.summary}），请出 1 道简短的随堂微测题检验我是否已经想通。`,
+                      );
+                      document.getElementById(COMPOSER_ID)?.focus();
+                    }}
+                  >
+                    1 分钟靶向自测 →
+                  </button>
+                </div>
+              )}
+
               {!chat.draftSubjectId && recentSpaces.length > 0 && (
                 <section className={styles.resume} aria-labelledby="resume-title">
-                  <h3 id="resume-title" className={styles.resumeTitle}>继续学习</h3>
-                  <ul className={styles.resumeList}>
+                  <h3 id="resume-title" className={styles.resumeTitle}>继续学习空间</h3>
+                  <ul className={styles.resumeList} data-stagger>
                     {recentSpaces.map((subject) => (
                       <li key={subject.id}>
                         <button className={styles.resumeItem} onClick={() => openSpace(subject.id)}>
-                          <span className={styles.resumeDot} style={{ background: subject.color }} aria-hidden />
-                          <span className={styles.resumeName}>{subject.name}</span>
-                          <span className={styles.resumeMeta}>
-                            {subject.progress.toReview > 0 && `${subject.progress.toReview} 个待巩固 · `}
-                            {studiedLabel(subject.progress.lastStudiedAt)}
-                          </span>
-                          <ChevronRight size={14} className={styles.resumeArrow} aria-hidden />
+                          <div className={styles.resumeItemTop}>
+                            <span className={styles.resumeDot} style={{ background: subject.color }} aria-hidden />
+                            <span className={styles.resumeName}>{subject.name}</span>
+                            <span className={styles.resumeMeta}>
+                              {subject.progress.openThreads > 0 && `${subject.progress.openThreads} 个 Thread 进行中 · `}
+                              {subject.progress.toReview > 0 && `${subject.progress.toReview} 个待巩固 · `}
+                              {studiedLabel(subject.progress.lastStudiedAt)}
+                            </span>
+                            <ChevronRight size={14} className={styles.resumeArrow} aria-hidden />
+                          </div>
+                          {subject.goal && <p className={styles.resumePreview}>{subject.goal}</p>}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+
+              {/* 参照 LobeHub 图 3 首页底部「最近话题」双行摘要流 */}
+              {!chat.draftSubjectId && recentTopics.length > 0 && (
+                <section className={styles.resume} aria-labelledby="recent-topics-title">
+                  <h3 id="recent-topics-title" className={styles.resumeTitle}>
+                    最近话题 <span className={styles.resumeCountBadge}>{recentTopics.length}</span>
+                  </h3>
+                  <ul className={styles.resumeList} data-stagger>
+                    {recentTopics.map((item) => (
+                      <li key={item.id}>
+                        <button className={styles.resumeItem} onClick={() => showConversation(item.id)}>
+                          <div className={styles.resumeItemTop}>
+                            <span className={styles.resumeName}>{item.title}</span>
+                            <span className={styles.resumeMeta}>{item.updatedAt.slice(5, 10)}</span>
+                            <ChevronRight size={14} className={styles.resumeArrow} aria-hidden />
+                          </div>
+                          {item.preview && <p className={styles.resumePreview}>{item.preview}</p>}
                         </button>
                       </li>
                     ))}
@@ -473,7 +712,7 @@ export function ChatApp() {
 
       {memoryOpen && (
         <>
-          {narrow && <button className={styles.backdrop} aria-label="关闭学习记忆" onClick={() => setMemoryOpen(false)} />}
+          {narrow && <button className={cx(styles.backdrop, styles.backdropOpen)} aria-label="关闭学习记忆" onClick={() => setMemoryOpen(false)} />}
           <aside className={styles.drawer}>
             <MemoryDrawer
               memories={chat.memories}
@@ -488,6 +727,19 @@ export function ChatApp() {
               onUpdate={chat.updateMemory}
               onDelete={chat.deleteMemory}
               onOpenConversation={(id) => { showConversation(id); if (narrow) setMemoryOpen(false); }}
+              onStartOnboarding={async () => {
+                try {
+                  const conv = await chatApi.startOnboarding();
+                  setOnboardingConvId(conv.id);
+                  setOnboardingMode(true);
+                  setMemoryOpen(false);
+                  setView({ type: "chat" });
+                  openConversation(conv.id);
+                  setSidebarOpen(false);
+                } catch {
+                  push({ tone: "error", title: "无法继续完善画像，请重试" });
+                }
+              }}
             />
           </aside>
         </>
@@ -497,10 +749,24 @@ export function ChatApp() {
         <SettingsDialog
           source={DATA_SOURCE}
           health={health}
-          studentId={DEMO_STUDENT_ID}
+          studentId={user.id}
+          user={user}
+          initialTab={settingsTab}
           modelSignal={modelSignal}
           onCheckHealth={() => void checkHealth()}
           onConfigChange={handleConfigChange}
+          onLogout={onLogout}
+          onRename={onRename}
+          onRestartOnboarding={async () => {
+            const conv = await chatApi.restartOnboarding();
+            setOnboardingConvId(conv.id);
+            setOnboardingMode(true);
+            setSettingsOpen(false);
+            setView({ type: "chat" });
+            openConversation(conv.id);
+            setSidebarOpen(false);
+            void chat.refreshList();
+          }}
           onClose={() => setSettingsOpen(false)}
         />
       )}
@@ -532,4 +798,23 @@ export function ChatApp() {
       <Toaster toasts={toasts} onDismiss={dismiss} />
     </div>
   );
+}
+
+export function ChatApp() {
+  const auth = useAuth();
+  if (DATA_SOURCE === "api" && auth.status !== "ready") {
+    if (auth.status === "loading") {
+      return <div className={authStyles.canvas}><p className={authStyles.loading}>正在确认登录状态</p></div>;
+    }
+    return (
+      <AuthView
+        error={auth.error}
+        onLogin={auth.login}
+        onRegister={auth.register}
+        onDemo={auth.enterDemo}
+      />
+    );
+  }
+  if (!auth.user) return null;
+  return <AuthenticatedChat key={auth.user.id} user={auth.user} onLogout={() => void auth.logout()} onRename={auth.rename} />;
 }

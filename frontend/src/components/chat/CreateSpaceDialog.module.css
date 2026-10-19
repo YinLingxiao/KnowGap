@@ -1,3 +1,4 @@
+/* 新建/编辑空间弹窗：严格参照 Claude "New project" 弹窗设计 + 阻尼弹簧动效 */
 .backdrop {
   position: fixed;
   z-index: 50;
@@ -5,21 +6,46 @@
   display: grid;
   place-items: center;
   padding: 24px;
-  background: rgb(0 0 0 / 45%);
+  background: rgb(0 0 0 / 52%);
+  backdrop-filter: blur(4px);
+  animation: backdrop-fade 200ms var(--ease-out);
 }
 
 .dialog {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  width: min(480px, 100%);
-  max-height: min(720px, 100%);
-  padding: 18px 18px 16px;
-  overflow: auto;
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  gap: 16px;
+  width: min(440px, 100%);
+  max-height: min(680px, 100%);
+  padding: 20px 22px 18px;
+  overflow: visible;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-xl);
   background: var(--bg-elevated);
   box-shadow: var(--shadow-popover);
+  transform-origin: center;
+  animation: modal-spring 240ms var(--ease-spring);
+}
+
+@keyframes backdrop-fade {
+  from {
+    opacity: 0;
+    backdrop-filter: blur(0);
+  }
+}
+
+@keyframes modal-spring {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.96);
+  }
+}
+
+@keyframes popover-spring {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.95);
+  }
 }
 
 .head {
@@ -29,16 +55,17 @@
 }
 
 .head h2 {
-  font-size: var(--text-lg);
+  font-size: 16px;
   font-weight: 600;
+  color: var(--text);
 }
 
 .close {
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius);
   color: var(--text-tertiary);
 }
 
@@ -47,126 +74,300 @@
   color: var(--text);
 }
 
-.hint {
-  color: var(--text-secondary);
-  font-size: var(--text-sm);
-  line-height: 1.5;
-}
-
-.nameRow,
 .field {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 7px;
+}
+
+.label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.optional {
+  margin-left: 2px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  font-weight: 400;
 }
 
 .nameRow {
-  flex-direction: row;
+  display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 6px 10px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius);
-  background: var(--bg);
+  gap: 8px;
+  height: 36px;
+  padding: 0 10px 0 6px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--bg-subtle);
+  transition:
+    border-color var(--t-hover) var(--ease-out),
+    box-shadow var(--t-hover) var(--ease-out),
+    background-color var(--t-hover) var(--ease-out);
 }
 
 .nameRow:focus-within {
   border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+  background: var(--bg-elevated);
+}
+
+.templates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.templatePill {
+  height: 24px;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-subtle);
+  color: var(--text-tertiary);
+  font-size: 11px;
+  transition:
+    background-color var(--t-hover) var(--ease-out),
+    color var(--t-hover) var(--ease-out),
+    border-color var(--t-hover) var(--ease-out);
+}
+
+.templatePill:hover {
+  border-color: var(--border-strong);
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.colorAnchor {
+  position: relative;
+}
+
+.iconSwatch {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  background: var(--bg-hover);
+  transition: background-color var(--t-hover) var(--ease-out);
+}
+
+.iconSwatch:hover {
+  background: var(--bg-active);
+}
+
+.colorPopover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 30;
+  display: flex;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-popover);
+  transform-origin: top left;
+  animation: popover-spring 180ms var(--ease-spring);
+}
+
+.dot,
+.dotOn {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  transition: transform var(--t-hover) var(--ease-spring);
+}
+
+.dot:hover,
+.dotOn:hover {
+  transform: scale(1.18);
+}
+
+.dotOn {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
 }
 
 .nameRow input,
-.field textarea,
-.field input {
+.field textarea {
   width: 100%;
   border: 0;
   outline: none;
   background: transparent;
   color: var(--text);
-  font-size: var(--text-md);
-}
-
-.field textarea,
-.field input {
-  padding: 8px 10px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius);
-  background: var(--bg);
-}
-
-.field textarea {
-  resize: vertical;
-  line-height: 1.5;
-}
-
-.field > span {
-  color: var(--text-secondary);
-  font-size: var(--text-xs);
-}
-
-.swatch {
-  flex-shrink: 0;
-  width: 18px;
-  height: 18px;
-  border: 2px solid var(--bg);
-  border-radius: 50%;
-  box-shadow: 0 0 0 1px var(--border-strong);
-}
-
-.levels {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.level,
-.levelOn {
-  height: 28px;
-  padding: 0 10px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--bg);
-  color: var(--text-secondary);
   font-size: var(--text-sm);
 }
 
-.levelOn {
-  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
-  background: var(--accent-soft);
-  color: var(--accent-text);
+.nameRow input::placeholder,
+.field textarea::placeholder {
+  color: var(--text-tertiary);
+}
+
+.field textarea {
+  padding: 9px 11px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--bg-subtle);
+  resize: vertical;
+  line-height: 1.55;
+  transition: border-color var(--t-hover) var(--ease-out);
+}
+
+.field textarea:focus {
+  border-color: var(--accent);
+}
+
+/* 参照 Claude 的 Context (optional) 外框 + 内部虚线框 */
+.contextBox {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--bg-subtle);
+}
+
+.contextHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.addFileBtn {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  color: var(--text-secondary);
+}
+
+.addFileBtn:hover {
+  background: var(--bg-hover);
+  color: var(--text);
 }
 
 .drop,
 .dropOn {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 4px;
-  padding: 14px;
+  justify-content: center;
+  padding: 11px 12px;
   border: 1px dashed var(--border-strong);
-  border-radius: var(--radius-lg);
+  border-radius: 7px;
   color: var(--text-tertiary);
-  font-size: var(--text-xs);
+  font-size: 12px;
   text-align: center;
+  cursor: pointer;
+  transition: border-color var(--t-hover) var(--ease-out), color var(--t-hover) var(--ease-out);
 }
 
+.drop:hover,
 .dropOn {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-}
-
-.drop button,
-.dropOn button {
-  color: var(--accent-text);
-  font-size: var(--text-sm);
-}
-
-.drop ul,
-.dropOn ul {
+  border-color: var(--text-secondary);
   color: var(--text-secondary);
+}
+
+.fileList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.fileList li {
+  padding: 2px 8px;
+  border-radius: 5px;
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.editExtra {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.levels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.level,
+.levelOn {
+  height: 26px;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.levelOn {
+  border-color: var(--border-strong);
+  background: var(--bg-active);
+  color: var(--text);
+}
+
+.dateInput {
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+  font-size: 12px;
 }
 
 .actions {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+  margin-top: 2px;
+}
+
+.cancelBtn,
+.submitBtn {
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  transition:
+    background-color var(--t-hover) var(--ease-out),
+    border-color var(--t-hover) var(--ease-out),
+    opacity var(--t-hover) var(--ease-out);
+}
+
+.cancelBtn {
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--text);
+}
+
+.cancelBtn:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.submitBtn {
+  background: var(--ink-solid);
+  color: var(--on-ink);
+}
+
+.submitBtn:hover:not(:disabled) {
+  background: var(--ink-solid-hover);
+}
+
+.submitBtn:disabled {
+  background: var(--bg-active);
+  color: var(--text-tertiary);
 }

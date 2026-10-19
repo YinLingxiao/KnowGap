@@ -7,7 +7,7 @@ hidden = collect_submodules("app") + [
     "uvicorn.loops.auto",
     "uvicorn.loops.asyncio",
     "uvicorn.protocols.http.auto",
-    "uvicorn.protocols.http.h11",
+    "uvicorn.protocols.http.h11_impl",
     "uvicorn.lifespan.on",
     "multipart",
 ]

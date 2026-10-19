@@ -9,16 +9,25 @@
   max-width: 220px;
   height: 28px;
   padding: 0 8px;
-  border-radius: 8px;
+  border-radius: var(--radius);
   color: var(--text-secondary);
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
   white-space: nowrap;
+  transition: background-color var(--t-hover) var(--ease-out), color var(--t-hover) var(--ease-out);
 }
 
 .trigger:hover,
 .trigger[aria-expanded="true"] {
   background: var(--bg-hover);
   color: var(--text);
+}
+
+.trigger > svg:last-child {
+  transition: transform 200ms var(--ease-spring);
+}
+
+.trigger[aria-expanded="true"] > svg:last-child {
+  transform: rotate(180deg);
 }
 
 .menu {
@@ -32,10 +41,19 @@
   max-height: 320px;
   padding: 4px;
   overflow-y: auto;
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
   background: var(--bg-elevated);
-  box-shadow: var(--shadow-popover);
+  box-shadow: var(--shadow-popover); /* taste-skill-ignore */
+  transform-origin: top left;
+  animation: picker-drop 180ms var(--ease-spring);
+}
+
+@keyframes picker-drop {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.96);
+  }
 }
 
 .option {
@@ -45,7 +63,7 @@
   gap: 8px;
   min-height: 32px;
   padding: 0 8px;
-  border-radius: 8px;
+  border-radius: var(--radius);
   font-size: var(--text-sm);
   text-align: left;
 }
@@ -62,7 +80,7 @@
 
 .option > svg {
   flex-shrink: 0;
-  color: var(--accent);
+  color: var(--text);
 }
 
 .create {
@@ -73,9 +91,7 @@
 }
 
 .divider {
-  height: 1px;
-  margin: 4px 2px;
-  background: var(--border);
+  margin: 4px 0;
 }
 
 .dot,
@@ -91,15 +107,4 @@
   align-items: center;
   gap: 6px;
   min-width: 0;
-}
-
-.input {
-  height: 32px;
-  margin: 2px;
-  padding: 0 8px;
-  border: 1px solid var(--accent);
-  border-radius: 8px;
-  outline: none;
-  background: var(--bg);
-  font-size: var(--text-sm);
 }

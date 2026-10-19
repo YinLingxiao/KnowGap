@@ -15,7 +15,8 @@ from app.chat.schemas import (
     ToolCallRecord,
     MessageAnchor, SpaceProgress, Subject, ThreadSummary, ThreadUpdate,
 )
-from app.memory.curated import LIMITS, apply as apply_note, bump_turns, decide, pending
+from app.chat.skills import ONBOARDING_FIRST_MESSAGE, ONBOARDING_TITLE
+from app.memory.curated import LIMITS, apply as apply_note, bump_turns, decide, onboarding_state, pending, set_onboarding_state
 from app.memory.curated import ensure as ensure_notes
 from app.memory.curated import ensure_fts, read_all, search as search_notes, snapshot_text, write as write_note
 from app.memory.store import Store, ensure_column, new_id, now
@@ -114,6 +115,14 @@ class ChatStore:
                     created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
                     UNIQUE(conversation_id, seq), UNIQUE(conversation_id, client_request_id)
                 );
+                CREATE TABLE IF NOT EXISTS model_usage (
+                    id TEXT PRIMARY KEY,
+                    conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+                    message_id TEXT REFERENCES conversation_messages(id) ON DELETE SET NULL,
+                    purpose TEXT NOT NULL, model TEXT NOT NULL, created_at TEXT NOT NULL,
+                    input_tokens INTEGER, output_tokens INTEGER, cached_tokens INTEGER
+                );
+                CREATE INDEX IF NOT EXISTS idx_usage_conversation ON model_usage(conversation_id);
                 CREATE TABLE IF NOT EXISTS learner_memories (
                     id TEXT PRIMARY KEY, student_id TEXT NOT NULL,
                     kind TEXT NOT NULL CHECK(kind IN ('misconception', 'mastery', 'preference')),
@@ -141,6 +150,17 @@ class ChatStore:
                     color TEXT NOT NULL DEFAULT '#3d6fdb', main_conversation_id TEXT,
                     created_at TEXT NOT NULL, updated_at TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS custom_skills (
+                    id TEXT PRIMARY KEY,
+                    student_id TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    role TEXT NOT NULL DEFAULT 'thread' CHECK(role IN ('thread', 'chat', 'main')),
+                    trigger_keywords TEXT NOT NULL DEFAULT '',
+                    content TEXT NOT NULL,
+                    enabled INTEGER NOT NULL DEFAULT 1,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
             """)
             # NULL subject_id: conversation outside any Subject / general memory that applies everywhere.
             ensure_column(db, "conversations", "subject_id", "TEXT")
@@ -159,6 +179,8 @@ class ChatStore:
             ensure_column(db, "conversations", "notes_snapshot", "TEXT")
             self._migrate_spaces(db)
             ensure_notes(db)
+            from app.chat.onboarding import ensure as ensure_onboarding
+            ensure_onboarding(db)
             ensure_fts(db)
             # A process that died mid-generation leaves "streaming" rows; they can never finish.
             db.execute(
@@ -688,7 +710,9 @@ class ChatStore:
         return message_id
 
     def _message(self, row: sqlite3.Row, memories: dict[str, LearnerMemory]) -> ChatMessage:
+        from app.chat.checkpoints import resume_state
         meta = json.loads(row["meta_json"])
+        checkpoint_available, checkpoint_blocked_reason = resume_state(meta.get("last_checkpoint"), row["status"])
         changes = [
             MemoryChange(action=change["action"], memory=memories[change["memory_id"]])
             for change in meta.get("memory_changes", []) if change["memory_id"] in memories
@@ -706,7 +730,9 @@ class ChatStore:
             tool_calls=[ToolCallRecord(**item) for item in meta.get("tool_calls", []) if isinstance(item, dict) and item.get("id") and item.get("name")],
             thread_summary=self._thread_summary(meta.get("thread_summary")),
             thread_update=ThreadUpdate(**meta["thread_update"]) if meta.get("thread_update") else None,
+            thread_proposals=meta.get("thread_proposals", []),
             pending_approval=meta.get("pending_approval"),
+            checkpoint_available=checkpoint_available, checkpoint_blocked_reason=checkpoint_blocked_reason,
             created_at=row["created_at"], updated_at=row["updated_at"],
         )
 
@@ -819,6 +845,44 @@ class ChatStore:
                 SELECT * FROM conversation_messages WHERE conversation_id = ? AND (? IS NULL OR seq < ?) ORDER BY seq
             """, (conversation_id, before_seq, before_seq)).fetchall()
 
+    def record_usage(self, request_id: str, conversation_id: str, message_id: str | None,
+                     purpose: str, model: str, usage: dict | None = None) -> None:
+        # One row per provider request, not per streamed chunk. Regeneration keeps its real cost
+        # even when the old reply is discarded. Deleting the conversation removes its ledger.
+        with self.connection() as db:
+            if not db.execute("SELECT 1 FROM conversations WHERE id = ?", (conversation_id,)).fetchone():
+                return
+            if message_id and not db.execute("SELECT 1 FROM conversation_messages WHERE id = ?", (message_id,)).fetchone():
+                message_id = None
+            values = usage or {}
+            db.execute("""
+                INSERT INTO model_usage VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET input_tokens=excluded.input_tokens,
+                    output_tokens=excluded.output_tokens, cached_tokens=excluded.cached_tokens
+            """, (request_id, conversation_id, message_id, purpose, model, now(),
+                  values.get("input_tokens"), values.get("output_tokens"), values.get("cached_tokens")))
+
+    def usage(self, student_id: str, subject_id: str | None = None,
+              conversation_id: str | None = None) -> dict:
+        with self.connection() as db:
+            rows = db.execute("""
+                SELECT u.* FROM model_usage u JOIN conversations c ON c.id = u.conversation_id
+                WHERE c.student_id = ? AND (? IS NULL OR c.subject_id = ?)
+                  AND (? IS NULL OR c.id = ?)
+            """, (student_id, subject_id, subject_id, conversation_id, conversation_id)).fetchall()
+        def totals(items):
+            cached = [r["cached_tokens"] for r in items if r["cached_tokens"] is not None]
+            return {
+                "requests": len(items), "reported_requests": sum(r["input_tokens"] is not None for r in items),
+                "input_tokens": sum(r["input_tokens"] or 0 for r in items),
+                "output_tokens": sum(r["output_tokens"] or 0 for r in items),
+                "cached_tokens": sum(cached) if cached else None,
+            }
+        ids = {r["conversation_id"] for r in rows}
+        return {"total": totals(rows), "conversations": {
+            cid: totals([r for r in rows if r["conversation_id"] == cid]) for cid in ids
+        }}
+
     # --------------------------------------------------------------- memories
 
     def _memories_by_id(self, db: sqlite3.Connection, student_id: str) -> dict[str, LearnerMemory]:
@@ -878,6 +942,106 @@ class ChatStore:
         with self.connection() as db:
             return bump_turns(db, student_id, reset, conversation_id)
 
+    def onboarding_status(self, student_id: str) -> dict:
+        with self.connection() as db:
+            from app.chat.onboarding import state as read_state
+            state = read_state(db, student_id)
+            state["has_user_profile"] = bool(read_all(db, student_id)["user"].strip())
+            conv_id = state.get("conversation_id")
+            if conv_id:
+                exists = db.execute(
+                    "SELECT id FROM conversations WHERE id = ? AND student_id = ?",
+                    (conv_id, student_id),
+                ).fetchone()
+                if not exists:
+                    state["conversation_id"] = None
+            return state
+
+    def start_onboarding(self, student_id: str) -> Conversation:
+        from app.chat.onboarding import QUESTIONS
+        with self.connection() as db:
+            db.execute("BEGIN IMMEDIATE")
+            from app.chat.onboarding import state as read_state
+            state = read_state(db, student_id)
+            conv_id = state.get("conversation_id")
+            if conv_id:
+                existing = db.execute(
+                    "SELECT id FROM conversations WHERE id = ? AND student_id = ?",
+                    (conv_id, student_id),
+                ).fetchone()
+                if existing:
+                    if state["status"] != "in_progress":
+                        db.execute("UPDATE onboarding_sessions SET status='in_progress', version=version+1 WHERE student_id=?", (student_id,))
+                    conv = self.conversation(conv_id, student_id)
+                    if conv is not None:
+                        return conv
+            timestamp = now()
+            conv_id = new_id("conv")
+            db.execute(
+                "INSERT INTO conversations(id, student_id, title, title_source, kind, created_at, updated_at) "
+                "VALUES (?, ?, ?, 'user', 'chat', ?, ?)",
+                (conv_id, student_id, ONBOARDING_TITLE, timestamp, timestamp),
+            )
+            self._insert(
+                db,
+                conv_id,
+                role="assistant",
+                kind="text",
+                content=(ONBOARDING_FIRST_MESSAGE if state["stage"] == "background" and not state["draft"] else
+                         "欢迎回来。请继续核对候选画像。" if state["ready"] else
+                         QUESTIONS[state["stage"]]),
+                status="complete",
+            )
+            set_onboarding_state(db, student_id, onboarded=False, conversation_id=conv_id)
+            db.execute('''INSERT INTO onboarding_sessions(student_id, conversation_id, status)
+                VALUES (?, ?, 'in_progress') ON CONFLICT(student_id) DO UPDATE SET
+                conversation_id=excluded.conversation_id, status='in_progress', version=version+1''', (student_id, conv_id))
+        conv = self.conversation(conv_id, student_id)
+        assert conv is not None
+        return conv
+
+    def complete_onboarding(self, student_id: str, version: int, entries: dict) -> dict:
+        with self.connection() as db:
+            db.execute("BEGIN IMMEDIATE")
+            from app.chat.onboarding import state, FIELDS, LABELS
+            current = state(db, student_id)
+            if current["status"] == "completed":
+                return current
+            if current["status"] != "in_progress" or not current["ready"] or current["version"] != version:
+                raise ValueError("请完成访谈并核对最新画像后再确认。")
+            if set(entries) - set(FIELDS):
+                raise ValueError("画像字段无效。")
+            from app.memory.curated import split_entries, join_entries
+            notes = split_entries(read_all(db, student_id)["user"])
+            additions = []
+            for key, value in entries.items():
+                if not isinstance(value, str) or len(value) > 220:
+                    raise ValueError("画像条目过长或格式无效。")
+                if value.strip():
+                    additions.append(f"{LABELS[key]}：{value.strip()}")
+            # The confirmation is explicit authorization; preserve all existing notes.
+            replaced_labels = tuple(f"{LABELS[key]}：" for key in entries)
+            kept = [entry for entry in notes if not (replaced_labels and entry.startswith(replaced_labels))]
+            write_note(db, student_id, "user", join_entries(kept + additions), now())
+            db.execute("UPDATE onboarding_sessions SET status='completed', confirmed_entries=?, version=version+1 WHERE student_id=?", (json.dumps(entries, ensure_ascii=False), student_id))
+            return state(db, student_id)
+
+    def restart_onboarding(self, student_id: str) -> Conversation:
+        with self.connection() as db:
+            db.execute("DELETE FROM onboarding_sessions WHERE student_id = ?", (student_id,))
+            db.execute(
+                "UPDATE agent_state SET onboarded = 0, onboarding_conversation_id = NULL WHERE student_id = ?",
+                (student_id,),
+            )
+        return self.start_onboarding(student_id)
+
+    def skip_onboarding(self, student_id: str) -> dict:
+        from app.chat.onboarding import state
+        with self.connection() as db:
+            db.execute("INSERT OR IGNORE INTO onboarding_sessions(student_id) VALUES (?)", (student_id,))
+            db.execute("UPDATE onboarding_sessions SET status='skipped', version=version+1 WHERE student_id=? AND status != 'completed'", (student_id,))
+            return state(db, student_id)
+
     def frozen_notes(self, conversation_id: str, student_id: str) -> str:
         with self.connection() as db:
             text = snapshot_text(read_all(db, student_id))
@@ -888,6 +1052,74 @@ class ChatStore:
     def search_messages(self, student_id: str, query: str, limit: int = 5, exclude_conversation_id: str | None = None) -> str:
         with self.connection() as db:
             return search_notes(db, student_id, query, limit, exclude_conversation_id)
+
+    # ------------------------------------------------------------------ custom skills
+
+    def list_custom_skills(self, student_id: str) -> list[dict]:
+        with self.connection() as db:
+            rows = db.execute(
+                "SELECT * FROM custom_skills WHERE student_id = ? ORDER BY created_at DESC",
+                (student_id,),
+            ).fetchall()
+            return [
+                {
+                    "id": row["id"],
+                    "name": row["name"],
+                    "role": row["role"],
+                    "trigger_keywords": row["trigger_keywords"],
+                    "content": row["content"],
+                    "enabled": bool(row["enabled"]),
+                    "created_at": row["created_at"],
+                    "updated_at": row["updated_at"],
+                }
+                for row in rows
+            ]
+
+    def create_custom_skill(
+        self, student_id: str, *, name: str, role: str = "thread", trigger_keywords: str = "", content: str,
+    ) -> dict:
+        clean_name = (name or "").strip()[:60]
+        clean_content = (content or "").strip()[:8000]
+        clean_triggers = (trigger_keywords or "").strip()[:200]
+        if not clean_name or not clean_content:
+            raise ValueError("Skill 名称和内容不能为空。")
+        if role not in {"thread", "chat", "main"}:
+            raise ValueError("Skill 角色只能是 thread、chat 或 main。")
+        skill_id = new_id("skill")
+        timestamp = now()
+        with self.connection() as db:
+            db.execute(
+                """INSERT INTO custom_skills(id, student_id, name, role, trigger_keywords, content, enabled, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)""",
+                (skill_id, student_id, clean_name, role, clean_triggers, clean_content, timestamp, timestamp),
+            )
+        return next(item for item in self.list_custom_skills(student_id) if item["id"] == skill_id)
+
+    def update_custom_skill(self, student_id: str, skill_id: str, *, enabled: bool | None = None, name: str | None = None,
+                            role: str | None = None, trigger_keywords: str | None = None, content: str | None = None) -> dict | None:
+        with self.connection() as db:
+            row = db.execute(
+                "SELECT * FROM custom_skills WHERE id = ? AND student_id = ?", (skill_id, student_id),
+            ).fetchone()
+            if row is None:
+                return None
+            next_name = (name.strip()[:60] if name is not None else row["name"]) or row["name"]
+            next_role = role if role in {"thread", "chat", "main"} else row["role"]
+            next_triggers = trigger_keywords.strip()[:200] if trigger_keywords is not None else row["trigger_keywords"]
+            next_content = (content.strip()[:8000] if content is not None else row["content"]) or row["content"]
+            next_enabled = int(bool(enabled)) if enabled is not None else row["enabled"]
+            db.execute(
+                """UPDATE custom_skills
+                   SET name = ?, role = ?, trigger_keywords = ?, content = ?, enabled = ?, updated_at = ?
+                   WHERE id = ? AND student_id = ?""",
+                (next_name, next_role, next_triggers, next_content, next_enabled, now(), skill_id, student_id),
+            )
+        return next((item for item in self.list_custom_skills(student_id) if item["id"] == skill_id), None)
+
+    def delete_custom_skill(self, student_id: str, skill_id: str) -> bool:
+        with self.connection() as db:
+            cursor = db.execute("DELETE FROM custom_skills WHERE id = ? AND student_id = ?", (skill_id, student_id))
+            return cursor.rowcount == 1
 
     def memories(self, student_id: str) -> list[LearnerMemory]:
         self.import_legacy()
@@ -934,7 +1166,7 @@ class ChatStore:
         if len(chosen) < MIN_LOCAL_HITS:
             outer.sort(key=lambda item: (item[0], item[1]), reverse=True)
             chosen += [(memory, scope) for _, _, memory, scope in outer[:2]]
-        return preferences[:2] + chosen
+        return preferences[:5] + chosen
 
     def update_memory(
         self, memory_id: str, student_id: str, summary: str | None, status: str | None, subject_id=UNSET,

@@ -6,12 +6,12 @@ from pydantic import BaseModel, Field
 
 from app.agents.llm import ProviderError
 from app.chat.schemas import (
-    Conversation, ConversationSummary, CreateConversation, LearnerMemory, Resolution, ResolveThread, SendMessage,
+    ConfirmProposal, Conversation, ConversationSummary, CreateConversation, LearnerMemory, Resolution, ResolveThread, SendMessage,
     StartExercise, UpdateConversation, UpdateMemory,
 )
 from app.chat.service import ChatService
 from app.chat.store import UNSET, ChatStore
-from app.models.schemas import DEMO_STUDENT
+from app.auth.deps import current_student
 from app.services.problems import PROBLEMS
 
 STREAM_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
@@ -30,12 +30,30 @@ class PendingDecision(BaseModel):
     allow: bool
 
 
+class ConfirmProfile(BaseModel):
+    version: int
+    entries: dict[str, str]
+
+
+class CreateCustomSkillBody(BaseModel):
+    name: str
+    role: str = "thread"
+    trigger_keywords: str = ""
+    content: str
+
+
+class PatchCustomSkillBody(BaseModel):
+    enabled: bool | None = None
+    name: str | None = None
+    role: str | None = None
+    trigger_keywords: str | None = None
+    content: str | None = None
+
+
 def chat_router(store: ChatStore, service: ChatService) -> APIRouter:
     router = APIRouter(prefix="/api", tags=["自由对话"])
-    student = DEMO_STUDENT
-
     def require(conversation_id: str) -> Conversation:
-        conversation = store.conversation(conversation_id, student)
+        conversation = store.conversation(conversation_id, current_student())
         if conversation is None:
             raise HTTPException(404, "会话不存在或已删除。")
         conversation.generating = service.is_generating(conversation_id)
@@ -44,9 +62,11 @@ def chat_router(store: ChatStore, service: ChatService) -> APIRouter:
     def require_idle(conversation_id: str) -> None:
         if service.is_generating(conversation_id):
             raise HTTPException(409, "上一条回复仍在生成，请先停止或稍候。")
+        if not service.has_thread_slot(current_student(), conversation_id):
+            raise HTTPException(409, "本空间已有 2 个 Thread 正在执行，请稍候再发送。")
 
     def require_subject(subject_id: str | None) -> None:
-        if subject_id is not None and store.subject(subject_id, student) is None:
+        if subject_id is not None and store.subject(subject_id, current_student()) is None:
             raise HTTPException(404, "Subject 不存在或已删除。")
 
     def stream(body) -> StreamingResponse:
@@ -54,7 +74,7 @@ def chat_router(store: ChatStore, service: ChatService) -> APIRouter:
 
     @router.get("/conversations", response_model=list[ConversationSummary])
     def list_conversations(subject_id: str | None = None):
-        items = store.list_conversations(student, subject_id)
+        items = store.list_conversations(current_student(), subject_id)
         for item in items:
             item.generating = service.is_generating(item.id)
         return items
@@ -68,7 +88,7 @@ def chat_router(store: ChatStore, service: ChatService) -> APIRouter:
                 raise HTTPException(404, "练习题不存在。")
         require_subject(body.subject_id)
         conversation_id = store.create_conversation(
-            student, title=body.title, problem=problem, client_request_id=body.client_request_id,
+            current_student(), title=body.title, problem=problem, client_request_id=body.client_request_id,
             subject_id=body.subject_id,
         )
         return require(conversation_id)
@@ -76,6 +96,11 @@ def chat_router(store: ChatStore, service: ChatService) -> APIRouter:
     @router.get("/conversations/{conversation_id}", response_model=Conversation)
     def get_conversation(conversation_id: str):
         return require(conversation_id)
+
+    @router.get("/conversations/{conversation_id}/usage")
+    def conversation_usage(conversation_id: str):
+        require(conversation_id)
+        return store.usage(current_student(), conversation_id=conversation_id)["total"]
 
     @router.patch("/conversations/{conversation_id}", response_model=Conversation)
     def update_conversation(conversation_id: str, body: UpdateConversation):
@@ -86,7 +111,7 @@ def chat_router(store: ChatStore, service: ChatService) -> APIRouter:
             require_subject(body.subject_id)
         try:
             updated = store.update_conversation(
-                conversation_id, student,
+                conversation_id, current_student(),
                 title=body.title if "title" in fields else UNSET,
                 subject_id=body.subject_id if "subject_id" in fields else UNSET,
             )
@@ -97,11 +122,11 @@ def chat_router(store: ChatStore, service: ChatService) -> APIRouter:
         return require(conversation_id)
 
     @router.delete("/conversations/{conversation_id}", status_code=204)
-    def delete_conversation(conversation_id: str):
+    async def delete_conversation(conversation_id: str):
         if store.role_context(conversation_id)["role"] != "main":
             service.stop(conversation_id)
         try:
-            deleted = store.delete_conversation(conversation_id, student)
+            deleted = store.delete_conversation(conversation_id, current_student())
         except ValueError as exc:
             raise HTTPException(409, str(exc)) from None
         if not deleted:
@@ -120,12 +145,23 @@ def chat_router(store: ChatStore, service: ChatService) -> APIRouter:
             replies = store.replies(existing)
             complete = [row for row in replies if row["status"] == "complete"]
             if complete:
-                return stream(service.replay(student, conversation_id, existing, complete[-1]["id"]))
-            generation = service.begin(student, conversation_id, existing, [row["id"] for row in replies])
+                return stream(service.replay(current_student(), conversation_id, existing, complete[-1]["id"]))
+            generation = service.begin(current_student(), conversation_id, existing, [row["id"] for row in replies])
         else:
             user_id = store.add_user_message(conversation_id, body.content, body.client_request_id)
-            generation = service.begin(student, conversation_id, user_id, [])
+            generation = service.begin(current_student(), conversation_id, user_id, [])
         return stream(service.events(generation))
+
+    @router.post("/conversations/{conversation_id}/messages/{message_id}/resume", response_model=Conversation)
+    async def resume_thread(conversation_id: str, message_id: str):
+        require(conversation_id)
+        try:
+            service.resume(current_student(), conversation_id, message_id)
+        except LookupError as exc:
+            raise HTTPException(404, str(exc)) from None
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from None
+        return require(conversation_id)
 
     @router.post("/conversations/{conversation_id}/regenerate")
     async def regenerate(conversation_id: str):
@@ -137,45 +173,185 @@ def chat_router(store: ChatStore, service: ChatService) -> APIRouter:
         if blocked:
             raise HTTPException(409, "最后一条消息之后已有新内容，无法重新生成。")
         replies = [row["id"] for row in store.replies(user_id)]
-        return stream(service.events(service.begin(student, conversation_id, user_id, replies)))
+        return stream(service.events(service.begin(current_student(), conversation_id, user_id, replies)))
 
     @router.post("/chat/tool-approvals/{approval_id}")
-    def approve_tool(approval_id: str, body: ToolApprovalBody):
+    async def approve_tool(approval_id: str, body: ToolApprovalBody):
         if not service.resolve_approval(approval_id, body.allow):
             raise HTTPException(404, "这次审批已经结束。")
         return {"ok": True}
 
+    @router.post("/conversations/{conversation_id}/confirm-proposal")
+    async def confirm_thread_proposal(conversation_id: str, body: ConfirmProposal):
+        require(conversation_id)
+        try:
+            thread_id = service.confirm_proposal(current_student(), conversation_id, body.message_id, body.proposal_id)
+        except LookupError as exc:
+            raise HTTPException(404, str(exc)) from None
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from None
+        thread = require(thread_id)
+        return {"thread_id": thread_id, "status": thread.execution_status}
+
     @router.get("/agent-memory")
     def agent_memory():
-        return store.agent_notes_view(student)
+        return store.agent_notes_view(current_student())
+
+    @router.get("/onboarding")
+    def get_onboarding():
+        return store.onboarding_status(current_student())
+
+    @router.post("/onboarding/start", response_model=Conversation)
+    def start_onboarding():
+        conv = store.start_onboarding(current_student())
+        conv.generating = service.is_generating(conv.id)
+        return conv
+
+    @router.post("/onboarding/complete")
+    def complete_onboarding(body: ConfirmProfile):
+        try:
+            state = store.onboarding_status(current_student())
+            if state["conversation_id"] and service.is_generating(state["conversation_id"]):
+                raise ValueError("请等待本轮访谈完成后再确认。")
+            return store.complete_onboarding(current_student(), body.version, body.entries)
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from None
+
+    @router.post("/onboarding/skip")
+    def skip_onboarding():
+        state = store.onboarding_status(current_student())
+        if state["conversation_id"]:
+            service.stop(state["conversation_id"])
+        return store.skip_onboarding(current_student())
+
+    @router.post("/onboarding/restart", response_model=Conversation)
+    def restart_onboarding():
+        state = store.onboarding_status(current_student())
+        if state["conversation_id"]:
+            service.stop(state["conversation_id"])
+        conv = store.restart_onboarding(current_student())
+        conv.generating = service.is_generating(conv.id)
+        return conv
+
+    @router.get("/usage")
+    def account_usage():
+        student_id = current_student()
+        spaces = [
+            {"id": subject.id, "name": subject.name, **store.usage(student_id, subject_id=subject.id)["total"]}
+            for subject in store.subjects(student_id)
+        ]
+        return {"total": store.usage(student_id)["total"], "spaces": spaces}
+
+    @router.get("/skills")
+    def list_skills():
+        return {"custom_skills": store.list_custom_skills(current_student())}
+
+    @router.post("/skills", status_code=201)
+    def create_skill(body: CreateCustomSkillBody):
+        try:
+            return store.create_custom_skill(
+                current_student(),
+                name=body.name,
+                role=body.role,
+                trigger_keywords=body.trigger_keywords,
+                content=body.content,
+            )
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from None
+
+    @router.patch("/skills/{skill_id}")
+    def patch_skill(skill_id: str, body: PatchCustomSkillBody):
+        updated = store.update_custom_skill(
+            current_student(),
+            skill_id,
+            enabled=body.enabled,
+            name=body.name,
+            role=body.role,
+            trigger_keywords=body.trigger_keywords,
+            content=body.content,
+        )
+        if updated is None:
+            raise HTTPException(404, "自定义 Skill 不存在或已删除。")
+        return updated
+
+    @router.delete("/skills/{skill_id}", status_code=204)
+    def delete_skill(skill_id: str):
+        if not store.delete_custom_skill(current_student(), skill_id):
+            raise HTTPException(404, "自定义 Skill 不存在或已删除。")
+        return Response(status_code=204)
+
+    @router.get("/workspace/tree")
+    def workspace_tree():
+        from app.agent_tools import workspace_of
+        ws = workspace_of(service.settings)
+        if ws is None:
+            return {"workspace": "", "name": "", "entries": []}
+        skip = {".git", "node_modules", "__pycache__", ".next", ".venv", "dist", "build"}
+        entries = []
+        try:
+            items = sorted(ws.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower()))
+            for item in items[:50]:
+                if item.name.startswith(".") and item.name in skip:
+                    continue
+                if item.name in skip:
+                    continue
+                if item.is_dir():
+                    children = []
+                    try:
+                        sub_items = sorted(item.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower()))
+                        for sub in sub_items[:25]:
+                            if sub.name in skip:
+                                continue
+                            children.append({
+                                "name": sub.name,
+                                "path": f"{item.name}/{sub.name}",
+                                "kind": "dir" if sub.is_dir() else "file",
+                            })
+                    except OSError:
+                        pass
+                    entries.append({
+                        "name": item.name,
+                        "path": item.name,
+                        "kind": "dir",
+                        "children": children,
+                    })
+                else:
+                    entries.append({
+                        "name": item.name,
+                        "path": item.name,
+                        "kind": "file",
+                    })
+        except OSError:
+            pass
+        return {"workspace": str(ws), "name": ws.name or str(ws), "entries": entries}
 
     @router.put("/agent-memory")
     def save_agent_memory(body: AgentNoteBody):
         try:
-            return store.save_agent_note(student, body.target, body.content)
+            return store.save_agent_note(current_student(), body.target, body.content)
         except ValueError as exc:
             raise HTTPException(422, str(exc)) from None
 
     @router.get("/agent-memory/pending")
     def pending_memory():
-        return store.pending_notes(student)
+        return store.pending_notes(current_student())
 
     @router.post("/agent-memory/pending/{pending_id}")
     def decide_memory(pending_id: str, body: PendingDecision):
-        result = store.decide_pending(student, pending_id, body.allow)
+        result = store.decide_pending(current_student(), pending_id, body.allow)
         if result is None:
             raise HTTPException(404, "这条待确认已经处理过。")
-        return {"result": result, **store.agent_notes_view(student)}
+        return {"result": result, **store.agent_notes_view(current_student())}
 
     @router.post("/conversations/{conversation_id}/stop")
-    def stop(conversation_id: str):
+    async def stop(conversation_id: str):
         require(conversation_id)
         return {"stopped": service.stop(conversation_id)}
 
     @router.post("/conversations/{conversation_id}/resolve/draft", response_model=Resolution)
     async def draft_resolution(conversation_id: str):
         try:
-            return await service.draft_resolution(student, conversation_id)
+            return await service.draft_resolution(current_student(), conversation_id)
         except LookupError as exc:
             raise HTTPException(404, str(exc)) from None
         except ProviderError as exc:
@@ -187,7 +363,7 @@ def chat_router(store: ChatStore, service: ChatService) -> APIRouter:
     @router.post("/conversations/{conversation_id}/resolve", response_model=Resolution)
     def resolve_thread(conversation_id: str, body: ResolveThread):
         try:
-            return store.resolve_thread(conversation_id, student, body.title, body.summary, body.takeaways)
+            return store.resolve_thread(conversation_id, current_student(), body.title, body.summary, body.takeaways)
         except LookupError as exc:
             raise HTTPException(404, str(exc)) from None
         except ValueError as exc:
@@ -196,7 +372,7 @@ def chat_router(store: ChatStore, service: ChatService) -> APIRouter:
     @router.post("/conversations/{conversation_id}/reopen", response_model=Conversation)
     def reopen_thread(conversation_id: str):
         try:
-            found = store.reopen_thread(conversation_id, student)
+            found = store.reopen_thread(conversation_id, current_student())
         except ValueError as exc:
             raise HTTPException(409, str(exc)) from None
         if not found:
@@ -215,7 +391,7 @@ def chat_router(store: ChatStore, service: ChatService) -> APIRouter:
 
     @router.get("/learner-memories", response_model=list[LearnerMemory])
     def list_memories(subject_id: str | None = None):
-        memories = store.memories(student)
+        memories = store.memories(current_student())
         return memories if subject_id is None else [m for m in memories if m.subject_id == subject_id]
 
     @router.patch("/learner-memories/{memory_id}", response_model=LearnerMemory)
@@ -224,7 +400,7 @@ def chat_router(store: ChatStore, service: ChatService) -> APIRouter:
             raise HTTPException(422, "请提供要修改的内容。")
         try:
             memory = store.update_memory(
-                memory_id, student, body.summary, body.status,
+                memory_id, current_student(), body.summary, body.status,
                 body.subject_id if "subject_id" in body.model_fields_set else UNSET,
             )
         except ValueError as exc:
@@ -237,7 +413,7 @@ def chat_router(store: ChatStore, service: ChatService) -> APIRouter:
 
     @router.delete("/learner-memories/{memory_id}", status_code=204)
     def delete_memory(memory_id: str):
-        if not store.delete_memory(memory_id, student):
+        if not store.delete_memory(memory_id, current_student()):
             raise HTTPException(404, "记忆不存在或已删除。")
         return Response(status_code=204)
 

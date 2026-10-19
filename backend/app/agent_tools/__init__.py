@@ -23,12 +23,36 @@ DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "dispatch_thread",
-            "description": "主对话将具体学习任务交给 Thread 并立即执行。相关补充传已有 thread_id，新任务省略 thread_id。每次只交办一件事，不要只创建空对话。",
+            "description": "主对话开始具体讲解、练习或研究时必须使用，用户无需提到 Thread。也用于「可以/开始吧」接受上轮具体任务。用户要求接着已有 Thread 时必须填其真实 thread_id，下一道练习也续接。独立新任务才省略 thread_id。交办后立即执行。",
             "parameters": {"type": "object", "properties": {
                 "title": {"type": "string", "description": "60 字以内的具体任务标题"},
-                "task": {"type": "string", "description": "任务范围、目标和本轮需要做的事，保持用户原意"},
-                "thread_id": {"type": "string", "description": "续接时填 conversation_role.threads 中的 id；新建时省略"},
+                "task": {"type": "string", "description": "自包含的任务说明：主题、目标、必要的前文/练习背景和下一步，保持用户原意；不能只写「可以」「继续」"},
+                "thread_id": {"type": "string", "description": "用户要继续已有 Thread 或补充相关任务时必须填 conversation_role.threads 对应项的真实 id；省略会新建，只有独立新任务才省略"},
+                "skill": {
+                    "type": "string",
+                    "enum": ["deep_explain", "socratic_practice", "study_note_builder", "general"],
+                    "description": "推荐挂载给 Thread 的教学技能：原理精讲用 deep_explain，做题带练用 socratic_practice，整理讲义/实验用 study_note_builder",
+                },
             }, "required": ["title", "task"], "additionalProperties": False},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "propose_threads",
+            "description": "仅在尚未选定任务、比较学习路线或只要建议时展示候选 Thread，不立即执行。用户已明确要讲解或练习，或已接受上轮任务时，使用 dispatch_thread 直接执行。",
+            "parameters": {"type": "object", "properties": {
+                "proposals": {"type": "array", "minItems": 1, "maxItems": 4, "items": {
+                    "type": "object",
+                    "properties": {
+                        "title": {"type": "string", "description": "60 字以内的具体任务标题"},
+                        "task": {"type": "string", "description": "任务范围、目标和预期结果"},
+                        "reason": {"type": "string", "description": "为什么建议这个任务，对学习目标的帮助"},
+                    },
+                    "required": ["title", "task", "reason"],
+                    "additionalProperties": False,
+                }},
+            }, "required": ["proposals"], "additionalProperties": False},
         },
     },
     {
@@ -40,6 +64,34 @@ DEFINITIONS = [
                 "summary": {"type": "string", "description": "600 字以内的进展或结果"},
                 "needs_user": {"type": "boolean"},
             }, "required": ["summary"], "additionalProperties": False},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "plan_steps",
+            "description": "在开展多步原理精讲、对比推导或讲义构建时，向界面展示结构化的执行步骤清单（2 到 4 步），或更新各步骤状态。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "steps": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 5,
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "title": {"type": "string", "description": "简短步骤名称，如“设计贯穿全文的小例子”"},
+                                "status": {"type": "string", "enum": ["pending", "in_progress", "completed"]},
+                            },
+                            "required": ["title", "status"],
+                            "additionalProperties": False,
+                        },
+                    },
+                },
+                "required": ["steps"],
+                "additionalProperties": False,
+            },
         },
     },
     {
@@ -108,7 +160,7 @@ DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "memory",
-            "description": "维护两块长期笔记，没有 read，内容已在系统提示的快照里。target=user 只记用户是谁、沟通方式和长期目标；target=memory 只记环境事实（路径、约定、资料位置、工具坑）。知识点的误区、掌握和学习偏好不要写到这里。action=add 追加一条，patch 用 content 替换唯一一条 old_text，remove 删掉那一条。完全相同的条目会被丢掉。超限直接失败，必须在这一轮里先 remove 再写。已保存或批准的写入会在下一轮进入系统提示。",
+            "description": "维护两块长期笔记，内容已在系统提示快照里。target=user 记录用户身份、长期目标及明确确认的长期学习/沟通偏好（统一前缀：讲解偏好：或互动偏好：）；target=memory 只记环境事实。知识点误区和掌握不要写入。临时要求不写入；空间专属要求不要写入全局 USER。action=add 追加，patch 精确替换唯一 old_text，remove 删除；修改同维度偏好优先 patch 而非追加。返回待确认、拒绝或失败不等于已保存。超限请先精简，已保存或批准的修改下一轮生效。",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -169,10 +221,27 @@ async def run(name: str, arguments: dict, ctx) -> str:
             if not getattr(ctx, "dispatch_thread", None):
                 raise ToolError("当前对话不能分派 Thread。")
             text = ctx.dispatch_thread(arguments)
+        elif name == "propose_threads":
+            if not getattr(ctx, "propose_threads", None):
+                raise ToolError("当前对话不能建议 Thread。")
+            text = ctx.propose_threads(arguments)
         elif name == "report_progress":
             if not getattr(ctx, "report_progress", None):
                 raise ToolError("当前对话不是 Thread。")
             text = ctx.report_progress(arguments)
+        elif name == "plan_steps":
+            steps = arguments.get("steps")
+            if not isinstance(steps, list) or not steps:
+                raise ToolError("steps 必须是非空步骤列表。")
+            cleaned = []
+            for item in steps[:5]:
+                if not isinstance(item, dict) or not str(item.get("title") or "").strip():
+                    raise ToolError("每个步骤必须包含 title。")
+                status = str(item.get("status") or "pending")
+                if status not in {"pending", "in_progress", "completed"}:
+                    status = "pending"
+                cleaned.append({"title": str(item["title"]).strip()[:80], "status": status})
+            text = json.dumps({"steps": cleaned}, ensure_ascii=False)
         elif name == "read":
             text = await asyncio.to_thread(files.read_file, ctx.workspace, arguments)
         elif name == "write":

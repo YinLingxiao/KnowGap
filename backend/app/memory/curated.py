@@ -31,9 +31,17 @@ def ensure(db: sqlite3.Connection) -> None:
     """)
     db.execute("""
         CREATE TABLE IF NOT EXISTS agent_state (
-            student_id TEXT PRIMARY KEY, turns_since_note INTEGER NOT NULL DEFAULT 0
+            student_id TEXT PRIMARY KEY,
+            turns_since_note INTEGER NOT NULL DEFAULT 0,
+            onboarded INTEGER NOT NULL DEFAULT 0,
+            onboarding_conversation_id TEXT
         )
     """)
+    cols = {row[1] for row in db.execute("PRAGMA table_info(agent_state)").fetchall()}
+    if "onboarded" not in cols:
+        db.execute("ALTER TABLE agent_state ADD COLUMN onboarded INTEGER NOT NULL DEFAULT 0")
+    if "onboarding_conversation_id" not in cols:
+        db.execute("ALTER TABLE agent_state ADD COLUMN onboarding_conversation_id TEXT")
     db.execute("""
         CREATE TABLE IF NOT EXISTS conversation_note_state (
             student_id TEXT NOT NULL, conversation_id TEXT NOT NULL
@@ -185,6 +193,48 @@ def bump_turns(db: sqlite3.Connection, student_id: str, reset: bool, conversatio
     """, (student_id, conversation_id))
     return db.execute("SELECT turns_since_note FROM conversation_note_state WHERE student_id = ? AND conversation_id = ?",
                       (student_id, conversation_id)).fetchone()[0]
+
+
+def onboarding_state(db: sqlite3.Connection, student_id: str) -> dict:
+    row = db.execute(
+        "SELECT onboarded, onboarding_conversation_id FROM agent_state WHERE student_id = ?",
+        (student_id,),
+    ).fetchone()
+    user_note = (read_all(db, student_id).get("user") or "").strip()
+    has_profile = bool(user_note)
+    onboarded = bool(row["onboarded"]) if row else False
+    conv_id = row["onboarding_conversation_id"] if row else None
+    return {
+        "onboarded": onboarded,
+        "conversation_id": conv_id,
+        "has_user_profile": has_profile,
+    }
+
+
+def set_onboarding_state(
+    db: sqlite3.Connection,
+    student_id: str,
+    *,
+    onboarded: bool | None = None,
+    conversation_id: str | None = None,
+) -> dict:
+    current = db.execute(
+        "SELECT onboarded, onboarding_conversation_id FROM agent_state WHERE student_id = ?",
+        (student_id,),
+    ).fetchone()
+    next_onboarded = int(bool(onboarded)) if onboarded is not None else (int(current["onboarded"]) if current else 0)
+    next_conv = conversation_id if conversation_id is not None else (current["onboarding_conversation_id"] if current else None)
+    db.execute(
+        """
+        INSERT INTO agent_state(student_id, turns_since_note, onboarded, onboarding_conversation_id)
+        VALUES (?, 0, ?, ?)
+        ON CONFLICT(student_id) DO UPDATE SET
+            onboarded = excluded.onboarded,
+            onboarding_conversation_id = excluded.onboarding_conversation_id
+        """,
+        (student_id, next_onboarded, next_conv),
+    )
+    return onboarding_state(db, student_id)
 
 
 def ensure_fts(db: sqlite3.Connection) -> None:

@@ -1,15 +1,20 @@
 /** 自由对话接口：REST + Server-Sent Events。接口字段（snake_case）只在这里出现。 */
 import { ApiError } from "@/lib/api/errors";
-import { mapSource, request, type WireSource } from "@/lib/api/http-client";
+import { authHeader, mapSource, request, type WireSource } from "@/lib/api/http-client";
 import { API_BASE_URL } from "@/lib/config";
 import type { Problem } from "@/lib/types";
 import type {
   ChatMessage, Conversation, ConversationSummary, LearnerMemory, LearnerMemoryStatus, MemoryChange, SpaceInput,
-  StreamEvent, Subject,
+  StreamEvent, Subject, TokenUsage, SpaceUsage,
 } from "./types";
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- wire payloads are mapped field by field below */
 type Wire = any;
+
+function mapUsage(data: Wire): TokenUsage {
+  return { requests: data.requests, reportedRequests: data.reported_requests,
+    inputTokens: data.input_tokens, outputTokens: data.output_tokens, cachedTokens: data.cached_tokens ?? null };
+}
 
 function mapMemory(data: Wire): LearnerMemory {
   return {
@@ -48,6 +53,11 @@ function mapMessage(data: Wire): ChatMessage {
       id: String(data.pending_approval.id), name: String(data.pending_approval.name),
       arguments: String(data.pending_approval.arguments ?? ""),
     } : null,
+    checkpointAvailable: Boolean(data.checkpoint_available),
+    checkpointBlockedReason: data.checkpoint_blocked_reason ?? null,
+    threadProposals: (data.thread_proposals ?? []).map((p: Wire) => ({
+      id: p.id, title: p.title, task: p.task, reason: p.reason, threadId: p.thread_id ?? null,
+    })),
     threadUpdate: data.thread_update ? {
       threadId: data.thread_update.thread_id, title: data.thread_update.title,
       status: data.thread_update.status, summary: data.thread_update.summary,
@@ -253,9 +263,15 @@ export const chatApi = {
       method: "POST", body: JSON.stringify({ allow }),
     });
   },
-  async agentSettings(): Promise<{ workspace: string; autoApprove: boolean; memoryWriteApproval: boolean }> {
+  async agentSettings(): Promise<{ workspace: string; autoApprove: boolean; memoryWriteApproval: boolean; reasoningEffort: "off" | "low" | "medium" | "high" }> {
     const data = await request<Wire>(root, "/api/agent/settings", { cache: "no-store" });
-    return { workspace: data.workspace ?? "", autoApprove: Boolean(data.auto_approve), memoryWriteApproval: Boolean(data.memory_write_approval) };
+    const effort = data.reasoning_effort;
+    return {
+      workspace: data.workspace ?? "",
+      autoApprove: Boolean(data.auto_approve),
+      memoryWriteApproval: Boolean(data.memory_write_approval),
+      reasoningEffort: effort === "off" || effort === "low" || effort === "medium" || effort === "high" ? effort : "medium",
+    };
   },
   async saveAgentSettings(input: { workspace: string; autoApprove: boolean; memoryWriteApproval: boolean }): Promise<{ workspace: string; autoApprove: boolean; memoryWriteApproval: boolean }> {
     const data = await request<Wire>(root, "/api/agent/settings", {
@@ -264,6 +280,115 @@ export const chatApi = {
       }),
     });
     return { workspace: data.workspace ?? "", autoApprove: Boolean(data.auto_approve), memoryWriteApproval: Boolean(data.memory_write_approval) };
+  },
+  async saveReasoningEffort(effort: "off" | "low" | "medium" | "high"): Promise<void> {
+    await request<Wire>(root, "/api/agent/settings", {
+      method: "PUT", body: JSON.stringify({ reasoning_effort: effort }),
+    });
+  },
+  async onboardingStatus(): Promise<{ onboarded: boolean; conversationId: string | null; hasUserProfile: boolean; status: string; stage: string | null; ready: boolean; version: number; draft: Record<string, { value: string; quote: string; declined: boolean }> }> {
+    const data = await request<Wire>(root, "/api/onboarding", { cache: "no-store" });
+    return {
+      onboarded: Boolean(data.onboarded),
+      conversationId: data.conversation_id ?? null,
+      hasUserProfile: Boolean(data.has_user_profile),
+      status: data.status, stage: data.stage, ready: data.ready, version: data.version, draft: data.draft ?? {},
+    };
+  },
+  async startOnboarding(): Promise<Conversation> {
+    return mapConversation(await request<Wire>(root, "/api/onboarding/start", { method: "POST" }));
+  },
+  async completeOnboarding(version: number, entries: Record<string, string>): Promise<{ onboarded: boolean }> {
+    const data = await request<Wire>(root, "/api/onboarding/complete", { method: "POST", body: JSON.stringify({ version, entries }) });
+    return { onboarded: Boolean(data.onboarded) };
+  },
+  async skipOnboarding(): Promise<void> {
+    await request(root, "/api/onboarding/skip", { method: "POST" });
+  },
+  async resumeThread(id: string, messageId: string): Promise<void> {
+    await request(root, `${path(id)}/messages/${encodeURIComponent(messageId)}/resume`, { method: "POST" });
+  },
+  async accountUsage(): Promise<{ total: TokenUsage; spaces: Array<TokenUsage & { id: string; name: string }> }> {
+    const data = await request<Wire>(root, "/api/usage", { cache: "no-store" });
+    return {
+      total: mapUsage(data.total),
+      spaces: (data.spaces ?? []).map((item: Wire) => ({ id: item.id, name: item.name, ...mapUsage(item) })),
+    };
+  },
+  async restartOnboarding(): Promise<Conversation> {
+    return mapConversation(await request<Wire>(root, "/api/onboarding/restart", { method: "POST" }));
+  },
+  async listCustomSkills(): Promise<Array<{ id: string; name: string; role: "thread" | "chat" | "main"; triggerKeywords: string; content: string; enabled: boolean }>> {
+    const data = await request<Wire>(root, "/api/skills", { cache: "no-store" });
+    return (data.custom_skills ?? []).map((item: Wire) => ({
+      id: item.id,
+      name: item.name,
+      role: item.role === "chat" || item.role === "main" ? item.role : "thread",
+      triggerKeywords: item.trigger_keywords ?? "",
+      content: item.content ?? "",
+      enabled: Boolean(item.enabled),
+    }));
+  },
+  async createCustomSkill(input: { name: string; role: "thread" | "chat" | "main"; triggerKeywords: string; content: string }) {
+    const item = await request<Wire>(root, "/api/skills", {
+      method: "POST",
+      body: JSON.stringify({
+        name: input.name,
+        role: input.role,
+        trigger_keywords: input.triggerKeywords,
+        content: input.content,
+      }),
+    });
+    return {
+      id: item.id as string,
+      name: item.name as string,
+      role: (item.role === "chat" || item.role === "main" ? item.role : "thread") as "thread" | "chat" | "main",
+      triggerKeywords: (item.trigger_keywords ?? "") as string,
+      content: (item.content ?? "") as string,
+      enabled: Boolean(item.enabled),
+    };
+  },
+  async updateCustomSkill(id: string, patch: { enabled?: boolean; name?: string; role?: "thread" | "chat" | "main"; triggerKeywords?: string; content?: string }) {
+    const item = await request<Wire>(root, `/api/skills/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        ...(patch.enabled !== undefined ? { enabled: patch.enabled } : {}),
+        ...(patch.name !== undefined ? { name: patch.name } : {}),
+        ...(patch.role !== undefined ? { role: patch.role } : {}),
+        ...(patch.triggerKeywords !== undefined ? { trigger_keywords: patch.triggerKeywords } : {}),
+        ...(patch.content !== undefined ? { content: patch.content } : {}),
+      }),
+    });
+    return {
+      id: item.id as string,
+      name: item.name as string,
+      role: (item.role === "chat" || item.role === "main" ? item.role : "thread") as "thread" | "chat" | "main",
+      triggerKeywords: (item.trigger_keywords ?? "") as string,
+      content: (item.content ?? "") as string,
+      enabled: Boolean(item.enabled),
+    };
+  },
+  async deleteCustomSkill(id: string): Promise<void> {
+    await request(root, `/api/skills/${encodeURIComponent(id)}`, { method: "DELETE" });
+  },
+  async workspaceTree(): Promise<{
+    workspace: string;
+    name: string;
+    entries: Array<{ name: string; path: string; kind: "dir" | "file"; children?: Array<{ name: string; path: string; kind: "dir" | "file" }> }>;
+  }> {
+    return await request(root, "/api/workspace/tree", { cache: "no-store" });
+  },
+  async spaceUsage(id: string): Promise<SpaceUsage> {
+    const data = await request<Wire>(root, `/api/subjects/${encodeURIComponent(id)}/usage`, { cache: "no-store" });
+    return { total: mapUsage(data.total), conversations: Object.fromEntries(
+      Object.entries(data.conversations).map(([cid, value]) => [cid, mapUsage(value)]),
+    ) };
+  },
+  async confirmProposal(id: string, messageId: string, proposalId: string): Promise<string> {
+    const data = await request<Wire>(root, `${path(id)}/confirm-proposal`, {
+      method: "POST", body: JSON.stringify({ message_id: messageId, proposal_id: proposalId }),
+    });
+    return data.thread_id;
   },
   async decideTool(approvalId: string, allow: boolean): Promise<void> {
     await request(root, `/api/chat/tool-approvals/${encodeURIComponent(approvalId)}`, {
@@ -291,7 +416,7 @@ async function stream(
   try {
     response = await fetch(`${root}${url}`, {
       method: "POST", body, signal: connectTimeout.signal,
-      headers: { Accept: "text/event-stream", ...(body ? { "Content-Type": "application/json" } : {}) },
+      headers: { Accept: "text/event-stream", ...authHeader(), ...(body ? { "Content-Type": "application/json" } : {}) },
     });
   } catch {
     signal.removeEventListener("abort", abort);
@@ -303,6 +428,12 @@ async function stream(
   }
   if (!response.ok || !response.body) {
     signal.removeEventListener("abort", abort);
+    if (response.status === 401) {
+      try {
+        localStorage.removeItem("knowgap.auth.token.v1");
+        window.dispatchEvent(new Event("knowgap:auth-expired"));
+      } catch { /* ignore */ }
+    }
     let detail = `请求失败（HTTP ${response.status}）`;
     try {
       const data = await response.json();

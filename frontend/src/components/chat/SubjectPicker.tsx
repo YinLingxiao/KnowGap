@@ -42,7 +42,7 @@ export function SubjectPicker({ subjects, value, onChange, onCreate }: SubjectPi
   return (
     <div className={styles.anchor} ref={ref}>
       <button className={styles.trigger} onClick={() => setOpen((state) => !state)} aria-haspopup="listbox" aria-expanded={open}>
-        <span className={styles.dot} style={{ background: current?.color ?? "var(--text-tertiary)" }} />
+        {current && <span className={styles.dot} style={{ background: current.color }} />}
         {current ? current.name : "学习空间"}
         <ChevronDown size={13} aria-hidden />
       </button>

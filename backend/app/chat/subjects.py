@@ -4,41 +4,45 @@ from fastapi import APIRouter, HTTPException, Response
 
 from app.chat.schemas import Conversation, ConversationSummary, CreateSubject, CreateThread, Subject, UpdateSubject
 from app.chat.store import ChatStore
-from app.models.schemas import DEMO_STUDENT
+from app.auth.deps import current_student
 
 
 def subject_router(store: ChatStore, service=None) -> APIRouter:
     router = APIRouter(prefix="/api/subjects", tags=["Subject"])
-    student = DEMO_STUDENT
-
     @router.get("", response_model=list[Subject])
     def list_subjects():
-        return store.subjects(student)
+        return store.subjects(current_student())
 
     @router.post("", response_model=Subject, status_code=201)
     def create_subject(body: CreateSubject):
         return store.create_subject(
-            student, body.name, body.description, body.instructions,
+            current_student(), body.name, body.description, body.instructions,
             goal=body.goal, level=body.level, deadline=body.deadline, color=body.color,
         )
 
     @router.get("/{subject_id}", response_model=Subject)
     def get_subject(subject_id: str):
-        subject = store.subject(subject_id, student)
+        subject = store.subject(subject_id, current_student())
         if subject is None:
             raise HTTPException(404, "Subject 不存在或已删除。")
         return subject
 
     @router.patch("/{subject_id}", response_model=Subject)
     def update_subject(subject_id: str, body: UpdateSubject):
-        subject = store.update_subject(subject_id, student, body.model_dump(exclude_unset=True))
+        subject = store.update_subject(subject_id, current_student(), body.model_dump(exclude_unset=True))
         if subject is None:
             raise HTTPException(404, "Subject 不存在或已删除。")
         return subject
 
+    @router.get("/{subject_id}/usage")
+    def subject_usage(subject_id: str):
+        if store.subject(subject_id, current_student()) is None:
+            raise HTTPException(404, "学习空间不存在。")
+        return store.usage(current_student(), subject_id=subject_id)
+
     @router.get("/{subject_id}/threads", response_model=list[ConversationSummary])
     def list_threads(subject_id: str):
-        threads = store.threads(subject_id, student)
+        threads = store.threads(subject_id, current_student())
         if threads is None:
             raise HTTPException(404, "学习空间不存在或已删除。")
         if service is not None:
@@ -50,19 +54,19 @@ def subject_router(store: ChatStore, service=None) -> APIRouter:
     def create_thread(subject_id: str, body: CreateThread):
         try:
             thread_id = store.create_thread(
-                student, subject_id, title=body.title, anchor_message_id=body.anchor_message_id,
+                current_student(), subject_id, title=body.title, anchor_message_id=body.anchor_message_id,
                 client_request_id=body.client_request_id,
             )
         except LookupError as exc:
             raise HTTPException(404, str(exc)) from None
-        conversation = store.conversation(thread_id, student)
+        conversation = store.conversation(thread_id, current_student())
         if conversation is None:
             raise HTTPException(404, "Thread 不存在或已删除。")
         return conversation
 
     @router.delete("/{subject_id}", status_code=204)
     def delete_subject(subject_id: str):
-        if not store.delete_subject(subject_id, student):
+        if not store.delete_subject(subject_id, current_student()):
             raise HTTPException(404, "Subject 不存在或已删除。")
         return Response(status_code=204)
 

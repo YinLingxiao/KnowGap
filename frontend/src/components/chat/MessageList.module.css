@@ -17,15 +17,16 @@
   flex-direction: column;
   gap: 28px;
   width: 100%;
-  max-width: 760px;
+  max-width: var(--chat-w);
   margin: 0 auto;
-  padding: 12px 20px 28px;
+  padding: 18px 24px 32px;
 }
 
 .row {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  animation: rise-in 300ms var(--ease-spring) backwards;
 }
 
 .userRow {
@@ -33,14 +34,41 @@
 }
 
 .userBubble {
-  max-width: min(85%, 600px);
-  padding: 10px 14px;
+  max-width: min(85%, 580px);
+  padding: 10px 16px;
   border-radius: 18px 18px 6px 18px;
-  background: var(--bg-active);
+  background: var(--bg-user-bubble);
+  color: var(--text);
   font-size: var(--text-read);
-  line-height: 1.65;
+  line-height: 1.6;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+.replyCount {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
+.newLine {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.newLine::before,
+.newLine::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: color-mix(in srgb, var(--accent) 32%, transparent);
 }
 
 .userMeta,
@@ -71,7 +99,11 @@
   color: var(--text-tertiary);
   font-size: var(--text-xs);
   opacity: 0;
-  transition: opacity var(--duration-fast) var(--ease), background var(--duration-fast) var(--ease);
+  transition: opacity var(--t-hover) var(--ease-out), background-color var(--t-hover) var(--ease-out);
+}
+
+.assistantRow:last-child .action {
+  opacity: 0.7;
 }
 
 .row:hover .action,
@@ -101,13 +133,16 @@
   gap: 5px;
   max-width: 100%;
   min-height: 24px;
-  padding: 2px 8px;
-  border: 1px solid var(--border);
+  padding: 2px 9px;
   border-radius: 999px;
+  background: var(--bg-subtle);
   color: var(--text-secondary);
   font-size: var(--text-xs);
   line-height: 1.4;
   text-align: left;
+  transition:
+    background-color var(--t-hover) var(--ease-out),
+    color var(--t-hover) var(--ease-out);
 }
 
 .noteDetail {
@@ -118,12 +153,12 @@
 }
 
 .good {
-  border-color: color-mix(in srgb, var(--green) 35%, var(--border));
+  background: var(--green-soft);
   color: var(--green);
 }
 
 .warn {
-  border-color: color-mix(in srgb, var(--orange) 35%, var(--border));
+  background: var(--orange-soft);
   color: var(--orange);
 }
 
@@ -145,14 +180,8 @@
 
 .memoryNote:hover,
 .exerciseNote:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
-  background: var(--accent-soft);
-  color: var(--accent-text);
-}
-
-.exerciseNote {
-  border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
-  color: var(--accent-text);
+  background: var(--bg-hover);
+  color: var(--text);
 }
 
 .exerciseNote:disabled {
@@ -163,8 +192,12 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  color: var(--text-tertiary);
+  background: linear-gradient(90deg, var(--text-tertiary) 30%, var(--text) 50%, var(--text-tertiary) 70%) 0 0 / 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
   font-size: var(--text-sm);
+  animation: shimmer 2.2s linear infinite;
 }
 
 .dots {
@@ -176,7 +209,7 @@
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: currentColor;
+  background: var(--accent);
   animation: pulse 1.2s infinite var(--ease);
 }
 
@@ -203,10 +236,11 @@
 .streaming > div > :last-child::after {
   content: "";
   display: inline-block;
-  width: 7px;
-  height: 1em;
-  margin-left: 2px;
-  vertical-align: -0.15em;
+  width: 2px;
+  height: 1.05em;
+  margin-left: 3px;
+  vertical-align: -0.18em;
+  border-radius: 1px;
   background: var(--accent);
   animation: blink 1s steps(2) infinite;
 }
@@ -223,7 +257,6 @@
   gap: 8px;
   margin-top: 6px;
   padding: 10px 12px;
-  border: 1px solid color-mix(in srgb, var(--red) 30%, var(--border));
   border-radius: var(--radius-lg);
   background: var(--red-soft);
   color: var(--text-secondary);
@@ -246,18 +279,24 @@
   font-weight: 500;
 }
 
+.resumeError {
+  display: block;
+  margin-top: 6px;
+  color: var(--red);
+  font-size: var(--text-xs);
+}
+
 .inlineButton {
   display: inline-flex;
   flex-shrink: 0;
   align-items: center;
   gap: 4px;
   height: 26px;
-  padding: 0 8px;
-  border: 1px solid var(--border-strong);
+  padding: 0 9px;
   border-radius: var(--radius);
   background: var(--bg-elevated);
   color: var(--text);
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
 }
 
 .inlineButton:hover:not(:disabled) {
@@ -291,11 +330,14 @@
   font-size: var(--text-xs);
 }
 
+/* 练习题：精致描边卡片 */
 .exercise {
-  padding: 14px 16px;
-  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border));
+  padding: 16px 20px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
   border-radius: var(--radius-lg);
-  background: color-mix(in srgb, var(--accent-soft) 60%, var(--bg));
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-card);
 }
 
 .exerciseHead {
@@ -304,13 +346,14 @@
   align-items: center;
   gap: 6px;
   margin-bottom: 8px;
-  color: var(--accent-text);
-  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
   font-weight: 500;
 }
 
 .exerciseHead strong {
   color: var(--text);
+  font-size: var(--text-sm);
   font-weight: 600;
 }
 
@@ -331,8 +374,8 @@
 }
 
 .sequences dd {
-  font-family: var(--font-mono);
   font-size: var(--text-lg);
+  font-variant-numeric: tabular-nums;
   letter-spacing: 0.04em;
 }
 
@@ -342,21 +385,123 @@
   font-size: var(--text-xs);
 }
 
+/* Thread 进展胶囊（参照 Claude 主对话内联单行胶囊：[ • 标题  进展摘要 ]） */
+.threadPill {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 8px;
+  max-width: 100%;
+  height: 32px;
+  padding: 0 13px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--bg-subtle);
+  color: var(--text);
+  font-size: var(--text-xs);
+  text-align: left;
+  transition:
+    background-color var(--t-hover) var(--ease-out),
+    border-color var(--t-hover) var(--ease-out);
+}
+
+.threadPill:hover {
+  border-color: color-mix(in srgb, var(--text) 20%, var(--border-strong));
+  background: var(--bg-hover);
+  transform: translateY(-1px);
+}
+
+.pillDot {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-secondary);
+}
+
+.dot_hollow {
+  border: 1.5px solid var(--text-tertiary);
+  background: transparent;
+}
+
+.pillTitle {
+  flex-shrink: 0;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.pillSummary {
+  overflow: hidden;
+  padding: 1px 7px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Thread 合并小结卡片 */
 .summary {
   display: flex;
   flex-direction: column;
   gap: 8px;
   width: 100%;
   padding: 14px 16px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
-  background: var(--bg-subtle);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-card);
   color: var(--text);
   text-align: left;
+  transition:
+    background-color var(--t-hover) var(--ease-out),
+    border-color var(--t-hover) var(--ease-out),
+    transform 200ms var(--ease-spring),
+    box-shadow 200ms var(--ease-out);
+}
+
+.summaryResolved {
+  border-left: 3px solid var(--green);
 }
 
 .summary:hover {
-  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  border-color: color-mix(in srgb, var(--text) 22%, var(--border-strong));
+  background: var(--bg-hover);
+  transform: translateY(-1.5px);
+  box-shadow: var(--shadow-elevated);
+}
+
+.summaryHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.summaryDot {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--grey);
+}
+
+.dot_working,
+.dot_queued {
+  background: var(--accent);
+  animation: pulse 1.5s infinite var(--ease);
+}
+
+.dot_waiting {
+  background: var(--orange);
+}
+
+.dot_resolved {
+  background: var(--green);
+}
+
+.dot_failed {
+  background: var(--red);
 }
 
 .summaryTitle {
@@ -364,10 +509,34 @@
   font-weight: 600;
 }
 
+.summaryStatus {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.summaryArrow {
+  flex-shrink: 0;
+  margin-left: auto;
+  color: var(--text-tertiary);
+  transition: transform var(--t-hover) var(--ease-out), color var(--t-hover) var(--ease-out);
+}
+
+.summary:hover .summaryArrow {
+  color: var(--text);
+  transform: translate(1px, -1px);
+}
+
 .summaryBody {
   color: var(--text-secondary);
   font-size: var(--text-sm);
-  line-height: 1.6;
+  line-height: 1.65;
+}
+
+.summary:not(.summaryResolved) .summaryBody {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
 }
 
 .takeaways {
@@ -375,8 +544,10 @@
   flex-direction: column;
   gap: 4px;
   padding-left: 16px;
+  list-style: disc;
   color: var(--text);
   font-size: var(--text-sm);
+  line-height: 1.6;
 }
 
 .summaryMemories {
@@ -392,68 +563,179 @@
   align-items: center;
   gap: 4px;
   height: 28px;
-  padding: 0 10px;
-  border: 1px solid var(--border);
+  padding: 0 11px;
+  border: 1px solid var(--border-strong);
   border-radius: 999px;
   background: var(--bg-elevated);
-  box-shadow: var(--shadow-popover);
+  box-shadow: var(--shadow-popover); /* taste-skill-ignore */
   color: var(--text-secondary);
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
   transform: translateX(-50%);
+  animation: jump-pop 180ms var(--ease-spring);
+}
+
+@keyframes jump-pop {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 8px) scale(0.95);
+  }
 }
 
 .jump:hover {
   color: var(--text);
 }
 
-.tools {
+/* plan_steps 步骤清单卡片（严格对齐 Claude Thread 的 ✓ / ○ 步骤框） */
+.planCard {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin-bottom: 8px;
+  margin-bottom: 14px;
+  padding: 11px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--bg-subtle);
 }
 
-.tool {
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg-elevated);
+.planStepRow {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}
+
+.planIconDone {
+  flex-shrink: 0;
+  color: var(--text-secondary);
+}
+
+.planIconActive {
+  flex-shrink: 0;
+  color: var(--text);
+}
+
+.planIconPending {
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+}
+
+.planStepText {
+  color: var(--text);
+}
+
+.planStepMuted {
+  color: var(--text-tertiary);
+}
+
+/* 工具调用：参照 Claude Thread 内的描边任务清单卡片（✓ 已完成 / ○ 执行中） */
+.toolChecklist {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--bg-subtle);
+}
+
+.toolCheckItem {
+  border-radius: var(--radius-sm);
   font-size: var(--text-xs);
 }
 
-.tool summary {
-  padding: 6px 8px;
+.toolCheckItem summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
   cursor: pointer;
+  list-style: none;
 }
 
-.tool pre,
+.toolCheckItem summary::-webkit-details-marker {
+  display: none;
+}
+
+.toolCheckItem summary:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.toolIconDone {
+  flex-shrink: 0;
+  color: var(--text-secondary);
+}
+
+.toolIconFail {
+  flex-shrink: 0;
+  color: var(--red);
+}
+
+.toolIconSpin {
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+  animation: spin 2s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.toolName {
+  flex: 1;
+  min-width: 0;
+  color: var(--text);
+}
+
+.toolStatus {
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+
+.toolCheckItem pre,
 .approval pre {
   margin: 0;
-  padding: 0 8px 8px;
+  padding: 6px 10px 8px;
+  font-size: 12px;
   white-space: pre-wrap;
   word-break: break-word;
   color: var(--text-secondary);
 }
 
 .approval {
-  margin-bottom: 8px;
-  padding: 8px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius);
-  background: var(--bg-elevated);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding: 12px 14px;
+  border-radius: var(--radius-lg);
+  background: var(--bg-subtle);
   font-size: var(--text-sm);
 }
 
 .approval div {
   display: flex;
+  justify-content: flex-end;
   gap: 8px;
 }
 
 .approval button {
   height: 28px;
-  padding: 0 10px;
-  border: 1px solid var(--border-strong);
+  padding: 0 12px;
   border-radius: var(--radius);
-  background: var(--bg);
+  background: var(--bg-elevated);
+  font-size: var(--text-xs);
+}
+
+.approval .approvalPrimary {
+  background: var(--ink-solid);
+  color: var(--on-ink);
 }
 
 @media (max-width: 640px) {

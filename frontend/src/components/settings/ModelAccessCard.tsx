@@ -59,9 +59,10 @@ interface ModelAccessCardProps {
   onCheckHealth: () => void;
   /** 读取或保存配置后回报，用于侧栏提示与清除过期的模型错误 */
   onConfigChange: (config: AIConfigStatus, saved: boolean) => void;
+  plain?: boolean;
 }
 
-export function ModelAccessCard({ source, health, signal, onCheckHealth, onConfigChange }: ModelAccessCardProps) {
+export function ModelAccessCard({ source, health, signal, onCheckHealth, onConfigChange, plain = false }: ModelAccessCardProps) {
   const fieldId = useId();
   const [config, setConfig] = useState<AIConfigStatus | null>(null);
   const [loading, setLoading] = useState(source === "api");
@@ -190,7 +191,8 @@ export function ModelAccessCard({ source, health, signal, onCheckHealth, onConfi
   const provider = findProvider(form.provider);
 
   return (
-    <section className={cx(styles.card, styles.cardWide)} aria-labelledby={`${fieldId}-title`}>
+    <section className={plain ? styles.embed : cx(styles.card, styles.cardWide)} aria-labelledby={plain ? undefined : `${fieldId}-title`}>
+      {!plain && (
       <header className={styles.cardHead}>
         <span className={styles.cardIcon} aria-hidden>
           <Cpu size={16} />
@@ -206,6 +208,7 @@ export function ModelAccessCard({ source, health, signal, onCheckHealth, onConfi
           {label}
         </span>
       </header>
+      )}
 
       <dl className={styles.statusGrid}>
         <div className={styles.statusRow}>
