@@ -2,8 +2,9 @@
 
 import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import {
-  ArrowDown, ArrowUpRight, BookOpenCheck, Brain, CheckCircle2,
-  Circle, CircleAlert, CircleDashed, CircleStop, CornerDownRight, Dumbbell, FileText, RotateCcw,
+  ArrowDown, ArrowUpRight, BookOpenCheck, Brain, CheckCircle2, ChevronDown, ChevronUp,
+  Circle, CircleAlert, CircleDashed, CircleStop, CornerDownRight, Dumbbell, FileDown, FileText, Pin, PinOff,
+  RotateCcw, Zap,
 } from "lucide-react";
 import type { StreamPhase } from "@/hooks/useChat";
 import { toApiError } from "@/lib/api/errors";
@@ -28,6 +29,37 @@ const TOOL_LABELS: Record<string, string> = {
   session_search: "检索历史会话",
   memory: "更新长期笔记",
 };
+
+/** 超过该字符数或行数的消息可折叠 */
+const FOLD_CHARS = 650;
+const FOLD_LINES = 14;
+const PIN_KEY_PREFIX = "knowgap.pins.v1.";
+const SAVE_TO_PAGE_EVENT = "knowgap:save-to-page";
+
+function isLongText(text: string): boolean {
+  return text.length > FOLD_CHARS || text.split("\n").length > FOLD_LINES;
+}
+
+/** 粗略估算 token：中日韩字符约 0.75 token/字，其余约 4 字符 1 token（非计费口径） */
+function estimateTokens(text: string): number {
+  const cjk = (text.match(/[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af\uf900-\ufaff]/g) ?? []).length;
+  return Math.max(1, Math.round(cjk * 0.75 + (text.length - cjk) / 4));
+}
+
+function readPins(conversationId: string): string[] {
+  try {
+    const raw = localStorage.getItem(PIN_KEY_PREFIX + conversationId);
+    const parsed: unknown = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function pinPreview(text: string): string {
+  const flat = text.replace(/```[\s\S]*?```/g, " ").replace(/[#>*_`~]/g, "").replace(/\s+/g, " ").trim();
+  return flat.length > 30 ? `${flat.slice(0, 30)}…` : flat || "（无文字内容）";
+}
 
 interface MessageListProps {
   conversationId: string;
@@ -112,6 +144,47 @@ export function MessageList({
   const scrollRef = useRef<HTMLDivElement>(null);
   const following = useRef(true);
   const [showJump, setShowJump] = useState(false);
+  const [foldOverride, setFoldOverride] = useState<Record<string, boolean>>({});
+  const [savedId, setSavedId] = useState<string | null>(null);
+  const [pinState, setPinState] = useState(() => ({ conversationId, ids: readPins(conversationId) }));
+  if (pinState.conversationId !== conversationId) {
+    setPinState({ conversationId, ids: readPins(conversationId) });
+  }
+  const pinnedIds = pinState.conversationId === conversationId ? pinState.ids : [];
+
+  const togglePin = (messageId: string) => {
+    const next = pinnedIds.includes(messageId) ? pinnedIds.filter((id) => id !== messageId) : [...pinnedIds, messageId];
+    setPinState({ conversationId, ids: next });
+    try { localStorage.setItem(PIN_KEY_PREFIX + conversationId, JSON.stringify(next)); } catch { /* ignore */ }
+  };
+
+  const jumpToMessage = (messageId: string) => {
+    const target = scrollRef.current?.querySelector<HTMLElement>(`[data-msg-id="${CSS.escape(messageId)}"]`);
+    if (!target) return;
+    following.current = false;
+    target.scrollIntoView({ block: "start", behavior: "smooth" });
+    target.classList.add(styles.flash);
+    window.setTimeout(() => target.classList.remove(styles.flash), 1600);
+  };
+
+  const saveToPage = (message: ChatMessage) => {
+    window.dispatchEvent(new CustomEvent(SAVE_TO_PAGE_EVENT, { detail: { content: message.content } }));
+    setSavedId(message.id);
+    window.setTimeout(() => setSavedId((current) => (current === message.id ? null : current)), 1800);
+  };
+
+  /** 超长且非流式的消息可折叠；用户长消息默认折叠，AI 回复默认展开 */
+  const foldState = (message: ChatMessage) => {
+    const long = message.status !== "streaming" && message.content !== "" && isLongText(message.content);
+    const folded = long && (foldOverride[message.id] ?? message.role === "user");
+    return { long, folded };
+  };
+  const toggleFold = (message: ChatMessage, folded: boolean) =>
+    setFoldOverride((prev) => ({ ...prev, [message.id]: !folded }));
+
+  const pinnedMessages = pinnedIds
+    .map((id) => messages.find((message) => message.id === id))
+    .filter((message): message is ChatMessage => Boolean(message));
 
   const toBottom = useCallback(() => {
     const element = scrollRef.current;
@@ -147,6 +220,22 @@ export function MessageList({
       <div ref={scrollRef} className={styles.scroll} onScroll={onScroll}>
         <div className={styles.list} role="log" aria-live="polite" aria-relevant="additions">
           {topSlot}
+          {pinnedMessages.length > 0 && (
+            <nav className={styles.pinBar} aria-label="置顶消息">
+              <Pin size={12} className={styles.pinBarIcon} aria-hidden />
+              {pinnedMessages.map((pinned) => (
+                <button
+                  key={pinned.id}
+                  type="button"
+                  className={styles.pinChip}
+                  onClick={() => jumpToMessage(pinned.id)}
+                  title={pinned.content}
+                >
+                  {pinPreview(pinned.content)}
+                </button>
+              ))}
+            </nav>
+          )}
           {messages.map((message, index) => {
             if (message.kind === "exercise") {
               return (
@@ -163,10 +252,18 @@ export function MessageList({
                 if (messages[j].role === "user") break;
                 if (messages[j].threadUpdate || messages[j].threadSummary) replyUpdates += 1;
               }
+              const userFold = foldState(message);
+              const userPinned = pinnedIds.includes(message.id);
               return (
-                <div key={message.id} className={cx(styles.row, styles.userRow)}>
-                  <div className={styles.userBubble}>{message.content}</div>
+                <div key={message.id} data-msg-id={message.id} className={cx(styles.row, styles.userRow)}>
+                  <div className={cx(styles.userBubble, userFold.folded && styles.folded)}>{message.content}</div>
                   <div className={styles.userMeta}>
+                    {userFold.long && (
+                      <button className={styles.foldToggle} onClick={() => toggleFold(message, userFold.folded)} aria-expanded={!userFold.folded}>
+                        {userFold.folded ? <ChevronDown size={12} aria-hidden /> : <ChevronUp size={12} aria-hidden />}
+                        {userFold.folded ? "展开全文" : "收起折叠"}
+                      </button>
+                    )}
                     {replyUpdates > 0 && (
                       <span className={styles.replyCount}>
                         <CornerDownRight size={11} aria-hidden />
@@ -192,6 +289,15 @@ export function MessageList({
                         {message.memoryChanges.length > 1 && ` 等 ${message.memoryChanges.length} 条`}
                       </button>
                     )}
+                    <button
+                      className={cx(styles.action, userPinned && styles.actionOn)}
+                      onClick={() => togglePin(message.id)}
+                      aria-pressed={userPinned}
+                      title={userPinned ? "取消置顶" : "置顶这条消息"}
+                    >
+                      {userPinned ? <PinOff size={13} aria-hidden /> : <Pin size={13} aria-hidden />}
+                      <span>{userPinned ? "取消置顶" : "置顶"}</span>
+                    </button>
                     <CopyButton text={message.content} className={styles.action} />
                   </div>
                 </div>
@@ -273,8 +379,11 @@ export function MessageList({
               .filter((id): id is string => Boolean(id) && id !== conversationSubjectId))];
             const outsideCount = used.filter((id) => outside.includes(memoriesById[id].subjectId ?? "")).length;
             const suggested = message.suggestedProblemId ? problems[message.suggestedProblemId] : undefined;
+            const fold = foldState(message);
+            const pinned = pinnedIds.includes(message.id);
+            const finished = message.status === "complete" && message.content !== "";
             return (
-              <div key={message.id} className={cx(styles.row, styles.assistantRow)}>
+              <div key={message.id} data-msg-id={message.id} className={cx(styles.row, styles.assistantRow)}>
                 {showNewDivider && (
                   <div className={styles.newLine} aria-hidden>
                     <span>New</span>
@@ -335,9 +444,21 @@ export function MessageList({
                   </div>
                 )}
                 {message.content ? (
-                  <div className={cx(streaming && styles.streaming)}>
-                    <Markdown text={message.content} />
-                  </div>
+                  <>
+                    <div className={cx(streaming && styles.streaming, fold.folded && styles.folded)}>
+                      <Markdown text={message.content} />
+                    </div>
+                    {fold.long && (
+                      <button
+                        className={cx(styles.foldToggle, styles.foldToggleBlock)}
+                        onClick={() => toggleFold(message, fold.folded)}
+                        aria-expanded={!fold.folded}
+                      >
+                        {fold.folded ? <ChevronDown size={12} aria-hidden /> : <ChevronUp size={12} aria-hidden />}
+                        {fold.folded ? "展开全文" : "收起折叠"}
+                      </button>
+                    )}
+                  </>
                 ) : streaming ? (
                   <p className={styles.thinking} role="status">
                     <span className={styles.dots} aria-hidden>
@@ -417,11 +538,39 @@ export function MessageList({
                       </button>
                     )}
                     {message.content && message.status !== "failed" && <CopyButton text={message.content} className={styles.action} />}
+                    {message.content && message.status !== "failed" && (
+                      <button
+                        className={cx(styles.action, pinned && styles.actionOn)}
+                        onClick={() => togglePin(message.id)}
+                        aria-pressed={pinned}
+                        title={pinned ? "取消置顶" : "置顶这条消息"}
+                      >
+                        {pinned ? <PinOff size={13} aria-hidden /> : <Pin size={13} aria-hidden />}
+                        <span>{pinned ? "取消置顶" : "置顶"}</span>
+                      </button>
+                    )}
+                    {finished && (
+                      <button
+                        className={cx(styles.action, savedId === message.id && styles.actionOn)}
+                        onClick={() => saveToPage(message)}
+                        title="把这条回复存入学习空间的笔记页"
+                      >
+                        <FileDown size={13} aria-hidden />
+                        <span>{savedId === message.id ? "已发送到笔记" : "存入空间笔记"}</span>
+                      </button>
+                    )}
                     {isLast && message.status !== "failed" && (
                       <button className={styles.action} onClick={onRegenerate} disabled={phase !== null && phase !== "analyzing"}>
                         <RotateCcw size={13} aria-hidden />
                         <span>重新生成</span>
                       </button>
+                    )}
+                    {finished && (
+                      <span className={styles.tokenNote} title="按回复文本粗略估算，非计费口径">
+                        <Zap size={11} aria-hidden />
+                        ~{estimateTokens(message.content)} tokens
+                        {message.toolCalls.length > 0 && ` · ${message.toolCalls.length} 步工具`}
+                      </span>
                     )}
                   </div>
                 )}

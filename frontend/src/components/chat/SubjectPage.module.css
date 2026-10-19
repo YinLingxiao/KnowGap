@@ -1041,3 +1041,204 @@
     display: none;
   }
 }
+
+/* 迁移学习先验锚点卡片（欢迎屏下方） */
+.anchorCard {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--bg-subtle);
+}
+
+.anchorHead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+  font-size: var(--text-sm);
+}
+
+.anchorDesc {
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  line-height: 1.6;
+}
+
+.anchorPills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.anchorPill {
+  height: 28px;
+  padding: 0 11px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  transition:
+    background-color var(--t-hover) var(--ease-out),
+    border-color var(--t-hover) var(--ease-out),
+    color var(--t-hover) var(--ease-out);
+}
+
+.anchorPill:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.anchorPill:disabled,
+.anchorGo:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.anchorForm {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.anchorForm input {
+  flex: 1;
+  min-width: 160px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-xs);
+}
+
+.anchorGo {
+  height: 30px;
+  padding: 0 12px;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: var(--accent-contrast, #fff);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+/* Pages（空间笔记白板） */
+.pagesPane {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.pagesBar {
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  font-size: var(--text-xs);
+}
+
+.pagesBar strong {
+  flex: 1;
+  min-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pagesViews {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.pagesViewBtn {
+  height: 24px;
+  padding: 0 8px;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+
+.pagesViewBtn:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.pagesViewOn {
+  background: var(--bg-active);
+  color: var(--text);
+}
+
+.pagesExport {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.pagesExport:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.pagesExport:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pagesNotice {
+  margin: 0 14px 6px;
+  padding: 5px 10px;
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-size: var(--text-xs);
+}
+
+.pagesBody {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  padding: 0 14px 14px;
+}
+
+.pagesEditor,
+.pagesPreview {
+  flex: 1;
+  min-height: 120px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow-y: auto;
+}
+
+.pagesEditor {
+  resize: none;
+  background: var(--bg-subtle);
+  color: var(--text);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12.5px;
+  line-height: 1.65;
+}
+
+.pagesPreview {
+  background: var(--bg-elevated);
+}

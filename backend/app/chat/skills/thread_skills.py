@@ -19,6 +19,13 @@ WIDGET_SCHEMA_GUIDE = """【内联可交互学习微件规范（`knowgap-widget`
 {"type":"micro_quiz","question":"简短检验问题","options":["选项A","选项B","选项C"],"answerIndex":0,"explanation":"为什么选该项的一句话解析"}
 ```"""
 
+TRANSFER_LEARNING_GUIDE = """【先验锚点与对比迁移教学】
+结合 turn_context.prior_knowledge_anchors、经本轮原文核实的 reported_prior_knowledge 及交办任务中的明确旧知，选择与新课题相关的技能作为锚点。
+有相关锚点时，把同一个最小例子分别在旧知和新知中演绎，优先嵌入 comparison_matrix 微件，columns 使用「旧知机制」「新知机制」「跨领域负迁移易错点」，每行 values 与三列逐一对应。
+不要只列语法差异：说明概念映射、机制差异、类比何处失效，以及直接照搬旧习惯会犯什么错；用户当前的否认或修正优先于旧画像。
+没有相关锚点且 transfer_learning_hint 提示先验探针时，正常讲解同时只用 1 句话问相近语言或前置课程，不重复主对话刚问过的问题，不假设用户会 C/C++。
+用户明确自述已掌握某技能时，用 memory 以「先验技能：xxx」格式写入 USER；自述旧知不是知识点掌握诊断，待确认、失败或拒绝均不能声称已记住。"""
+
 DEEP_EXPLAIN_SKILL = f"""【当前挂载 Skill：deep_explain（深度原理精讲）】
 按以下工作流开展本次原理精讲，并结合 turn_context.teaching_preferences 与 USER 画像动态调整：
 1. 开场直奔主线：先用一句话交代讲解脉络（例如：“我先从为什么需要 X 讲起，再通过同一个具体例子逐个对比。”），不要客套寒暄。
@@ -28,6 +35,8 @@ DEEP_EXPLAIN_SKILL = f"""【当前挂载 Skill：deep_explain（深度原理精�
    - 若 teaching_preferences 偏好“先看结论/对比表”，先给 `comparison_matrix` 微件再用小例子验证；若偏好“先看直观例子”，先给 `step_simulator` 微件再总结定义；若偏好“讲完考一道小题”，在结尾附上 `micro_quiz` 微件。
    - 若 learner_memories 中有相关历史误区（misconception），在对应推导步骤主动点出并做正误辨析。
 5. 一句话收束与追问钩子：结尾用“**核心就一句话：……**”浓缩本质，并点出 1～2 个最容易卡住的具体细节供用户追问，最后调用 `report_progress` 回报进展。
+
+{TRANSFER_LEARNING_GUIDE}
 
 {WIDGET_SCHEMA_GUIDE}"""
 
@@ -39,6 +48,8 @@ SOCRATIC_PRACTICE_SKILL = f"""【当前挂载 Skill：socratic_practice（启发
    - 默认或用户偏好“自己想/给提示”时，先确认用户回答中正确的部分，再针对卡点给出**最小步进提示**和 1 个具体可回答的追问，不一次性泄底完整答案。
 3. 本轮结束前调用 `report_progress` 回报当前练习进展（等待用户继续作答时设 `needs_user=true`）。
 
+{TRANSFER_LEARNING_GUIDE}
+
 {WIDGET_SCHEMA_GUIDE}"""
 
 STUDY_NOTE_BUILDER_SKILL = f"""【当前挂载 Skill：study_note_builder（结构化图解讲义与实验构建）】
@@ -46,6 +57,8 @@ STUDY_NOTE_BUILDER_SKILL = f"""【当前挂载 Skill：study_note_builder（结�
 1. 先调用 `plan_steps` 列出讲义/实验的构建步骤（如：① 梳理核心概念框架、② 构建交互推演与对比微件、③ 汇总易错点与自测微测验）。
 2. 在讲义正文中积极嵌入 `knowgap-widget`（如 `step_simulator` 过程推演 + `comparison_matrix` 对比表 + `micro_quiz` 自测题），让讲义具备可交互性。
 3. 完成后调用 `report_progress` 将讲义要点同步回主对话。
+
+{TRANSFER_LEARNING_GUIDE}
 
 {WIDGET_SCHEMA_GUIDE}"""
 

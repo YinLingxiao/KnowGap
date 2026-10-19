@@ -1,7 +1,7 @@
 import difflib
 from pathlib import Path
 
-from app.agent_tools.guard import ToolError, resolve_inside
+from app.agent_tools.guard import ToolError, enforce_content_security_blacklist, resolve_inside
 
 MAX_LINES = 2000
 MAX_BYTES = 50_000
@@ -40,6 +40,7 @@ def write_file(root: Path | None, arguments: dict) -> str:
     content = arguments.get("content")
     if not isinstance(content, str):
         raise ToolError("content 必须是字符串。")
+    enforce_content_security_blacklist(content)
     if len(content.encode("utf-8")) > MAX_WRITE:
         raise ToolError("内容超过 1MB。")
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -57,6 +58,7 @@ def edit_file(root: Path | None, arguments: dict) -> str:
         raise ToolError("old_text 不能为空。")
     if not isinstance(new, str):
         raise ToolError("new_text 必须是字符串。")
+    enforce_content_security_blacklist(new)
     text = path.read_text(encoding="utf-8")
     count = text.count(old)
     if count == 0:

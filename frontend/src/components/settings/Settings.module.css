@@ -1222,6 +1222,87 @@
   flex: 1;
 }
 
+/* 五层白盒记忆：先验技能锚点 + 层级徽章 */
+.anchorBox {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-subtle);
+}
+
+.layerLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.layerBadge {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.layer_identity {
+  background: color-mix(in srgb, #3b82f6 16%, transparent);
+  color: #2563eb;
+}
+
+.layer_preference {
+  background: color-mix(in srgb, #a855f7 16%, transparent);
+  color: #9333ea;
+}
+
+.layer_context {
+  background: color-mix(in srgb, #f59e0b 18%, transparent);
+  color: #b45309;
+}
+
+.layer_activity {
+  background: color-mix(in srgb, #10b981 16%, transparent);
+  color: #059669;
+}
+
+.layer_experience {
+  background: color-mix(in srgb, #ef4444 14%, transparent);
+  color: #dc2626;
+}
+
+.entryBody {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  line-height: 1.5;
+}
+
+.layerSelect {
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--bg-subtle);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+
+.noteComposer {
+  flex-wrap: wrap;
+}
+
 .embed {
   display: flex;
   flex-direction: column;

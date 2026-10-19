@@ -553,6 +553,8 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
             <div className={styles.dock}>
               {failureBar}
                   <Composer
+                    conversationId={chat.activeId}
+                    messages={thread?.messages}
                     value={chat.draft}
                     onChange={chat.setDraft}
                     onSend={() => void chat.sendMessage()}

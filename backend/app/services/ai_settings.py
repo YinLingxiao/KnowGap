@@ -3,6 +3,7 @@
 import json
 import os
 import tempfile
+import time
 from pathlib import Path
 from threading import RLock
 from urllib.parse import urlsplit
@@ -11,6 +12,8 @@ from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, SecretStr, ValidationError
 
 from app.config import Settings
+
+RAW_READ_ATTEMPTS = 4
 
 
 class ConfigurationInput(BaseModel):
@@ -57,15 +60,28 @@ class AISettings:
         })
 
     def _raw(self) -> dict:
-        if not self.path.exists():
-            return {}
-        try:
-            data = json.loads(self.path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            return {}
-        return data if isinstance(data, dict) else {}
+        with self.lock:
+            # On Windows a concurrent os.replace can briefly make the file unreadable;
+            # retry instead of reporting an empty config (which drops the workspace).
+            for attempt in range(RAW_READ_ATTEMPTS):
+                if not self.path.exists():
+                    return {}
+                try:
+                    data = json.loads(self.path.read_text(encoding="utf-8"))
+                    break
+                except OSError:
+                    if attempt == RAW_READ_ATTEMPTS - 1:
+                        return {}
+                    time.sleep(0.02 * (attempt + 1))
+                except ValueError:
+                    return {}
+            return data if isinstance(data, dict) else {}
 
     def _write(self, payload: dict) -> None:
+        with self.lock:
+            self._write_locked(payload)
+
+    def _write_locked(self, payload: dict) -> None:
         temporary = None
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)

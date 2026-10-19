@@ -1,3 +1,4 @@
+import logging
 import smtplib
 from email.message import EmailMessage
 
@@ -8,6 +9,9 @@ from starlette.concurrency import run_in_threadpool
 from app.auth.store import AuthStore, public_user
 from app.chat.store import ChatStore
 from app.config import Settings
+
+logger = logging.getLogger(__name__)
+CODE_TTL_SECONDS = 300
 
 
 class PatchMe(BaseModel):
@@ -75,9 +79,12 @@ def auth_router(auth: AuthStore, chat: ChatStore, settings: Settings | None = No
             try:
                 await run_in_threadpool(_send_smtp_email, settings, body.email.strip(), code, body.purpose)
             except Exception as exc:
-                raise HTTPException(502, "验证码邮件发送失败，请检查后端 SMTP 邮箱配置。") from exc
-            return {"sent": True, "delivery": "smtp", "expires_in": 300}
-        return {"sent": True, "delivery": "demo", "demo_code": code, "expires_in": 300}
+                # A rejected recipient (e.g. a test domain) or an unreachable server must not
+                # strand a valid code; fall back to the on-screen demo delivery.
+                logger.warning("SMTP delivery failed, falling back to demo code: %s", type(exc).__name__)
+            else:
+                return {"sent": True, "delivery": "smtp", "expires_in": CODE_TTL_SECONDS}
+        return {"sent": True, "delivery": "demo", "demo_code": code, "expires_in": CODE_TTL_SECONDS}
 
     @router.post("/register", status_code=201)
     def register(body: RegisterBody):

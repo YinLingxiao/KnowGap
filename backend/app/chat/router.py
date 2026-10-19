@@ -1,5 +1,7 @@
 """Free-chat endpoints. Conversations do not require a problem; exercises are optional context."""
 
+from collections import OrderedDict
+
 from fastapi import APIRouter, HTTPException, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -14,6 +16,7 @@ from app.chat.store import UNSET, ChatStore
 from app.auth.deps import current_student
 from app.services.problems import PROBLEMS
 
+SUGGEST_MIN_CHARS, SUGGEST_MAX_CHARS, SUGGEST_CACHE_LIMIT = 12, 80, 256
 STREAM_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
 
 
@@ -93,9 +96,74 @@ def chat_router(store: ChatStore, service: ChatService) -> APIRouter:
         )
         return require(conversation_id)
 
+    _suggest_cache: OrderedDict[tuple[str, str], str] = OrderedDict()
+
     @router.get("/conversations/{conversation_id}", response_model=Conversation)
     def get_conversation(conversation_id: str):
         return require(conversation_id)
+
+    @router.get("/conversations/{conversation_id}/suggest-reply")
+    async def suggest_reply(conversation_id: str):
+        conv = require(conversation_id)
+        if conv.generating:
+            return {"suggestion": "", "message_id": None}
+        history = [
+            row for row in store.history(conversation_id)
+            if row["status"] == "complete" and (row["content"] or "").strip()
+        ]
+        if not history or history[-1]["role"] != "assistant":
+            return {"suggestion": "", "message_id": None}
+        last_msg = history[-1]
+        cache_key = (conversation_id, last_msg["id"])
+        if cache_key in _suggest_cache:
+            _suggest_cache.move_to_end(cache_key)
+            return {"suggestion": _suggest_cache[cache_key], "message_id": last_msg["id"]}
+        try:
+            import httpx
+            from app.agents.llm import provider_endpoint, shared_ssl_context
+            # service.settings is the AISettings holder; the real Settings lives on .current.
+            cfg = service.settings.current if hasattr(service.settings, "current") else service.settings
+            base_url, api_key = provider_endpoint(cfg)
+            model_name = cfg.llm_model.strip()
+            snippet_turns = []
+            for row in history[-4:]:
+                role = "user" if row["role"] == "user" else "assistant"
+                snippet_turns.append(f"[{role}]: {row['content'][:800]}")
+            prompt = (
+                "你是智能输入框的『下一步追问补全器』。请根据下方对话的最后一轮 assistant 回复，"
+                "站在【用户（学习者）】第一人称视角，预测用户最可能顺着 AI 的话往下接的一句自然、具体、可直接发送的回复或推进指令（20~65个字）。\n"
+                "要求：\n"
+                "1. 必须用第一人称口吻（如『那就按你说的…』『好，我们先从…开始，结合具体例子讲讲…』『我理解核心是…，那如果遇到…情况呢？』）。\n"
+                "2. 紧扣 assistant 最后一段提出的问题、分支建议或下一步行动，不要空泛客套。\n"
+                "3. 只输出这一句预测文本本身，不要加引号、不要加任何前缀或解释。\n\n"
+                + "\n\n".join(snippet_turns)
+            )
+            payload = {
+                "model": model_name,
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 512,
+                "temperature": 0.3,
+            }
+            async with httpx.AsyncClient(timeout=12.0, verify=shared_ssl_context()) as client:
+                resp = await client.post(
+                    f"{base_url}/chat/completions",
+                    json=payload,
+                    headers={"Authorization": f"Bearer {api_key}"},
+                )
+            if resp.is_success:
+                data = resp.json()
+                text = (data.get("choices") or [{}])[0].get("message", {}).get("content") or ""
+                cleaned = text.strip().strip("\"'“”‘’`").replace("\n", " ").strip()
+                if len(cleaned) > SUGGEST_MAX_CHARS:
+                    cleaned = cleaned[:SUGGEST_MAX_CHARS].rstrip()
+                if len(cleaned) >= SUGGEST_MIN_CHARS:
+                    _suggest_cache[cache_key] = cleaned
+                    while len(_suggest_cache) > SUGGEST_CACHE_LIMIT:
+                        _suggest_cache.popitem(last=False)
+                    return {"suggestion": cleaned, "message_id": last_msg["id"]}
+        except Exception:
+            pass
+        return {"suggestion": "", "message_id": last_msg["id"]}
 
     @router.get("/conversations/{conversation_id}/usage")
     def conversation_usage(conversation_id: str):

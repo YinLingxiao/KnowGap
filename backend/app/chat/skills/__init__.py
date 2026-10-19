@@ -56,9 +56,17 @@ def select_skill_prompt(
     delegated_task: str | None = None,
     delegated_skill: str | None = None,
     conversation_title: str = "",
+    earlier_user_texts: list[str] | None = None,
 ) -> str | None:
     """Return the role-appropriate Skill SOP to inject into `turn_context.active_skill`."""
+    # A Feynman self-test spans several turns: once the title or an earlier user turn started it,
+    # later answers ("栈就是…") keep the challenge instead of falling back to deep_explain.
+    feynman_session = bool(_FEYNMAN_RE.search(conversation_title or "")) or any(
+        _FEYNMAN_RE.search(text or "") for text in earlier_user_texts or []
+    )
     if role == "thread":
+        if feynman_session and delegated_skill not in THREAD_SKILLS:
+            return THREAD_SKILLS["feynman_challenge"]
         skill_key = infer_thread_skill(delegated_task or user_text, delegated_skill)
         return THREAD_SKILLS.get(skill_key)
     if role == "main":
@@ -67,7 +75,7 @@ def select_skill_prompt(
         return None
     if role == "chat":
         sample = (user_text or "").strip()
-        if _FEYNMAN_RE.search(sample):
+        if feynman_session or _FEYNMAN_RE.search(sample):
             return THREAD_SKILLS["feynman_challenge"].replace("，并调用 `report_progress` 回报掌握结论", "")
         if len(sample) >= 8 and not _PRACTICE_RE.search(sample) and _EXPLAIN_RE.search(sample):
             return THREAD_SKILLS["deep_explain"].replace("，最后调用 `report_progress` 回报进展", "")

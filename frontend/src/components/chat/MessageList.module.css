@@ -747,3 +747,112 @@
     max-width: 92%;
   }
 }
+
+/* 超长消息折叠：底部渐变遮罩 */
+.folded {
+  max-height: 260px;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 72px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 72px), transparent);
+}
+
+.foldToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 999px;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  transition: background-color var(--t-hover) var(--ease-out), color var(--t-hover) var(--ease-out);
+}
+
+.foldToggle:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.foldToggleBlock {
+  align-self: flex-start;
+  margin-top: 4px;
+}
+
+/* 置顶消息横幅：吸顶，点击跳转 */
+.pinBar {
+  position: sticky;
+  z-index: 5;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: -6px 0 -14px;
+  padding: 5px 8px;
+  overflow-x: auto;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-card);
+  scrollbar-width: none;
+}
+
+.pinBar::-webkit-scrollbar {
+  display: none;
+}
+
+.pinBarIcon {
+  flex-shrink: 0;
+  color: var(--accent);
+}
+
+.pinChip {
+  flex-shrink: 0;
+  max-width: 260px;
+  height: 24px;
+  padding: 0 9px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: background-color var(--t-hover) var(--ease-out), color var(--t-hover) var(--ease-out);
+}
+
+.pinChip:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.row {
+  scroll-margin-top: 56px;
+}
+
+.flash {
+  animation: pin-flash 1.6s var(--ease-out);
+}
+
+@keyframes pin-flash {
+  0%,
+  35% {
+    background: var(--accent-soft);
+  }
+}
+
+.actionOn,
+.assistantRow:last-child .actionOn {
+  color: var(--accent-text);
+  opacity: 1;
+}
+
+.tokenNote {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: auto;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.8;
+}

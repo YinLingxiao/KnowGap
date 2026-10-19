@@ -378,6 +378,17 @@ export const chatApi = {
   }> {
     return await request(root, "/api/workspace/tree", { cache: "no-store" });
   },
+  async suggestReply(conversationId: string): Promise<{ suggestion: string; messageId: string | null }> {
+    const data = await request<Wire>(
+      root,
+      `/api/conversations/${encodeURIComponent(conversationId)}/suggest-reply`,
+      { cache: "no-store" },
+    );
+    return {
+      suggestion: typeof data.suggestion === "string" ? data.suggestion : "",
+      messageId: (data.message_id as string | null | undefined) ?? null,
+    };
+  },
   async spaceUsage(id: string): Promise<SpaceUsage> {
     const data = await request<Wire>(root, `/api/subjects/${encodeURIComponent(id)}/usage`, { cache: "no-store" });
     return { total: mapUsage(data.total), conversations: Object.fromEntries(

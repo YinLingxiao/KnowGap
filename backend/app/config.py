@@ -24,7 +24,7 @@ class Settings(BaseSettings):
         default="", validation_alias=AliasChoices("LLM_BASE_URL", "OPENAI_BASE_URL")
     )
     llm_model: str = ""
-    llm_timeout_seconds: float = Field(default=45, gt=0, le=120)
+    llm_timeout_seconds: float = Field(default=90, gt=0, le=120)
     anysearch_api_key: SecretStr = SecretStr('')
     anysearch_timeout_seconds: float = Field(default=20, gt=0, le=60)
     cors_origins: list[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]

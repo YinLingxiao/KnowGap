@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Brain, CheckCircle2, ChevronDown, ChevronRight, FileText, Folder, GraduationCap, History, ListTodo,
-  Maximize2, MessagesSquare, Mic, Minimize2, MoreHorizontal,
+  Brain, CheckCircle2, ChevronDown, ChevronRight, Download, FileText, Folder, GraduationCap, History, Link2, ListTodo,
+  Maximize2, MessagesSquare, Mic, Minimize2, MoreHorizontal, NotebookPen,
   PanelLeftOpen, Plus, RotateCcw, Settings, SlidersHorizontal, Trash2, Upload, X,
 } from "lucide-react";
 import { WIDGET_ASK_EVENT } from "./LearningWidget";
@@ -18,6 +18,7 @@ import { cx } from "@/lib/cx";
 import type { CourseMaterial, Problem } from "@/lib/types";
 import { Button } from "../ui/Button";
 import { Composer } from "./Composer";
+import { Markdown } from "./Markdown";
 import { MemoryItem } from "./MemoryDrawer";
 import { MessageList } from "./MessageList";
 import { UsageStats } from "./UsageStats";
@@ -25,13 +26,53 @@ import styles from "./SubjectPage.module.css";
 
 type Panel =
   | { mode: "list" }
+  | { mode: "pages" }
   | { mode: "thread"; id: string }
   | { mode: "info"; section: "about" | "files" | "memory" };
+
+const SAVE_TO_PAGE_EVENT = "knowgap:save-to-page";
+const PRIOR_PREFIX = "先验技能：";
+const LAYER_PREFIX_RE = /^\[(Identity|Preference|Context|Activity|Experience)\]\s*/i;
+
+const TRANSFER_ANCHORS: Array<{ label: string; skills: string[]; text: string }> = [
+  { label: "会 C/C++", skills: ["C / C++"], text: "C/C++" },
+  { label: "会 Python", skills: ["Python"], text: "Python" },
+  { label: "会 Java/JS", skills: ["Java / JS"], text: "Java/JS" },
+  { label: "学过微积分/线代", skills: ["高等数学", "线性代数"], text: "微积分/线代" },
+  { label: "学过电路/大物", skills: ["电路原理", "大学物理"], text: "电路/大物" },
+];
+
+function pagesKey(subjectId: string) {
+  return `knowgap.space.pages.v1:${API_BASE_URL}:${subjectId}`;
+}
+
+function readPages(subjectId: string) {
+  try {
+    return localStorage.getItem(pagesKey(subjectId)) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+/** 把先验技能合并进 USER 的「先验技能：」条目（与设置 → 记忆中的锚点栏同一条目）。 */
+async function syncPriorSkills(skills: string[]) {
+  const notes = await chatApi.agentNotes();
+  const entries = notes.user.split(/\s*§\s*/).map((item) => item.trim()).filter(Boolean);
+  const strip = (entry: string) => entry.replace(LAYER_PREFIX_RE, "");
+  const existing = entries.find((entry) => strip(entry).startsWith(PRIOR_PREFIX));
+  const current = existing
+    ? strip(existing).slice(PRIOR_PREFIX.length).split(/[、，,;；]+/).map((item) => item.trim()).filter(Boolean)
+    : [];
+  const merged = [...current, ...skills.filter((skill) => !current.includes(skill))];
+  const kept = entries.filter((entry) => !strip(entry).startsWith(PRIOR_PREFIX));
+  await chatApi.saveAgentNote("user", [...kept, `${PRIOR_PREFIX}${merged.join("、")}`].join("\n§\n"));
+}
 
 function readPanel(subjectId: string): Panel {
   try {
     const parsed: unknown = JSON.parse(localStorage.getItem(`knowgap.space.panel.v1:${API_BASE_URL}:${subjectId}`) ?? "null");
     if (!parsed || typeof parsed !== "object" || !("mode" in parsed)) return { mode: "list" };
+    if (parsed.mode === "pages") return { mode: "pages" };
     if (parsed.mode === "thread" && "id" in parsed && typeof parsed.id === "string") return { mode: "thread", id: parsed.id };
     if (parsed.mode === "info" && "section" in parsed && (parsed.section === "about" || parsed.section === "files" || parsed.section === "memory")) {
       return { mode: "info", section: parsed.section };
@@ -72,6 +113,10 @@ export function SubjectPage({
   const [drafting, setDrafting] = useState(false);
   const [draftError, setDraftError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [pages, setPages] = useState<{ id: string; text: string }>({ id: "", text: "" });
+  const [pagesView, setPagesView] = useState<"edit" | "split" | "preview">("split");
+  const [pagesNotice, setPagesNotice] = useState<string | null>(null);
+  const [customAnchor, setCustomAnchor] = useState("");
 
   const showPanel = (next: Panel) => {
     setPanel(next);
@@ -92,6 +137,62 @@ export function SubjectPage({
   useEffect(() => {
     setInstructions(subject.instructions);
   }, [subject.instructions]);
+
+  useEffect(() => {
+    setPages({ id: subject.id, text: readPages(subject.id) });
+    setPagesNotice(null);
+  }, [subject.id]);
+
+  useEffect(() => {
+    if (pages.id !== subject.id) return;
+    try {
+      localStorage.setItem(pagesKey(subject.id), pages.text);
+    } catch { /* convenience only */ }
+  }, [pages, subject.id]);
+
+  useEffect(() => {
+    let timer: number | undefined;
+    const onSave = (event: Event) => {
+      const content = (event as CustomEvent<{ content?: string }>).detail?.content?.trim();
+      if (!content) return;
+      setPages((prev) => {
+        const base = prev.id === subject.id ? prev.text : readPages(subject.id);
+        return { id: subject.id, text: base.trim() ? `${base.replace(/\s+$/, "")}\n\n---\n\n${content}\n` : `${content}\n` };
+      });
+      setPanel({ mode: "pages" });
+      setPanelCollapsed(false);
+      setOverlay(true);
+      setPagesNotice("已存入空间笔记");
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => setPagesNotice(null), 2400);
+    };
+    window.addEventListener(SAVE_TO_PAGE_EVENT, onSave);
+    return () => {
+      window.removeEventListener(SAVE_TO_PAGE_EVENT, onSave);
+      window.clearTimeout(timer);
+    };
+  }, [subject.id]);
+
+  const exportPages = () => {
+    const blob = new Blob([pages.text], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${subject.name.replace(/[\\/:*?"<>|]/g, "_") || "空间笔记"}-笔记.md`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const startTransfer = (anchorText: string, skills: string[]) => {
+    if (!mainId) return;
+    void syncPriorSkills(skills).catch(() => { /* 画像同步失败不阻塞开讲 */ });
+    void chat.sendTo(
+      mainId,
+      `我已经掌握了「${anchorText}」基础，接下来学习「${subject.name}」时，请优先用对比迁移学习法，将新概念与我熟悉的「${anchorText}」做映射对比，并提醒我容易混淆的负迁移误区。`,
+    );
+  };
 
   useEffect(() => {
     if (!panelReady) return;
@@ -367,6 +468,51 @@ export function SubjectPage({
                     </button>
                   </div>
                 </div>
+                {main.messages.length === 0 && (
+                  <section className={styles.anchorCard} aria-label="迁移学习先验锚点">
+                    <div className={styles.anchorHead}>
+                      <Link2 size={13} aria-hidden />
+                      <strong>🔗 迁移学习先验锚点</strong>
+                    </div>
+                    <p className={styles.anchorDesc}>
+                      选一个你已经掌握的旧知，AI 会把「{subject.name}」的新概念与它做对比映射，并提醒负迁移误区。
+                    </p>
+                    <div className={styles.anchorPills} role="group" aria-label="先验基础">
+                      {TRANSFER_ANCHORS.map((anchor) => (
+                        <button
+                          key={anchor.label}
+                          type="button"
+                          className={styles.anchorPill}
+                          disabled={Boolean(mainPhase)}
+                          onClick={() => startTransfer(anchor.text, anchor.skills)}
+                        >
+                          {anchor.label}
+                        </button>
+                      ))}
+                    </div>
+                    <form
+                      className={styles.anchorForm}
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        const text = customAnchor.trim();
+                        if (!text || mainPhase) return;
+                        startTransfer(text, [text]);
+                        setCustomAnchor("");
+                      }}
+                    >
+                      <input
+                        value={customAnchor}
+                        maxLength={30}
+                        aria-label="自定义先验基础"
+                        placeholder="或输入其他旧知，如「离散数学」"
+                        onChange={(event) => setCustomAnchor(event.target.value)}
+                      />
+                      <button type="submit" className={styles.anchorGo} disabled={!customAnchor.trim() || Boolean(mainPhase)}>
+                        用对比迁移法开讲 →
+                      </button>
+                    </form>
+                  </section>
+                )}
               </div>
             )}
             onRegenerate={() => void chat.regenerate(mainId)}
@@ -389,6 +535,8 @@ export function SubjectPage({
           <div className={styles.dock}>
             {failureFor(mainId) && <p className={styles.error}>{failureFor(mainId)?.error.message}</p>}
             <Composer
+              conversationId={mainId}
+              messages={main?.messages}
               value={chat.draftFor(mainId)}
               onChange={(value) => chat.setDraftFor(mainId, value)}
               onSend={() => void chat.sendTo(mainId, chat.draftFor(mainId))}
@@ -439,6 +587,17 @@ export function SubjectPage({
                   <MessagesSquare size={13} aria-hidden />
                   <span>Threads</span>
                   {openThreads.length > 0 && <span className={styles.tabCount}>{openThreads.length}</span>}
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={panel.mode === "pages"}
+                  className={cx(styles.panelTabPill, panel.mode === "pages" && styles.panelTabActive)}
+                  onClick={() => setPanel({ mode: "pages" })}
+                  title="Pages（空间笔记白板）"
+                >
+                  <NotebookPen size={13} aria-hidden />
+                  <span>Pages</span>
                 </button>
                 <button
                   type="button"
@@ -541,6 +700,47 @@ export function SubjectPage({
               onOpen={openThread}
             />
           )}
+          {panel.mode === "pages" && (
+            <div className={styles.pagesPane}>
+              <header className={styles.pagesBar}>
+                <strong>Pages · {subject.name}</strong>
+                <div className={styles.pagesViews} role="group" aria-label="笔记视图">
+                  {([["edit", "编辑"], ["split", "分栏"], ["preview", "预览"]] as const).map(([id, label]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      aria-pressed={pagesView === id}
+                      className={cx(styles.pagesViewBtn, pagesView === id && styles.pagesViewOn)}
+                      onClick={() => setPagesView(id)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <button type="button" className={styles.pagesExport} disabled={!pages.text.trim()} onClick={exportPages}>
+                  <Download size={12} aria-hidden />
+                  <span>[⬇ 导出为 .md 文件]</span>
+                </button>
+              </header>
+              {pagesNotice && <p className={styles.pagesNotice} role="status">{pagesNotice}</p>}
+              <div className={styles.pagesBody}>
+                {pagesView !== "preview" && (
+                  <textarea
+                    className={styles.pagesEditor}
+                    value={pages.id === subject.id ? pages.text : ""}
+                    aria-label="空间笔记（Markdown）"
+                    placeholder="在这里记录本空间的笔记，支持 Markdown。对话里点「存入空间笔记」会自动追加到这里。"
+                    onChange={(event) => setPages({ id: subject.id, text: event.target.value })}
+                  />
+                )}
+                {pagesView !== "edit" && (
+                  <div className={styles.pagesPreview}>
+                    {pages.text.trim() ? <Markdown text={pages.text} /> : <p className={styles.muted}>暂无内容，预览会实时显示在这里。</p>}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
           {panel.mode === "thread" && threadId && (
             <div className={styles.thread}>
               {thread && (
@@ -573,6 +773,8 @@ export function SubjectPage({
                 {failureFor(threadId) && <p className={styles.error}>{failureFor(threadId)?.error.message}</p>}
                 <Composer
                   inputId="thread-composer"
+                  conversationId={threadId}
+                  messages={thread?.messages}
                   value={chat.draftFor(threadId)}
                   onChange={(value) => chat.setDraftFor(threadId, value)}
                   onSend={() => void chat.sendTo(threadId, chat.draftFor(threadId))}

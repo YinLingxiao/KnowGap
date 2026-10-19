@@ -3,7 +3,7 @@ import os
 import signal
 import subprocess
 
-from app.agent_tools.guard import ToolError
+from app.agent_tools.guard import ToolError, enforce_security_blacklist
 
 MAX_OUTPUT = 50_000
 
@@ -30,6 +30,7 @@ async def _terminate_tree(process) -> None:
 
 
 async def run(root, arguments: dict) -> str:
+    enforce_security_blacklist(str(arguments.get("command") or ""))
     if root is None or not root.is_dir():
         raise ToolError("还没有工作区。请先在设置里选择一个文件夹。")
     command = arguments.get("command")

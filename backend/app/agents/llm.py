@@ -162,6 +162,8 @@ def request_error(exc: Exception) -> ProviderError:
 
 
 PROVIDER_FAILURES = (httpx.RequestError, httpx.InvalidURL, UnicodeEncodeError, ImportError)
+# Connection-level transport failures worth one retry; read timeouts are not retried.
+TRANSIENT_FAILURES = (httpx.ConnectError, httpx.ConnectTimeout, httpx.RemoteProtocolError, httpx.ReadError, httpx.WriteError)
 
 
 @cache
@@ -178,18 +180,36 @@ class ChatModel(Protocol):
     async def complete_json(self, messages: list[dict]) -> dict: ...
 
 
+def _arguments_text(raw) -> str:
+    # Some gateways return already-decoded arguments; str() would yield Python repr, not JSON.
+    if isinstance(raw, (dict, list)):
+        return json.dumps(raw, ensure_ascii=False)
+    return str(raw or "")
+
+
 def _tool_calls_from(raw: list) -> list[dict]:
     calls = []
-    for call in raw:
+    for call in raw if isinstance(raw, list) else []:
         if not isinstance(call, dict):
             continue
         function = call.get("function") or {}
+        if not isinstance(function, dict):
+            continue
+        name = function.get("name")
+        if not isinstance(name, str) or not name.strip():
+            continue
         calls.append({
             "id": str(call.get("id") or ""),
-            "name": str(function.get("name") or ""),
-            "arguments": str(function.get("arguments") or ""),
+            "name": name.strip(),
+            "arguments": _arguments_text(function.get("arguments")),
         })
     return calls
+
+
+class _TransientStreamError(Exception):
+    def __init__(self, cause: Exception):
+        super().__init__(str(cause))
+        self.cause = cause
 
 
 class ChatCompletionsChat:
@@ -200,6 +220,19 @@ class ChatCompletionsChat:
         self.transport = transport
 
     async def stream(self, messages: list[dict], tools: list[dict] | None = None) -> AsyncIterator[tuple[str, object]]:
+        # Retry once on a connection-level failure, but only before any output reached the caller.
+        for attempt in range(2):
+            produced = False
+            try:
+                async for item in self._stream_once(messages, tools):
+                    produced = True
+                    yield item
+                return
+            except _TransientStreamError as exc:
+                if produced or attempt:
+                    raise request_error(exc.cause) from None
+
+    async def _stream_once(self, messages: list[dict], tools: list[dict] | None) -> AsyncIterator[tuple[str, object]]:
         settings = self.settings
         base_url, api_key = provider_endpoint(settings)
         payload = {"model": settings.llm_model, "messages": messages, "stream": True,
@@ -240,6 +273,9 @@ class ChatCompletionsChat:
                         if not line.startswith("data:"):
                             continue
                         data = line[5:].strip()
+                        if not data:
+                            # Gateway keep-alive heartbeat.
+                            continue
                         if data == "[DONE]":
                             break
                         chunk = json.loads(data)
@@ -255,22 +291,36 @@ class ChatCompletionsChat:
                             if text:
                                 yield "text", text
                             for call in delta.get("tool_calls") or []:
-                                index = call.get("index", 0)
+                                if not isinstance(call, dict):
+                                    continue
+                                index = call.get("index")
+                                if index is None:
+                                    index = 0
+                                if not isinstance(index, int) or index < 0:
+                                    continue
                                 slot = pending.setdefault(index, {"id": "", "name": "", "arguments": ""})
                                 if call.get("id"):
                                     slot["id"] = call["id"]
                                 function = call.get("function") or {}
-                                if function.get("name"):
+                                if not isinstance(function, dict):
+                                    continue
+                                # Null/empty names are normal in argument-only chunks.
+                                # Retain their arguments until later name fragments arrive.
+                                if isinstance(function.get("name"), str):
                                     slot["name"] += function["name"]
-                                if function.get("arguments"):
+                                if isinstance(function.get("arguments"), str):
                                     slot["arguments"] += function["arguments"]
                             if choice.get("finish_reason"):
                                 finish = choice["finish_reason"]
-                    if pending:
-                        yield "tool_calls", [pending[index] for index in sorted(pending)]
+                    calls = [dict(pending[index], name=pending[index]["name"].strip())
+                             for index in sorted(pending) if pending[index]["name"].strip()]
+                    if calls:
+                        yield "tool_calls", calls
                     yield "finish", finish
         except ProviderError:
             raise
+        except TRANSIENT_FAILURES as exc:
+            raise _TransientStreamError(exc) from None
         except PROVIDER_FAILURES as exc:
             raise request_error(exc) from None
         except (ValueError, KeyError, IndexError, TypeError):

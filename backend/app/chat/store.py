@@ -1200,64 +1200,110 @@ class ChatStore:
         subject_id: str | None = None, tags: list[str] | None = None,
     ) -> MemoryChange | None:
         """Deterministic status transitions; the model only proposes evidence."""
-        timestamp = now()
+        changes = self.record_observation_changes(
+            student_id, kind=kind, topic=topic, topic_key=topic_key, summary=summary, quote=quote, reason=reason,
+            signal=signal, related_id=related_id, conversation_id=conversation_id, message_id=message_id,
+            subject_id=subject_id, tags=tags,
+        )
+        return changes[0] if changes else None
+
+    def record_observation_changes(
+        self, student_id: str, *, kind: str, topic: str, topic_key: str | None, summary: str, quote: str, reason: str,
+        signal: str, related_id: str | None, conversation_id: str, message_id: str,
+        subject_id: str | None = None, tags: list[str] | None = None,
+    ) -> list[MemoryChange]:
+        """Like record_observation, but a mastery that disproves a misconception yields both changes."""
+        fields = dict(topic_key=topic_key, quote=quote, reason=reason, conversation_id=conversation_id,
+                      message_id=message_id, subject_id=subject_id, tags=tags)
         with self.connection() as db:
             db.execute("BEGIN IMMEDIATE")
-            row = None
-            if related_id:
-                row = db.execute(
-                    "SELECT * FROM learner_memories WHERE id = ? AND student_id = ? AND kind = ?",
-                    (related_id, student_id, kind),
+            changes = []
+            if signal == "contradicts" and related_id and kind != "misconception":
+                # Analysis often labels a correct re-derivation as {"kind": "mastery", "effect": "weakens"}
+                # pointing at the old misconception; that is counter-evidence for the misconception.
+                target = db.execute(
+                    "SELECT * FROM learner_memories WHERE id = ? AND student_id = ? AND kind = 'misconception'",
+                    (related_id, student_id),
                 ).fetchone()
-            # Preferences are general; what is learned about a topic belongs to the conversation's Subject.
-            scope = None if kind == "preference" else subject_id
-            if row is None:
-                row = db.execute(
-                    "SELECT * FROM learner_memories WHERE student_id = ? AND kind = ? AND lower(topic) = lower(?) "
-                    "AND subject_id IS ?",
-                    (student_id, kind, topic, scope),
-                ).fetchone()
-            if row is None and signal != "supports":
-                return None  # Nothing to weaken; counter-evidence alone never creates a memory.
-            action = "updated" if row else "created"
-            memory_id = row["id"] if row else new_id("lmem")
-            if row is None:
-                db.execute(
-                    "INSERT INTO learner_memories(id, student_id, kind, topic, topic_key, summary, status, confidence, "
-                    "origin, subject_id, tags_json, created_at, updated_at) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, 0.5, 'chat', ?, '[]', ?, ?)",
-                    (memory_id, student_id, kind, topic, topic_key, summary,
-                     "suspected" if kind == "misconception" else "observed", scope, timestamp, timestamp),
-                )
-            if tags:
-                known = json.loads(db.execute(
-                    "SELECT tags_json FROM learner_memories WHERE id = ?", (memory_id,)).fetchone()["tags_json"])
-                merged = list(dict.fromkeys(known + tags))[:6]
-                db.execute("UPDATE learner_memories SET tags_json = ? WHERE id = ?",
-                           (json.dumps(merged, ensure_ascii=False), memory_id))
-            inserted = db.execute(
-                "INSERT OR IGNORE INTO learner_memory_evidence"
-                "(memory_id, conversation_id, message_id, quote, reason, signal, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (memory_id, conversation_id, message_id, quote, reason, signal, timestamp),
-            ).rowcount
-            if not inserted:
-                return None
-            signals = [r["signal"] for r in db.execute(
-                "SELECT signal FROM learner_memory_evidence WHERE memory_id = ? ORDER BY id", (memory_id,),
-            )]
-            supports = signals.count("supports")
-            if kind == "misconception":
-                last_support = max(i for i, s in enumerate(signals) if s == "supports")
-                after = len(signals) - 1 - last_support
-                status = ("resolved" if after >= 2 else "improving" if after == 1
-                          else "needs_review" if supports >= 2 else "suspected")
-            else:
-                status = "observed" if signals[-1] == "supports" else "uncertain"
-            confidence = round(min(0.9, 0.35 + 0.15 * supports) if signals[-1] == "supports"
-                               else max(0.2, 0.5 - 0.1 * (len(signals) - supports)), 2)
-            db.execute(
-                "UPDATE learner_memories SET status = ?, confidence = ?, updated_at = ?, "
-                "topic_key = COALESCE(topic_key, ?) WHERE id = ?",
-                (status, confidence, timestamp, topic_key, memory_id),
+                if target is not None:
+                    change = self._record_locked(
+                        db, student_id, kind="misconception", topic=target["topic"], summary=target["summary"],
+                        signal="contradicts", related_id=related_id, **fields,
+                    )
+                    changes += [change] if change else []
+                    if kind == "mastery":
+                        change = self._record_locked(
+                            db, student_id, kind="mastery", topic=topic, summary=summary,
+                            signal="supports", related_id=None, **fields,
+                        )
+                        changes += [change] if change else []
+                    return changes
+            change = self._record_locked(
+                db, student_id, kind=kind, topic=topic, summary=summary, signal=signal, related_id=related_id, **fields,
             )
-            return MemoryChange(action=action, memory=self._memories(db, student_id, memory_id)[0])
+            return [change] if change else []
+
+    def _record_locked(
+        self, db, student_id: str, *, kind: str, topic: str, topic_key: str | None, summary: str, quote: str,
+        reason: str, signal: str, related_id: str | None, conversation_id: str, message_id: str,
+        subject_id: str | None, tags: list[str] | None,
+    ) -> MemoryChange | None:
+        timestamp = now()
+        row = None
+        if related_id:
+            row = db.execute(
+                "SELECT * FROM learner_memories WHERE id = ? AND student_id = ? AND kind = ?",
+                (related_id, student_id, kind),
+            ).fetchone()
+        # Preferences are general; what is learned about a topic belongs to the conversation's Subject.
+        scope = None if kind == "preference" else subject_id
+        if row is None:
+            row = db.execute(
+                "SELECT * FROM learner_memories WHERE student_id = ? AND kind = ? AND lower(topic) = lower(?) "
+                "AND subject_id IS ?",
+                (student_id, kind, topic, scope),
+            ).fetchone()
+        if row is None and signal != "supports":
+            return None  # Nothing to weaken; counter-evidence alone never creates a memory.
+        action = "updated" if row else "created"
+        memory_id = row["id"] if row else new_id("lmem")
+        if row is None:
+            db.execute(
+                "INSERT INTO learner_memories(id, student_id, kind, topic, topic_key, summary, status, confidence, "
+                "origin, subject_id, tags_json, created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, 0.5, 'chat', ?, '[]', ?, ?)",
+                (memory_id, student_id, kind, topic, topic_key, summary,
+                 "suspected" if kind == "misconception" else "observed", scope, timestamp, timestamp),
+            )
+        if tags:
+            known = json.loads(db.execute(
+                "SELECT tags_json FROM learner_memories WHERE id = ?", (memory_id,)).fetchone()["tags_json"])
+            merged = list(dict.fromkeys(known + tags))[:6]
+            db.execute("UPDATE learner_memories SET tags_json = ? WHERE id = ?",
+                       (json.dumps(merged, ensure_ascii=False), memory_id))
+        inserted = db.execute(
+            "INSERT OR IGNORE INTO learner_memory_evidence"
+            "(memory_id, conversation_id, message_id, quote, reason, signal, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (memory_id, conversation_id, message_id, quote, reason, signal, timestamp),
+        ).rowcount
+        if not inserted:
+            return None
+        signals = [r["signal"] for r in db.execute(
+            "SELECT signal FROM learner_memory_evidence WHERE memory_id = ? ORDER BY id", (memory_id,),
+        )]
+        supports = signals.count("supports")
+        if kind == "misconception":
+            last_support = max(i for i, s in enumerate(signals) if s == "supports")
+            after = len(signals) - 1 - last_support
+            status = ("resolved" if after >= 2 else "improving" if after == 1
+                      else "needs_review" if supports >= 2 else "suspected")
+        else:
+            status = "observed" if signals[-1] == "supports" else "uncertain"
+        confidence = round(min(0.9, 0.35 + 0.15 * supports) if signals[-1] == "supports"
+                           else max(0.2, 0.5 - 0.1 * (len(signals) - supports)), 2)
+        db.execute(
+            "UPDATE learner_memories SET status = ?, confidence = ?, updated_at = ?, "
+            "topic_key = COALESCE(topic_key, ?) WHERE id = ?",
+            (status, confidence, timestamp, topic_key, memory_id),
+        )
+        return MemoryChange(action=action, memory=self._memories(db, student_id, memory_id)[0])

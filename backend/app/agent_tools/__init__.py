@@ -6,7 +6,9 @@ from pathlib import Path
 
 from app.agent_tools import bash as bash_tool
 from app.agent_tools import files
-from app.agent_tools.guard import ToolError
+from app.agent_tools.guard import (
+    ToolError, check_content_security_blacklist, check_security_blacklist, enforce_security_blacklist,
+)
 
 MAX_RESULT = 8000
 
@@ -160,7 +162,7 @@ DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "memory",
-            "description": "维护两块长期笔记，内容已在系统提示快照里。target=user 记录用户身份、长期目标及明确确认的长期学习/沟通偏好（统一前缀：讲解偏好：或互动偏好：）；target=memory 只记环境事实。知识点误区和掌握不要写入。临时要求不写入；空间专属要求不要写入全局 USER。action=add 追加，patch 精确替换唯一 old_text，remove 删除；修改同维度偏好优先 patch 而非追加。返回待确认、拒绝或失败不等于已保存。超限请先精简，已保存或批准的修改下一轮生效。",
+            "description": "维护两块长期笔记，内容已在系统提示快照里。target=user 记录用户身份、长期目标及明确确认的长期学习/沟通偏好（统一前缀：讲解偏好：或互动偏好：），用户明确自述已学过的技能用先验技能：前缀记录，不能当作经诊断的掌握结论；target=memory 只记环境事实。知识点误区和掌握不要写入。临时要求不写入；空间专属要求不要写入全局 USER。action=add 追加，patch 精确替换唯一 old_text，remove 删除；修改同维度偏好优先 patch 而非追加。返回待确认、拒绝或失败不等于已保存。超限请先精简，已保存或批准的修改下一轮生效。",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -193,13 +195,80 @@ DEFINITIONS = [
 NEEDS_APPROVAL = {"write", "edit", "bash"}
 
 
+def _without_trailing_commas(raw: str) -> str:
+    """Repair JSON punctuation only; commas/quotes inside string values are data."""
+    result = []
+    in_string = escaped = False
+    for index, char in enumerate(raw):
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+        elif char == '"':
+            in_string = True
+        elif char == ",":
+            following = index + 1
+            while following < len(raw) and raw[following].isspace():
+                following += 1
+            if following < len(raw) and raw[following] in "}]":
+                continue
+        result.append(char)
+    return "".join(result)
+
+
+INVALID_ARGUMENTS = "工具参数不是有效的 JSON 对象，请检查括号与引号闭合后重试。"
+
+
+def _container(raw: str, opening: str) -> str | None:
+    start = raw.find("{") if opening == "{" else next((i for i, char in enumerate(raw) if char in "{["), -1)
+    if start < 0:
+        return None
+    end = raw.rfind("}" if raw[start] == "{" else "]")
+    return raw[start:end + 1] if end >= start else None
+
+
 def parse_arguments(raw: str) -> dict:
     if not raw or not raw.strip():
         return {}
-    value = json.loads(raw)
+    try:
+        value = json.loads(raw)
+    except json.JSONDecodeError:
+        # Isolate the outer JSON container from fences, BOMs and stray model text.
+        # Keep arrays intact so the object-only contract cannot be bypassed; only when the
+        # first container is not JSON (e.g. a "[见下]" note) fall back to the object block.
+        for opening in ("first", "{"):
+            cleaned = _container(raw, opening)
+            if cleaned is None:
+                continue
+            try:
+                value = json.loads(_without_trailing_commas(cleaned))
+                break
+            except json.JSONDecodeError:
+                continue
+        else:
+            raise ToolError(INVALID_ARGUMENTS) from None
     if not isinstance(value, dict):
         raise ToolError("工具参数必须是 JSON 对象。")
     return value
+
+
+def preflight_blacklist(name: str, raw_args: str) -> str | None:
+    """Blacklist verdict for a pending call, so a doomed call never reaches the approval card."""
+    try:
+        arguments = parse_arguments(raw_args)
+    except ToolError:
+        return None  # Malformed arguments are reported by the normal execution path.
+    reason = None
+    if name == "bash":
+        reason = check_security_blacklist(str(arguments.get("command") or ""))
+    elif name in {"read", "write", "edit"}:
+        reason = check_security_blacklist(str(arguments.get("path") or ""))
+    if not reason and name in {"write", "edit"}:
+        reason = check_content_security_blacklist(arguments.get("content" if name == "write" else "new_text"))
+    return f"安全防线拦截：{reason}" if reason else None
 
 
 def _clip(text: str) -> str:
@@ -209,6 +278,11 @@ def _clip(text: str) -> str:
 
 
 async def run(name: str, arguments: dict, ctx) -> str:
+    # Mandatory preflight before accessing context or delegating to any executor.
+    if name == "bash":
+        enforce_security_blacklist(str(arguments.get("command") or ""))
+    elif name in {"read", "write", "edit"}:
+        enforce_security_blacklist(str(arguments.get("path") or ""))
     try:
         if name == "exercise_reference":
             from app.services.problems import reference_for
@@ -267,7 +341,7 @@ async def run(name: str, arguments: dict, ctx) -> str:
         else:
             text = f"未知工具：{name}"
     except json.JSONDecodeError:
-        return "工具参数不是有效的 JSON。"
+        return INVALID_ARGUMENTS
     except OSError as exc:
         return f"文件操作失败：{exc.strerror or exc}"
     return _clip(text)

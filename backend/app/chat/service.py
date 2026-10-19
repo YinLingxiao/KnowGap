@@ -16,7 +16,9 @@ import logging
 import time
 from collections.abc import AsyncIterator, Callable
 
-from app.agent_tools import DEFINITIONS, NEEDS_APPROVAL, parse_arguments, run as run_tool, workspace_of
+from app.agent_tools import (
+    DEFINITIONS, NEEDS_APPROVAL, parse_arguments, preflight_blacklist, run as run_tool, workspace_of,
+)
 from app.agent_tools.guard import ToolError
 from app.agents.llm import ChatModel, ProviderError
 from app.chat.agent import (
@@ -221,7 +223,7 @@ class ChatService:
         return not row or row["kind"] != "thread" or not row["parent_id"] or (
             self._count_running_threads(student_id, row["parent_id"]) < THREAD_CONCURRENCY)
 
-    def _start_next_queued_thread(self, student_id: str, main_id: str) -> None:
+    def _start_next_queued_thread(self, student_id: str, main_id: str, exclude: str | None = None) -> None:
         """Fill all free slots, oldest undelivered input first; skip already-running workers."""
         with self.store.connection() as db:
             queued = db.execute("""
@@ -233,7 +235,8 @@ class ChatService:
                 GROUP BY c.id ORDER BY oldest, c.id
             """, (student_id, main_id)).fetchall()
         for row in queued:
-            self._start_delivery(student_id, row["id"])
+            if row["id"] != exclude:
+                self._start_delivery(student_id, row["id"])
 
     def _dispatch_thread(self, student_id: str, generation: Generation, arguments: dict) -> str:
         body = DispatchThread(**arguments)
@@ -390,11 +393,16 @@ class ChatService:
             state.update(next_call=index, in_flight=False)
             self._save_checkpoint(generation, state)
             supported = any(t["function"]["name"] == name for t in definitions)
-            allowed = True
+            allowed, blocked = True, None
             if name in NEEDS_APPROVAL and supported:
-                allowed = await self._await_approval(generation, name, raw_args)
+                # The blacklist is checked before asking, so the user is never asked to approve `rm -rf /`.
+                blocked = preflight_blacklist(name, raw_args)
+                if not blocked:
+                    allowed = await self._await_approval(generation, name, raw_args)
             output, ok = "用户拒绝了这次操作。", False
-            if allowed:
+            if blocked:
+                output = blocked
+            elif allowed:
                 queue.put_nowait(("tool_start", {"id": call["id"], "name": name, "arguments": raw_args}))
                 try:
                     if not supported:
@@ -596,13 +604,21 @@ class ChatService:
             })
             self._release(generation)
             queue.put_nowait(("done", {"message": self._message(student_id, assistant_id)}))
+            if generation.parent_id and not self.closing:
+                # The slot is free once the reply is stored; queued Threads need not wait for analysis.
+                # This Thread's own next input still starts in `finally`, after its status report.
+                try:
+                    self._start_next_queued_thread(student_id, generation.parent_id,
+                                                   exclude=generation.conversation_id)
+                except Exception:
+                    logger.exception("Could not start the next queued thread")
             if text.strip():
                 # A regenerated reply must not count the same user turn twice.
                 already_counted = self.store.message_meta(generation.user_message_id).get("note_counted")
-                reset = any(item.get("name") == "memory" and item.get("ok") and
-                            item.get("output", "").startswith("已更新") for item in tool_log)
+                # A mid-conversation memory note does not replace the ten-turn review;
+                # only the review below resets the counter.
                 count = 0 if already_counted else self.store.bump_note_turns(
-                    student_id, reset, generation.conversation_id,
+                    student_id, False, generation.conversation_id,
                 )
                 self.store.merge_meta(generation.user_message_id, {"note_counted": True})
                 if count >= 10:
@@ -731,15 +747,14 @@ class ChatService:
         topic_key = exercise.topic_key if exercise and result["attempt"] else None
         changes = []
         for observation in result["observations"]:
-            change = self.store.record_observation(
+            recorded = self.store.record_observation_changes(
                 student_id, kind=observation["kind"], topic=observation["topic"], topic_key=topic_key,
                 summary=observation["summary"], quote=observation["quote"], reason=observation["reason"],
                 signal=observation["signal"], related_id=observation["related_id"],
                 conversation_id=generation.conversation_id, message_id=user_id,
                 subject_id=subject_id, tags=observation["tags"],
             )
-            if change:
-                changes.append({"action": change.action, "memory_id": change.memory.id})
+            changes += [{"action": change.action, "memory_id": change.memory.id} for change in recorded]
         self.store.merge_meta(user_id, {"analyzed": True, "attempt": result["attempt"], "memory_changes": changes})
         self.store.merge_meta(generation.assistant_message_id, {
             "used_memory_ids": result["used_memory_ids"], "suggested_problem_id": result["suggested_problem_id"],

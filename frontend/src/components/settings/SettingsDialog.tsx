@@ -577,6 +577,43 @@ function splitEntries(content: string) {
   return content.split(/\s*§\s*/).map((item) => item.trim()).filter(Boolean);
 }
 
+type LayerId = "identity" | "preference" | "context" | "activity" | "experience";
+
+const MEMORY_LAYERS: Array<{ id: LayerId; tag: string; label: string; hint: string }> = [
+  { id: "identity", tag: "Identity", label: "身份与技能栈", hint: "你是谁、已掌握哪些旧知" },
+  { id: "preference", tag: "Preference", label: "教学偏好", hint: "喜欢怎样被教" },
+  { id: "context", tag: "Context", label: "目标与约束", hint: "学习目标、截止时间、限制" },
+  { id: "activity", tag: "Activity", label: "近期动态", hint: "最近学了什么、复盘结论" },
+  { id: "experience", tag: "Experience", label: "经验法则", hint: "沉淀下来的学习方法" },
+];
+
+const PRIOR_PREFIX = "先验技能：";
+const PRIOR_SKILLS = [
+  "C / C++", "Python", "Java / JS", "高等数学", "线性代数", "概率统计", "大学物理", "电路原理", "数据结构与算法",
+];
+
+const LAYER_PREFIX_RE = /^\[(Identity|Preference|Context|Activity|Experience)\]\s*/i;
+
+function layerOf(entry: string): LayerId {
+  const explicit = LAYER_PREFIX_RE.exec(entry);
+  if (explicit) return explicit[1].toLowerCase() as LayerId;
+  if (/^(先验技能|常学领域|身份|专业|年级|技能栈)/.test(entry)) return "identity";
+  if (/^(阶段目标|背景约束|目标|截止|约束|时间|考试|背景)/.test(entry)) return "context";
+  if (/^(近期动态|阶段复盘|近期|最近|本周)/.test(entry)) return "activity";
+  if (/^(经验法则|经验|法则|心得|教训|方法)/.test(entry)) return "experience";
+  return "preference";
+}
+
+function stripLayer(entry: string) {
+  return entry.replace(LAYER_PREFIX_RE, "");
+}
+
+function parsePriorSkills(notes: string[]) {
+  const line = notes.map(stripLayer).find((item) => item.startsWith(PRIOR_PREFIX));
+  if (!line) return [];
+  return line.slice(PRIOR_PREFIX.length).split(/[、，,;；]+/).map((item) => item.trim()).filter(Boolean);
+}
+
 function MemoryPane() {
   const [approval, setApproval] = useState(false);
   const [workspace, setWorkspace] = useState("");
@@ -586,6 +623,8 @@ function MemoryPane() {
   const [limits, setLimits] = useState({ user: 1375, memory: 2200 });
   const [draft, setDraft] = useState("");
   const [target, setTarget] = useState<"user" | "memory">("user");
+  const [layer, setLayer] = useState<LayerId>("preference");
+  const [customSkill, setCustomSkill] = useState("");
   const [note, setNote] = useState("");
 
   useEffect(() => {
@@ -626,6 +665,26 @@ function MemoryPane() {
 
   const userChars = userNotes.join("\n§\n").length;
   const memChars = memoryNotes.join("\n§\n").length;
+  const priorSkills = parsePriorSkills(userNotes);
+  const skillOptions = [...PRIOR_SKILLS, ...priorSkills.filter((item) => !PRIOR_SKILLS.includes(item))];
+
+  async function setPriorSkills(next: string[]) {
+    const kept = userNotes.filter((item) => !stripLayer(item).startsWith(PRIOR_PREFIX));
+    const updated = next.length > 0 ? [...kept, `${PRIOR_PREFIX}${next.join("、")}`] : kept;
+    try {
+      await save("user", updated);
+    } catch (error) {
+      setNote(error instanceof Error ? error.message : "保存先验技能失败");
+    }
+  }
+
+  const togglePrior = (skill: string) =>
+    void setPriorSkills(priorSkills.includes(skill) ? priorSkills.filter((item) => item !== skill) : [...priorSkills, skill]);
+
+  const layerCounts = MEMORY_LAYERS.map((item) => ({
+    ...item,
+    count: userNotes.filter((entry) => layerOf(entry) === item.id).length,
+  }));
 
   return (
     <section>
@@ -634,10 +693,60 @@ function MemoryPane() {
         <Toggle checked={approval} label="记忆写入需确认" onChange={(value) => void saveApproval(value)} />
       </SettingRow>
       <div className={styles.sectionHeaderRow}>
-        <p className={styles.sectionLabel}>用户画像 USER（身份、目标与确认的长期学习偏好）</p>
+        <p className={styles.sectionLabel}>五层白盒记忆 USER（5-Layer White-Box Memory）</p>
         <span className={styles.capacityTag}>{userChars} / {limits.user} 字</span>
       </div>
-      <Entries
+
+      <div className={styles.anchorBox}>
+        <div className={styles.settingRowInfo}>
+          <p className={styles.settingRowTitle}>Identity · 先验技能锚点（我已掌握的旧知）</p>
+          <p className={styles.settingRowDesc}>点选后同步到 USER 的「先验技能：」条目，AI 会用你熟悉的旧知做类比迁移。</p>
+        </div>
+        <div className={styles.domainGrid} role="group" aria-label="先验技能锚点">
+          {skillOptions.map((skill) => (
+            <button
+              key={skill}
+              type="button"
+              aria-pressed={priorSkills.includes(skill)}
+              className={cx(styles.domainTag, priorSkills.includes(skill) && styles.domainTagActive)}
+              onClick={() => togglePrior(skill)}
+            >
+              {skill}
+            </button>
+          ))}
+        </div>
+        <form
+          className={styles.noteComposer}
+          onSubmit={(event) => {
+            event.preventDefault();
+            const skill = customSkill.trim();
+            if (!skill) return;
+            if (!priorSkills.includes(skill)) togglePrior(skill);
+            setCustomSkill("");
+          }}
+        >
+          <input
+            className={styles.noteInput}
+            value={customSkill}
+            maxLength={30}
+            aria-label="自定义先验技能"
+            placeholder="自定义已掌握的技能或课程，如「离散数学」"
+            onChange={(event) => setCustomSkill(event.target.value)}
+          />
+          <button className={styles.rowBtn} type="submit" disabled={!customSkill.trim()}>
+            添加锚点
+          </button>
+        </form>
+      </div>
+
+      <div className={styles.layerLegend} aria-label="五层白盒记忆分布">
+        {layerCounts.map((item) => (
+          <span key={item.id} className={cx(styles.layerBadge, styles[`layer_${item.id}`])} title={item.hint}>
+            [{item.tag} {item.label}] {item.count}
+          </span>
+        ))}
+      </div>
+      <UserEntries
         items={userNotes}
         onDelete={(index) =>
           void save("user", userNotes.filter((_, item) => item !== index)).catch((error: unknown) =>
@@ -663,7 +772,9 @@ function MemoryPane() {
           event.preventDefault();
           const text = draft.trim();
           if (!text) return;
-          const items = target === "user" ? [...userNotes, text] : [...memoryNotes, text];
+          const layerTag = MEMORY_LAYERS.find((item) => item.id === layer)?.tag ?? "Preference";
+          const userText = LAYER_PREFIX_RE.test(text) ? text : `[${layerTag}] ${text}`;
+          const items = target === "user" ? [...userNotes, userText] : [...memoryNotes, text];
           void save(target, items)
             .then(() => setDraft(""))
             .catch((error: unknown) => setNote(error instanceof Error ? error.message : "保存失败"));
@@ -678,11 +789,25 @@ function MemoryPane() {
           ]}
           onChange={setTarget}
         />
+        {target === "user" && (
+          <select
+            className={styles.layerSelect}
+            value={layer}
+            aria-label="所属白盒层级"
+            onChange={(event) => setLayer(event.target.value as LayerId)}
+          >
+            {MEMORY_LAYERS.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.tag} · {item.label}
+              </option>
+            ))}
+          </select>
+        )}
         <input
           className={styles.noteInput}
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
-          placeholder={target === "user" ? "新增用户画像或偏好条目…" : "新增环境事实条目…"}
+          placeholder={target === "user" ? "新增用户画像条目（将带上所选层级前缀）…" : "新增环境事实条目…"}
         />
         <button className={styles.rowBtn} type="submit" disabled={!draft.trim()}>
           添加
@@ -705,6 +830,31 @@ function Entries({ items, onDelete }: { items: string[]; onDelete: (index: numbe
           </button>
         </div>
       ))}
+    </div>
+  );
+}
+
+function UserEntries({ items, onDelete }: { items: string[]; onDelete: (index: number) => void }) {
+  if (!items.length) return <p className={styles.emptyLine}>还没有条目。</p>;
+  return (
+    <div className={styles.entryList}>
+      {items.map((item, index) => {
+        const id = layerOf(item);
+        const meta = MEMORY_LAYERS.find((layer) => layer.id === id) ?? MEMORY_LAYERS[1];
+        return (
+          <div key={`${item}-${index}`} className={styles.entry}>
+            <span className={styles.entryBody}>
+              <span className={cx(styles.layerBadge, styles[`layer_${id}`])}>
+                [{meta.tag} {meta.label}]
+              </span>
+              <span>{stripLayer(item)}</span>
+            </span>
+            <button type="button" className={styles.textBtn} onClick={() => onDelete(index)}>
+              删除
+            </button>
+          </div>
+        );
+      })}
     </div>
   );
 }
