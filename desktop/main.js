@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, nativeTheme } = require("electron");
 const { spawn } = require("child_process");
 const http = require("http");
 const net = require("net");
@@ -65,6 +65,16 @@ function stopBackend() {
 ipcMain.handle("select-folder", async () => {
   const result = await dialog.showOpenDialog({ properties: ["openDirectory"] });
   return result.canceled ? null : result.filePaths[0];
+});
+
+ipcMain.handle("set-theme", (_event, theme) => {
+  const next = theme === "light" || theme === "dark" ? theme : "system";
+  nativeTheme.themeSource = next;
+  const bg = nativeTheme.shouldUseDarkColors ? "#111215" : "#ffffff";
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) win.setBackgroundColor(bg);
+  }
+  return nativeTheme.shouldUseDarkColors ? "dark" : "light";
 });
 
 async function open() {

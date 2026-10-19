@@ -21,11 +21,18 @@ function readChoice(): ThemeChoice {
   }
 }
 
+function syncDesktopTheme(choice: ThemeChoice) {
+  if (typeof window !== "undefined") {
+    void window.knowgap?.setTheme?.(choice);
+  }
+}
+
 function applyChoice(choice: ThemeChoice) {
   const root = document.documentElement;
   root.classList.add("theme-switching");
   if (choice === "system") delete root.dataset.theme;
   else root.dataset.theme = choice;
+  syncDesktopTheme(choice);
   try {
     if (choice === "system") localStorage.removeItem(STORAGE_KEY);
     else localStorage.setItem(STORAGE_KEY, choice);
@@ -41,7 +48,9 @@ export function useThemeChoice(): [ThemeChoice, (choice: ThemeChoice) => void] {
   const [choice, setChoice] = useState<ThemeChoice>("system");
 
   useEffect(() => {
-    setChoice(readChoice());
+    const initial = readChoice();
+    setChoice(initial);
+    syncDesktopTheme(initial);
     const onChange = (event: Event) => setChoice((event as CustomEvent<ThemeChoice>).detail);
     window.addEventListener(CHANGE_EVENT, onChange);
     return () => window.removeEventListener(CHANGE_EVENT, onChange);

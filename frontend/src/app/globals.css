@@ -236,8 +236,19 @@ p {
 html.theme-switching,
 html.theme-switching body,
 html.theme-switching aside,
-html.theme-switching main {
-  transition: background-color 200ms var(--ease), border-color 200ms var(--ease), color 200ms var(--ease);
+html.theme-switching main,
+html.theme-switching div,
+html.theme-switching section,
+html.theme-switching header,
+html.theme-switching footer,
+html.theme-switching button,
+html.theme-switching input,
+html.theme-switching textarea {
+  transition:
+    background-color 180ms var(--ease),
+    border-color 180ms var(--ease),
+    color 180ms var(--ease),
+    box-shadow 180ms var(--ease);
 }
 
 button,

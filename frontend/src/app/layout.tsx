@@ -18,8 +18,8 @@ export const viewport: Viewport = {
   ],
 };
 
-/** 首帧前应用用户手动选择的主题，避免闪烁 */
-const THEME_SCRIPT = `(function(){try{var t=localStorage.getItem("knowgap.theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;}catch(e){}})();`;
+/** 首帧前应用用户手动选择的主题，避免闪烁，并同步桌面端原生窗口标题栏深浅色 */
+const THEME_SCRIPT = `(function(){try{var t=localStorage.getItem("knowgap.theme");if(t==="light"||t==="dark"){document.documentElement.dataset.theme=t;if(window.knowgap&&window.knowgap.setTheme)window.knowgap.setTheme(t);}else if(window.knowgap&&window.knowgap.setTheme){window.knowgap.setTheme("system");}}catch(e){}})();`;
 
 export default function RootLayout({
   children,

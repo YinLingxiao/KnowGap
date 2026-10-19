@@ -21,7 +21,10 @@ import styles from "./Settings.module.css";
 
 declare global {
   interface Window {
-    knowgap?: { selectFolder: () => Promise<string | null> };
+    knowgap?: {
+      selectFolder: () => Promise<string | null>;
+      setTheme?: (theme: "system" | "light" | "dark") => Promise<string>;
+    };
   }
 }
 
