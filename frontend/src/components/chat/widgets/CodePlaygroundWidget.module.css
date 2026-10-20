@@ -1,0 +1,341 @@
+/* 代码实验台微件。卡片、徽章、按钮复用 ../LearningWidget.module.css，这里只补充新增部分。
+   颜色全部来自 globals.css 的变量，明暗主题自动适配。 */
+
+.metaRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.todoDone {
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.instructions {
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  line-height: 1.65;
+}
+
+.editor {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-subtle);
+  transition: border-color var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out);
+}
+
+.editor:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.stdin summary {
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.stdinInput {
+  width: 100%;
+  margin-top: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-subtle);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.55;
+  resize: vertical;
+}
+
+.stdinInput:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.runBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: var(--accent-solid);
+  color: var(--on-accent);
+  font-size: 12px;
+  font-weight: 600;
+  transition: background-color var(--duration-fast) var(--ease-out), transform var(--t-press) var(--ease-out);
+}
+
+.runBtn:hover:not(:disabled) {
+  background: var(--accent-solid-hover);
+}
+
+.runBtn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.runBtn:disabled {
+  opacity: 0.65;
+  cursor: progress;
+}
+
+.spin {
+  animation: spin 900ms linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.askedNote {
+  padding: 7px 12px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-size: var(--text-xs);
+}
+
+/* 状态横幅 */
+.banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  font-size: var(--text-xs);
+  line-height: 1.55;
+}
+
+.bannerText {
+  flex: 1;
+  min-width: 0;
+}
+
+.bannerText p {
+  margin-top: 2px;
+  color: var(--text-secondary);
+}
+
+.bannerGood {
+  border-color: color-mix(in srgb, var(--green) 40%, var(--border));
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.bannerWarn {
+  border-color: color-mix(in srgb, var(--orange) 40%, var(--border));
+  background: var(--orange-soft);
+  color: var(--orange);
+}
+
+.bannerBad {
+  border-color: color-mix(in srgb, var(--red) 40%, var(--border));
+  background: var(--red-soft);
+  color: var(--red);
+}
+
+.score {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.result {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* 诊断列表 */
+.diagList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.diagItem {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-subtle);
+  color: var(--text);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  text-align: left;
+}
+
+button.diagItem:hover {
+  border-color: var(--border-strong);
+  background: var(--bg-hover);
+}
+
+.diagSeverity {
+  flex-shrink: 0;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--red-soft);
+  color: var(--red);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.diagWarn {
+  background: var(--orange-soft);
+  color: var(--orange);
+}
+
+.diagLoc {
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.diagMsg {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.excerpt {
+  display: block;
+  margin-top: 2px;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.warnings summary {
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.warnings .diagList {
+  margin-top: 6px;
+}
+
+/* 输出块 */
+.output {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.outputLabel {
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+
+.pre {
+  max-height: 220px;
+  margin: 0;
+  padding: 8px 10px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-subtle);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* 测试用例 */
+.cases {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.case {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
+}
+
+.case summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.caseMeta {
+  margin-left: auto;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.caseBody {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 2px 12px 12px;
+}
+
+.compare {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px;
+}
+
+.chip {
+  flex-shrink: 0;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.chipGood {
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.chipBad {
+  background: var(--red-soft);
+  color: var(--red);
+}
+
+.chipMuted {
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+}
+
+.exit {
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+}
+
+.muted {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}

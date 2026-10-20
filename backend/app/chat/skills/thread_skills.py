@@ -1,7 +1,7 @@
 """Execution Skills prioritized for injection into Learning Space Threads (`thread`)."""
 
 WIDGET_SCHEMA_GUIDE = """【内联可交互学习微件规范（`knowgap-widget`）】
-为了提供直观、可操纵的现代教学体验，你不仅可以用文字讲解，还可以直接在正文任意位置嵌入 ```knowgap-widget 代码块（里面必须是单行或多行合法 JSON，不要加注释），前端会将其编译为原生可交互组件并支持双向追问。支持以下 4 种类型：
+为了提供直观、可操纵的现代教学体验，你不仅可以用文字讲解，还可以直接在正文任意位置嵌入 ```knowgap-widget 代码块（里面必须是单行或多行合法 JSON，不要加注释），前端会将其编译为原生可交互组件并支持双向追问。支持以下 5 种类型：
 1. 单步状态推演器（适合机制流程、映射演化、算法步骤、历史/反应过程）：
 ```knowgap-widget
 {"type":"step_simulator","title":"推演标题","steps":[{"label":"第1步名称","detail":"本步核心变化说明","state":[{"key":"变量/槽位","value":"当前值","highlight":true}]}]}
@@ -17,7 +17,16 @@ WIDGET_SCHEMA_GUIDE = """【内联可交互学习微件规范（`knowgap-widget`
 4. 随堂微测验（适合讲完概念后的 30 秒互动检验）：
 ```knowgap-widget
 {"type":"micro_quiz","question":"简短检验问题","options":["选项A","选项B","选项C"],"answerIndex":0,"explanation":"为什么选该项的一句话解析"}
-```"""
+```
+5. 代码实验台（适合讲完编程或算法实现类概念后，让学生在本机真实沙盒里填空、编译、排错；当本轮主题是编程或算法实现时优先选用本类型）：
+```knowgap-widget
+{"type":"code_playground","title":"补全：求平方","language":"python","mode":"scaffold","instructions":"读入一个整数，输出它的平方。补全 TODO 处的代码。","starter_code":"n = int(input())\\n# TODO: 请在此处补全：计算 n 的平方并赋给 result\\nprint(result)","test_cases":[{"name":"用例1","input":"3","expected":"9"},{"name":"用例2","input":"-4","expected":"16"}]}
+```
+code_playground 的三步教学流程：
+- 第一步，先用文字把核心原理讲清楚（为什么这样做、关键一步是什么），再放微件，不要一上来就丢代码。
+- 第二步，给出带挖空的脚手架：Python 用 `# TODO: 请在此处补全…`，JavaScript、C、C++ 用 `// TODO: 请在此处补全…`；上下游框架代码写完整，只在最关键的 1～3 处留空缺。想让学生从零写，就把 mode 设为 "free"，starter_code 只放最小骨架。
+- 第三步，学生点「编译并运行」后，会把「代码 + 真实编译器/解释器报错」发回给你。先指出报错对应的原理和行号，再给最小提示，不要直接贴完整答案；通过后再出一个变式。
+字段约束：language 只能是 python、javascript、c、cpp 之一；starter_code 里的换行必须写成 `\\n`，引号要转义；test_cases 最多 10 组，input 是标准输入，expected 是期望的标准输出；代码不要读写文件、联网、读环境变量或启动子进程，这些会被沙盒的安全黑名单直接拦截。"""
 
 DEEP_EXPLAIN_SKILL = f"""【当前挂载 Skill：deep_explain（深度原理精讲）】
 按以下工作流开展本次原理精讲，并结合 turn_context.teaching_preferences 与 USER 画像动态调整：
