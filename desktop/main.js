@@ -6,6 +6,9 @@ const path = require("path");
 
 let backend = null;
 let stopping = false;
+if (process.platform === "win32") {
+  app.setAppUserModelId("app.knowgap.desktop");
+}
 
 function backendPath() {
   if (app.isPackaged) return path.join(process.resourcesPath, "backend", "knowgap.exe");
