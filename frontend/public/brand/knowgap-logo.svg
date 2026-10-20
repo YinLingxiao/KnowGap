@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" fill="none">
+      <defs>
+        <linearGradient id="pillarGrad" x1="150" y1="140" x2="360" y2="884" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stop-color="#60A5FA"/>
+          <stop offset="45%" stop-color="#3B82F6"/>
+          <stop offset="100%" stop-color="#1D4ED8"/>
+        </linearGradient>
+        <linearGradient id="upperWing" x1="520" y1="450" x2="880" y2="150" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stop-color="#38BDF8"/>
+          <stop offset="50%" stop-color="#3B82F6"/>
+          <stop offset="100%" stop-color="#1D4ED8"/>
+        </linearGradient>
+        <linearGradient id="lowerWing" x1="520" y1="574" x2="880" y2="874" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stop-color="#38BDF8"/>
+          <stop offset="55%" stop-color="#2563EB"/>
+          <stop offset="100%" stop-color="#1E3A8A"/>
+        </linearGradient>
+        <linearGradient id="prismCore" x1="400" y1="400" x2="580" y2="624" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stop-color="#67E8F9"/>
+          <stop offset="50%" stop-color="#38BDF8"/>
+          <stop offset="100%" stop-color="#2563EB"/>
+        </linearGradient>
+        <linearGradient id="prismInner" x1="440" y1="450" x2="530" y2="574" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stop-color="#FFFFFF"/>
+          <stop offset="100%" stop-color="#BAE6FD"/>
+        </linearGradient>
+        <linearGradient id="rimLight" x1="140" y1="140" x2="880" y2="880" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stop-color="#93C5FD" stop-opacity="0.55"/>
+          <stop offset="50%" stop-color="#60A5FA" stop-opacity="0.2"/>
+          <stop offset="100%" stop-color="#1E3A8A" stop-opacity="0.15"/>
+        </linearGradient>
+      </defs>
+
+      <!-- 1. Left Pillar (Known Foundation) with clean V-notch facing the central gap -->
+      <path d="M 156 214
+               C 156 164 210 134 253 160
+               L 336 210
+               C 356 222 368 244 368 268
+               L 368 386
+               C 368 402 361 417 349 427
+               L 270 492
+               C 256 503 256 521 270 532
+               L 349 597
+               C 361 607 368 622 368 638
+               L 368 756
+               C 368 780 356 802 336 814
+               L 253 864
+               C 210 890 156 860 156 810
+               Z"
+            fill="url(#pillarGrad)"
+            stroke="url(#rimLight)"
+            stroke-width="4"/>
+
+      <!-- 2. Upper Right Wing (Clean 36px gap above the central prism) -->
+      <path d="M 552 344
+               L 774 158
+               C 813 125 872 153 872 204
+               L 872 342
+               C 872 367 861 391 842 407
+               L 682 542
+               C 661 560 630 558 611 538
+               L 548 470
+               C 516 436 518 373 552 344
+               Z"
+            transform="translate(18, -56)"
+            fill="url(#upperWing)"
+            stroke="url(#rimLight)"
+            stroke-width="4"/>
+
+      <!-- 3. Lower Right Wing (Clean mirror symmetry below the central prism) -->
+      <path d="M 552 680
+               L 774 866
+               C 813 899 872 871 872 820
+               L 872 682
+               C 872 657 861 633 842 617
+               L 682 482
+               C 661 464 630 466 611 486
+               L 548 554
+               C 516 588 518 651 552 680
+               Z"
+            transform="translate(18, 56)"
+            fill="url(#lowerWing)"
+            stroke="url(#rimLight)"
+            stroke-width="4"/>
+
+      <!-- 4. Central Faceted Diamond Prism (The "知隙" Spark bridging the gap, zero overlap) -->
+      <path d="M 468 386
+               C 476 374 492 374 500 386
+               L 584 496
+               C 593 508 593 516 584 528
+               L 500 638
+               C 492 650 476 650 468 638
+               L 384 528
+               C 375 516 375 508 384 496
+               Z"
+            fill="url(#prismCore)"
+            stroke="url(#rimLight)"
+            stroke-width="4"/>
+
+      <!-- Crisp 4-point inner star highlight inside the prism -->
+      <path d="M 484 434
+               C 491 478 510 497 554 512
+               C 510 527 491 546 484 590
+               C 477 546 458 527 414 512
+               C 458 497 477 478 484 434
+               Z"
+            fill="url(#prismInner)"/>
+    </svg>

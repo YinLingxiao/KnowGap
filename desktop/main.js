@@ -95,7 +95,8 @@ async function open() {
     minWidth: 900,
     minHeight: 600,
     title: "KnowGap",
-    backgroundColor: "#111215",
+    icon: path.join(__dirname, "icon.ico"),
+    backgroundColor: nativeTheme.shouldUseDarkColors ? "#111215" : "#ffffff",
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),

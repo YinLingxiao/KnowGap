@@ -31,6 +31,7 @@ exe = EXE(
     [],
     exclude_binaries=True,
     name="knowgap",
+    icon="icon.ico",
     console=False,
 )
 coll = COLLECT(

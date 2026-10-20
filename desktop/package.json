@@ -15,11 +15,14 @@
     "appId": "app.knowgap.desktop",
     "productName": "KnowGap",
     "directories": { "output": "dist" },
-    "files": ["main.js", "preload.js"],
+    "files": ["main.js", "preload.js", "icon.ico", "icon.png"],
     "extraResources": [
       { "from": "../frontend/out", "to": "frontend" },
       { "from": "../backend/dist/knowgap", "to": "backend" }
     ],
-    "win": { "target": "nsis" }
+    "win": {
+      "target": "nsis",
+      "icon": "icon.ico"
+    }
   }
 }

@@ -330,8 +330,7 @@
 }
 
 .greetingLogo {
-  border-radius: var(--radius);
-  box-shadow: 0 6px 18px color-mix(in srgb, var(--accent) 30%, transparent);
+  filter: drop-shadow(0 4px 12px color-mix(in srgb, var(--accent) 34%, transparent));
 }
 
 .starters {
