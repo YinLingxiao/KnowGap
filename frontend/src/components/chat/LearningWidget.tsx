@@ -9,6 +9,8 @@ import {
 import { cx } from "@/lib/cx";
 import { parseWidgetJson } from "@/lib/chat/widgetJson";
 import styles from "./LearningWidget.module.css";
+import { MathText } from "./math";
+import { ProblemSourceBadge, type ProblemSource } from "./widgets/ProblemSourceBadge";
 
 const CodePlaygroundWidget = dynamic(
   () => import("./widgets/CodePlaygroundWidget").then((m) => m.CodePlaygroundWidget),
@@ -678,6 +680,9 @@ function MicroQuizWidget({ data }: { data: Record<string, unknown> }) {
   const options = Array.isArray(data.options) ? data.options.map(String) : [];
   const answerIndex = typeof data.answerIndex === "number" ? data.answerIndex : 0;
   const explanation = String(data.explanation || "");
+  // problem_drill 出的题带服务端核对过的 meta.source；其他技能的普通微测没有 meta，不显示标签
+  const meta = data.meta && typeof data.meta === "object" ? (data.meta as Record<string, unknown>) : null;
+  const source = meta?.source && typeof meta.source === "object" ? (meta.source as ProblemSource) : null;
   const [selected, setSelected] = useState<number | null>(null);
 
   if (!question || options.length === 0) return null;
@@ -692,8 +697,18 @@ function MicroQuizWidget({ data }: { data: Record<string, unknown> }) {
             <HelpCircle size={12} aria-hidden />
             随堂微测
           </span>
-          <strong className={styles.widgetTitle}>{question}</strong>
+          <strong className={styles.widgetTitle}>
+            <MathText text={question} />
+          </strong>
         </div>
+        {source && (
+          <ProblemSourceBadge
+            source={source}
+            patternId={typeof meta?.pattern_id === "string" ? meta.pattern_id : null}
+            knowledgePoint={typeof meta?.knowledge_point === "string" ? meta.knowledge_point : null}
+            fingerprint={typeof meta?.fingerprint === "string" ? meta.fingerprint : null}
+          />
+        )}
       </header>
 
       <div className={styles.quizOptions}>
@@ -713,7 +728,9 @@ function MicroQuizWidget({ data }: { data: Record<string, unknown> }) {
               onClick={() => setSelected(idx)}
             >
               <span className={styles.quizOptionLetter}>{String.fromCharCode(65 + idx)}</span>
-              <span className={styles.quizOptionText}>{opt}</span>
+              <span className={styles.quizOptionText}>
+                <MathText text={opt} />
+              </span>
               {rightOption && <CheckCircle2 size={15} className={styles.iconRight} aria-hidden />}
               {wrongPicked && <CircleAlert size={15} className={styles.iconWrong} aria-hidden />}
             </button>
@@ -724,7 +741,11 @@ function MicroQuizWidget({ data }: { data: Record<string, unknown> }) {
       {answered && (
         <div className={cx(styles.quizFeedback, isCorrect ? styles.feedbackRight : styles.feedbackWrong)}>
           <strong>{isCorrect ? "回答正确！" : `这道题选 ${String.fromCharCode(65 + answerIndex)}`}</strong>
-          {explanation && <p>{explanation}</p>}
+          {explanation && (
+            <p>
+              <MathText text={explanation} />
+            </p>
+          )}
           <div className={styles.quizFeedbackFoot}>
             <button
               type="button"

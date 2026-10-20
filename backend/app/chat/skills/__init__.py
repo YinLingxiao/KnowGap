@@ -10,7 +10,7 @@ from app.chat.skills.main_skills import MAIN_ROADMAP_SKILL
 from app.chat.skills.thread_skills import THREAD_SKILLS
 
 _FEYNMAN_RE = re.compile(r"费曼|我来讲|听我讲|挑刺|考官")
-_PRACTICE_RE = re.compile(r"练习|做题|考我|出.*题|测验|刷题|来看看我的解答|对不对")
+_PRACTICE_RE = re.compile(r"练习|做题|考我|出.*题|测验|刷题|来看看我的解答|对不对|练手|好题|真题|母题")
 _NOTE_RE = re.compile(r"讲义|笔记|总结成文档|模拟器|写成文件|整理一份")
 _ROADMAP_RE = re.compile(r"计划|路线|怎么学|从哪开始|学习安排|规划")
 _EXPLAIN_RE = re.compile(r"讲解|原理|为什么|怎么理解|区别|对比|深入|映射|机制|过程|推导")
@@ -67,10 +67,16 @@ def select_skill_prompt(
     feynman_session = bool(_FEYNMAN_RE.search(conversation_title or "")) or any(
         _FEYNMAN_RE.search(text or "") for text in earlier_user_texts or []
     )
+    # 练习出题改由 problem_drill 接管：先搜真题母题再出题，作答后的引导沿用 socratic_practice。
+    # 在函数内导入：problem_drill_skill 依赖 agent_tools，顶层导入会形成循环。
+    from app.chat.skills.problem_drill_skill import problem_drill_prompt
+
     if role == "thread":
         if feynman_session and delegated_skill not in THREAD_SKILLS:
             return THREAD_SKILLS["feynman_challenge"]
         skill_key = infer_thread_skill(delegated_task or user_text, delegated_skill)
+        if skill_key == "socratic_practice":
+            return problem_drill_prompt("thread")
         return THREAD_SKILLS.get(skill_key)
     if role == "main":
         if _ROADMAP_RE.search(user_text or ""):
@@ -83,10 +89,7 @@ def select_skill_prompt(
         if len(sample) >= 8 and not _PRACTICE_RE.search(sample) and _EXPLAIN_RE.search(sample):
             return THREAD_SKILLS["deep_explain"].replace("，最后调用 `report_progress` 回报进展", "")
         if _PRACTICE_RE.search(sample):
-            return THREAD_SKILLS["socratic_practice"].replace(
-                "3. 本轮结束前调用 `report_progress` 回报当前练习进展（等待用户继续作答时设 `needs_user=true`）。",
-                "",
-            )
+            return problem_drill_prompt("chat")
     return None
 
 

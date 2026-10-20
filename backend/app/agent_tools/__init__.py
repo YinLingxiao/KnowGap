@@ -6,9 +6,11 @@ from pathlib import Path
 
 from app.agent_tools import bash as bash_tool
 from app.agent_tools import files
+from app.agent_tools import problem_search
 from app.agent_tools.guard import (
     ToolError, check_content_security_blacklist, check_security_blacklist, enforce_security_blacklist,
 )
+from app.chat.skills import problem_drill_skill
 
 MAX_RESULT = 8000
 
@@ -190,6 +192,8 @@ DEFINITIONS = [
             },
         },
     },
+    problem_search.DEFINITION,
+    problem_drill_skill.VERIFY_DEFINITION,
 ]
 
 NEEDS_APPROVAL = {"write", "edit", "bash"}
@@ -333,6 +337,11 @@ async def run(name: str, arguments: dict, ctx) -> str:
                 arguments.get("old_text"),
                 approve=bool(getattr(ctx, "approve_memory", False)),
             )
+        elif name == problem_search.TOOL_NAME:
+            # 两个工具内部兜住所有异常、自己控制输出长度，永远返回 JSON 文本
+            text = await problem_search.run(arguments, ctx)
+        elif name == problem_drill_skill.VERIFY_TOOL:
+            text = await problem_drill_skill.run_verify(arguments, ctx)
         elif name == "session_search":
             limit = arguments.get("limit", 5)
             text = ctx.store.search_messages(

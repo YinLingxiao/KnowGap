@@ -29,6 +29,7 @@ from app.chat.store import ChatStore, INTERRUPTED
 from app.chat.checkpoints import resume_state
 from app.chat.usage import normalize_usage
 from app.chat.schemas import DispatchThread, ProposeThreads, ReportProgress
+from app.chat.skills.problem_drill_skill import SEARCH_TOOL, drill_plan, guard_reply, wants_problems
 from app.chat.coordination import cancel_deliveries, dispatch, next_delivery, report
 from app.memory.store import new_id
 from app.services.materials import MaterialStore
@@ -525,6 +526,9 @@ class ChatService:
                 self._agent_flag("memory_write_approval"),
             )
             ctx.exercise = exercise
+            # search_good_problems 用当前对话的模型抽题、用讲义库做本地检索
+            ctx.model = model
+            ctx.library = self.library
             if role["role"] == "main":
                 ctx.dispatch_thread = lambda arguments: self._dispatch_thread(student_id, generation, arguments)
                 ctx.propose_threads = lambda arguments: self._propose_threads(student_id, generation, arguments)
@@ -543,10 +547,29 @@ class ChatService:
                 "pending": [], "next_call": 0, "in_flight": False,
                 "workspace": str(ctx.workspace) if ctx.workspace else None,
             }
+            drill_active, forced = drill_plan(
+                role["role"], user_text, role.get("delegated_task"), role.get("delegated_skill"),
+                [row["content"] for row in history if row["role"] == "assistant"], memories,
+            )
             if generation.checkpoint:
                 messages, parts = state["messages"], state["parts"]
                 tool_log, tool_messages = state["tool_log"], state["tool_messages"]
                 if state["phase"] == "tools":
+                    await self._execute_tools(generation, state, definitions, ctx)
+            else:
+                # 出题轮：知识点明确时，服务端先替模型调用一次搜题，模型直接拿结果出题。
+                # 小模型经常只说「我去搜一下」就结束，不真正调用工具。
+                if forced and any(t["function"]["name"] == SEARCH_TOOL for t in definitions):
+                    call = {"id": new_id("tool"), "name": SEARCH_TOOL,
+                            "arguments": json.dumps(forced, ensure_ascii=False)}
+                    batch = [{"role": "assistant", "content": "", "tool_calls": [{
+                        "id": call["id"], "type": "function",
+                        "function": {"name": call["name"], "arguments": call["arguments"]},
+                    }]}]
+                    messages.extend(batch)
+                    tool_messages.extend(batch)
+                    state.update(phase="tools", pending=[call], next_call=0, in_flight=False)
+                    self._save_checkpoint(generation, state)
                     await self._execute_tools(generation, state, definitions, ctx)
             for round_index in range(state["rounds"], MAX_TOOL_ROUNDS):
                 state.update(phase="model", rounds=round_index)
@@ -596,6 +619,17 @@ class ChatService:
             text = "".join(parts)
             if not text.strip():
                 raise ProviderError(502, "模型返回了空回复，请重试。")
+            # 逐题核对 micro_quiz：来源不明或被改动的题隐藏，meta.source 按检索记录重写。
+            # 流式阶段已显示的原文会在 done 事件里被存储的核对结果替换。
+            text, quiz_report = guard_reply(
+                text, tool_log, allowed_misconceptions={m.id for m, _ in memories if m.kind == "misconception"},
+                drill_active=drill_active and wants_problems(user_text),
+                # history 含本轮用户消息；只有这一条时，「你之前提到」之类的说法一定是编的
+                first_turn=sum(1 for row in history if row["role"] == "user") <= 1,
+            )
+            if any(quiz_report.values()):  # 有任何核对、替换或清理动作就记一笔
+                # warning 级别：uvicorn 默认不输出应用自己的 info 日志
+                logger.warning("problem_drill quiz check: %s", quiz_report)
             cited = [source.model_dump() for source in sources if f"[{source.label}]" in text]
             self.store.finish_reply(assistant_id, content=text, status="complete", meta={
                 "context_memory_ids": [m.id for m, _ in memories], "sources": cited, "truncated": finish == "length",

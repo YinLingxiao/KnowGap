@@ -6,3 +6,7 @@ python-dotenv
 httpx[socks]>=0.28,<1
 pypdf>=5,<7
 python-multipart>=0.0.20,<1
+# search_good_problems / problem_drill：公式校验与网页正文抽取
+sympy==1.14.0
+trafilatura==2.3.1
+beautifulsoup4==4.15.0

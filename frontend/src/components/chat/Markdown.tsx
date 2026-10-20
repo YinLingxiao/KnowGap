@@ -5,6 +5,7 @@ import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Check, Copy } from "lucide-react";
 import { LearningWidget } from "./LearningWidget";
+import { mathRehypePlugins, mathRemarkPlugins } from "./math";
 import styles from "./Markdown.module.css";
 
 export async function copyText(text: string): Promise<boolean> {
@@ -93,11 +94,13 @@ const components: Components = {
   },
 };
 
-/** 模型回复的 Markdown（GFM）。不渲染原始 HTML。 */
+const remarkPlugins = [remarkGfm, ...(mathRemarkPlugins ?? [])];
+
+/** 模型回复的 Markdown（GFM + $…$ / $$…$$ 公式）。不渲染原始 HTML。 */
 export const Markdown = memo(function Markdown({ text }: { text: string }) {
   return (
     <div className={styles.markdown}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+      <ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={mathRehypePlugins} components={components}>
         {text}
       </ReactMarkdown>
     </div>
