@@ -163,8 +163,10 @@ if IS_WINDOWS:
 
     _JOB_LIMIT_ACTIVE_PROCESS = 0x00000008
     _JOB_LIMIT_PROCESS_MEMORY = 0x00000100
+    _JOB_LIMIT_DIE_ON_UNHANDLED_EXCEPTION = 0x00000400
     _JOB_LIMIT_KILL_ON_JOB_CLOSE = 0x00002000
     _EXTENDED_LIMIT_INFORMATION = 9
+    _kernel32.SetErrorMode(0x0001 | 0x0002)
 
 
 class _Job:
@@ -183,7 +185,7 @@ class _Job:
             logger.warning("CreateJobObjectW 失败（%s），降级为 taskkill", ctypes.get_last_error())
             return None
         info = _ExtendedLimit()
-        flags = _JOB_LIMIT_KILL_ON_JOB_CLOSE
+        flags = _JOB_LIMIT_KILL_ON_JOB_CLOSE | _JOB_LIMIT_DIE_ON_UNHANDLED_EXCEPTION
         if memory_limit:
             flags |= _JOB_LIMIT_PROCESS_MEMORY
             info.ProcessMemoryLimit = memory_limit

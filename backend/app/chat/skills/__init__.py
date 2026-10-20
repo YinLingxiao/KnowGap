@@ -16,6 +16,7 @@ _ROADMAP_RE = re.compile(r"计划|路线|怎么学|从哪开始|学习安排|规
 _EXPLAIN_RE = re.compile(r"讲解|原理|为什么|怎么理解|区别|对比|深入|映射|机制|过程|推导")
 _COMPARE_RE = re.compile(r"区别|对比|异同|不同|优缺点|还是|哪几种")
 _FORMULA_RE = re.compile(r"公式|计算|参数|曲线|命中率|弹性|斜率|变化影响")
+_CODE_RE = re.compile(r"代码实验|写代码|代码填空|脚手架|补全.*代码|编译运行|code_playground", re.I)
 
 
 def recommend_widget(role: str, user_text: str, delegated_task: str | None = None) -> str | None:
@@ -25,6 +26,8 @@ def recommend_widget(role: str, user_text: str, delegated_task: str | None = Non
     sample = f"{delegated_task or ''} {user_text or ''}".strip()
     if not sample or len(sample) < 4:
         return None
+    if _CODE_RE.search(sample):
+        return "code_playground（建议在回复中嵌入 ```knowgap-widget 的 code_playground 代码脚手架实验台）"
     if _PRACTICE_RE.search(sample):
         return "micro_quiz（建议在回复中嵌入 ```knowgap-widget 的 micro_quiz 随堂微测卡）"
     if _COMPARE_RE.search(sample):

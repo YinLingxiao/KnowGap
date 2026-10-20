@@ -1,13 +1,19 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
+import { useMemo, useState } from "react";
 import {
-  Bug, Check, CheckCircle2, ChevronLeft, ChevronRight, CircleAlert, CircuitBoard, Code, HelpCircle,
-  ImageIcon, Layers, MessageSquarePlus, Pencil, Play, Sliders, Sparkles, Terminal,
+  Check, CheckCircle2, ChevronLeft, ChevronRight, CircleAlert, CircuitBoard, HelpCircle,
+  ImageIcon, Layers, MessageSquarePlus, Pencil, Sliders, Sparkles,
 } from "lucide-react";
 import { cx } from "@/lib/cx";
 import { parseWidgetJson } from "@/lib/chat/widgetJson";
 import styles from "./LearningWidget.module.css";
+
+const CodePlaygroundWidget = dynamic(
+  () => import("./widgets/CodePlaygroundWidget").then((m) => m.CodePlaygroundWidget),
+  { ssr: false, loading: () => <div className={styles.skeletonCard} role="status">正在加载代码编辑器…</div> },
+);
 
 export const WIDGET_ASK_EVENT = "knowgap:widget-ask";
 
@@ -93,155 +99,6 @@ function asList(value: unknown): unknown[] {
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
-}
-
-interface PlaygroundTest {
-  name: string;
-  input: string;
-  expected: string;
-}
-
-interface PlaygroundResult {
-  ok: boolean;
-  lines: string[];
-}
-
-const BLANK_RE = /_{3,}|\bTODO\b/g;
-
-function CodePlaygroundWidget({ data }: { data: Record<string, unknown> }) {
-  const title = asText(data.title, "代码脚手架填空");
-  const language = asText(data.language, "python");
-  const starter = asText(data.code ?? data.starter ?? data.scaffold);
-  const solution = asText(data.solution);
-  const hint = asText(data.hint);
-  const sampleOutput = asText(data.sampleOutput);
-  const tests = useMemo<PlaygroundTest[]>(
-    () =>
-      asList(data.tests ?? data.test_cases).map((raw, index) => {
-        const item = asRecord(raw);
-        return {
-          name: asText(item.name, `用例 ${index + 1}`),
-          input: asText(item.input),
-          expected: asText(item.expected ?? item.output),
-        };
-      }),
-    [data.tests, data.test_cases],
-  );
-  const [code, setCode] = useState(starter);
-  const [result, setResult] = useState<PlaygroundResult | null>(null);
-  const gutter = useRef<HTMLDivElement>(null);
-
-  if (!starter) return null;
-  const lineCount = Math.max(1, code.split("\n").length);
-
-  const run = () => {
-    const blanks = (code.match(BLANK_RE) ?? []).length;
-    if (blanks > 0) {
-      setResult({ ok: false, lines: [`⚠ 还有 ${blanks} 处空白（___ 或 TODO）没有填写`] });
-      return;
-    }
-    const squash = (text: string) => text.replace(/\s+/g, "");
-    const lines: string[] = [];
-    let ok = true;
-    if (solution && squash(solution) !== squash(code)) {
-      ok = false;
-      lines.push("△ 与参考写法不完全一致，不代表一定有错，可以点「让 AI 诊断代码」确认");
-    } else {
-      lines.push("✓ 空白已全部填写");
-      tests.forEach((test) => lines.push(`✓ ${test.name}：${test.input || "（无输入）"} → 预期 ${test.expected || "—"}`));
-      if (sampleOutput) lines.push(`输出：${sampleOutput}`);
-    }
-    lines.push("（模拟运行：浏览器端只做占位与写法检查，不会真正执行代码）");
-    setResult({ ok, lines });
-  };
-
-  const diagnose = () => {
-    const testText = tests.map((test) => `- ${test.name}：输入 ${test.input || "无"}，预期 ${test.expected || "—"}`).join("\n");
-    const outText = result ? `\n本地检查结果：\n${result.lines.join("\n")}` : "";
-    emitWidgetQuestion(
-      `请帮我诊断「${title}」里的 ${language} 代码，先指出问题所在并给提示，不要直接给完整答案：\n\`\`\`${language}\n${code}\n\`\`\`${
-        testText ? `\n测试用例：\n${testText}` : ""
-      }${outText}`,
-    );
-  };
-
-  return (
-    <section className={styles.widgetCard} aria-label={title}>
-      <header className={styles.widgetHead}>
-        <div className={styles.widgetTitleWrap}>
-          <span className={styles.widgetBadge}>
-            <Code size={12} aria-hidden />
-            代码填空
-          </span>
-          <strong className={styles.widgetTitle}>{title}</strong>
-        </div>
-        <code className={styles.formulaBadge}>{language}</code>
-      </header>
-
-      {hint && <p className={styles.matrixTakeaway}>💡 {hint}</p>}
-
-      <div className={styles.codeWrap}>
-        <div ref={gutter} className={styles.codeGutter} aria-hidden>
-          {Array.from({ length: lineCount }, (_, i) => (
-            <span key={i}>{i + 1}</span>
-          ))}
-        </div>
-        <textarea
-          className={styles.codeArea}
-          value={code}
-          spellCheck={false}
-          wrap="off"
-          aria-label={`${language} 代码编辑区`}
-          onChange={(event) => setCode(event.target.value)}
-          onScroll={(event) => {
-            if (gutter.current) gutter.current.scrollTop = event.currentTarget.scrollTop;
-          }}
-        />
-      </div>
-
-      {tests.length > 0 && (
-        <ul className={styles.testList} aria-label="测试用例">
-          {tests.map((test, index) => (
-            <li key={`${test.name}-${index}`}>
-              <strong>{test.name}</strong>
-              <code>{test.input || "（无输入）"}</code>
-              <span>→</span>
-              <code>{test.expected || "—"}</code>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      <div className={cx(styles.runOutput, result && !result.ok && styles.runOutputWarn)} role="status" aria-live="polite">
-        <span className={styles.runOutputHead}>
-          <Terminal size={12} aria-hidden />
-          运行输出
-        </span>
-        {result ? result.lines.map((line, i) => <p key={i}>{line}</p>) : <p>点击「模拟运行」检查填空是否完整。</p>}
-      </div>
-
-      <footer className={styles.widgetFoot}>
-        <button type="button" className={styles.ctrlBtn} onClick={run}>
-          <Play size={13} aria-hidden />
-          <span>模拟运行</span>
-        </button>
-        <button
-          type="button"
-          className={styles.ctrlBtn}
-          onClick={() => {
-            setCode(starter);
-            setResult(null);
-          }}
-        >
-          <span>重置代码</span>
-        </button>
-        <button type="button" className={styles.askAiBtn} onClick={diagnose}>
-          <Bug size={12} aria-hidden />
-          <span>让 AI 诊断代码</span>
-        </button>
-      </footer>
-    </section>
-  );
 }
 
 interface Annotation {

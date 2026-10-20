@@ -102,7 +102,7 @@ export function parseCodePlaygroundSpec(data: Record<string, unknown>): ParseRes
       title: clip((firstText(data, ["title"]) ?? "").trim() || "代码实验台", LIMITS.title),
       language,
       mode,
-      instructions: clip((firstText(data, ["instructions", "description", "prompt"]) ?? "").trim(), LIMITS.instructions),
+      instructions: clip((firstText(data, ["instructions", "description", "prompt", "hint"]) ?? "").trim(), LIMITS.instructions),
       starterCode,
       testCases,
     },
