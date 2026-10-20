@@ -70,7 +70,9 @@ export function parseCodePlaygroundSpec(data: Record<string, unknown>): ParseRes
     const shown = typeof data.language === "string" && data.language.trim() ? `「${clip(data.language.trim(), 20)}」` : "";
     return { ok: false, reason: `不支持的语言${shown}，代码实验台目前只支持 Python、JavaScript、C、C++。` };
   }
-  const starterCode = (firstText(data, ["starter_code", "starterCode", "code"]) ?? "").replace(/\r\n?/g, "\n");
+  // `starter` / `scaffold` 是 main 上内联的模拟版微件用过的字段名，一并接受，方便替换时不改模型输出。
+  const starterCode = (firstText(data, ["starter_code", "starterCode", "code", "starter", "scaffold"]) ?? "")
+    .replace(/\r\n?/g, "\n");
   if (starterCode.length > LIMITS.code) {
     return { ok: false, reason: `脚手架代码太长（超过 ${LIMITS.code} 字），无法载入。` };
   }

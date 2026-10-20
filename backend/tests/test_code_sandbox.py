@@ -146,9 +146,11 @@ def test_adversarial_long_lines_scan_fast():
     assert time.perf_counter() - started < 1.0
 
 
-def test_guard_reexports_the_same_function():
-    assert guard.check_security_blacklist is blacklist.check_security_blacklist
-    assert guard.DEFAULT_SECURITY_BLACKLIST is blacklist.DEFAULT_SECURITY_BLACKLIST
+def test_sandbox_blacklist_never_shadows_the_guard_module():
+    # main 上的 agent_tools/guard.py 有自己的 check_security_blacklist（检查 shell 命令和路径，返回 str | None），
+    # 沙盒的黑名单（检查源码，返回 list[BlockedRule]）不能覆盖它，否则 resolve_inside 的防线会被悄悄削弱。
+    assert getattr(guard, "check_security_blacklist", None) is not blacklist.check_security_blacklist
+    assert getattr(guard, "DEFAULT_SECURITY_BLACKLIST", None) is not blacklist.DEFAULT_SECURITY_BLACKLIST
     assert runner.check_security_blacklist is blacklist.check_security_blacklist
 
 

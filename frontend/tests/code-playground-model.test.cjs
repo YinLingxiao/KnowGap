@@ -75,6 +75,17 @@ test('解析：用例数量和长度被截断到后端上限', () => {
   assert.equal(tooLong.ok, false);
 });
 
+test('解析：兼容 main 上内联微件用过的字段名 starter / scaffold / tests / output', () => {
+  const a = model.parseCodePlaygroundSpec({
+    language: 'python', starter: 'x = 1  # TODO', tests: [{ input: '1', output: '2' }],
+  });
+  assert.equal(a.ok, true);
+  assert.equal(a.spec.starterCode, 'x = 1  # TODO');
+  assert.deepEqual(a.spec.testCases, [{ name: '用例 1', input: '1', expected: '2' }]);
+  const b = model.parseCodePlaygroundSpec({ language: 'python', scaffold: 'y = 2' });
+  assert.equal(b.spec.starterCode, 'y = 2');
+});
+
 test('TODO 计数同时认 # 和 //', () => {
   assert.equal(model.countTodos('x = 1\n# TODO: a\n  // TODO b\nprint(1)  # todo 小写不算'), 2);
   assert.equal(model.countTodos('no todo here'), 0);
