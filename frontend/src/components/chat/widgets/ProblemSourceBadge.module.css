@@ -1,0 +1,193 @@
+/* 与 LearningWidget.module.css 的 widgetBadge / askAiBtn 同一套变量与尺寸 */
+.root {
+  position: relative;
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.badge,
+.moreBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  max-width: 260px;
+  padding: 0 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--t-hover) var(--ease), color var(--t-hover) var(--ease);
+}
+
+.badge {
+  border: 1px solid color-mix(in srgb, var(--green) 30%, var(--border));
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.badgeAdapted {
+  border-color: color-mix(in srgb, var(--amber) 30%, var(--border));
+  background: var(--amber-soft);
+  color: var(--amber);
+}
+
+.badge:hover {
+  color: var(--text);
+}
+
+.badgePrefix {
+  flex-shrink: 0;
+}
+
+.badgePrefix::after {
+  content: "·";
+  margin-left: 4px;
+}
+
+.badgeText {
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.moreBtn {
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border-strong));
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-weight: 500;
+}
+
+.moreBtn:hover:not(:disabled) {
+  background: var(--accent-soft-strong);
+  color: var(--text);
+}
+
+.moreBtn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.badge:focus-visible,
+.moreBtn:focus-visible,
+.closeBtn:focus-visible,
+.link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.spin {
+  animation: spin 900ms linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  width: min(320px, 86vw);
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-popover);
+  color: var(--text);
+  font-size: var(--text-sm);
+}
+
+.panelHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.closeBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.closeBtn:hover {
+  background: var(--bg-hover);
+}
+
+.fields {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 10px;
+  margin: 0;
+}
+
+.fields dt {
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.fields dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 10px;
+  color: var(--accent-text);
+  font-weight: 500;
+  text-decoration: underline;
+}
+
+.noLink {
+  margin: 10px 0 0;
+  color: var(--text-secondary);
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* 窄屏：只保留图标，文字留给 aria-label 和 title */
+@media (max-width: 520px) {
+  .badgePrefix,
+  .badgeText,
+  .moreText {
+    display: none;
+  }
+
+  .badge,
+  .moreBtn {
+    width: 28px;
+    padding: 0;
+    justify-content: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spin {
+    animation: none;
+  }
+}
