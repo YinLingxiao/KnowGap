@@ -14,6 +14,7 @@ import { chatApi } from "@/lib/chat/api";
 import { levelLabel, plainText } from "@/lib/chat/space";
 import type { ConversationSummary, LearnerMemory, Subject, SpaceUsage, TokenUsage } from "@/lib/chat/types";
 import { API_BASE_URL } from "@/lib/config";
+import { SPACE_PAGES_EVENT, spacePagesKey } from "@/lib/spacePages";
 import { cx } from "@/lib/cx";
 import type { CourseMaterial, Problem } from "@/lib/types";
 import { Button } from "../ui/Button";
@@ -43,13 +44,9 @@ const TRANSFER_ANCHORS: Array<{ label: string; skills: string[]; text: string }>
   { label: "学过电路/大物", skills: ["电路原理", "大学物理"], text: "电路/大物" },
 ];
 
-function pagesKey(subjectId: string) {
-  return `knowgap.space.pages.v1:${API_BASE_URL}:${subjectId}`;
-}
-
 function readPages(subjectId: string) {
   try {
-    return localStorage.getItem(pagesKey(subjectId)) ?? "";
+    return localStorage.getItem(spacePagesKey(subjectId)) ?? "";
   } catch {
     return "";
   }
@@ -148,7 +145,7 @@ export function SubjectPage({
   useEffect(() => {
     if (pages.id !== subject.id) return;
     try {
-      localStorage.setItem(pagesKey(subject.id), pages.text);
+      localStorage.setItem(spacePagesKey(subject.id), pages.text);
     } catch { /* convenience only */ }
   }, [pages, subject.id]);
 
@@ -173,6 +170,16 @@ export function SubjectPage({
       window.removeEventListener(SAVE_TO_PAGE_EVENT, onSave);
       window.clearTimeout(timer);
     };
+  }, [subject.id]);
+
+  useEffect(() => {
+    const onRefresh = (event: Event) => {
+      const subjectId = (event as CustomEvent<{ subjectId?: string }>).detail?.subjectId;
+      if (subjectId !== subject.id) return;
+      setPages({ id: subject.id, text: readPages(subject.id) });
+    };
+    window.addEventListener(SPACE_PAGES_EVENT, onRefresh);
+    return () => window.removeEventListener(SPACE_PAGES_EVENT, onRefresh);
   }, [subject.id]);
 
   const exportPages = () => {

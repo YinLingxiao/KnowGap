@@ -34,6 +34,7 @@ import { OnboardingStage } from "./OnboardingStage";
 import { SpacesPage } from "./SpacesPage";
 import { SubjectPage } from "./SubjectPage";
 import { SubjectPicker } from "./SubjectPicker";
+import { FocusCapsule } from "../focus/FocusCapsule";
 import styles from "./ChatApp.module.css";
 
 const NARROW = "(max-width: 860px)";
@@ -110,6 +111,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
   const chat = useChat(push, user.id);
   const [narrow, setNarrow] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [zen, setZen] = useState(false);
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [memoryFocus, setMemoryFocus] = useState<string[]>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -385,7 +387,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
   );
 
   return (
-    <div className={cx(styles.app, !sidebarOpen && styles.sidebarClosed, narrow && styles.narrow)}>
+    <div className={cx(styles.app, (!sidebarOpen || zen) && styles.sidebarClosed, narrow && styles.narrow, zen && styles.zen)}>
       {narrow && (
         <button
           className={cx(styles.backdrop, sidebarOpen && styles.backdropOpen)}
@@ -427,6 +429,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
       </aside>
 
       <main className={styles.main}>
+        <FocusCapsule zen={zen} onZenChange={setZen} contextSubjectId={contextSubjectId} />
         {!onboardingMode && interviewError && <p role="alert">{interviewError}<button onClick={() => window.location.reload()}>刷新重试</button></p>}
         {materialsOpen ? (
           <MaterialLibrary
