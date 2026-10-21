@@ -13,6 +13,7 @@ let stopping = false;
 let mainWindow = null;
 let quickWindow = null;
 let quickShortcut = null;
+let quickFallbackTried = false;
 let appOrigin = "";
 
 const QUICK_SHORTCUTS = ["Alt+Space", "CommandOrControl+Shift+K"];
@@ -96,8 +97,10 @@ function waitHealth(port) {
       });
     };
     const retry = () => {
-      if (Date.now() - started > 30000) reject(new Error("后端没有在 30 秒内启动"));
-      else setTimeout(tick, 300);
+      if (Date.now() - started > 30000) {
+        const log = path.join(app.getPath("userData"), "logs", "backend.log");
+        reject(new Error(`后端没有在 30 秒内启动（端口 ${port}）。\n日志：${log}`));
+      } else setTimeout(tick, 300);
     };
     tick();
   });
@@ -172,7 +175,16 @@ function createQuickWindow() {
   quickWindow.on("closed", () => {
     quickWindow = null;
   });
-  // 静态导出产物是 quick.html；后端 StaticFiles 不会把 /quick 映射到 quick.html，所以直接请求文件名
+  // 静态导出产物是 quick.html；后端 StaticFiles 不会把 /quick 映射到 quick.html。
+  // 若 quick.html 因旧版安装包/静态资源不完整而加载失败，再尝试 SPA 路由 /quick
+  //（新版后端会把无扩展名路由回退到同名 .html），避免浮窗只剩一块空白。
+  quickFallbackTried = false;
+  quickWindow.webContents.on("did-fail-load", (_event, code, description, url) => {
+    if (quickFallbackTried || !appOrigin || url.endsWith("/quick")) return;
+    quickFallbackTried = true;
+    console.warn(`[KnowGap] ${url} 加载失败（${code} ${description}），回退到 /quick`);
+    void quickWindow.loadURL(`${appOrigin}/quick`);
+  });
   void quickWindow.loadURL(`${appOrigin}/quick.html`);
 }
 
@@ -238,12 +250,27 @@ async function open() {
   const port = await pickPort();
   const exe = backendPath();
   const folder = staticPath();
+  if (!fs.existsSync(exe)) {
+    throw new Error(`找不到后端程序：${exe}\n请重新安装 KnowGap。`);
+  }
+  if (!fs.existsSync(path.join(folder, "index.html"))) {
+    throw new Error(`找不到前端静态资源：${folder}\n请重新安装 KnowGap。`);
+  }
+  console.log(`[KnowGap] 数据目录：${app.getPath("userData")}`);
   backend = spawn(exe, ["--port", String(port), "--static", folder], {
     env: { ...process.env, KNOWGAP_DATA_DIR: app.getPath("userData") },
     windowsHide: true,
   });
-  backend.on("exit", (code) => {
-    if (!stopping && code) dialog.showErrorBox("KnowGap", `后端已退出（${code}）`);
+  backend.on("error", (error) => {
+    console.error("[KnowGap] 后端启动失败", error);
+    if (!stopping) dialog.showErrorBox("KnowGap", `后端启动失败：${error.message}`);
+  });
+  backend.on("exit", (code, signal) => {
+    if (stopping) return;
+    const reason = code === null ? `信号 ${signal}` : `退出码 ${code}`;
+    console.error(`[KnowGap] 后端意外退出（${reason}）`);
+    // 后端退出后窗口只剩报错页，直接提示用户重启，避免以为应用还在正常工作。
+    dialog.showErrorBox("KnowGap", `后端已退出（${reason}），请重启应用。`);
   });
   await waitHealth(port);
   rememberPort(port);
@@ -272,11 +299,22 @@ async function open() {
   registerQuickShortcut();
 }
 
-app.whenReady().then(open).catch((error) => {
-  dialog.showErrorBox("KnowGap", error.message);
-  stopBackend();
+if (!app.requestSingleInstanceLock()) {
+  // 重复启动会再起一个后端、抢端口并让两个窗口写同一份数据，路演现场很容易误触。
   app.quit();
-});
+} else {
+  app.on("second-instance", () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  });
+  app.whenReady().then(open).catch((error) => {
+    dialog.showErrorBox("KnowGap", error.message);
+    stopBackend();
+    app.quit();
+  });
+}
 
 app.on("before-quit", () => {
   if (quickWindow && !quickWindow.isDestroyed()) quickWindow.destroy();
