@@ -634,7 +634,7 @@ export function SubjectPage({
                   onClick={() => setPanel({ mode: "list" })}
                 >
                   <MessagesSquare size={13} aria-hidden />
-                  <span>Threads</span>
+                  <span className={styles.pillLabel}>Threads</span>
                   {openThreads.length > 0 && <span className={styles.tabCount}>{openThreads.length}</span>}
                 </button>
                 <button
@@ -646,7 +646,7 @@ export function SubjectPage({
                   title="Pages（空间笔记白板）"
                 >
                   <NotebookPen size={13} aria-hidden />
-                  <span>Pages</span>
+                  <span className={styles.pillLabel}>Pages</span>
                 </button>
                 <button
                   type="button"
@@ -657,7 +657,7 @@ export function SubjectPage({
                   title="知识迷雾拓扑图"
                 >
                   <Waypoints size={13} aria-hidden />
-                  <span>图谱</span>
+                  <span className={styles.pillLabel}>图谱</span>
                 </button>
                 <button
                   type="button"
@@ -726,7 +726,7 @@ export function SubjectPage({
                   <UsageStats usage={usage?.conversations[threadId]} label="用量" align="right" />
                 </>
               ) : (
-                <UsageStats usage={usage?.total} label="用量" align="right" />
+                <span className={styles.usageSlot}><UsageStats usage={usage?.total} label="用量" align="right" /></span>
               )}
               {!narrow && (
                 <button

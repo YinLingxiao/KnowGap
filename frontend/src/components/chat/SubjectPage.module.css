@@ -28,6 +28,7 @@
 
 /* ---------- 视图顶栏（View Header · 44px） ---------- */
 .header {
+  container: spaceheader / inline-size;
   position: relative;
   display: flex;
   flex-shrink: 0;
@@ -60,7 +61,8 @@
 }
 
 .heading h1 {
-  min-width: 0;
+  /* 空间名永远保留几个字，先让日期和目标胶囊收起 */
+  min-width: 5em;
   overflow: hidden;
   font-size: var(--text-sm);
   font-weight: 600;
@@ -427,6 +429,7 @@
 }
 
 .panelBar {
+  container: panelbar / inline-size;
   display: flex;
   flex-shrink: 0;
   align-items: center;
@@ -1620,5 +1623,34 @@ button.footprintDoneRow:hover {
   .ring_working {
     animation: none;
     transition: none;
+  }
+}
+
+/* 右侧面板较窄时：非当前标签只显示图标，用量统计收起，保证所有标签都看得见 */
+.usageSlot {
+  display: contents;
+}
+
+@container panelbar (max-width: 520px) {
+  .panelTabPill:not(.panelTabActive) .pillLabel {
+    display: none;
+  }
+
+  .usageSlot {
+    display: none;
+  }
+}
+
+@container spaceheader (max-width: 640px) {
+  .heading .metaPill {
+    display: none;
+  }
+
+  .tools .overviewBtn > span {
+    display: none;
+  }
+
+  .tools .overviewBtn {
+    padding: 0 8px;
   }
 }

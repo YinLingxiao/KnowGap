@@ -1,4 +1,6 @@
 .slot {
+  position: relative;
+  z-index: 30;
   flex: 0 0 auto;
   border-bottom: 1px solid var(--border-subtle);
   background: var(--bg);
@@ -88,8 +90,11 @@
 .card {
   display: grid;
   gap: 8px;
+  /* 浮在内容上方，出现和收起都不推动页面 */
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 12px;
   width: min(420px, calc(100% - 24px));
-  margin: 0 12px 10px;
   padding: 12px;
   border: 1px solid var(--border);
   border-radius: var(--radius);

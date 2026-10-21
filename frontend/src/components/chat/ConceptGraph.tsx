@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { X } from "lucide-react";
 import { toApiError } from "@/lib/api/errors";
 import { conceptGraphApi, type ConceptGraphResult, type FogConcept } from "@/lib/chat/conceptGraph";
@@ -128,17 +128,17 @@ function layout(insights: SubjectInsights, fog: FogConcept[], generatedAt: strin
   return { nodes, edges };
 }
 
-function labelOf(node: GraphNode, count: number) {
+function labelOf(node: GraphNode, count: number, ink = 1) {
   const radius = RADIUS[node.ring];
   const next = node.ring === "inner" ? RADIUS.mid : node.ring === "mid" ? RADIUS.outer : null;
-  const dot = nodeRadius(count, radius);
+  const dot = nodeRadius(count, radius) * Math.min(ink, 1.8);
   const gap = next == null ? CX - radius - dot - 14 : next - radius - dot * 2 - 16;
   const chord = count <= 1 ? gap : 2 * radius * Math.sin(Math.PI / count) - dot;
-  const limit = Math.max(2, Math.min(8, Math.floor(Math.min(gap, chord) / 13)));
+  const limit = Math.max(4, Math.min(8, Math.floor(Math.min(gap, chord) / (13 * ink))));
   const sortedAngle = Math.atan2(node.y - CY, node.x - CX);
   const cos = Math.cos(sortedAngle);
   const sin = Math.sin(sortedAngle);
-  const labelR = radius + dot + 9;
+  const labelR = radius + dot + 9 * ink;
   return {
     text: truncate(node.label, limit),
     full: node.label,
@@ -190,6 +190,19 @@ export function ConceptGraph({
   const [attackError, setAttackError] = useState<string | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
+  // 视图坐标系固定为 VB，面板越窄缩放越小；按比例放大字号和节点，屏幕上的文字始终可读
+  const [ink, setInk] = useState(1.6);
+  const hubScale = Math.min(ink, 1.8);
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(([entry]) => {
+      const size = Math.min(entry.contentRect.width, entry.contentRect.height || entry.contentRect.width);
+      if (size > 0) setInk(Math.round(Math.min(2.6, Math.max(1, VB / size)) * 10) / 10);
+    });
+    observer.observe(stage);
+    return () => observer.disconnect();
+  });
   const drag = useRef<{ px: number; py: number; x: number; y: number } | null>(null);
   const dragged = useRef(false);
   const requestId = useRef(0);
@@ -333,6 +346,7 @@ export function ConceptGraph({
             <svg
               ref={svgRef}
               viewBox={`0 0 ${VB} ${VB}`}
+              style={{ "--ink": ink } as CSSProperties}
               role="application"
               aria-label={`${name}的知识迷雾拓扑图，已掌握 ${settled}，待攻克 ${pending}，待解锁 ${locked}`}
               onPointerDown={(event) => {
@@ -374,25 +388,25 @@ export function ConceptGraph({
                   if (!from || !to) return null;
                   return <line key={`${a}|${b}`} x1={from.x} y1={from.y} x2={to.x} y2={to.y} className={styles.edge} />;
                 })}
-                <circle cx={CX} cy={CY} r={58} className={styles.hub} />
-                <circle cx={CX} cy={CY} r={40} className={styles.track} />
+                <circle cx={CX} cy={CY} r={58 * hubScale} className={styles.hub} />
+                <circle cx={CX} cy={CY} r={40 * hubScale} className={styles.track} />
                 {total > 0 && pct > 0 && (
                   <circle
                     cx={CX}
                     cy={CY}
-                    r={40}
+                    r={40 * hubScale}
                     className={styles.value}
-                    strokeDasharray={`${(pct / 100) * progress} ${progress}`}
+                    strokeDasharray={`${(pct / 100) * progress * hubScale} ${progress * hubScale}`}
                     transform={`rotate(-90 ${CX} ${CY})`}
                   />
                 )}
-                <text x={CX} y={CY - 8} className={styles.centerName}>{truncate(name, 6)}</text>
-                <text x={CX} y={CY + 14} className={styles.centerPct}>{total ? `${pct}%` : "—"}</text>
-                <text x={CX} y={CY + 32} className={styles.centerHint}>{total ? `已掌握 ${settled}/${total}` : "待开始"}</text>
+                <text x={CX} y={CY - 8 * hubScale} className={styles.centerName}>{truncate(name, 6)}</text>
+                <text x={CX} y={CY + 14 * hubScale} className={styles.centerPct}>{total ? `${pct}%` : "—"}</text>
+                <text x={CX} y={CY + 32 * hubScale} className={styles.centerHint}>{total ? `已掌握 ${settled}/${total}` : "待开始"}</text>
                 <title>{name}</title>
                 {graph.nodes.map((node) => {
                   const count = graph.nodes.filter((item) => item.ring === node.ring).length;
-                  const label = labelOf(node, count);
+                  const label = labelOf(node, count, ink);
                   const on = selected === node.id;
                   return (
                     <g
