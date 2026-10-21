@@ -23,7 +23,7 @@ import styles from "./Settings.module.css";
 declare global {
   interface Window {
     knowgap?: {
-      selectFolder: () => Promise<string | null>;
+      selectFolder: (defaultPath?: string) => Promise<string | null>;
       setTheme?: (theme: "system" | "light" | "dark") => Promise<string>;
     };
   }

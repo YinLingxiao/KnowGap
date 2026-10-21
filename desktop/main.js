@@ -65,8 +65,11 @@ function stopBackend() {
   backend = null;
 }
 
-ipcMain.handle("select-folder", async () => {
-  const result = await dialog.showOpenDialog({ properties: ["openDirectory"] });
+ipcMain.handle("select-folder", async (_event, defaultPath) => {
+  const result = await dialog.showOpenDialog({
+    properties: ["openDirectory"],
+    defaultPath: typeof defaultPath === "string" && defaultPath ? defaultPath : undefined,
+  });
   return result.canceled ? null : result.filePaths[0];
 });
 

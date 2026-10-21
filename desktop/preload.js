@@ -1,6 +1,6 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("knowgap", {
-  selectFolder: () => ipcRenderer.invoke("select-folder"),
+  selectFolder: (defaultPath) => ipcRenderer.invoke("select-folder", defaultPath),
   setTheme: (theme) => ipcRenderer.invoke("set-theme", theme),
 });
