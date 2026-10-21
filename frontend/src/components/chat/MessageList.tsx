@@ -12,6 +12,7 @@ import type { ChatMessage, LearnerMemory } from "@/lib/chat/types";
 import { cx } from "@/lib/cx";
 import type { Problem } from "@/lib/types";
 import { CopyButton, Markdown } from "./Markdown";
+import { SELECTABLE_ATTR, SelectionToolbar } from "./SelectionToolbar";
 import { ThreadProposals } from "./ThreadProposals";
 import { VisionMarkedText } from "./widgets/ImageMarker";
 import { hasVisionMarker } from "./widgets/visionData";
@@ -463,7 +464,10 @@ export function MessageList({
                 )}
                 {message.content ? (
                   <>
-                    <div className={cx(streaming && styles.streaming, fold.folded && styles.folded)}>
+                    <div
+                      className={cx(streaming && styles.streaming, fold.folded && styles.folded)}
+                      {...(!streaming && { [SELECTABLE_ATTR]: "" })}
+                    >
                       <Markdown text={message.content} />
                     </div>
                     {fold.long && (
@@ -614,6 +618,12 @@ export function MessageList({
           )}
         </div>
       </div>
+      <SelectionToolbar
+        scopeRef={scrollRef}
+        conversationId={conversationId}
+        canSaveToPage={Boolean(conversationSubjectId)}
+        canSend={phase === null || phase === "analyzing"}
+      />
       {showJump && (
         <button className={styles.jump} onClick={() => { following.current = true; setShowJump(false); toBottom(); }}>
           <ArrowDown size={14} aria-hidden />

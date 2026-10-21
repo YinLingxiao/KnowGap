@@ -15,6 +15,7 @@ import type { ChatMessage } from "@/lib/chat/types";
 import { cx } from "@/lib/cx";
 import type { Problem } from "@/lib/types";
 import { WIDGET_ASK_EVENT } from "./LearningWidget";
+import { QUOTE_TO_COMPOSER_EVENT, SEND_TO_COMPOSER_EVENT, type ComposerTextDetail } from "./SelectionToolbar";
 import { ImageAttach } from "./widgets/ImageAttach";
 import { withImageMarker } from "./widgets/visionData";
 import { WIDGET_SEND_EVENT, type WidgetSendDetail } from "./widgets/widgetEvents";
@@ -368,6 +369,70 @@ export function Composer({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- subscribe once
   }, []);
+
+  // 划词浮条联动（仅响应本会话）：引用插入输入框顶部；或把一段文本放进输入框后直接发送
+  const latest = useRef({ value, onChange });
+  useEffect(() => {
+    latest.current = { value, onChange };
+  });
+  const pendingSend = useRef<string | null>(null);
+  const restoreDraft = useRef<string | null>(null);
+  const [sendNonce, setSendNonce] = useState(0);
+  useEffect(() => {
+    if (!conversationId) return;
+    const textFor = (event: Event) => {
+      const detail = (event as CustomEvent<ComposerTextDetail>).detail;
+      return detail?.conversationId === conversationId && detail.text ? detail.text : null;
+    };
+    const onQuote = (event: Event) => {
+      const text = textFor(event);
+      if (!text) return;
+      const { value: current, onChange: change } = latest.current;
+      change(text + current.replace(/^\s+/, ""));
+      requestAnimationFrame(() => {
+        const el = textareaRef.current;
+        if (!el) return;
+        el.focus();
+        el.setSelectionRange(text.length, text.length);
+        el.scrollTop = 0;
+      });
+    };
+    const onSendText = (event: Event) => {
+      const text = textFor(event);
+      if (!text) return;
+      const { value: current, onChange: change } = latest.current;
+      // 发送后把用户原本的草稿还回去
+      restoreDraft.current = current.trim() && current !== text ? current : null;
+      pendingSend.current = text;
+      change(text);
+      setSendNonce((n) => n + 1);
+    };
+    window.addEventListener(QUOTE_TO_COMPOSER_EVENT, onQuote);
+    window.addEventListener(SEND_TO_COMPOSER_EVENT, onSendText);
+    return () => {
+      window.removeEventListener(QUOTE_TO_COMPOSER_EVENT, onQuote);
+      window.removeEventListener(SEND_TO_COMPOSER_EVENT, onSendText);
+      pendingSend.current = null;
+      restoreDraft.current = null;
+    };
+  }, [conversationId]);
+
+  // 等父组件草稿真正更新为待发文本后再发送，onSend 读到的才是新草稿
+  useEffect(() => {
+    if (pendingSend.current !== null) {
+      if (value !== pendingSend.current) return;
+      pendingSend.current = null;
+      if (!generating && !locked) onSend();
+      else restoreDraft.current = null;
+      return;
+    }
+    if (restoreDraft.current !== null && value === "") {
+      const draft = restoreDraft.current;
+      restoreDraft.current = null;
+      onChange(draft);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 只在草稿变化或收到发送请求时检查
+  }, [value, sendNonce]);
 
   const selectEffort = (next: ThinkingEffort) => {
     setEffort(next);
@@ -856,6 +921,7 @@ export function Composer({
               readOnly={locked}
               aria-controls={popupOpen ? popupId : undefined}
               onChange={(event) => {
+                restoreDraft.current = null;
                 onChange(event.target.value);
                 syncTrigger(event.target.value, event.target.selectionStart);
               }}

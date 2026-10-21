@@ -1,0 +1,68 @@
+.bar {
+  position: fixed;
+  z-index: 60;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-popover);
+  user-select: none;
+  animation: barIn var(--duration-fast) var(--ease-out);
+}
+
+.item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  white-space: nowrap;
+  transition:
+    background var(--t-hover) var(--ease),
+    color var(--t-hover) var(--ease);
+}
+
+.item:hover:not([aria-disabled="true"]) {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.item:active:not([aria-disabled="true"]) {
+  transform: scale(0.97);
+}
+
+.item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.item[aria-disabled="true"] {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.divider {
+  width: 1px;
+  height: 14px;
+  margin: 0 2px;
+  background: var(--border);
+}
+
+@keyframes barIn {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bar {
+    animation: none;
+  }
+}
