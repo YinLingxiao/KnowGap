@@ -25,6 +25,16 @@ declare global {
     knowgap?: {
       selectFolder: (defaultPath?: string) => Promise<string | null>;
       setTheme?: (theme: "system" | "light" | "dark") => Promise<string>;
+      /** 主窗口：快问浮窗请求打开某个对话；未订阅时桌面壳会刷新主窗口 */
+      onOpenConversation?: (listener: (conversationId: string) => void) => () => void;
+      /** 仅快问浮窗窗口使用 */
+      quick?: {
+        hide: () => Promise<void>;
+        resize: (height: number) => Promise<void>;
+        shortcut: () => Promise<string | null>;
+        openInMain: (conversationId?: string) => Promise<void>;
+        onShown: (listener: () => void) => () => void;
+      };
     };
   }
 }
