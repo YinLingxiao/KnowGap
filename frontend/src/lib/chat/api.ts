@@ -389,6 +389,29 @@ export const chatApi = {
       messageId: (data.message_id as string | null | undefined) ?? null,
     };
   },
+  async contextSummary(conversationId: string): Promise<{ summary: string; upToSeq: number }> {
+    const data = await request<Wire>(
+      root,
+      `${path(conversationId)}/context-summary`,
+      { cache: "no-store" },
+    );
+    return {
+      summary: typeof data.summary === "string" ? data.summary : "",
+      upToSeq: Number(data.up_to_seq ?? 0),
+    };
+  },
+  async compressConversation(conversationId: string): Promise<{ summary: string; compressedTurns: number; upToSeq: number }> {
+    const data = await request<Wire>(
+      root,
+      `${path(conversationId)}/compress`,
+      { method: "POST" },
+    );
+    return {
+      summary: typeof data.summary === "string" ? data.summary : "",
+      compressedTurns: Number(data.compressed_turns ?? 0),
+      upToSeq: Number(data.up_to_seq ?? 0),
+    };
+  },
   async spaceUsage(id: string): Promise<SpaceUsage> {
     const data = await request<Wire>(root, `/api/subjects/${encodeURIComponent(id)}/usage`, { cache: "no-store" });
     return { total: mapUsage(data.total), conversations: Object.fromEntries(

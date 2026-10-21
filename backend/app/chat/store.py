@@ -177,6 +177,8 @@ class ChatStore:
             ensure_column(db, "subjects", "color", "TEXT NOT NULL DEFAULT '#3d6fdb'")
             ensure_column(db, "subjects", "main_conversation_id", "TEXT")
             ensure_column(db, "conversations", "notes_snapshot", "TEXT")
+            ensure_column(db, "conversations", "context_summary", "TEXT NOT NULL DEFAULT ''")
+            ensure_column(db, "conversations", "compressed_up_to_seq", "INTEGER NOT NULL DEFAULT 0")
             self._migrate_spaces(db)
             ensure_notes(db)
             from app.chat.onboarding import ensure as ensure_onboarding
@@ -415,6 +417,36 @@ class ChatStore:
                 # Memories already learned here keep their scope; the learner edits that separately.
                 db.execute("UPDATE conversations SET subject_id = ? WHERE id = ?", (subject_id, conversation_id))
             return True
+
+    def set_auto_title(self, conversation_id: str, title: str) -> bool:
+        """Update conversation title only if the user has not manually renamed it."""
+        clean = " ".join(title.split()).strip(" \t\r\n\"'“”‘’《》「」。，、！？!?")[:32]
+        if not clean:
+            return False
+        with self.connection() as db:
+            cur = db.execute(
+                "UPDATE conversations SET title = ?, title_source = 'auto' "
+                "WHERE id = ? AND title_source IN ('pending', 'auto') AND title NOT LIKE '练习 · %'",
+                (clean, conversation_id),
+            )
+            return cur.rowcount > 0
+
+    def get_context_summary(self, conversation_id: str) -> tuple[str, int]:
+        with self.connection() as db:
+            row = db.execute(
+                "SELECT context_summary, compressed_up_to_seq FROM conversations WHERE id = ?",
+                (conversation_id,),
+            ).fetchone()
+            if row is None:
+                return "", 0
+            return str(row["context_summary"] or ""), int(row["compressed_up_to_seq"] or 0)
+
+    def save_context_summary(self, conversation_id: str, summary: str, up_to_seq: int) -> None:
+        with self.connection() as db:
+            db.execute(
+                "UPDATE conversations SET context_summary = ?, compressed_up_to_seq = ?, updated_at = ? WHERE id = ?",
+                (summary[:2400], max(0, int(up_to_seq)), now(), conversation_id),
+            )
 
     def conversation_subject(self, conversation_id: str) -> Subject | None:
         with self.connection() as db:

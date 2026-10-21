@@ -94,7 +94,11 @@ ANALYSIS_PROMPT = """你是 KnowGap 的学习记录员。你只记录有充分�
   ],
   "used_memory_ids": [],
   "suggested_exercise_id": null,
-  "thread_report": null 或 {"summary": "600字以内的实际进展和结果", "needs_user": false}
+  "thread_report": null 或 {"summary": "600字以内的实际进展和结果", "needs_user": false},
+  "topic_title": "6到16字精炼概括本对话学习主题的短标题（不带标点引号）",
+  "profile_ops": [
+    {"layer": "Identity|Preference|Context|Activity|Experience", "content": "学习者明确自述的先验背景、学科目标或长期偏好"}
+  ]
 }
 规则：
 1. evidence 必须是 latest_user_message 中逐字、连续的原文片段，不得改写或拼接；找不到这样的片段就不要输出该条。
@@ -213,7 +217,8 @@ def chat_messages(
     history: list[sqlite3.Row], memories: list[tuple[LearnerMemory, str]], exercise: Problem | None,
     sources: list[SourceReference], subject: Subject | None = None, conversation_role: dict | None = None,
     snapshot: str | None = None, thinking_depth: str = "medium", conversation_title: str = "",
-    custom_skills: list[dict] | None = None,
+    custom_skills: list[dict] | None = None, compressed_summary: str | None = None,
+    compressed_up_to_seq: int = 0,
 ) -> list[dict]:
     # Ordered from stable to volatile so provider prefix caches cover the prompt and the whole history;
     # only the trailing turn context (and the new message) is fresh input each turn.
@@ -297,7 +302,21 @@ def chat_messages(
     system = f"{role_prompt}\n\n{CHAT_PROMPT}"
     if snapshot:
         system += f"\n\n{snapshot}"
-    transcript = dialogue(history, include_tools=True)
+    # Rows folded into the persisted summary leave the verbatim window; the summary stands in for them.
+    recent = history
+    effective_summary = ""
+    if compressed_up_to_seq and (compressed_summary or "").strip():
+        recent = [row for row in history if row["seq"] > compressed_up_to_seq or row["kind"] == "exercise"]
+        effective_summary = compressed_summary.strip()
+    transcript = dialogue(recent, include_tools=True)
+    # Turns that still overflow the window before the next compression leave a cheap deterministic trace.
+    full = dialogue(recent, bounded=False)
+    dropped = len(full) - len(dialogue(recent))
+    if dropped > 0:
+        trace = deterministic_compress_fallback(full[:dropped])
+        effective_summary = f"{effective_summary}\n{trace}" if effective_summary else trace
+    if effective_summary:
+        turn["compressed_session_history"] = effective_summary
     # Turn context sits just before the latest user message: the conversation still ends on the
     # user's turn, and everything earlier stays byte-identical to the previous request's prefix.
     cut = next((i for i in range(len(transcript) - 1, -1, -1) if transcript[i]["role"] == "user"), len(transcript))
@@ -476,4 +495,60 @@ def validate_analysis(raw: dict, user_text: str, exercise: Problem | None, given
     suggested = raw.get("suggested_exercise_id")
     if isinstance(suggested, str) and suggested in PROBLEMS:
         result["suggested_problem_id"] = suggested
+    raw_title = clean_text(raw.get("topic_title"), 28)
+    result["topic_title"] = raw_title if raw_title and len(raw_title) >= 2 else None
+    profile_ops = []
+    raw_profile = raw.get("profile_ops")
+    valid_layers = {"Identity", "Preference", "Context", "Activity", "Experience"}
+    for item in raw_profile[:2] if isinstance(raw_profile, list) else []:
+        if not isinstance(item, dict):
+            continue
+        layer = clean_text(item.get("layer"), 20)
+        content = clean_text(item.get("content"), 180)
+        if layer in valid_layers and content:
+            profile_ops.append({"layer": layer, "content": content})
+    result["profile_ops"] = profile_ops
     return result
+
+
+COMPRESS_PROMPT = """你是 KnowGap 的会话历史压缩引擎。请将给定的早期对话轮次与已有摘要合并压缩为一段高密度、零信息丢失的中文上下文摘要。
+请严格返回 JSON 对象：
+{"summary": "400字以内的结构化摘要，包含：1) 已探讨的核心概念与公式结论；2) 用户暴露出的卡点与已解决的问题；3) 当前正在推进的任务或代码上下文。"}
+禁止编造对话中未出现的内容。"""
+
+
+def deterministic_compress_fallback(turns: list[dict], previous_summary: str = "") -> str:
+    """Fast deterministic context compressor used when turns overflow or when the LLM compressor is unavailable."""
+    user_points = []
+    assistant_points = []
+    for item in turns:
+        role = item.get("role")
+        text = " ".join(str(item.get("content") or "").split())
+        if not text:
+            continue
+        if role == "user":
+            user_points.append(text[:90])
+        elif role == "assistant":
+            assistant_points.append(text[:110])
+    parts = []
+    if previous_summary.strip():
+        parts.append(f"早期累计摘要：{previous_summary.strip()[:600]}")
+    if user_points:
+        parts.append("历史提问脉络：" + " → ".join(user_points[-6:]))
+    if assistant_points:
+        parts.append("已讲结论要点：" + "；".join(assistant_points[-4:]))
+    return "\n".join(parts)[:1800]
+
+
+def compress_history_messages(turns: list[dict], previous_summary: str = "") -> list[dict]:
+    payload = {
+        "previous_summary": previous_summary[:1200],
+        "turns_to_compress": [
+            {"role": t.get("role"), "content": str(t.get("content") or "")[:400]}
+            for t in turns[-60:]
+        ],
+    }
+    return [
+        {"role": "system", "content": COMPRESS_PROMPT},
+        {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
+    ]
