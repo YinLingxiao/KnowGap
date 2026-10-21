@@ -112,6 +112,12 @@ def _reset_agenda_and_focus(db, student_id: str, subject_ids: list[str]) -> None
     if "agenda_tasks" in tables:
         db.execute("DELETE FROM agenda_tasks WHERE student_id = ? AND id LIKE ?", (student_id, f"{AGENDA_PREFIX}%"))
         if subject_ids:
+            # 演示空间里后来手动或由 AI 添加的任务也属于演示数据，空间删掉后不能留下孤儿任务
+            placeholders = ",".join("?" * len(subject_ids))
+            db.execute(
+                f"DELETE FROM agenda_tasks WHERE student_id = ? AND subject_id IN ({placeholders})",
+                (student_id, *subject_ids),
+            )
             # 由演示误区自动生成的闪回任务也一并清掉
             placeholders = ",".join("?" * len(subject_ids))
             db.execute(
