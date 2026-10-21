@@ -20,6 +20,8 @@ export interface AgendaTask {
   durationMinutes: number | null;
   /** 硬截止日（Deadline），YYYY-MM-DD，与 Schedule 独立 */
   deadlineDate: string | null;
+  /** 提醒：开始前多少分钟弹系统通知，0 = 准时；null = 不提醒。只对有 scheduledStartAt 的任务生效 */
+  reminderMinutes: number | null;
   status: TaskStatus;
   completedAt: string | null;
   source: TaskSource;
@@ -60,6 +62,7 @@ export interface TaskInput {
   scheduledStartAt?: string | null;
   durationMinutes?: number | null;
   deadlineDate?: string | null;
+  reminderMinutes?: number | null;
   source?: "manual" | "ai_breakdown";
 }
 
@@ -95,4 +98,14 @@ export interface FocusStartDetail {
   taskId: string | null;
   title: string;
   subjectId: string | null;
+}
+
+/** 打开全局「添加任务」弹窗；detail 里的字段作为默认值（如预览视图某天的「+ 添加任务」） */
+export const COMPOSE_TASK_EVENT = "knowgap:compose-task";
+
+export interface ComposeTaskDetail {
+  scheduledDate?: string | null;
+  subjectId?: string | null;
+  parentId?: string | null;
+  title?: string;
 }

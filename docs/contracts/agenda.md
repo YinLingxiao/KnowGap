@@ -130,3 +130,27 @@ interface AiBreakdownDialogProps {
 
 - **专注联动**：任务行上的「▶ 专注」按钮派发 `window` 事件 `knowgap:focus-start`，`detail: { taskId: string | null; title: string; subjectId: string | null }`；番茄钟模块监听该事件开始计时。番茄钟结项时如勾选「完成任务」，自行调用 `agendaApi.updateTask(taskId, { status: "done" })`，并派发 `knowgap:agenda-changed` 让日程页刷新。
 - **刷新**：任何模块改了任务后派发 `window` 事件 `knowgap:agenda-changed`（无 detail），日程页监听后重新拉取。
+
+## 6. v2 增补（2026-10-21 晚）：提醒、全局添加任务、桌面托盘
+
+### 6.1 提醒字段 `reminder_minutes`
+- Task 新增可写字段 `reminder_minutes`：整数，开始前多少分钟提醒，`0` = 准时，`null` = 不提醒；允许值 `0 / 5 / 10 / 15 / 30 / 60 / 120 / 1440`，其他值 422。
+- 只对有 `scheduled_start_at` 的任务生效；没有开始时间时可以存，但不会触发。
+- `.ics` 导出：有提醒的 VEVENT 加 `VALARM`（`TRIGGER:-PT{n}M`，`ACTION:DISPLAY`）。
+- AI 工具 `agenda_add` / `agenda_update` 的任务字段同步增加 `reminder_minutes`。
+- 前端类型：`AgendaTask.reminderMinutes`、`TaskInput.reminderMinutes`（`lib/agenda/types.ts`、`api.ts` 已加映射）。
+
+### 6.2 全局「添加任务」弹窗
+- 任何模块派发 `window` 事件 `COMPOSE_TASK_EVENT = "knowgap:compose-task"`，`detail: ComposeTaskDetail`（`scheduledDate / subjectId / parentId / title` 均可选，作为默认值），即打开弹窗。
+- 弹窗由 task-composer 会话实现并在 ChatApp 挂载一次；创建成功后派发 `AGENDA_CHANGED_EVENT`。
+- 日程页各视图里的「+ 添加任务」一律派发这个事件，不再各自实现输入框（行内快录 QuickAdd 可保留在「今天/收件箱」顶部）。
+
+### 6.3 桌面端桥接（`window.knowgap`，preload 暴露）
+| 方法 / 事件 | 方向 | 说明 |
+| --- | --- | --- |
+| `showMain(): void` | 页面 → 主进程 | 显示并聚焦主窗口（窗口在托盘里时也能唤出）。通知点击、快问浮窗跳转都用它 |
+| `setTrayStatus({ focus?: string \| null; todayCount?: number })` | 页面 → 主进程 | 托盘悬停提示与菜单里的「专注中 12:34 · 标题」「今日待办 N 项」 |
+| `getDesktopSettings(): Promise<{ closeToTray: boolean; openAtLogin: boolean }>` / `setDesktopSettings(patch)` | 页面 ↔ 主进程 | 设置页的两个开关 |
+| 页面 `window` 事件 `knowgap:tray-command`，`detail: "open-agenda" \| "start-focus" \| "quick-ask"` | 主进程 → 页面 | 托盘菜单命令，由 preload 转成 DOM 事件；`open-agenda` 复用 `knowgap:open-agenda`，`start-focus` 复用 `FOCUS_START_EVENT` |
+- 浏览器（非 Electron）里 `window.knowgap` 不存在，所有调用都要可选链并静默降级。
+- 其他会话需要调用而类型尚未声明时，用局部类型断言，例如 `(window as unknown as { knowgap?: { showMain?: () => void } }).knowgap?.showMain?.()`，不要去改 SettingsDialog.tsx 里的全局声明（归 desktop-tray 会话）。

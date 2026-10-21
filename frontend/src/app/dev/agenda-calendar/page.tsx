@@ -12,7 +12,7 @@ function monday(today: string) { return shift(today, -((new Date(`${today}T12:00
 function task(id: string, input: TaskInput): AgendaTask {
   return { id, title: input.title, notes: input.notes ?? "", priority: input.priority ?? 4, labels: input.labels ?? [], parentId: input.parentId ?? null,
     subjectId: input.subjectId ?? null, threadId: null, scheduledDate: input.scheduledDate ?? null, scheduledStartAt: input.scheduledStartAt ?? null,
-    durationMinutes: input.durationMinutes ?? null, deadlineDate: input.deadlineDate ?? null, status: "open", completedAt: null,
+    durationMinutes: input.durationMinutes ?? null, deadlineDate: input.deadlineDate ?? null, reminderMinutes: null, status: "open", completedAt: null,
     source: input.source ?? "manual", memoryId: null, reviewStep: null, sortOrder: 0, createdAt: "", updatedAt: "" };
 }
 function fixtures(week: string): AgendaTask[] {

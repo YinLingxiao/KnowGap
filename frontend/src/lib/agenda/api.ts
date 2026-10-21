@@ -37,6 +37,7 @@ export function mapTask(data: Wire): AgendaTask {
     scheduledStartAt: str(data.scheduled_start_at),
     durationMinutes: typeof data.duration_minutes === "number" ? data.duration_minutes : null,
     deadlineDate: str(data.deadline_date),
+    reminderMinutes: typeof data.reminder_minutes === "number" ? data.reminder_minutes : null,
     status: data.status === "done" || data.status === "cancelled" ? data.status : "open",
     completedAt: str(data.completed_at),
     source: data.source === "ai_breakdown" || data.source === "review" ? data.source : "manual",
@@ -64,6 +65,7 @@ const FIELDS: Record<string, string> = {
   title: "title", notes: "notes", parentId: "parent_id", priority: "priority", labels: "labels",
   subjectId: "subject_id", threadId: "thread_id", scheduledDate: "scheduled_date",
   scheduledStartAt: "scheduled_start_at", durationMinutes: "duration_minutes", deadlineDate: "deadline_date",
+  reminderMinutes: "reminder_minutes",
   source: "source", status: "status", sortOrder: "sort_order",
 };
 
