@@ -276,7 +276,8 @@ def chat_messages(
         "latest_user_message": latest_user,
         "conversation_role": role_info,
         "active_skill": active_skill,
-        "recommended_widget": recommend_widget(role_name, latest_user, role_info.get("delegated_task")),
+        "recommended_widget": recommend_widget(role_name, latest_user, role_info.get("delegated_task"),
+                                               earlier_user_texts=user_texts[:-1]),
         "thinking_depth": thinking_depth,
         "teaching_preferences": teaching_preferences,
         "prior_knowledge_anchors": prior_knowledge_anchors,
@@ -292,7 +293,9 @@ def chat_messages(
     learning_topic = bool(_LEARNING_TOPIC_RE.search(latest_user)) or (
         role_name == "thread" and user_turns == 1 and bool(role_info.get("delegated_task"))
     )
-    if 1 <= user_turns <= 2 and (learning_topic or reported_prior_knowledge):
+    # 模拟复试只提问不讲课，不插入先验探针或对比迁移提示
+    in_viva = active_skill is not None and "viva_interview" in active_skill
+    if 1 <= user_turns <= 2 and (learning_topic or reported_prior_knowledge) and not in_viva:
         turn["transfer_learning_hint"] = (
             TRANSFER_LEARNING_HINT if prior_knowledge_anchors or reported_prior_knowledge else PREREQUISITE_PROBE_HINT
         )

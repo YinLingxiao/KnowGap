@@ -13,6 +13,7 @@ import { MathText } from "./math";
 import { CircuitNetlistWidget } from "./widgets/CircuitNetlistWidget";
 import { ImageAnnotatorWidget } from "./widgets/ImageAnnotatorWidget";
 import { ProblemSourceBadge, type ProblemSource } from "./widgets/ProblemSourceBadge";
+import { VivaRadarWidget } from "./widgets/VivaRadarWidget";
 
 const CodePlaygroundWidget = dynamic(
   () => import("./widgets/CodePlaygroundWidget").then((m) => m.CodePlaygroundWidget),
@@ -86,6 +87,9 @@ export function LearningWidget({ rawCode }: { rawCode: string }) {
   }
   if (type === "circuit_netlist") {
     return <CircuitNetlistWidget data={parsed} />;
+  }
+  if (type === "viva_radar") {
+    return <VivaRadarWidget data={parsed} />;
   }
 
   return null;

@@ -181,8 +181,12 @@ def drill_plan(role: str, user_text: str, delegated_task: str | None = None, del
     路由判断与 skills.select_skill_prompt 一致。第二项为 None 表示不兜底（如知识点太宽、要等用户补充）。
     """
     from app.chat.skills import _FEYNMAN_RE, _PRACTICE_RE, infer_thread_skill
+    from app.chat.skills.viva_skill import current_turn
 
     text = user_text or ""
+    # 模拟复试中的开场与回答（「考考我栈」「出栈顺序的问题是…」）不是在要题，不能被搜题接管
+    if current_turn(text) is not None:
+        return False, None
     if role == "thread":
         active = infer_thread_skill(delegated_task or text, delegated_skill) == "socratic_practice"
     elif role == "chat":
@@ -700,18 +704,28 @@ ASK_SPECIFIC_NOTE = ("想练哪个具体的知识点？说得具体一点（比�
 
 def guard_reply(text: str, tool_log: list[dict] | None = None, *, require_source: bool | None = None,
                 allowed_misconceptions=None, drill_active: bool = False,
-                first_turn: bool = False) -> tuple[str, dict]:
+                first_turn: bool = False, viva_answers: list[str] | None = None) -> tuple[str, dict]:
     """回复生成后调用。返回 (核对后的回复, 报告)。
 
     require_source 为 None 时自动判断：本轮调用过搜题或校验工具，就要求每张 micro_quiz 都能溯源；
     否则只核对自带 candidate_id 的微件，其他技能生成的普通 micro_quiz 原样保留，保持向后兼容。
+    viva_answers 是本场模拟复试的回答原文，用于核对 viva_radar 的引用；不传时取本次生成里
+    select_skill_prompt 记下的复试状态，都没有时 viva_radar 的引用一律视为无法核实。
     """
+    from app.chat.skills.viva_skill import current_turn, guard_viva_radar
+
+    if viva_answers is None:
+        turn = current_turn()
+        viva_answers = turn["answers"] if turn else []
+    text, viva_report = guard_viva_radar(text, viva_answers)
     used = any(isinstance(call, dict) and call.get("name") in DRILL_TOOLS for call in tool_log or [])
     searched = any(isinstance(call, dict) and call.get("name") == SEARCH_TOOL for call in tool_log or [])
     # drill_active：用户本轮在要题（服务端判断）。即使模型没调用工具，也按出题轮核对，防止它自己编题
     require = (used or drill_active) if require_source is None else require_source
     allowed = set(allowed_misconceptions) if allowed_misconceptions is not None else None
     report = {"checked": 0, "kept": 0, "blocked": []}
+    if viva_report:
+        report["viva_radar"] = viva_report
     # 服务端生成的内容（测验卡、原文题块、隐藏提示）先换成占位 token，清理正文时不会误伤，最后再换回来
     blocks: list[str] = []
     rendered: set[str] = set()  # 本轮已经展示过的候选题 id
