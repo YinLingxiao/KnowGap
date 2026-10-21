@@ -49,3 +49,25 @@ SQLite、会话与 `.env` 不提交 Git。
 检查使用临时数据库、注入模型或 HTTP 测试传输，不调用真实模型。
 它们能验证程序协议与状态治理，不能证明真实模型的诊断正确、三轮提示质量或抗诱导能力。
 真实模型评估由 Cursor 单独执行并记录，配置模型后再做。
+
+## 演示数据
+
+`backend/scripts/seed_demo.py` 写入两个合成学习空间（数据结构、电路原理）、主对话、学习记忆、Thread 和五层 USER 档案。标题和描述带「演示」，不含真实个人信息。重复执行不会重复插入。`--reset` 只删除 `client_request_id` 以 `seed-demo-` 开头的会话，以及 USER 档案里含「（演示档案）」的条目。
+
+默认学生 `demo-student-001`。默认数据库是 `Settings.resolved_database_path()`（开发版为 `backend/data/knowgap.sqlite3`，可用 `DATABASE_PATH` 覆盖）。桌面版由 Electron 把 `KNOWGAP_DATA_DIR` 设为 `app.getPath("userData")`，库文件是该目录下的 `knowgap.sqlite3`（`backend/desktop_entry.py`）。`--db` 传入目录时按这个规则解析。开发态 userData 一般是 `%APPDATA%\knowgap-desktop`，安装包（productName 为 KnowGap）一般是 `%APPDATA%\KnowGap`。
+
+在仓库根目录执行。
+
+开发版：
+
+```powershell
+backend\.venv\Scripts\python.exe backend\scripts\seed_demo.py
+```
+
+桌面版：
+
+```powershell
+backend\.venv\Scripts\python.exe backend\scripts\seed_demo.py --db "$env:APPDATA\knowgap-desktop\knowgap.sqlite3"
+```
+
+清除时在对应命令后加 `--reset`。日程和专注记录表尚未接入，脚本里的 `seed_agenda()` / `seed_focus()` 先留空。
