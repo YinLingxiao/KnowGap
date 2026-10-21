@@ -756,6 +756,7 @@ class ChatStore:
             attempt=ExerciseAttempt(**meta["attempt"]) if meta.get("attempt") else None,
             memory_changes=changes,
             used_memory_ids=[i for i in meta.get("used_memory_ids", []) if i in memories],
+            plan_changes=meta.get("plan_changes", []),
             suggested_problem_id=meta.get("suggested_problem_id"),
             sources=[SourceReference(**source) for source in meta.get("sources", [])],
             truncated=bool(meta.get("truncated")),

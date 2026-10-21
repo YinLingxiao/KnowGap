@@ -37,7 +37,7 @@ def test_role_policy_and_coordinator_tools_match_the_actual_conversation(tmp_pat
     assert (names & {"dispatch_thread", "propose_threads"}) == (
         {"dispatch_thread", "propose_threads"} if role == "main" else set())
     assert ("report_progress" in names) == (role == "thread")
-    assert ("plan_steps" in names) == (role in {"thread", "chat"})
+    assert "update_plan" in names and "plan_steps" not in names
     if role == "main":
         assert not names & {"read", "write", "edit", "bash", "plan_steps"}
 
