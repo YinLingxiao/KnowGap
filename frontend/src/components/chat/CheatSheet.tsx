@@ -183,7 +183,7 @@ export function CheatSheet({ subject, notes, onClose }: { subject: Subject; note
                   ))}
                 </ol>
               ) : (
-                <p className={styles.empty}>{pending ? "读取中…" : "还没有记录到误区。多在空间里练习，KnowGap 会记下你的易错点。"}</p>
+                <div className={styles.empty}>{pending ? "读取中…" : <>记下的误区会出现在这里。<button type="button" onClick={onClose}>去主对话讲一讲</button></>}</div>
               )}
             </Quadrant>
 
@@ -203,7 +203,7 @@ export function CheatSheet({ subject, notes, onClose }: { subject: Subject; note
                   ))}
                 </ul>
               ) : (
-                <p className={styles.empty}>{pending ? "读取中…" : "还没有已解决的 Thread。在 Thread 里点「合并回主对话」后，结论会出现在这里。"}</p>
+                <div className={styles.empty}>{pending ? "读取中…" : <>已解决的支线结论会出现在这里。<button type="button" onClick={onClose}>去主对话讲一讲</button></>}</div>
               )}
             </Quadrant>
 

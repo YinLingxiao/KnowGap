@@ -33,11 +33,6 @@ function readView(): AgendaViewKey {
   }
 }
 
-const EMPTY_HINT: Record<string, string> = {
-  inbox: "收件箱是空的。没有日期、也不属于任何学习空间的任务会出现在这里。",
-  today: "今天没有安排。可以在上面写一句话添加，或者在对话里让 AI 帮你排。",
-};
-
 interface AgendaPageProps {
   subjects: Subject[];
   sidebarOpen: boolean;
@@ -247,7 +242,10 @@ export function AgendaPage(props: AgendaPageProps) {
         </div>
         <div className={styles.scroll}>
           {groups.every((group) => group.nodes.length === 0) ? (
-            <p className={styles.emptyLine}>{EMPTY_HINT[view] ?? "这里还没有任务。"}</p>
+            <div className={styles.emptyLine}>
+              <p>完成的任务和复习会出现在这里。</p>
+              <button type="button" className={styles.btn} onClick={() => dispatchCompose({})}>记一个任务</button>
+            </div>
           ) : (
             <AgendaList groups={groups} today={today} {...listProps} />
           )}

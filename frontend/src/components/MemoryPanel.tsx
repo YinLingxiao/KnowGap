@@ -76,8 +76,8 @@ export function MemoryPanel({
         <ErrorNotice error={error} compact onRetry={onRefresh} retryLabel="重新加载" />
       ) : data.length === 0 ? (
         <div className={styles.empty}>
-          <p className={styles.emptyTitle}>还没有学习记忆</p>
-          <p>完成一次作答后，有证据支持的误区会记在这里，并在你下次学习同类题时被参考。记录不准确时可以删除。</p>
+          <p className={styles.emptyTitle}>学过的误区会出现在这里。</p>
+          <button type="button" onClick={onRefresh}>刷新看看</button>
         </div>
       ) : (
         <div className={styles.list}>

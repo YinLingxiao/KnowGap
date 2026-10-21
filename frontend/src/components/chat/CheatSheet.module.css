@@ -320,6 +320,17 @@
   font-size: var(--text-xs);
 }
 
+.empty button {
+  display: inline-flex;
+  margin-top: 8px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: var(--text-xs);
+}
+
 .shimmer {
   animation: pulse 1.4s ease-in-out infinite;
 }

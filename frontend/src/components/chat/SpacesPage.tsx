@@ -204,8 +204,8 @@ export function SpacesPage(props: SpacesPageProps) {
             <div className={styles.emptyIcon}>
               <GraduationCap size={20} aria-hidden />
             </div>
-            <h2>还没有学习空间</h2>
-            <p>每个学习空间拥有一条主对话与多个并行 Thread。在主对话规划路线，在右侧 Thread 深入解决具体卡点，并共享课程资料与学习记忆。</p>
+            <h2>一门课一个空间</h2>
+            <p>对话、笔记和复习都会出现在这里。</p>
             <button className={styles.createBtn} onClick={props.onCreate}>
               <Plus size={14} aria-hidden />
               <span>新建学习空间</span>
