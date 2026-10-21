@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, globalShortcut, ipcMain, nativeTheme, screen } = require("electron");
+const { app, BrowserWindow, Menu, Notification, Tray, dialog, globalShortcut, ipcMain, nativeImage, nativeTheme, screen } = require("electron");
 const { spawn } = require("child_process");
 const http = require("http");
 const fs = require("fs");
@@ -15,6 +15,11 @@ let quickWindow = null;
 let quickShortcut = null;
 let quickFallbackTried = false;
 let appOrigin = "";
+let tray = null;
+let quitting = false;
+let revealOnReady = false;
+let settings = { closeToTray: true, openAtLogin: false, backgroundNotified: false };
+let trayStatus = { focus: null, todayCount: 0 };
 
 const QUICK_SHORTCUTS = ["Alt+Space", "CommandOrControl+Shift+K"];
 const QUICK_WIDTH = 640;
@@ -49,6 +54,10 @@ function portFile() {
   return path.join(app.getPath("userData"), "port.json");
 }
 
+function settingsFile() {
+  return path.join(app.getPath("userData"), "desktop-settings.json");
+}
+
 function lastPort() {
   try {
     const port = Number(JSON.parse(fs.readFileSync(portFile(), "utf8")).port);
@@ -79,6 +88,56 @@ function rememberPort(port) {
   } catch {
     // 记不住只是下次可能换端口，不影响启动
   }
+}
+
+function loadSettings() {
+  try {
+    const data = JSON.parse(fs.readFileSync(settingsFile(), "utf8"));
+    settings = {
+      closeToTray: data.closeToTray !== false,
+      openAtLogin: data.openAtLogin === true,
+      backgroundNotified: data.backgroundNotified === true,
+    };
+  } catch {
+    settings = { closeToTray: true, openAtLogin: false, backgroundNotified: false };
+  }
+}
+
+function saveSettings() {
+  try {
+    fs.mkdirSync(app.getPath("userData"), { recursive: true });
+    fs.writeFileSync(settingsFile(), JSON.stringify({
+      closeToTray: settings.closeToTray,
+      openAtLogin: settings.openAtLogin,
+      backgroundNotified: settings.backgroundNotified,
+    }));
+  } catch {
+    // 写失败时本次会话仍用内存里的开关
+  }
+}
+
+function publicSettings() {
+  return { closeToTray: settings.closeToTray, openAtLogin: settings.openAtLogin };
+}
+
+function applyLoginItem() {
+  app.setLoginItemSettings({
+    openAtLogin: settings.openAtLogin,
+    args: ["--hidden"],
+  });
+}
+
+function applySettingsPatch(patch) {
+  if (!patch || typeof patch !== "object") return publicSettings();
+  if (typeof patch.closeToTray === "boolean") settings.closeToTray = patch.closeToTray;
+  if (typeof patch.openAtLogin === "boolean") {
+    const changed = patch.openAtLogin !== settings.openAtLogin;
+    settings.openAtLogin = patch.openAtLogin;
+    if (changed) applyLoginItem();
+  }
+  saveSettings();
+  refreshTrayMenu();
+  return publicSettings();
 }
 
 function waitHealth(port) {
@@ -115,6 +174,11 @@ function stopBackend() {
     backend.kill();
   }
   backend = null;
+}
+
+function quitApp() {
+  quitting = true;
+  app.quit();
 }
 
 ipcMain.handle("select-folder", async (_event, defaultPath) => {
@@ -188,17 +252,22 @@ function createQuickWindow() {
   void quickWindow.loadURL(`${appOrigin}/quick.html`);
 }
 
-function toggleQuickWindow() {
+function showQuickWindow() {
   if (!appOrigin) return;
   if (!quickWindow || quickWindow.isDestroyed()) createQuickWindow();
-  if (quickWindow.isVisible() && quickWindow.isFocused()) {
-    quickWindow.hide();
-    return;
-  }
   placeQuickWindow();
   quickWindow.show();
   quickWindow.focus();
   quickWindow.webContents.send("quick-shown");
+}
+
+function toggleQuickWindow() {
+  if (!appOrigin) return;
+  if (quickWindow && !quickWindow.isDestroyed() && quickWindow.isVisible() && quickWindow.isFocused()) {
+    quickWindow.hide();
+    return;
+  }
+  showQuickWindow();
 }
 
 function registerQuickShortcut() {
@@ -217,12 +286,130 @@ function registerQuickShortcut() {
   console.warn("[KnowGap] 快问浮窗快捷键全部注册失败，浮窗不可用");
 }
 
-function focusMainWindow() {
-  if (!mainWindow || mainWindow.isDestroyed()) return null;
+function displayShortcut() {
+  if (quickShortcut === "CommandOrControl+Shift+K") {
+    return process.platform === "darwin" ? "Cmd+Shift+K" : "Ctrl+Shift+K";
+  }
+  return quickShortcut;
+}
+
+function showMain() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
   if (mainWindow.isMinimized()) mainWindow.restore();
   mainWindow.show();
   mainWindow.focus();
-  return mainWindow;
+}
+
+function mainIsShown() {
+  return Boolean(mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible() && !mainWindow.isMinimized());
+}
+
+function notifyBackgroundOnce() {
+  if (settings.backgroundNotified) return;
+  settings.backgroundNotified = true;
+  saveSettings();
+  if (!Notification.isSupported()) return;
+  try {
+    const key = displayShortcut() || "Alt+Space";
+    new Notification({
+      title: "KnowGap",
+      body: `KnowGap 仍在后台运行，${key} 随时快问`,
+      icon: path.join(__dirname, "icon.png"),
+    }).show();
+  } catch {
+    // 系统拒绝通知时仍然留在托盘
+  }
+}
+
+function hideMainToTray() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.hide();
+  notifyBackgroundOnce();
+}
+
+function toggleMain() {
+  if (mainIsShown()) hideMainToTray();
+  else showMain();
+}
+
+function cleanFocus(value) {
+  if (typeof value !== "string") return null;
+  const text = value.trim();
+  return text ? text.slice(0, 120) : null;
+}
+
+function setTrayStatus(patch) {
+  if (!patch || typeof patch !== "object") return;
+  let menuDirty = false;
+  if ("focus" in patch) trayStatus.focus = cleanFocus(patch.focus);
+  if ("todayCount" in patch && typeof patch.todayCount === "number" && Number.isFinite(patch.todayCount)) {
+    const next = Math.max(0, Math.round(patch.todayCount));
+    if (next !== trayStatus.todayCount) {
+      trayStatus.todayCount = next;
+      menuDirty = true;
+    }
+  }
+  if (tray) tray.setToolTip(trayStatus.focus || "KnowGap");
+  if (menuDirty) refreshTrayMenu();
+}
+
+function sendTrayCommand(command) {
+  if (command === "quick-ask") showQuickWindow();
+  if (command === "open-agenda") showMain();
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.send("tray-command", command);
+}
+
+function buildTrayMenu() {
+  const key = displayShortcut();
+  return Menu.buildFromTemplate([
+    { label: "打开 KnowGap", click: () => showMain() },
+    { label: key ? `快问（${key}）` : "快问", click: () => showQuickWindow() },
+    { label: "开始专注 25 分钟", click: () => sendTrayCommand("start-focus") },
+    { label: `今日待办 ${trayStatus.todayCount} 项`, click: () => sendTrayCommand("open-agenda") },
+    { type: "separator" },
+    {
+      label: "关闭时最小化到托盘",
+      type: "checkbox",
+      checked: settings.closeToTray,
+      click: (item) => {
+        settings.closeToTray = Boolean(item.checked);
+        saveSettings();
+      },
+    },
+    {
+      label: "开机自启",
+      type: "checkbox",
+      checked: settings.openAtLogin,
+      click: (item) => {
+        settings.openAtLogin = Boolean(item.checked);
+        applyLoginItem();
+        saveSettings();
+      },
+    },
+    { label: "退出", click: () => quitApp() },
+  ]);
+}
+
+function refreshTrayMenu() {
+  if (!tray) return;
+  tray.setContextMenu(buildTrayMenu());
+  tray.setToolTip(trayStatus.focus || "KnowGap");
+}
+
+function trayImage() {
+  const ico = nativeImage.createFromPath(path.join(__dirname, "icon.ico"));
+  if (!ico.isEmpty()) return ico;
+  return nativeImage.createFromPath(path.join(__dirname, "icon.png"));
+}
+
+function createTray() {
+  if (tray) return;
+  tray = new Tray(trayImage());
+  tray.setToolTip("KnowGap");
+  tray.setIgnoreDoubleClickEvents(true);
+  refreshTrayMenu();
+  tray.on("click", () => toggleMain());
 }
 
 ipcMain.handle("quick-hide", () => {
@@ -240,11 +427,23 @@ ipcMain.handle("quick-shortcut", () => quickShortcut);
 
 ipcMain.handle("open-in-main", (_event, conversationId) => {
   if (quickWindow && !quickWindow.isDestroyed()) quickWindow.hide();
-  const win = focusMainWindow();
-  if (win && typeof conversationId === "string" && conversationId) {
-    win.webContents.send("open-conversation", conversationId);
+  showMain();
+  if (mainWindow && !mainWindow.isDestroyed() && typeof conversationId === "string" && conversationId) {
+    mainWindow.webContents.send("open-conversation", conversationId);
   }
 });
+
+ipcMain.handle("show-main", () => {
+  showMain();
+});
+
+ipcMain.handle("set-tray-status", (_event, patch) => {
+  setTrayStatus(patch);
+});
+
+ipcMain.handle("get-desktop-settings", () => publicSettings());
+
+ipcMain.handle("set-desktop-settings", (_event, patch) => applySettingsPatch(patch));
 
 async function open() {
   const port = await pickPort();
@@ -280,6 +479,7 @@ async function open() {
     height: 820,
     minWidth: 900,
     minHeight: 600,
+    show: false,
     title: "KnowGap",
     icon: path.join(__dirname, "icon.ico"),
     backgroundColor: nativeTheme.shouldUseDarkColors ? "#111215" : "#ffffff",
@@ -288,7 +488,13 @@ async function open() {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
+      backgroundThrottling: false,
     },
+  });
+  mainWindow.on("close", (event) => {
+    if (quitting || !settings.closeToTray) return;
+    event.preventDefault();
+    hideMainToTray();
   });
   mainWindow.on("closed", () => {
     mainWindow = null;
@@ -297,6 +503,8 @@ async function open() {
   });
   await mainWindow.loadURL(`${appOrigin}/`);
   registerQuickShortcut();
+  refreshTrayMenu();
+  if (revealOnReady || !process.argv.includes("--hidden")) showMain();
 }
 
 if (!app.requestSingleInstanceLock()) {
@@ -304,20 +512,32 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.on("second-instance", () => {
-    if (!mainWindow || mainWindow.isDestroyed()) return;
-    if (mainWindow.isMinimized()) mainWindow.restore();
-    mainWindow.show();
-    mainWindow.focus();
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      revealOnReady = true;
+      return;
+    }
+    showMain();
   });
-  app.whenReady().then(open).catch((error) => {
+  app.whenReady().then(() => {
+    loadSettings();
+    applyLoginItem();
+    createTray();
+    return open();
+  }).catch((error) => {
     dialog.showErrorBox("KnowGap", error.message);
+    quitting = true;
     stopBackend();
     app.quit();
   });
 }
 
 app.on("before-quit", () => {
+  quitting = true;
   if (quickWindow && !quickWindow.isDestroyed()) quickWindow.destroy();
+  if (tray) {
+    tray.destroy();
+    tray = null;
+  }
   stopBackend();
 });
 app.on("will-quit", () => {

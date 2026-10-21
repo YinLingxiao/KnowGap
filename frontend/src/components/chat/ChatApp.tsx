@@ -23,6 +23,7 @@ import authStyles from "../auth/AuthView.module.css";
 import { useAuth } from "../auth/useAuth";
 import { MaterialLibrary } from "../MaterialLibrary";
 import type { ModelSignal } from "../settings/ModelAccessCard";
+import { DesktopBridge } from "../desktop/DesktopBridge";
 import { SettingsDialog, type SettingsTab } from "../settings/SettingsDialog";
 import { Toaster, useToasts } from "../ui/Toaster";
 import { COMPOSER_ID, Composer } from "./Composer";
@@ -400,6 +401,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
   return (
     <div className={cx(styles.app, (!sidebarOpen || zen) && styles.sidebarClosed, narrow && styles.narrow, zen && styles.zen)}>
       <ReminderScheduler userId={user.id} subjects={chat.subjects} />
+      <DesktopBridge />
       {narrow && (
         <button
           className={cx(styles.backdrop, sidebarOpen && styles.backdropOpen)}

@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require("electron");
+const { contextBridge, ipcRenderer, webFrame } = require("electron");
 
 // 主窗口里“打开某个对话”的订阅者；没有订阅者时退回为刷新页面，
 // 由前端从 localStorage 恢复快问浮窗预先写好的活动对话。
@@ -15,6 +15,24 @@ ipcRenderer.on("open-conversation", (_event, conversationId) => {
 const quickShownListeners = new Set();
 ipcRenderer.on("quick-shown", () => {
   for (const listener of quickShownListeners) listener();
+});
+
+const TRAY_COMMANDS = new Set(["open-agenda", "start-focus", "quick-ask"]);
+
+function dispatchOnPage(type, detail) {
+  const init = detail === undefined ? "" : `, { detail: ${JSON.stringify(detail)} }`;
+  void webFrame.executeJavaScript(
+    `window.dispatchEvent(new CustomEvent(${JSON.stringify(type)}${init}))`,
+  ).catch(() => {});
+}
+
+ipcRenderer.on("tray-command", (_event, command) => {
+  if (!TRAY_COMMANDS.has(command)) return;
+  dispatchOnPage("knowgap:tray-command", command);
+  if (command === "open-agenda") dispatchOnPage("knowgap:open-agenda");
+  if (command === "start-focus") {
+    dispatchOnPage("knowgap:focus-start", { taskId: null, title: "自由专注", subjectId: null });
+  }
 });
 
 contextBridge.exposeInMainWorld("knowgap", {
@@ -34,4 +52,12 @@ contextBridge.exposeInMainWorld("knowgap", {
       return () => quickShownListeners.delete(listener);
     },
   },
+  showMain: () => {
+    void ipcRenderer.invoke("show-main");
+  },
+  setTrayStatus: (status) => {
+    void ipcRenderer.invoke("set-tray-status", status);
+  },
+  getDesktopSettings: () => ipcRenderer.invoke("get-desktop-settings"),
+  setDesktopSettings: (patch) => ipcRenderer.invoke("set-desktop-settings", patch),
 });
