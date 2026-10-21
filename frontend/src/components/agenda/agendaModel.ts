@@ -1,7 +1,8 @@
-/** 日程列表的分组、排序与日期展示（纯函数，不依赖 React）。 */
+/** 日程各视图的分组、排序与日期展示（纯函数，不依赖 React）。 */
 import { formatYmd } from "@/lib/agenda/quickAdd";
 import {
-  FOCUS_START_EVENT, type AgendaTask, type AgendaThread, type FocusStartDetail, type TaskPriority,
+  COMPOSE_TASK_EVENT, FOCUS_START_EVENT,
+  type AgendaTask, type AgendaThread, type ComposeTaskDetail, type FocusStartDetail, type TaskPriority,
 } from "@/lib/agenda/types";
 
 /** 通知番茄钟模块开始专注（约定见 docs/contracts/agenda.md 第 5 节） */
@@ -9,19 +10,31 @@ export function dispatchFocusStart(detail: FocusStartDetail): void {
   window.dispatchEvent(new CustomEvent<FocusStartDetail>(FOCUS_START_EVENT, { detail }));
 }
 
-export type GroupKey = "overdue" | "today" | "tomorrow" | "week" | "later" | "unscheduled" | "done";
+/** 打开全局「添加任务」弹窗（约定见第 6.2 节） */
+export function dispatchCompose(detail: ComposeTaskDetail): void {
+  window.dispatchEvent(new CustomEvent<ComposeTaskDetail>(COMPOSE_TASK_EVENT, { detail }));
+}
 
-export const GROUP_LABELS: Record<GroupKey, string> = {
-  overdue: "逾期",
+export type GroupKey = string;
+
+/** 日程页左侧导航的视图；学习空间视图为 `space:{id}` */
+export type AgendaViewKey = "inbox" | "today" | "upcoming" | "week" | `space:${string}`;
+
+export const VIEW_LABELS: Record<"inbox" | "today" | "upcoming" | "week", string> = {
+  inbox: "收件箱",
   today: "今天",
-  tomorrow: "明天",
-  week: "未来 7 天",
-  later: "以后",
-  unscheduled: "未安排",
-  done: "今日已完成",
+  upcoming: "预览",
+  week: "周历",
 };
 
-export const GROUP_ORDER: GroupKey[] = ["overdue", "today", "tomorrow", "week", "later", "unscheduled", "done"];
+export const spaceView = (id: string): AgendaViewKey => `space:${id}`;
+export const spaceIdOf = (view: AgendaViewKey): string | null => (view.startsWith("space:") ? view.slice(6) : null);
+
+export function parseViewKey(raw: unknown): AgendaViewKey | null {
+  if (typeof raw !== "string") return null;
+  if (raw === "inbox" || raw === "today" || raw === "upcoming" || raw === "week") return raw;
+  return raw.startsWith("space:") && raw.length > 6 ? (raw as AgendaViewKey) : null;
+}
 
 export interface TaskNode {
   kind: "task" | "review";
@@ -42,7 +55,14 @@ export type AgendaNode = TaskNode | ThreadNode;
 export interface AgendaGroup {
   key: GroupKey;
   label: string;
+  /** 标题右侧的次要文字，如「明天 · 周四」 */
+  sublabel?: string;
+  tone?: "overdue" | "today";
   nodes: AgendaNode[];
+  /** 节末「+ 添加任务」的默认值；缺省则不显示 */
+  compose?: { scheduledDate?: string | null; subjectId?: string | null };
+  /** 没有条目时仍显示该节（预览视图的每一天） */
+  keepEmpty?: boolean;
 }
 
 /** 键盘导航用的扁平行：顶层节点或展开后的子任务 */
@@ -71,18 +91,16 @@ export function localDateOf(iso: string | null): string | null {
   return Number.isNaN(date.getTime()) ? null : formatYmd(date);
 }
 
-/**
- * 一个条目落在哪一组。
- * 逾期：计划日（没有计划日时看截止日）早于今天；只有截止日且未逾期的归「未安排」。
- */
-export function bucketFor(scheduled: string | null, deadline: string | null, today: string): GroupKey {
-  const anchor = scheduled ?? deadline;
-  if (anchor && anchor < today) return "overdue";
-  if (!scheduled) return "unscheduled";
-  const diff = dayDiff(today, scheduled);
-  if (diff === 0) return "today";
-  if (diff === 1) return "tomorrow";
-  return diff <= 7 ? "week" : "later";
+/** YYYY-MM-DD 加减天数 */
+export function addDays(ymd: string, days: number): string {
+  const date = new Date(toUtcDay(ymd) + days * 86_400_000);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}`;
+}
+
+/** 所在周的周一 */
+export function mondayOf(ymd: string): string {
+  return addDays(ymd, -((new Date(toUtcDay(ymd)).getUTCDay() + 6) % 7));
 }
 
 const FAR = "9999-12-31T24:00";
@@ -118,16 +136,12 @@ export function compareSiblings(a: AgendaTask, b: AgendaTask): number {
   return a.sortOrder - b.sortOrder || a.createdAt.localeCompare(b.createdAt);
 }
 
-export function buildGroups(input: {
-  tasks: AgendaTask[];
-  threads: AgendaThread[];
-  today: string;
-  subjectId: string | null;
-}): AgendaGroup[] {
-  const { today, subjectId } = input;
-  const live = input.tasks.filter(
-    (task) => task.status !== "cancelled" && (!subjectId || task.subjectId === subjectId),
-  );
+/**
+ * 把任务组装成「顶层 + 子任务」节点。
+ * 只保留「自己未完成，或还有未完成子任务」的顶层；子任务保留全部（含已完成），用于进度显示。
+ */
+export function buildNodes(tasks: AgendaTask[]): TaskNode[] {
+  const live = tasks.filter((task) => task.status !== "cancelled");
   const ids = new Set(live.map((task) => task.id));
   const childrenOf = new Map<string, AgendaTask[]>();
   const tops: AgendaTask[] = [];
@@ -138,40 +152,164 @@ export function buildGroups(input: {
       tops.push(task);
     }
   }
-
-  const buckets = new Map<GroupKey, AgendaNode[]>(GROUP_ORDER.map((key) => [key, []]));
+  const nodes: TaskNode[] = [];
   for (const task of tops) {
     const children = (childrenOf.get(task.id) ?? []).sort(compareSiblings);
-    const openChildren = children.filter((child) => child.status === "open");
-    const node: TaskNode = { kind: task.source === "review" ? "review" : "task", key: taskKey(task.id), task, children };
-
-    if (task.status === "done" && openChildren.length === 0) {
-      if (localDateOf(task.completedAt) === today) buckets.get("done")!.push(node);
-      continue;
-    }
-    const candidates = [task, ...openChildren].map((item) => bucketFor(item.scheduledDate, item.deadlineDate, today));
-    const bucket = GROUP_ORDER.find((key) => candidates.includes(key)) ?? "unscheduled";
-    buckets.get(bucket)!.push(node);
+    if (task.status === "done" && !children.some((child) => child.status === "open")) continue;
+    nodes.push({ kind: task.source === "review" ? "review" : "task", key: taskKey(task.id), task, children });
   }
+  return nodes;
+}
 
-  for (const thread of input.threads) {
-    if (subjectId && thread.subjectId !== subjectId) continue;
-    const bucket = bucketFor(thread.deadlineDate, null, today);
-    buckets.get(bucket)!.push({ kind: "thread", key: threadKey(thread.threadId), thread });
+const threadNode = (thread: AgendaThread): ThreadNode => ({ kind: "thread", key: threadKey(thread.threadId), thread });
+
+/** 节点的计划日：自己有就用自己的，否则取未完成子任务里最早的 */
+function nodeDay(node: TaskNode): string | null {
+  if (node.task.scheduledDate) return node.task.scheduledDate;
+  const days = node.children
+    .filter((child) => child.status === "open" && child.scheduledDate)
+    .map((child) => child.scheduledDate as string)
+    .sort();
+  return days[0] ?? null;
+}
+
+/** 逾期：计划日早于今天；没有计划日时看截止日 */
+function isOverdue(node: TaskNode, today: string): boolean {
+  const day = nodeDay(node) ?? node.task.deadlineDate;
+  return Boolean(day && day < today);
+}
+
+const sorted = (nodes: AgendaNode[]) => nodes.sort(compareNodes);
+
+/** 收件箱：没有日期（计划日、截止日都没有）且不属于任何空间 */
+export function isInboxNode(node: TaskNode): boolean {
+  return !node.task.subjectId && !nodeDay(node) && !node.task.deadlineDate;
+}
+
+export interface ViewCounts {
+  inbox: number;
+  today: number;
+  upcoming: number;
+  week: number;
+  spaces: Map<string, number>;
+}
+
+/** 左侧导航各项的未完成数（Thread 计入今天/预览与所属空间） */
+export function countViews(tasks: AgendaTask[], threads: AgendaThread[], today: string): ViewCounts {
+  const nodes = buildNodes(tasks);
+  const spaces = new Map<string, number>();
+  const bump = (id: string | null) => { if (id) spaces.set(id, (spaces.get(id) ?? 0) + 1); };
+  let inbox = 0;
+  let todayCount = 0;
+  let upcoming = 0;
+  const weekEnd = addDays(mondayOf(today), 6);
+  let week = 0;
+  const horizon = addDays(today, 13);
+  for (const node of nodes) {
+    bump(node.task.subjectId);
+    if (isInboxNode(node)) inbox += 1;
+    const day = nodeDay(node);
+    const overdue = isOverdue(node, today);
+    if (overdue || day === today) todayCount += 1;
+    if (overdue || (day && day <= horizon)) upcoming += 1;
+    if (day && day >= mondayOf(today) && day <= weekEnd) week += 1;
   }
+  for (const thread of threads) {
+    bump(thread.subjectId);
+    const day = thread.deadlineDate;
+    if (day && day <= today) todayCount += 1;
+    if (day && day <= horizon) upcoming += 1;
+    if (day && day >= mondayOf(today) && day <= weekEnd) week += 1;
+  }
+  return { inbox, today: todayCount, upcoming, week, spaces };
+}
 
+/** 「今天」视图：逾期 + 今天 */
+export function buildTodayGroups(tasks: AgendaTask[], threads: AgendaThread[], today: string): AgendaGroup[] {
+  const overdue: AgendaNode[] = [];
+  const todays: AgendaNode[] = [];
+  for (const node of buildNodes(tasks)) {
+    if (isOverdue(node, today)) overdue.push(node);
+    else if (nodeDay(node) === today) todays.push(node);
+  }
+  for (const thread of threads) {
+    if (!thread.deadlineDate) continue;
+    if (thread.deadlineDate < today) overdue.push(threadNode(thread));
+    else if (thread.deadlineDate === today) todays.push(threadNode(thread));
+  }
   const groups: AgendaGroup[] = [];
-  for (const key of GROUP_ORDER) {
-    const nodes = buckets.get(key)!;
-    if (!nodes.length) continue;
-    if (key === "done") {
-      nodes.sort((a, b) => (b.kind === "thread" || a.kind === "thread" ? 0 : (b.task.completedAt ?? "").localeCompare(a.task.completedAt ?? "")));
-    } else {
-      nodes.sort(compareNodes);
+  if (overdue.length) groups.push({ key: "overdue", label: "逾期", tone: "overdue", nodes: sorted(overdue) });
+  groups.push({
+    key: "today", label: "今天", sublabel: `${monthDay(today)} · ${weekdayOf(today)}`, tone: "today",
+    nodes: sorted(todays), compose: { scheduledDate: today }, keepEmpty: true,
+  });
+  return groups;
+}
+
+/** 「收件箱」视图 */
+export function buildInboxGroups(tasks: AgendaTask[]): AgendaGroup[] {
+  const nodes = buildNodes(tasks).filter(isInboxNode);
+  return [{ key: "inbox", label: "收件箱", nodes: sorted(nodes), compose: {}, keepEmpty: true }];
+}
+
+export const UPCOMING_DAYS = 14;
+
+export const dayGroupKey = (day: string) => `day:${day}`;
+
+/** 「预览」视图：逾期一节 + 从今天起连续 14 天，每天一节 */
+export function buildUpcomingGroups(tasks: AgendaTask[], threads: AgendaThread[], today: string): AgendaGroup[] {
+  const overdue: AgendaNode[] = [];
+  const byDay = new Map<string, AgendaNode[]>();
+  const push = (day: string, node: AgendaNode) => byDay.set(day, [...(byDay.get(day) ?? []), node]);
+  for (const node of buildNodes(tasks)) {
+    if (isOverdue(node, today)) overdue.push(node);
+    else {
+      const day = nodeDay(node);
+      if (day) push(day, node);
     }
-    groups.push({ key, label: GROUP_LABELS[key], nodes });
+  }
+  for (const thread of threads) {
+    if (!thread.deadlineDate) continue;
+    if (thread.deadlineDate < today) overdue.push(threadNode(thread));
+    else push(thread.deadlineDate, threadNode(thread));
+  }
+  const groups: AgendaGroup[] = [];
+  if (overdue.length) groups.push({ key: "overdue", label: "逾期", tone: "overdue", nodes: sorted(overdue) });
+  for (let offset = 0; offset < UPCOMING_DAYS; offset += 1) {
+    const day = addDays(today, offset);
+    const relative = offset === 0 ? "今天" : offset === 1 ? "明天" : offset === 2 ? "后天" : null;
+    groups.push({
+      key: dayGroupKey(day),
+      label: monthDay(day),
+      sublabel: [relative, weekdayOf(day)].filter(Boolean).join(" · "),
+      tone: offset === 0 ? "today" : undefined,
+      nodes: sorted(byDay.get(day) ?? []),
+      compose: { scheduledDate: day },
+      keepEmpty: true,
+    });
   }
   return groups;
+}
+
+/** 学习空间视图：进行中 Thread / 闪回复习 / 任务 */
+export function buildSpaceGroups(
+  tasks: AgendaTask[], threads: AgendaThread[], subjectId: string,
+): AgendaGroup[] {
+  const nodes = buildNodes(tasks.filter((task) => task.subjectId === subjectId));
+  const threadNodes = threads.filter((thread) => thread.subjectId === subjectId).map(threadNode);
+  const reviews = nodes.filter((node) => node.kind === "review");
+  const plain = nodes.filter((node) => node.kind === "task");
+  const groups: AgendaGroup[] = [];
+  if (threadNodes.length) groups.push({ key: "threads", label: "进行中 Thread", nodes: sorted(threadNodes) });
+  if (reviews.length) groups.push({ key: "reviews", label: "闪回复习", nodes: sorted(reviews) });
+  groups.push({ key: "tasks", label: "任务", nodes: sorted(plain), compose: { subjectId }, keepEmpty: true });
+  return groups;
+}
+
+/** 空间进度：顶层与子任务一起算，已完成 / 全部（不含取消） */
+export function spaceProgress(tasks: AgendaTask[], subjectId: string): { done: number; total: number } {
+  const mine = tasks.filter((task) => task.subjectId === subjectId && task.status !== "cancelled");
+  return { done: mine.filter((task) => task.status === "done").length, total: mine.length };
 }
 
 export function flattenRows(

@@ -380,3 +380,15 @@ test('quickAddToInput only sends fields that have a value', () => {
   });
   assert.equal(quickAddToInput({ ...parse('x').fields, title: 'a'.repeat(300) }).title.length, 200);
 });
+
+test('半/整 only belong to the clock when glued to 点 and not starting a word', () => {
+  const spaced = parse('后天晚上7点 整理哈希表笔记');
+  assert.equal(spaced.title, '整理哈希表笔记');
+  assert.equal(spaced.fields.scheduledStartAt, '2026-10-23T19:00');
+  const glued = parse('明天7点整理笔记');
+  assert.equal(glued.title, '整理笔记');
+  assert.equal(glued.fields.scheduledStartAt, '2026-10-22T07:00');
+  assert.equal(parse('明天3点半导体复习').title, '半导体复习');
+  assert.equal(parse('明天下午3点半 复习').fields.scheduledStartAt, '2026-10-22T15:30');
+  assert.equal(parse('明天8点整 早读').fields.scheduledStartAt, '2026-10-22T08:00');
+});

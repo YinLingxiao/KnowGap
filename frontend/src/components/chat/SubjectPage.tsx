@@ -20,6 +20,7 @@ import type { CourseMaterial, Problem } from "@/lib/types";
 import { Button } from "../ui/Button";
 import { CheatSheet } from "./CheatSheet";
 import { ConceptGraph, type AttackTarget } from "./ConceptGraph";
+import { SpaceTasks } from "../agenda/SpaceTasks";
 import { Composer } from "./Composer";
 import { Markdown } from "./Markdown";
 import { MemoryItem } from "./MemoryDrawer";
@@ -31,6 +32,7 @@ type Panel =
   | { mode: "list" }
   | { mode: "pages" }
   | { mode: "graph" }
+  | { mode: "tasks" }
   | { mode: "thread"; id: string }
   | { mode: "info"; section: "about" | "files" | "memory" };
 
@@ -74,6 +76,7 @@ function readPanel(subjectId: string): Panel {
     if (!parsed || typeof parsed !== "object" || !("mode" in parsed)) return { mode: "list" };
     if (parsed.mode === "pages") return { mode: "pages" };
     if (parsed.mode === "graph") return { mode: "graph" };
+    if (parsed.mode === "tasks") return { mode: "tasks" };
     if (parsed.mode === "thread" && "id" in parsed && typeof parsed.id === "string") return { mode: "thread", id: parsed.id };
     if (parsed.mode === "info" && "section" in parsed && (parsed.section === "about" || parsed.section === "files" || parsed.section === "memory")) {
       return { mode: "info", section: parsed.section };
@@ -662,6 +665,17 @@ export function SubjectPage({
                 <button
                   type="button"
                   role="tab"
+                  aria-selected={panel.mode === "tasks"}
+                  className={cx(styles.panelTabPill, panel.mode === "tasks" && styles.panelTabActive)}
+                  onClick={() => setPanel({ mode: "tasks" })}
+                  title="这个空间的日程任务"
+                >
+                  <ListTodo size={13} aria-hidden />
+                  <span className={styles.pillLabel}>任务</span>
+                </button>
+                <button
+                  type="button"
+                  role="tab"
                   aria-selected={panel.mode === "info" && panel.section === "files"}
                   className={cx(styles.panelIconTab, panel.mode === "info" && panel.section === "files" && styles.panelTabActive)}
                   onClick={() => setPanel({ mode: "info", section: "files" })}
@@ -763,6 +777,13 @@ export function SubjectPage({
               onOpen={openThread}
               onResolve={(id) => void beginResolve(id)}
               onReopen={(id) => void reopen(id)}
+            />
+          )}
+          {panel.mode === "tasks" && (
+            <SpaceTasks
+              subject={{ id: subject.id, name: subject.name, color: subject.color, deadline: subject.deadline ?? null }}
+              subjects={chat.subjects.map((item) => ({ id: item.id, name: item.name, color: item.color }))}
+              onOpenThread={openThread}
             />
           )}
           {panel.mode === "graph" && (

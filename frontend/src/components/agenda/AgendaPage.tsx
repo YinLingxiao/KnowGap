@@ -1,26 +1,42 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  CalendarDays, CircleAlert, Download, Inbox, List, LoaderCircle, PanelLeftOpen, RotateCcw, Sparkles,
-} from "lucide-react";
+import { CircleAlert, Download, LoaderCircle, PanelLeftOpen, RotateCcw, Sparkles } from "lucide-react";
 import { describeError } from "@/lib/api/errors";
 import { agendaApi } from "@/lib/agenda/api";
 import type { AgendaTask, AgendaThread, TaskInput } from "@/lib/agenda/types";
 import type { Subject } from "@/lib/chat/types";
 import { cx } from "@/lib/cx";
 import AiBreakdownDialog from "./AiBreakdownDialog";
-import { AgendaList, type SubjectInfo } from "./AgendaList";
+import { AgendaList, useListState, type AgendaListProps, type SubjectInfo } from "./AgendaList";
 import {
-  buildGroups, compareSiblings, dispatchFocusStart, taskKey, threadKey, type GroupKey,
+  VIEW_LABELS, buildInboxGroups, buildTodayGroups, buildUpcomingGroups, compareSiblings, countViews,
+  dispatchCompose, dispatchFocusStart, mondayOf, parseViewKey, spaceIdOf, taskKey, threadKey,
+  type AgendaGroup, type AgendaViewKey,
 } from "./agendaModel";
+import { AgendaRail } from "./AgendaRail";
 import { QuickAdd } from "./QuickAdd";
+import { SpaceTaskList } from "./SpaceTasks";
 import { TaskInspector } from "./TaskInspector";
+import { UpcomingView } from "./UpcomingView";
 import { useAgenda } from "./useAgenda";
 import WeekCalendar from "./WeekCalendar";
 import styles from "./AgendaPage.module.css";
 
-type ViewMode = "list" | "week";
+const VIEW_KEY = "knowgap.agenda.view.v1";
+
+function readView(): AgendaViewKey {
+  try {
+    return parseViewKey(localStorage.getItem(VIEW_KEY)) ?? "upcoming";
+  } catch {
+    return "upcoming";
+  }
+}
+
+const EMPTY_HINT: Record<string, string> = {
+  inbox: "收件箱是空的。没有日期、也不属于任何学习空间的任务会出现在这里。",
+  today: "今天没有安排。可以在上面写一句话添加，或者在对话里让 AI 帮你排。",
+};
 
 interface AgendaPageProps {
   subjects: Subject[];
@@ -28,6 +44,7 @@ interface AgendaPageProps {
   onOpenSidebar: () => void;
   /** 打开某个 Thread（对话 id 与所属空间） */
   onOpenThread: (threadId: string, subjectId: string | null) => void;
+  onOpenSpace: (subjectId: string) => void;
   onNotify: (toast: { tone: "success" | "error" | "info"; title: string; description?: string }) => void;
 }
 
@@ -48,16 +65,21 @@ export function AgendaPage(props: AgendaPageProps) {
   const agenda = useAgenda(notifyError);
   const { tasks, threads, today, update, create, remove } = agenda;
 
-  const [mode, setMode] = useState<ViewMode>("list");
-  const [subjectFilter, setSubjectFilter] = useState<string | null>(null);
-  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [view, setViewState] = useState<AgendaViewKey>("upcoming");
+  const list = useListState();
+  const { selectedKey, setSelectedKey, collapsedGroups, collapsedParents, toggleGroup, toggleParent, expandParent } = list;
   const [inspectedId, setInspectedId] = useState<string | null>(null);
-  const [collapsedGroups, setCollapsedGroups] = useState<ReadonlySet<GroupKey>>(new Set());
-  const [collapsedParents, setCollapsedParents] = useState<ReadonlySet<string>>(new Set());
   const [exporting, setExporting] = useState(false);
   const [breakdownOpen, setBreakdownOpen] = useState(false);
   const [weekStart, setWeekStart] = useState<string | null>(null);
   const quickRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { setViewState(readView()); }, []);
+  const setView = useCallback((next: AgendaViewKey) => {
+    setViewState(next);
+    setSelectedKey(null);
+    try { localStorage.setItem(VIEW_KEY, next); } catch { /* 存储不可用时只影响下次打开 */ }
+  }, [setSelectedKey]);
 
   const subjectInfos = useMemo<SubjectInfo[]>(
     () => props.subjects.map((subject) => ({ id: subject.id, name: subject.name, color: subject.color })),
@@ -65,40 +87,30 @@ export function AgendaPage(props: AgendaPageProps) {
   );
   const subjectMap = useMemo(() => new Map(subjectInfos.map((item) => [item.id, item])), [subjectInfos]);
 
-  // 筛选的空间被删除后，回到「全部空间」
+  const spaceId = spaceIdOf(view);
+  const space = spaceId ? props.subjects.find((subject) => subject.id === spaceId) ?? null : null;
+  // 选中的空间被删除后回到「预览」
   useEffect(() => {
-    if (subjectFilter && !subjectMap.has(subjectFilter)) setSubjectFilter(null);
-  }, [subjectFilter, subjectMap]);
+    if (spaceId && props.subjects.length > 0 && !space) setView("upcoming");
+  }, [spaceId, space, props.subjects.length, setView]);
 
-  const groups = useMemo(
-    () => buildGroups({ tasks, threads, today, subjectId: subjectFilter }),
-    [tasks, threads, today, subjectFilter],
-  );
+  const counts = useMemo(() => countViews(tasks, threads, today), [tasks, threads, today]);
+  const groups = useMemo<AgendaGroup[]>(() => {
+    if (view === "today") return buildTodayGroups(tasks, threads, today);
+    if (view === "inbox") return buildInboxGroups(tasks);
+    if (view === "upcoming") return buildUpcomingGroups(tasks, threads, today);
+    return [];
+  }, [view, tasks, threads, today]);
 
   const inspected = inspectedId ? tasks.find((task) => task.id === inspectedId) ?? null : null;
   useEffect(() => {
     if (inspectedId && agenda.status === "ready" && !inspected) setInspectedId(null);
   }, [agenda.status, inspected, inspectedId]);
 
-  const toggleGroup = useCallback((key: GroupKey) => {
-    setCollapsedGroups((current) => {
-      const next = new Set(current);
-      if (!next.delete(key)) next.add(key);
-      return next;
-    });
-  }, []);
-  const toggleParent = useCallback((id: string) => {
-    setCollapsedParents((current) => {
-      const next = new Set(current);
-      if (!next.delete(id)) next.add(id);
-      return next;
-    });
-  }, []);
-
   const openTask = useCallback((task: AgendaTask) => {
     setSelectedKey(taskKey(task.id));
     setInspectedId(task.id);
-  }, []);
+  }, [setSelectedKey]);
   const toggleDone = useCallback((task: AgendaTask) => {
     void update(task.id, { status: task.status === "done" ? "open" : "done" });
   }, [update]);
@@ -108,25 +120,25 @@ export function AgendaPage(props: AgendaPageProps) {
   const focusThread = useCallback((thread: AgendaThread) => {
     dispatchFocusStart({ taskId: null, title: thread.title, subjectId: thread.subjectId });
   }, []);
+  const openThread = useCallback((thread: AgendaThread) => {
+    setSelectedKey(threadKey(thread.threadId));
+    props.onOpenThread(thread.threadId, thread.subjectId);
+  }, [props, setSelectedKey]);
 
   const createTask = useCallback(async (input: TaskInput) => {
-    const task = await create({ ...input, source: "manual" });
+    // 「今天」视图里快录的任务默认排在今天
+    const dated = view === "today" && !input.scheduledDate && !input.scheduledStartAt
+      ? { ...input, scheduledDate: today } : input;
+    const task = await create({ ...dated, source: "manual" });
     if (task) setSelectedKey(taskKey(task.id));
     return Boolean(task);
-  }, [create]);
+  }, [create, view, today, setSelectedKey]);
 
   const addSubtask = useCallback(async (parent: AgendaTask, title: string) => {
-    const child = await create({
-      title, parentId: parent.id, subjectId: parent.subjectId, source: "manual",
-    });
-    if (child) setCollapsedParents((current) => {
-      if (!current.has(parent.id)) return current;
-      const next = new Set(current);
-      next.delete(parent.id);
-      return next;
-    });
+    const child = await create({ title, parentId: parent.id, subjectId: parent.subjectId, source: "manual" });
+    if (child) expandParent(parent.id);
     return child;
-  }, [create]);
+  }, [create, expandParent]);
 
   const deleteTask = useCallback(async (id: string) => {
     const ok = await remove(id);
@@ -135,13 +147,13 @@ export function AgendaPage(props: AgendaPageProps) {
       setSelectedKey((current) => (current === taskKey(id) ? null : current));
     }
     return ok;
-  }, [remove]);
+  }, [remove, setSelectedKey]);
 
   const exportIcs = async () => {
     if (exporting) return;
     setExporting(true);
     try {
-      const blob = await agendaApi.exportIcs({ status: "open", subjectId: subjectFilter });
+      const blob = await agendaApi.exportIcs({ status: "open", subjectId: spaceId });
       download(blob, "knowgap-agenda.ics");
       onNotify({ tone: "success", title: "已导出 knowgap-agenda.ics" });
     } catch (cause) {
@@ -151,32 +163,98 @@ export function AgendaPage(props: AgendaPageProps) {
     }
   };
 
-  // 页面级快捷键：n 聚焦快录；焦点在输入控件里时不拦截
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "n" || event.metaKey || event.ctrlKey || event.altKey) return;
-      const target = event.target as HTMLElement | null;
-      if (target && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))) return;
-      event.preventDefault();
-      quickRef.current?.focus();
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
-
   const subtasks = useMemo(
     () => (inspected ? tasks.filter((task) => task.parentId === inspected.id).sort(compareSiblings) : []),
     [inspected, tasks],
   );
   const parentTitle = inspected?.parentId ? tasks.find((task) => task.id === inspected.parentId)?.title ?? null : null;
-  const openCount = useMemo(
-    () => groups.filter((group) => group.key !== "done").reduce((sum, group) => sum + group.nodes.length, 0),
-    [groups],
-  );
 
   const failure = agenda.error ? describeError(agenda.error) : null;
   const showInspector = Boolean(inspected);
   const currentWeek = weekStart ?? mondayOf(today);
+  const heading = space ? space.name : (VIEW_LABELS as Record<string, string>)[view] ?? "日程";
+  const listProps: Omit<AgendaListProps, "groups" | "today"> = {
+    subjects: subjectMap,
+    selectedKey,
+    collapsedGroups,
+    collapsedParents,
+    onSelect: setSelectedKey,
+    onOpenTask: openTask,
+    onOpenThread: openThread,
+    onToggleDone: toggleDone,
+    onFocusTask: focusTask,
+    onFocusThread: focusThread,
+    onToggleGroup: toggleGroup,
+    onToggleParent: toggleParent,
+    onCompose: (defaults) => dispatchCompose(defaults),
+  };
+
+  let main: React.ReactNode;
+  if (agenda.status === "loading") {
+    main = (
+      <div className={styles.skeleton} role="status" aria-label="正在加载日程">
+        {Array.from({ length: 7 }, (_, index) => <span key={index} style={{ width: `${88 - index * 6}%` }} />)}
+      </div>
+    );
+  } else if (agenda.status === "error") {
+    main = (
+      <div className={styles.state} role="alert">
+        <CircleAlert size={20} aria-hidden />
+        <h2>{failure?.title ?? "日程加载失败"}</h2>
+        <p>{agenda.error?.message && agenda.error.message !== failure?.title ? agenda.error.message : failure?.hint}</p>
+        <button type="button" className={styles.btn} onClick={() => void agenda.reload()}>
+          <RotateCcw size={13} aria-hidden />重新加载
+        </button>
+      </div>
+    );
+  } else if (view === "week") {
+    main = (
+      <WeekCalendar
+        weekStart={currentWeek}
+        tasks={tasks}
+        threads={threads}
+        today={today}
+        onWeekChange={setWeekStart}
+        onSelectTask={(id) => { setSelectedKey(taskKey(id)); setInspectedId(id); }}
+        onSelectThread={(id) => props.onOpenThread(id, threads.find((thread) => thread.threadId === id)?.subjectId ?? null)}
+        onReschedule={(taskId, patch) => void update(taskId, patch)}
+        onCreateAt={(slot) => void create({
+          title: "新任务", scheduledDate: slot.scheduledDate, scheduledStartAt: slot.scheduledStartAt,
+          durationMinutes: slot.scheduledStartAt ? 30 : null, source: "manual",
+        }).then((task) => { if (task) openTask(task); })}
+      />
+    );
+  } else if (space) {
+    main = (
+      <SpaceTaskList
+        subject={{ id: space.id, name: space.name, color: space.color, deadline: space.deadline }}
+        tasks={tasks}
+        threads={threads}
+        today={today}
+        onOpenTask={openTask}
+        onOpenThread={openThread}
+        onToggleDone={toggleDone}
+        onOpenSpace={() => props.onOpenSpace(space.id)}
+      />
+    );
+  } else if (view === "upcoming") {
+    main = <UpcomingView groups={groups} today={today} listProps={listProps} />;
+  } else {
+    main = (
+      <>
+        <div className={styles.quick}>
+          <QuickAdd ref={quickRef} subjects={subjectInfos} defaultSubjectId={null} onCreate={createTask} />
+        </div>
+        <div className={styles.scroll}>
+          {groups.every((group) => group.nodes.length === 0) ? (
+            <p className={styles.emptyLine}>{EMPTY_HINT[view] ?? "这里还没有任务。"}</p>
+          ) : (
+            <AgendaList groups={groups} today={today} {...listProps} />
+          )}
+        </div>
+      </>
+    );
+  }
 
   return (
     <div className={styles.page}>
@@ -186,32 +264,8 @@ export function AgendaPage(props: AgendaPageProps) {
             <PanelLeftOpen size={16} />
           </button>
         )}
-        <h1 className={styles.heading}>日程</h1>
-        {agenda.status === "ready" && <span className={styles.badge}>{openCount} 项待办</span>}
-
-        <div className={styles.switch} role="group" aria-label="视图切换">
-          <button type="button" className={cx(styles.switchBtn, mode === "list" && styles.switchOn)} aria-pressed={mode === "list"} onClick={() => setMode("list")}>
-            <List size={13} aria-hidden />列表
-          </button>
-          <button type="button" className={cx(styles.switchBtn, mode === "week" && styles.switchOn)} aria-pressed={mode === "week"} onClick={() => setMode("week")}>
-            <CalendarDays size={13} aria-hidden />周历
-          </button>
-        </div>
-
+        <h1 className={styles.heading}>{heading}</h1>
         <span className={styles.spacer} />
-
-        <label className={styles.filter}>
-          <span className="sr-only">按空间筛选</span>
-          <select
-            value={subjectFilter ?? ""}
-            aria-label="按空间筛选"
-            onChange={(event) => setSubjectFilter(event.target.value || null)}
-          >
-            <option value="">全部空间</option>
-            {subjectInfos.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-          </select>
-        </label>
-
         <button type="button" className={styles.btn} onClick={() => setBreakdownOpen(true)} aria-label="AI 拆解排期" title="AI 拆解排期">
           <Sparkles size={13} aria-hidden />AI 拆解排期
         </button>
@@ -220,88 +274,27 @@ export function AgendaPage(props: AgendaPageProps) {
         </button>
       </header>
 
-      <div className={cx(styles.content, showInspector && styles.withInspector)}>
-        <div className={styles.mainCol}>
-          {mode === "list" ? (
-            <>
-              <div className={styles.quick}>
-                <QuickAdd ref={quickRef} subjects={subjectInfos} defaultSubjectId={subjectFilter} onCreate={createTask} />
-              </div>
-              <div className={styles.scroll}>
-                {agenda.status === "loading" ? (
-                  <div className={styles.skeleton} role="status" aria-label="正在加载日程">
-                    {Array.from({ length: 7 }, (_, index) => <span key={index} style={{ width: `${88 - index * 6}%` }} />)}
-                  </div>
-                ) : agenda.status === "error" ? (
-                  <div className={styles.state} role="alert">
-                    <CircleAlert size={20} aria-hidden />
-                    <h2>{failure?.title ?? "日程加载失败"}</h2>
-                    <p>{agenda.error?.message && agenda.error.message !== failure?.title ? agenda.error.message : failure?.hint}</p>
-                    <button type="button" className={styles.btn} onClick={() => void agenda.reload()}>
-                      <RotateCcw size={13} aria-hidden />重新加载
-                    </button>
-                  </div>
-                ) : groups.length === 0 ? (
-                  <div className={styles.state}>
-                    <Inbox size={20} aria-hidden />
-                    <h2>{subjectFilter ? "这个空间还没有日程" : "还没有日程"}</h2>
-                    <p>在上面的输入框里写一句话就能添加，比如「明天下午3点 复习戴维南定理 p1 45分钟」。艾宾浩斯闪回和进行中的 Thread 也会出现在这里。</p>
-                    <button type="button" className={styles.btn} onClick={() => quickRef.current?.focus()}>开始添加</button>
-                  </div>
-                ) : (
-                  <AgendaList
-                    groups={groups}
-                    today={today}
-                    subjects={subjectMap}
-                    selectedKey={selectedKey}
-                    collapsedGroups={collapsedGroups}
-                    collapsedParents={collapsedParents}
-                    onSelect={setSelectedKey}
-                    onOpenTask={openTask}
-                    onOpenThread={(thread) => { setSelectedKey(threadKey(thread.threadId)); props.onOpenThread(thread.threadId, thread.subjectId); }}
-                    onToggleDone={toggleDone}
-                    onFocusTask={focusTask}
-                    onFocusThread={focusThread}
-                    onToggleGroup={toggleGroup}
-                    onToggleParent={toggleParent}
-                  />
-                )}
-              </div>
-            </>
-          ) : (
-            <WeekCalendar
-              weekStart={currentWeek}
-              tasks={subjectFilter ? tasks.filter((task) => task.subjectId === subjectFilter) : tasks}
-              threads={subjectFilter ? threads.filter((thread) => thread.subjectId === subjectFilter) : threads}
-              today={today}
-              onWeekChange={setWeekStart}
-              onSelectTask={(id) => { setSelectedKey(taskKey(id)); setInspectedId(id); }}
-              onSelectThread={(id) => props.onOpenThread(id, threads.find((thread) => thread.threadId === id)?.subjectId ?? null)}
-              onReschedule={(taskId, patch) => void update(taskId, patch)}
-              onCreateAt={(slot) => void create({
-                title: "新任务", scheduledDate: slot.scheduledDate, scheduledStartAt: slot.scheduledStartAt,
-                durationMinutes: slot.scheduledStartAt ? 30 : null, subjectId: subjectFilter, source: "manual",
-              }).then((task) => { if (task) openTask(task); })}
-            />
+      <div className={styles.body}>
+        <AgendaRail view={view} counts={counts} subjects={subjectInfos} onChange={setView} />
+        <div className={cx(styles.content, showInspector && styles.withInspector)}>
+          <div className={styles.mainCol}>{main}</div>
+          {showInspector && inspected && (
+            <div className={styles.inspector}>
+              <TaskInspector
+                key={inspected.id}
+                task={inspected}
+                parentTitle={parentTitle}
+                subtasks={subtasks}
+                subjects={subjectInfos}
+                onClose={() => setInspectedId(null)}
+                onUpdate={update}
+                onDelete={deleteTask}
+                onAddSubtask={addSubtask}
+                onSelectTask={(id) => { setInspectedId(id); setSelectedKey(taskKey(id)); }}
+              />
+            </div>
           )}
         </div>
-
-        {showInspector && inspected && (
-          <div className={styles.inspector}>
-            <TaskInspector
-              key={inspected.id}
-              task={inspected}
-              parentTitle={parentTitle}
-              subtasks={subtasks}
-              subjects={subjectInfos}
-              onClose={() => setInspectedId(null)}
-              onUpdate={update}
-              onDelete={deleteTask}
-              onAddSubtask={addSubtask}
-              onSelectTask={(id) => { setInspectedId(id); setSelectedKey(taskKey(id)); }}
-            />
-          </div>
-        )}
       </div>
 
       <AiBreakdownDialog
@@ -309,7 +302,7 @@ export function AgendaPage(props: AgendaPageProps) {
         subjects={props.subjects.map((subject) => ({
           id: subject.id, name: subject.name, color: subject.color, deadline: subject.deadline,
         }))}
-        defaultSubjectId={subjectFilter}
+        defaultSubjectId={spaceId}
         onClose={() => setBreakdownOpen(false)}
         onCreated={(created) => {
           setBreakdownOpen(false);
@@ -319,13 +312,4 @@ export function AgendaPage(props: AgendaPageProps) {
       />
     </div>
   );
-}
-
-/** 本地日期所在周的周一（YYYY-MM-DD） */
-function mondayOf(day: string): string {
-  const base = day ? new Date(`${day}T00:00:00`) : new Date();
-  const offset = (base.getDay() + 6) % 7;
-  base.setDate(base.getDate() - offset);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${base.getFullYear()}-${pad(base.getMonth() + 1)}-${pad(base.getDate())}`;
 }

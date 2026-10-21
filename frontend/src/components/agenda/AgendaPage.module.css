@@ -260,3 +260,52 @@
     max-width: 110px;
   }
 }
+
+/* 左侧导航 + 内容；窄宽度时导航收成顶部下拉（见 AgendaRail.module.css） */
+.body {
+  container: agendabody / inline-size;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+@container agendabody (max-width: 640px) {
+  .body {
+    flex-direction: column;
+  }
+}
+
+.body > .content {
+  flex: 1;
+  min-width: 0;
+}
+
+.emptyLine {
+  padding: 28px 16px;
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+  text-align: center;
+}
+
+/* 日程区域不够宽时，详情改成浮在列表右侧的抽屉，列表不再被挤压 */
+.body {
+  position: relative;
+}
+
+@container agendabody (max-width: 1240px) {
+  .withInspector {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .withInspector .inspector {
+    position: absolute;
+    z-index: 20;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(380px, 100%);
+    border-left: 1px solid var(--border);
+    background: var(--bg-panel);
+    box-shadow: var(--shadow-popover);
+  }
+}

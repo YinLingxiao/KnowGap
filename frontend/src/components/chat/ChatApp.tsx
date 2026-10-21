@@ -470,6 +470,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
               } catch { /* 存储不可用时只打开空间 */ }
               openSpace(subjectId);
             }}
+            onOpenSpace={(subjectId) => openSpace(subjectId)}
             onNotify={push}
           />
         ) : view.type === "spaces" ? (

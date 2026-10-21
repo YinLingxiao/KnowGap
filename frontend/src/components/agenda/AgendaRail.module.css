@@ -1,0 +1,135 @@
+/* 父容器（AgendaPage .body）声明了 container agendabody，窄宽度时切换为下拉 */
+.rail {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 200px;
+  flex-shrink: 0;
+  min-height: 0;
+  padding: 10px 8px 16px;
+  overflow-y: auto;
+  border-right: 1px solid var(--border-subtle);
+  background: var(--bg-panel);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  text-align: left;
+  transition: background-color var(--t-hover) var(--ease-out), color var(--t-hover) var(--ease-out);
+}
+
+.item:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.active,
+.active:hover {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-weight: 500;
+}
+
+.icon {
+  flex-shrink: 0;
+}
+
+.dotSlot {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.count {
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 400;
+}
+
+.active .count {
+  color: var(--accent-text);
+}
+
+.section {
+  margin: 14px 0 4px;
+  padding: 0 8px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.empty {
+  margin: 0;
+  padding: 4px 8px;
+  color: var(--text-tertiary);
+  font-size: 11.5px;
+}
+
+.picker {
+  display: none;
+}
+
+.picker select {
+  width: 100%;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
+  color: var(--text);
+  font-size: var(--text-sm);
+}
+
+.picker select:hover {
+  border-color: var(--border-strong);
+}
+
+@container agendabody (max-width: 640px) {
+  .rail {
+    display: none;
+  }
+
+  .picker {
+    display: block;
+    flex-shrink: 0;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+}

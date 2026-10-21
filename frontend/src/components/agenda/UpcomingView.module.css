@@ -1,0 +1,144 @@
+.view {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.strip {
+  flex-shrink: 0;
+  padding: 10px 14px 8px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.stripHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.month {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.navBtn,
+.todayBtn {
+  display: inline-grid;
+  place-items: center;
+  height: 26px;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+}
+
+.navBtn {
+  width: 26px;
+}
+
+.todayBtn {
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  background: var(--bg-subtle);
+  font-size: 11.5px;
+  font-weight: 500;
+}
+
+.navBtn:hover:not(:disabled),
+.todayBtn:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.navBtn:disabled {
+  opacity: 0.35;
+}
+
+.days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 2px;
+}
+
+.day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 4px 0 3px;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  transition: background-color var(--t-hover) var(--ease-out);
+}
+
+.day:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.day:disabled {
+  color: var(--text-tertiary);
+  opacity: 0.5;
+}
+
+.dayName {
+  font-size: 11px;
+}
+
+.dayNum {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+
+.dayToday .dayName {
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+.dayToday .dayNum {
+  background: var(--accent-solid);
+  color: var(--on-accent);
+}
+
+.dayPicked:not(.dayToday) .dayNum {
+  background: var(--accent-soft-strong);
+  color: var(--accent-text);
+}
+
+.dayDot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.dayDotOn {
+  background: var(--text-tertiary);
+}
+
+.dayToday .dayDotOn {
+  background: var(--accent);
+}
+
+.scroll {
+  flex: 1;
+  min-height: 0;
+  padding: 0 14px;
+  overflow-y: auto;
+  scroll-padding-top: 0;
+}

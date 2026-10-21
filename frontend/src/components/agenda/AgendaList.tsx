@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, type KeyboardEvent } from "react";
-import { Check, ChevronRight, MessagesSquare, Play, Repeat } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { Check, ChevronRight, MessagesSquare, Play, Plus, Repeat } from "lucide-react";
 import type { AgendaTask, AgendaThread } from "@/lib/agenda/types";
 import { cx } from "@/lib/cx";
 import {
@@ -16,7 +16,7 @@ export interface SubjectInfo {
   color: string;
 }
 
-interface AgendaListProps {
+export interface AgendaListProps {
   groups: AgendaGroup[];
   today: string;
   subjects: Map<string, SubjectInfo>;
@@ -31,9 +31,38 @@ interface AgendaListProps {
   onFocusThread: (thread: AgendaThread) => void;
   onToggleGroup: (key: GroupKey) => void;
   onToggleParent: (taskId: string) => void;
+  /** 节末「+ 添加任务」 */
+  onCompose?: (defaults: NonNullable<AgendaGroup["compose"]>) => void;
+  /** 某节为空时的提示文字 */
+  emptyHint?: (group: AgendaGroup) => string | null;
+  ariaLabel?: string;
 }
 
 const PRIORITY_CLASS = [styles.p1, styles.p1, styles.p2, styles.p3, styles.p4];
+
+function toggleIn<T>(current: ReadonlySet<T>, key: T): ReadonlySet<T> {
+  const next = new Set(current);
+  if (!next.delete(key)) next.add(key);
+  return next;
+}
+
+/** 列表的选中行、分组折叠与父任务折叠状态 */
+export function useListState() {
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [collapsedGroups, setCollapsedGroups] = useState<ReadonlySet<GroupKey>>(new Set());
+  const [collapsedParents, setCollapsedParents] = useState<ReadonlySet<string>>(new Set());
+  const toggleGroup = useCallback((key: GroupKey) => setCollapsedGroups((current) => toggleIn(current, key)), []);
+  const toggleParent = useCallback((id: string) => setCollapsedParents((current) => toggleIn(current, id)), []);
+  const expandParent = useCallback((id: string) => setCollapsedParents((current) => {
+    if (!current.has(id)) return current;
+    const next = new Set(current);
+    next.delete(id);
+    return next;
+  }), []);
+  return {
+    selectedKey, setSelectedKey, collapsedGroups, collapsedParents, toggleGroup, toggleParent, expandParent,
+  };
+}
 
 export function AgendaList(props: AgendaListProps) {
   const { groups, collapsedGroups, collapsedParents, selectedKey } = props;
@@ -91,29 +120,53 @@ export function AgendaList(props: AgendaListProps) {
       className={styles.list}
       role="listbox"
       tabIndex={0}
-      aria-label="日程列表，上下键选择，空格完成，回车打开详情"
+      aria-label={`${props.ariaLabel ?? "日程列表"}，上下键选择，空格完成，回车打开详情`}
       aria-activedescendant={selectedKey ? `agenda-row-${selectedKey}` : undefined}
       onKeyDown={onKeyDown}
     >
       {groups.map((group) => {
+        if (!group.nodes.length && !group.keepEmpty) return null;
         const collapsed = collapsedGroups.has(group.key);
+        const hint = !group.nodes.length ? props.emptyHint?.(group) ?? null : null;
+        const heading = group.sublabel ? `${group.label} · ${group.sublabel}` : group.label;
         return (
-          <section key={group.key} className={styles.group} aria-label={group.label}>
+          <section key={group.key} className={styles.group} aria-label={heading} data-group-key={group.key}>
             <h2 className={styles.groupHead}>
               <button
                 type="button"
-                className={cx(styles.groupToggle, group.key === "overdue" && styles.groupOverdue)}
+                className={cx(
+                  styles.groupToggle,
+                  group.tone === "overdue" && styles.groupOverdue,
+                  group.tone === "today" && styles.groupToday,
+                )}
                 aria-expanded={!collapsed}
                 onClick={() => props.onToggleGroup(group.key)}
               >
                 <ChevronRight size={12} className={cx(styles.chev, !collapsed && styles.chevOpen)} aria-hidden />
                 <span>{group.label}</span>
-                <span className={styles.groupCount}>{group.nodes.length}</span>
+                {group.sublabel && <span className={styles.groupSub}>{group.sublabel}</span>}
+                {group.nodes.length > 0 && <span className={styles.groupCount}>{group.nodes.length}</span>}
               </button>
             </h2>
-            {!collapsed && group.nodes.map((node) => (
-              <NodeRows key={node.key} node={node} {...props} collapsedParent={node.kind !== "thread" && collapsedParents.has(node.task.id)} />
-            ))}
+            {!collapsed && (
+              <>
+                {group.nodes.map((node) => (
+                  <NodeRows key={node.key} node={node} {...props} collapsedParent={node.kind !== "thread" && collapsedParents.has(node.task.id)} />
+                ))}
+                {hint && <p className={styles.emptyHint}>{hint}</p>}
+                {group.compose && props.onCompose && (
+                  <button
+                    type="button"
+                    className={styles.addRow}
+                    onClick={() => props.onCompose?.(group.compose!)}
+                    aria-label={`添加任务到「${heading}」`}
+                  >
+                    <Plus size={13} aria-hidden />
+                    添加任务
+                  </button>
+                )}
+              </>
+            )}
           </section>
         );
       })}

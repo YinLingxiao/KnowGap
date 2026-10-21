@@ -1,4 +1,5 @@
 .list {
+  container: agendalist / inline-size;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -49,6 +50,45 @@
 
 .groupOverdue:hover {
   color: var(--red);
+}
+
+.groupToday,
+.groupToday:hover {
+  color: var(--accent-text);
+}
+
+.groupSub {
+  overflow: hidden;
+  color: var(--text-tertiary);
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.emptyHint {
+  margin: 0;
+  padding: 6px 8px 2px 32px;
+  color: var(--text-tertiary);
+  font-size: 11.5px;
+}
+
+.addRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 8px 0 30px;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  text-align: left;
+  transition: color var(--t-hover) var(--ease-out), background-color var(--t-hover) var(--ease-out);
+}
+
+.addRow:hover,
+.addRow:focus-visible {
+  background: var(--bg-hover);
+  color: var(--accent-text);
 }
 
 .groupCount {
@@ -185,7 +225,7 @@
 
 .title {
   overflow: hidden;
-  min-width: 0;
+  min-width: 4em;
   color: var(--text);
   font-size: var(--text-sm);
   text-overflow: ellipsis;
@@ -337,6 +377,25 @@
   }
 
   .meta {
+    display: none;
+  }
+}
+
+/* 窄列表（如学习空间右侧面板）：标题优先，标签、空间名和进度条让位 */
+@container agendalist (max-width: 520px) {
+  .label,
+  .subject,
+  .progress {
+    display: none;
+  }
+
+  .meta {
+    gap: 6px;
+  }
+}
+
+@container agendalist (max-width: 380px) {
+  .badge {
     display: none;
   }
 }
