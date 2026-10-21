@@ -36,6 +36,12 @@ declare global {
         openInMain: (conversationId?: string) => Promise<void>;
         onShown: (listener: () => void) => () => void;
       };
+      showMain?: () => void;
+      setTrayStatus?: (status: { focus?: string | null; todayCount?: number }) => void;
+      getDesktopSettings?: () => Promise<{ closeToTray: boolean; openAtLogin: boolean }>;
+      setDesktopSettings?: (
+        patch: Partial<{ closeToTray: boolean; openAtLogin: boolean }>,
+      ) => Promise<{ closeToTray: boolean; openAtLogin: boolean }>;
     };
   }
 }
@@ -326,6 +332,43 @@ function Toggle({ checked, label, onChange }: { checked: boolean; label: string;
   );
 }
 
+function DesktopRows() {
+  const [desktop, setDesktop] = useState<{ closeToTray: boolean; openAtLogin: boolean } | null>(null);
+  useEffect(() => {
+    const api = window.knowgap;
+    if (!api?.getDesktopSettings) return;
+    let cancelled = false;
+    void api.getDesktopSettings().then((value) => {
+      if (!cancelled && value && typeof value.closeToTray === "boolean" && typeof value.openAtLogin === "boolean") {
+        setDesktop(value);
+      }
+    }).catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  if (!desktop) return null;
+  const patch = (next: Partial<{ closeToTray: boolean; openAtLogin: boolean }>) => {
+    setDesktop({ ...desktop, ...next });
+    void window.knowgap?.setDesktopSettings?.(next).catch(() => {
+      void window.knowgap?.getDesktopSettings?.().then((value) => {
+        if (value && typeof value.closeToTray === "boolean" && typeof value.openAtLogin === "boolean") setDesktop(value);
+      }).catch(() => undefined);
+    });
+  };
+  return (
+    <>
+      <p className={styles.sectionLabel}>桌面</p>
+      <SettingRow title="关闭时最小化到托盘" desc="关闭窗口后继续在后台运行，可从托盘图标重新打开。">
+        <Toggle checked={desktop.closeToTray} label="关闭时最小化到托盘" onChange={(closeToTray) => patch({ closeToTray })} />
+      </SettingRow>
+      <SettingRow title="开机自启" desc="登录系统后只在托盘启动，不打开主窗口。">
+        <Toggle checked={desktop.openAtLogin} label="开机自启" onChange={(openAtLogin) => patch({ openAtLogin })} />
+      </SettingRow>
+    </>
+  );
+}
+
 function GeneralPane({ userId }: { userId: string }) {
   const [theme, setTheme] = useThemeChoice();
   const [look, setLook] = useState<Appearance>(() => readAppearance(userId));
@@ -372,6 +415,7 @@ function GeneralPane({ userId }: { userId: string }) {
           onChange={(motion) => patch({ ...look, motion })}
         />
       </SettingRow>
+      <DesktopRows />
     </section>
   );
 }

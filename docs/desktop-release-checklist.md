@@ -118,11 +118,19 @@ logs/backend.log    后端日志（启动信息、请求、异常）
 | 4.12 | Spotlight 回退（Ctrl+Shift+K） | 若 4.11 无反应：先看主进程日志是否输出「快捷键 Alt+Space 注册失败」，再按 `Ctrl+Shift+K` | 浮窗同样弹出；应用启动日志显示实际注册成功的快捷键 | ☐ |
 | 4.13 | /quick 静态路由 | 浏览器访问 `http://127.0.0.1:$port/quick.html` 和 `http://127.0.0.1:$port/quick` | 两者均 200 并渲染快问页面（后端会把无扩展名路由回退到 `quick.html`） | ☐ |
 | 4.14 | 「在主窗口打开」跳转 | 浮窗提问并等回复完成，点「在主窗口打开」 | 浮窗隐藏；主窗口切到该对话，消息与浮窗一致；侧栏高亮该对话 | ☐ |
-| 4.15 | 重启端口复用 | 关闭主窗口 → 重新启动应用；对比两次 `port.json` 与地址栏 origin | 端口不变（首次因 38617 被占用换端口后，之后复用上次端口）；登录态保留，无需重新登录 | ☐ |
+| 4.15 | 重启端口复用 | 托盘「退出」后重新启动应用；对比两次 `port.json` 与地址栏 origin | 端口不变（首次因 38617 被占用换端口后，之后复用上次端口）；登录态保留，无需重新登录 | ☐ |
 | 4.16 | 打开的对话保留 | 重启后观察主区域 | 自动回到上次打开的对话；学习空间、最近对话数量、消息内容均仍在 | ☐ |
-| 4.17 | 关闭后进程全退 | 关闭主窗口，等待 3 秒后执行 `Get-Process KnowGap,knowgap` | 无 `KnowGap.exe`、无 `resources\backend\knowgap.exe` 残留；端口不再 LISTENING | ☐ |
+| 4.17 | 托盘退出后进程全退 | 托盘右键「退出」，等待 3 秒后执行 `Get-Process KnowGap,knowgap -ErrorAction SilentlyContinue` | 无 `KnowGap.exe`、无 `knowgap.exe`；端口不再 LISTENING。点主窗口 × 不会退出（见 4.20） | ☐ |
 | 4.18 | 数据目录持久化 | 重启后检查 `%APPDATA%\knowgap-desktop` | `knowgap.sqlite3`、`ai-settings.json`、`port.json`、`logs\backend.log` 均在；新对话/空间重启后仍在 | ☐ |
-| 4.19 | 重复启动保护 | 应用运行时再次双击 `KnowGap.exe` | 不出现第二个窗口/第二个后端；已有窗口被唤到前台 | ☐ |
+| 4.19 | 重复启动保护 | 应用运行时再次双击 `KnowGap.exe`（主窗口在托盘里时再测一次） | 不出现第二个窗口/第二个后端；已有主窗口被唤出。第二个进程自行退出 | ☐ |
+| 4.20 | 关闭到托盘 | 默认设置下点主窗口 × | 窗口从任务栏消失，`KnowGap.exe` 与 `knowgap.exe` 仍在；托盘图标还在。第一次弹出系统通知「KnowGap 仍在后台运行，{实际快捷键} 随时快问」，`%APPDATA%\knowgap-desktop\desktop-settings.json` 里 `backgroundNotified` 变为 `true`；再隐藏不再弹 | ☐ |
+| 4.21 | 托盘单击切换 | 左键单击托盘图标 | 主窗口在显示与隐藏之间切换；隐藏后后端 `/health` 仍为 200 | ☐ |
+| 4.22 | 托盘菜单 | 右键托盘图标 | 菜单为：打开 KnowGap、快问（括号内是实际生效的快捷键）、开始专注 25 分钟、今日待办 N 项、分隔线、关闭时最小化到托盘（默认勾选）、开机自启（勾选项）、退出 | ☐ |
+| 4.23 | 今日待办 / 开始专注 | 点「今日待办 N 项」；再点「开始专注 25 分钟」 | 主窗口打开并进入日程；专注开始后托盘悬停由「KnowGap」变为「专注中 mm:ss · 标题」（空闲时回到「KnowGap」）。N 为今天计划且未完成的任务数 | ☐ |
+| 4.24 | 隐藏时快问并能回主窗口 | 主窗口隐藏后按实际快捷键（默认 `Alt+Space`），在浮窗回复完成后点「在主窗口打开」 | 浮窗能弹出；主窗口从托盘被唤出并打开同一对话 | ☐ |
+| 4.25 | `--hidden` 启动 | 托盘退出后执行 `npx electron . --hidden`（安装包则 `KnowGap.exe --hidden`） | 只出现托盘，主窗口不显示；`/health` 200；左键托盘图标可以打开主窗口 | ☐ |
+| 4.26 | 设置里的两个开关 | 设置 → 通用 | 仅 Electron 里出现「关闭时最小化到托盘」「开机自启」。浏览器里没有这两项。关掉「关闭时最小化到托盘」后点 ×，进程按 4.17 退出 | ☐ |
+| 4.27 | 关掉托盘驻留后的关闭 | 设置或托盘菜单取消「关闭时最小化到托盘」，再点主窗口 × | 窗口关闭，快捷键注销，浮窗销毁，`knowgap.exe` 被结束，无残留进程 | ☐ |
 
 ### 4.6 的恢复步骤
 
@@ -163,7 +171,7 @@ Get-ChildItem "desktop\dist\win-unpacked\resources\backend"
 | 白屏 / 404 | 确认包内 `resources\frontend\index.html`、`quick.html` 存在；重新执行打包脚本（会清理旧产物） |
 | Spotlight 无反应 | 主进程日志看快捷键注册结果；关闭占用 `Alt+Space` 的软件，或用 `Ctrl+Shift+K` |
 | 登录态丢失 | 端口变了（origin 变了）。检查 38617 是否被占；`port.json` 是否可写 |
-| 关闭后仍有 knowgap.exe | 确认是从主窗口关闭（不是只在任务管理器结束 Electron）；残留可 `Stop-Process -Name knowgap -Force` |
+| 关闭后仍有 knowgap.exe | 默认点 × 会留在托盘，这是预期。要完全退出用托盘「退出」，或先关掉「关闭时最小化到托盘」。残留可 `Stop-Process -Name knowgap,KnowGap -Force` |
 
 ---
 
@@ -177,6 +185,8 @@ Get-ChildItem "desktop\dist\win-unpacked\resources\backend"
 6. **后端依赖未锁定**：`backend/requirements.txt` 里 fastapi/uvicorn/pydantic 等未固定版本。全新 venv 会解析到比开发机更新的版本（本轮：fastapi 0.157.0 / starlette 1.9.0，开发机是 0.143.1 / 1.8.0），两套都验证通过，但长期不可复现。`requirements.txt` 不在本次可改范围，建议后续锁定。
 7. **卸载会留下空的安装目录**：NSIS 卸载后 `%LOCALAPPDATA%\Programs\knowgap-desktop` 仍存在（0 个文件），快捷方式和注册表项已清除，`%APPDATA%\knowgap-desktop` 数据保留。属 electron-builder/NSIS 默认行为。
 8. **打包必须在干净检出里做**：多个会话共用同一工作区时，别人未提交的改动会被 `next build` 打进安装包。本轮最终包是在 `git worktree`（仅 `2e659cd` + 本分支修复）里构建的。
+9. **关闭按钮默认不再退出进程**：`closeToTray` 默认开启，点 × 只隐藏窗口。完全退出走托盘「退出」。开发态 `electron.exe` 的「开机自启」会登记到 Electron 可执行文件，路演以安装包为准。
+10. **托盘状态依赖新的静态前端**：`DesktopBridge` 和设置页开关在 `frontend/out` 里。只换 `desktop/main.js`、不重新 `next build` 时，托盘菜单仍可用，但悬停不会更新、设置页也没有开关。
 
 ---
 
