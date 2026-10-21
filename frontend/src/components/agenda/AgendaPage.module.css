@@ -7,8 +7,10 @@
 }
 
 .top {
+  container: agendatop / inline-size;
   display: flex;
   flex-shrink: 0;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   min-height: 44px;
@@ -17,11 +19,15 @@
 }
 
 .heading {
+  flex-shrink: 0;
+  white-space: nowrap;
   font-size: var(--text-md);
   font-weight: 600;
 }
 
 .badge {
+  flex-shrink: 0;
+  white-space: nowrap;
   padding: 1px 7px;
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -61,6 +67,7 @@
 }
 
 .switchBtn {
+  white-space: nowrap;
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -237,8 +244,19 @@
   }
 }
 
-.heatmap {
-  margin: 24px 0 8px;
-  padding-top: 16px;
-  border-top: 1px solid var(--border);
+/* 窄窗口：按钮只留图标，筛选框收窄，标题行不再被挤成竖排 */
+@container agendatop (max-width: 640px) {
+  .badge {
+    display: none;
+  }
+
+  .top .btn {
+    padding: 0 8px;
+    font-size: 0;
+    gap: 0;
+  }
+
+  .filter select {
+    max-width: 110px;
+  }
 }

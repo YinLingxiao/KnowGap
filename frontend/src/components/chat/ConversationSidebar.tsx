@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Image from "next/image";
 import {
   Brain, CalendarCheck, ChevronRight, FolderKanban, Loader, MoreHorizontal, PanelLeftClose, Pencil, Plus,
@@ -32,6 +32,8 @@ interface SidebarProps {
   spacesActive: boolean;
   onOpenAgenda: () => void;
   agendaActive: boolean;
+  /** 侧栏里的专注计时入口，由 ChatApp 注入 */
+  focusSlot?: ReactNode;
   onRename: (id: string, title: string) => Promise<boolean>;
   onDelete: (id: string) => Promise<boolean>;
   onRetry: () => void;
@@ -278,6 +280,7 @@ export function ConversationSidebar(props: SidebarProps) {
           <CalendarCheck size={15} aria-hidden />
           <span>日程</span>
         </button>
+        {props.focusSlot}
         <button className={styles.navItem} onClick={props.onOpenMemory}>
           <Brain size={15} aria-hidden />
           <span>学习记忆</span>

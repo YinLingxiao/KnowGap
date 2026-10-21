@@ -9,7 +9,6 @@ import { agendaApi } from "@/lib/agenda/api";
 import type { AgendaTask, AgendaThread, TaskInput } from "@/lib/agenda/types";
 import type { Subject } from "@/lib/chat/types";
 import { cx } from "@/lib/cx";
-import { FocusHeatmap } from "../focus/FocusHeatmap";
 import AiBreakdownDialog from "./AiBreakdownDialog";
 import { AgendaList, type SubjectInfo } from "./AgendaList";
 import {
@@ -213,10 +212,10 @@ export function AgendaPage(props: AgendaPageProps) {
           </select>
         </label>
 
-        <button type="button" className={styles.btn} onClick={() => setBreakdownOpen(true)}>
+        <button type="button" className={styles.btn} onClick={() => setBreakdownOpen(true)} aria-label="AI 拆解排期" title="AI 拆解排期">
           <Sparkles size={13} aria-hidden />AI 拆解排期
         </button>
-        <button type="button" className={styles.btn} onClick={() => void exportIcs()} disabled={exporting}>
+        <button type="button" className={styles.btn} onClick={() => void exportIcs()} disabled={exporting} aria-label="导出 .ics" title="导出 .ics 日历文件">
           {exporting ? <LoaderCircle size={13} className={styles.spin} aria-hidden /> : <Download size={13} aria-hidden />}导出 .ics
         </button>
       </header>
@@ -266,11 +265,6 @@ export function AgendaPage(props: AgendaPageProps) {
                     onToggleGroup={toggleGroup}
                     onToggleParent={toggleParent}
                   />
-                )}
-                {agenda.status === "ready" && (
-                  <section className={styles.heatmap} aria-label="12 周专注热力图">
-                    <FocusHeatmap />
-                  </section>
                 )}
               </div>
             </>

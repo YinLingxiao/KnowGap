@@ -33,6 +33,7 @@ import { CreateSpaceDialog } from "./CreateSpaceDialog";
 import { OnboardingStage } from "./OnboardingStage";
 import { SpacesPage } from "./SpacesPage";
 import { AgendaPage } from "../agenda/AgendaPage";
+import { OPEN_AGENDA_EVENT } from "./AgendaToolCard";
 import { SubjectPage } from "./SubjectPage";
 import { SubjectPicker } from "./SubjectPicker";
 import { FocusCapsule } from "../focus/FocusCapsule";
@@ -329,6 +330,12 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
     openConversation(id);
     closeOverlays();
   };
+  // AI 回复里「已加入日程」卡片的「在日程中查看」
+  useEffect(() => {
+    const open = () => { setView({ type: "agenda" }); closeOverlays(); };
+    window.addEventListener(OPEN_AGENDA_EVENT, open);
+    return () => window.removeEventListener(OPEN_AGENDA_EVENT, open);
+  });
   // 桌面端 Spotlight 快问浮窗「在主窗口打开」：主进程把对话 id 发到这里
   const showConversationRef = useRef(showConversation);
   showConversationRef.current = showConversation;
@@ -419,6 +426,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
             spacesActive={view.type === "spaces"}
             onOpenAgenda={() => { setView({ type: "agenda" }); closeOverlays(); }}
             agendaActive={view.type === "agenda"}
+            focusSlot={<FocusCapsule zen={zen} onZenChange={setZen} contextSubjectId={contextSubjectId} />}
             onRename={chat.renameConversation}
             onDelete={chat.deleteConversation}
             onRetry={() => void chat.refreshList()}
@@ -433,7 +441,6 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
       </aside>
 
       <main className={styles.main}>
-        <FocusCapsule zen={zen} onZenChange={setZen} contextSubjectId={contextSubjectId} />
         {!onboardingMode && interviewError && <p role="alert">{interviewError}<button onClick={() => window.location.reload()}>刷新重试</button></p>}
         {materialsOpen ? (
           <MaterialLibrary
