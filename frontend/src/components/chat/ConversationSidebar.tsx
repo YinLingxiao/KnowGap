@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Image from "next/image";
 import {
-  Brain, CalendarCheck, ChevronRight, FolderKanban, Loader, MoreHorizontal, PanelLeftClose, Pencil, Plus,
+  Brain, CalendarCheck, ChevronRight, FolderKanban, ListPlus, Loader, MoreHorizontal, PanelLeftClose, Pencil, Plus,
   Search, Settings, SlidersHorizontal, Trash2, X,
 } from "lucide-react";
 import type { ApiError } from "@/lib/api/errors";
@@ -224,78 +224,88 @@ export function ConversationSidebar(props: SidebarProps) {
       </header>
 
       <div className={styles.nav}>
-        {searchActive ? (
-          <div className={cx(styles.searchField, styles.searchFieldActive)}>
-            <Search size={14} aria-hidden />
-            <input
-              ref={searchInputRef}
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              onBlur={() => {
-                if (!query) setSearchOpen(false);
-              }}
-              onKeyDown={(event) => {
-                if (event.key === "Escape") {
-                  setQuery("");
-                  setSearchOpen(false);
-                }
-              }}
-              placeholder="筛选对话与空间…"
+        <div className={styles.searchRow}>
+          {searchActive ? (
+            <div className={cx(styles.searchField, styles.searchFieldActive)}>
+              <Search size={14} aria-hidden />
+              <input
+                ref={searchInputRef}
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                onBlur={() => {
+                  if (!query) setSearchOpen(false);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") {
+                    setQuery("");
+                    setSearchOpen(false);
+                  }
+                }}
+                placeholder="筛选对话与空间…"
+                aria-label="搜索对话和学习空间"
+              />
+              {query && (
+                <button type="button" className={styles.searchClear} onClick={() => setQuery("")} aria-label="清空搜索">
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+          ) : (
+            <button
+              type="button"
+              className={styles.searchField}
+              onClick={() => setSearchOpen(true)}
               aria-label="搜索对话和学习空间"
-            />
-            {query && (
-              <button type="button" className={styles.searchClear} onClick={() => setQuery("")} aria-label="清空搜索">
-                <X size={12} />
-              </button>
-            )}
-          </div>
-        ) : (
+            >
+              <Search size={14} aria-hidden />
+              <span>搜索</span>
+            </button>
+          )}
           <button
             type="button"
-            className={styles.searchField}
-            onClick={() => setSearchOpen(true)}
-            aria-label="搜索对话和学习空间"
+            className={styles.iconButton}
+            onClick={() => window.dispatchEvent(new CustomEvent(COMPOSE_TASK_EVENT))}
+            aria-label="添加任务"
+            title="添加任务（Q）"
           >
-            <Search size={14} aria-hidden />
-            <span>搜索</span>
+            <ListPlus size={16} aria-hidden />
           </button>
-        )}
+          <div className={styles.focusShortcut}>{props.focusSlot}</div>
+        </div>
 
-        <button
-          className={cx(styles.navItem, isNewChatActive && styles.navActive)}
-          onClick={props.onNewChat}
-        >
-          <Plus size={15} aria-hidden />
-          <span>新对话</span>
-        </button>
-        <button className={styles.navItem} onClick={() => window.dispatchEvent(new CustomEvent(COMPOSE_TASK_EVENT))} title="添加任务（Q）">
-          <Plus size={15} aria-hidden />
-          <span>添加任务</span>
-          <kbd className={styles.composeKey}>Q</kbd>
-        </button>
-        <div className={styles.navRow}>
-          <button className={cx(styles.navItem, props.spacesActive && styles.navActive)} onClick={props.onOpenSpaces}>
-            <FolderKanban size={15} aria-hidden />
-            <span>学习空间</span>
+        <div className={styles.primaryNav} role="group" aria-label="学习与安排">
+          <button
+            className={cx(styles.navItem, isNewChatActive && styles.navActive)}
+            onClick={props.onNewChat}
+          >
+            <Plus size={15} aria-hidden />
+            <span>新对话</span>
           </button>
-          <button className={styles.sectionAction} onClick={props.onCreateSpace} aria-label="新建学习空间" title="新建学习空间">
-            <Plus size={14} />
+          <button className={cx(styles.navItem, props.agendaActive && styles.navActive)} onClick={props.onOpenAgenda}>
+            <CalendarCheck size={15} aria-hidden />
+            <span>日程</span>
+          </button>
+          <div className={styles.navRow}>
+            <button className={cx(styles.navItem, props.spacesActive && styles.navActive)} onClick={props.onOpenSpaces}>
+              <FolderKanban size={15} aria-hidden />
+              <span>学习空间</span>
+            </button>
+            <button className={styles.sectionAction} onClick={props.onCreateSpace} aria-label="新建学习空间" title="新建学习空间">
+              <Plus size={14} />
+            </button>
+          </div>
+        </div>
+        <div className={styles.secondaryNav} role="group" aria-label="记忆与资料">
+          <button className={styles.navItem} onClick={props.onOpenMemory}>
+            <Brain size={15} aria-hidden />
+            <span>学习记忆</span>
+            {props.memoryCount > 0 && <span className={styles.count}>{props.memoryCount}</span>}
+          </button>
+          <button className={cx(styles.navItem, props.materialsActive && styles.navActive)} onClick={props.onOpenMaterials}>
+            <SlidersHorizontal size={15} aria-hidden />
+            <span>通用资料</span>
           </button>
         </div>
-        <button className={cx(styles.navItem, props.agendaActive && styles.navActive)} onClick={props.onOpenAgenda}>
-          <CalendarCheck size={15} aria-hidden />
-          <span>日程</span>
-        </button>
-        {props.focusSlot}
-        <button className={styles.navItem} onClick={props.onOpenMemory}>
-          <Brain size={15} aria-hidden />
-          <span>学习记忆</span>
-          {props.memoryCount > 0 && <span className={styles.count}>{props.memoryCount}</span>}
-        </button>
-        <button className={cx(styles.navItem, props.materialsActive && styles.navActive)} onClick={props.onOpenMaterials}>
-          <SlidersHorizontal size={15} aria-hidden />
-          <span>通用资料</span>
-        </button>
       </div>
 
       <div className={styles.scroll}>
