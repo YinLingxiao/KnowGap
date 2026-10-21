@@ -1,0 +1,38 @@
+.dialog { margin: auto; padding: 0; width: min(720px, calc(100vw - 32px)); max-height: min(850px, calc(100dvh - 48px)); border: 1px solid var(--border-strong); border-radius: var(--radius-lg); background: var(--bg-elevated); color: var(--text); box-shadow: var(--shadow-popover); overflow: hidden; }
+.dialog[open] { display: flex; flex-direction: column; }
+.dialog::backdrop { background: var(--bg-app-shell); opacity: 0.8; }
+.header { display: flex; align-items: center; gap: 10px; padding: 18px 20px; border-bottom: 1px solid var(--border); }
+.header h2 { font-size: 16px; font-weight: 600; flex: 1; }
+.accent { color: var(--accent-text); }
+.dialog button, .dialog input, .dialog select, .dialog textarea { font: inherit; }
+.dialog button { display: inline-flex; justify-content: center; align-items: center; gap: 6px; min-height: 32px; padding: 5px 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--bg); color: var(--text); cursor: pointer; font-size: 12px; }
+.dialog button:hover { background: var(--bg-hover); }
+.dialog button:disabled { opacity: 0.5; cursor: not-allowed; }
+.dialog .iconButton { min-width: 30px; padding: 4px; background: none; border: none; }
+.dialog :is(button, input, select, textarea):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.dialog :is(input, select, textarea) { width: 100%; min-width: 0; padding: 7px 9px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--bg); color: var(--text); font-size: 13px; caret-color: var(--accent); }
+.dialog input::placeholder, .dialog textarea::placeholder { color: var(--text-tertiary); opacity: 1; }
+.dialog textarea { resize: vertical; min-height: 112px; max-height: 260px; line-height: 1.7; }
+.form { display: flex; flex-direction: column; overflow: hidden; min-height: 0; }
+.body { padding: 20px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--border-strong) var(--bg-elevated); }
+.description { color: var(--text-secondary); font-size: 12px; margin-bottom: 18px; }
+.inputGroup, .preview { border: none; min-width: 0; }
+.inputGroup label, .fields label { display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--text-secondary); }
+.inputOptions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 18px; }
+.inputOptions label > span { font-size: 10px; color: var(--text-tertiary); }
+.draftRow { border: none; padding: 10px 0 16px; min-width: 0; border-bottom: 1px solid var(--border); margin-bottom: 14px; }
+.draftRow legend { font-size: 11px; color: var(--text-secondary); font-weight: 500; }
+.titleRow { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; }
+.titleRow > input { font-weight: 500; }
+.fields { display: grid; grid-template-columns: 1.3fr 1fr 0.8fr 1fr; gap: 8px; }
+.dialog .add { background: none; border-style: dashed; width: 100%; color: var(--text-secondary); }
+.footer { padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-top: 1px solid var(--border); flex-shrink: 0; }
+.footer .description { margin: 0; }
+.dialog .primary { background: var(--accent-solid); border-color: var(--accent-solid); color: var(--on-accent); }
+.dialog .primary:hover { background: var(--accent-solid-hover); }
+.error { background: var(--red-soft); color: var(--red); border: 1px solid var(--red); border-radius: var(--radius-sm); padding: 10px 12px; font-size: 12px; margin-bottom: 16px; overflow-wrap: anywhere; }
+.loading { display: flex; align-items: center; gap: 8px; font-size: 12px; margin-top: 20px; color: var(--accent-text); }
+.loading span { width: 12px; height: 12px; border: 2px solid var(--accent-soft-strong); border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (max-width: 600px) { .fields { grid-template-columns: 1fr 1fr; } .inputOptions { grid-template-columns: 1fr; } .header, .body { padding: 16px; } }
+@media (prefers-reduced-motion: reduce) { .loading span { animation: none; } }
