@@ -245,6 +245,7 @@ class ChatMessage(BaseModel):
     attempt: ExerciseAttempt | None = None
     memory_changes: list[MemoryChange] = Field(default_factory=list)
     used_memory_ids: list[str] = Field(default_factory=list)
+    plan_changes: list[dict] = Field(default_factory=list)
     suggested_problem_id: str | None = None
     sources: list[SourceReference] = Field(default_factory=list)
     truncated: bool = False

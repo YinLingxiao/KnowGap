@@ -90,6 +90,7 @@ def create_app(
     app.state.service_models = service_models
     app.include_router(material_router(library, lambda subject_id: chat_store.subject(subject_id, current_student()) is not None))
     app.include_router(chat_router(chat_store, chat_service))
+    from app.chat.plan_router import plan_router; app.include_router(plan_router(chat_store))
     app.include_router(agenda_router(chat_store, chat))
     app.include_router(subject_router(chat_store, chat_service))
     app.include_router(auth_router(auth_store, chat_store, settings))

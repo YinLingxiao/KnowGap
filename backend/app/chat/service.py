@@ -28,6 +28,7 @@ from app.chat.agent import (
     review_messages, validate_analysis, validate_resolution,
 )
 from app.chat.store import ChatStore, INTERRUPTED
+from app.chat.plan import PlanStore, brief
 from app.chat.checkpoints import resume_state
 from app.chat.usage import normalize_usage
 from app.chat.schemas import DispatchThread, ProposeThreads, ReportProgress
@@ -411,7 +412,8 @@ class ChatService:
             name, raw_args = call.get("name") or "", call.get("arguments") or "{}"
             state.update(next_call=index, in_flight=False)
             self._save_checkpoint(generation, state)
-            supported = any(t["function"]["name"] == name for t in definitions)
+            supported = any(t["function"]["name"] == name for t in definitions) or (
+                name == "plan_steps" and generation.checkpoint is not None)
             allowed, blocked = True, None
             if name in NEEDS_APPROVAL and supported:
                 # The blacklist is checked before asking, so the user is never asked to approve `rm -rf /`.
@@ -536,16 +538,24 @@ class ChatService:
                               if self.settings is not None else "medium")
             custom_skills = self.store.list_custom_skills(student_id)
             compressed_summary, compressed_seq = self.store.get_context_summary(generation.conversation_id)
+            plans = PlanStore(self.store)
+            learning_plan, plan_user_events = (plans.context(generation.conversation_id, student_id)
+                                                if not generation.checkpoint else (None, []))
             messages = chat_messages(
                 history, memories, exercise, sources, subject, role, snapshot, thinking_depth, conv_title,
                 custom_skills=custom_skills, compressed_summary=compressed_summary,
                 compressed_up_to_seq=compressed_seq,
+                learning_plan=learning_plan, plan_user_events=plan_user_events,
             )
             ctx = ToolContext(
                 workspace_of(self.settings), self.store, student_id, generation.conversation_id,
                 self._agent_flag("memory_write_approval"),
             )
             ctx.exercise = exercise
+            ctx.assistant_message_id = assistant_id
+            ctx.user_message_id = generation.user_message_id
+            ctx.plan_version = plans.read(generation.conversation_id, student_id)["version"]
+            ctx.on_plan = lambda plan: queue.put_nowait(("plan", plan))
             # search_good_problems 用当前对话的模型抽题、用讲义库做本地检索
             ctx.model = model
             ctx.library = self.library
@@ -555,7 +565,7 @@ class ChatService:
             if role["role"] == "thread":
                 ctx.report_progress = lambda arguments: self._progress(student_id, generation, ctx, arguments)
             definitions = [tool for tool in DEFINITIONS if (
-                tool["function"]["name"] in {"dispatch_thread", "propose_threads", "session_search", "memory",
+                tool["function"]["name"] in {"dispatch_thread", "propose_threads", "session_search", "memory", "update_plan",
                                              "agenda_list", "agenda_add", "agenda_update"}
                 if role["role"] == "main" else tool["function"]["name"] not in {"dispatch_thread", "propose_threads"}
                 and (role["role"] == "thread" or tool["function"]["name"] != "report_progress")
@@ -779,9 +789,11 @@ class ChatService:
             return
         given = [m.id for m, _ in memories]
         is_thread = self.store.role_context(generation.conversation_id)["role"] == "thread"
+        learning_plan = brief(PlanStore(self.store).read(generation.conversation_id, student_id))
         try:
             raw = await asyncio.wait_for(
-                self._complete_json(model, analysis_messages(history, user_text, reply, memories, given, exercise, is_thread),
+                self._complete_json(model, analysis_messages(history, user_text, reply, memories, given, exercise, is_thread,
+                                    learning_plan),
                                     generation.conversation_id, generation.assistant_message_id, "analysis"),
                 ANALYSIS_TIMEOUT,
             )
@@ -790,7 +802,12 @@ class ChatService:
             logger.warning("Learning analysis skipped: %s", getattr(exc, "detail", type(exc).__name__))
             generation.queue.put_nowait(("analysis", {"skipped": True}))
             return
-        result = validate_analysis(raw, user_text, exercise, given)
+        result = validate_analysis(raw, user_text, exercise, given, learning_plan)
+        plan, plan_changes = PlanStore(self.store).apply_analysis(
+            generation.conversation_id, student_id, result["plan_updates"], generation.assistant_message_id, user_id,
+        )
+        if plan_changes:
+            generation.queue.put_nowait(("plan", plan))
         if is_thread and isinstance(raw, dict) and isinstance(raw.get("thread_report"), dict):
             try:
                 summary = ReportProgress(**raw["thread_report"])

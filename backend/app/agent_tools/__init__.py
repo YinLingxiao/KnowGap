@@ -74,20 +74,23 @@ DEFINITIONS = [
     {
         "type": "function",
         "function": {
-            "name": "plan_steps",
-            "description": "在开展多步原理精讲、对比推导或讲义构建时，向界面展示结构化的执行步骤清单（2 到 4 步），或更新各步骤状态。",
+            "name": "update_plan",
+            "description": "创建或整份更新本对话学习计划（1~8 步）。保留已有步骤 id；讲完不等于学会，需要作答时设 awaiting_learner 并在 note 写问题，学习者答对后才设 done。返回归一化计划及被拒绝的改动。",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "steps": {
                         "type": "array",
                         "minItems": 1,
-                        "maxItems": 5,
+                        "maxItems": 8,
                         "items": {
                             "type": "object",
                             "properties": {
-                                "title": {"type": "string", "description": "简短步骤名称，如“设计贯穿全文的小例子”"},
-                                "status": {"type": "string", "enum": ["pending", "in_progress", "completed"]},
+                                "id": {"type": "string"},
+                                "title": {"type": "string", "minLength": 1, "maxLength": 60},
+                                "status": {"type": "string", "enum": ["pending", "in_progress", "awaiting_learner", "done", "skipped"]},
+                                "note": {"type": "string", "maxLength": 120},
+                                "thread_id": {"type": "string"},
                             },
                             "required": ["title", "status"],
                             "additionalProperties": False,
@@ -311,6 +314,21 @@ async def run(name: str, arguments: dict, ctx) -> str:
             if not getattr(ctx, "report_progress", None):
                 raise ToolError("当前对话不是 Thread。")
             text = ctx.report_progress(arguments)
+        elif name == "update_plan":
+            from app.chat.plan import PlanStore
+
+            try:
+                result = PlanStore(ctx.store).update(
+                    ctx.conversation_id, ctx.student_id, arguments.get("steps"),
+                    getattr(ctx, "assistant_message_id", None), getattr(ctx, "user_message_id", None),
+                )
+            except (LookupError, ValueError) as exc:
+                raise ToolError(str(exc)) from exc
+            if result["plan_changes"] or result["plan"]["version"] != getattr(ctx, "plan_version", 0):
+                if getattr(ctx, "on_plan", None):
+                    ctx.on_plan(result["plan"])
+            ctx.plan_version = result["plan"]["version"]
+            text = json.dumps(result, ensure_ascii=False)
         elif name == "plan_steps":
             steps = arguments.get("steps")
             if not isinstance(steps, list) or not steps:
