@@ -40,9 +40,9 @@
   gap: 4px;
   padding: 2px 6px;
   border-radius: 4px;
-  background: var(--red-soft);
-  color: var(--red);
-  font-size: 11px;
+  background: var(--amber-soft);
+  color: var(--amber);
+  font-size: var(--text-2xs);
 }
 
 .iconBtn {
@@ -74,7 +74,7 @@
   flex-wrap: wrap;
   gap: 4px;
   color: var(--text-tertiary);
-  font-size: 11.5px;
+  font-size: var(--text-xs);
 }
 
 .parent button {
@@ -95,7 +95,7 @@
   color: var(--text);
   font-size: var(--text-xl);
   font-weight: 600;
-  line-height: 1.35;
+  line-height: var(--leading-tight);
 }
 
 .titleInput:hover {
@@ -196,7 +196,7 @@
 .textBtn {
   flex-shrink: 0;
   color: var(--text-tertiary);
-  font-size: 11.5px;
+  font-size: var(--text-xs);
 }
 
 .textBtn:hover {
@@ -207,7 +207,7 @@
   display: inline-flex;
   padding: 2px;
   border: 1px solid var(--border);
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   background: var(--bg-subtle);
 }
 
@@ -217,9 +217,9 @@
   gap: 5px;
   height: 22px;
   padding: 0 8px;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   color: var(--text-tertiary);
-  font-size: 11.5px;
+  font-size: var(--text-xs);
 }
 
 .segBtn:hover {
@@ -256,7 +256,7 @@
   border-radius: 4px;
   background: var(--bg-hover);
   color: var(--text-secondary);
-  font-size: 11.5px;
+  font-size: var(--text-xs);
 }
 
 .tag button {
@@ -280,7 +280,7 @@
   border: 0;
   background: transparent;
   color: var(--text);
-  font-size: 11.5px;
+  font-size: var(--text-xs);
 }
 
 .tagInput::placeholder {
@@ -309,7 +309,7 @@
 
 .memoryHint {
   color: var(--text-tertiary);
-  font-size: 11.5px;
+  font-size: var(--text-xs);
 }
 
 .notes {
@@ -333,7 +333,7 @@
   background: var(--bg);
   color: var(--text);
   font-size: var(--text-sm);
-  line-height: 1.55;
+  line-height: var(--leading-ui);
   resize: vertical;
 }
 
@@ -369,7 +369,7 @@
 .count {
   color: var(--text-tertiary);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--text-2xs);
   font-weight: 400;
 }
 

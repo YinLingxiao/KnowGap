@@ -73,7 +73,7 @@
 }
 
 .head h2 {
-  font-size: 16px;
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text);
 }
@@ -99,7 +99,7 @@
 }
 
 .label {
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text);
 }
@@ -107,7 +107,7 @@
 .optional {
   margin-left: 2px;
   color: var(--text-tertiary);
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 400;
 }
 
@@ -118,7 +118,7 @@
   height: 36px;
   padding: 0 10px 0 6px;
   border: 1.5px solid var(--border-strong);
-  border-radius: 8px;
+  border-radius: var(--radius);
   background: var(--bg-subtle);
   transition:
     border-color var(--t-hover) var(--ease-out),
@@ -146,7 +146,7 @@
   border-radius: 999px;
   background: var(--bg-subtle);
   color: var(--text-tertiary);
-  font-size: 11px;
+  font-size: var(--text-xs);
   transition:
     background-color var(--t-hover) var(--ease-out),
     color var(--t-hover) var(--ease-out),
@@ -168,7 +168,7 @@
   place-items: center;
   width: 26px;
   height: 26px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--bg-hover);
   transition: background-color var(--t-hover) var(--ease-out);
 }
@@ -229,10 +229,10 @@
 .field textarea {
   padding: 9px 11px;
   border: 1px solid var(--border-strong);
-  border-radius: 8px;
+  border-radius: var(--radius);
   background: var(--bg-subtle);
   resize: vertical;
-  line-height: 1.55;
+  line-height: var(--leading-ui);
   transition: border-color var(--t-hover) var(--ease-out);
 }
 
@@ -262,7 +262,7 @@
   place-items: center;
   width: 22px;
   height: 22px;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   color: var(--text-secondary);
 }
 
@@ -278,9 +278,9 @@
   justify-content: center;
   padding: 11px 12px;
   border: 1px dashed var(--border-strong);
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   color: var(--text-tertiary);
-  font-size: 12px;
+  font-size: var(--text-xs);
   text-align: center;
   cursor: pointer;
   transition: border-color var(--t-hover) var(--ease-out), color var(--t-hover) var(--ease-out);
@@ -300,10 +300,10 @@
 
 .fileList li {
   padding: 2px 8px;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   background: var(--bg-subtle);
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: var(--text-xs);
 }
 
 .editExtra {
@@ -325,9 +325,9 @@
   height: 26px;
   padding: 0 9px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: var(--text-xs);
 }
 
 .levelOn {
@@ -340,10 +340,10 @@
   height: 26px;
   padding: 0 8px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--bg-subtle);
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: var(--text-xs);
 }
 
 .actions {
@@ -357,8 +357,8 @@
 .submitBtn {
   height: 32px;
   padding: 0 14px;
-  border-radius: 8px;
-  font-size: 13px;
+  border-radius: var(--radius);
+  font-size: var(--text-sm);
   font-weight: 500;
   transition:
     background-color var(--t-hover) var(--ease-out),

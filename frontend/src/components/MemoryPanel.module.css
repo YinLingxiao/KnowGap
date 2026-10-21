@@ -62,7 +62,7 @@
   padding: 12px 16px 0;
   color: var(--text-tertiary);
   font-size: var(--text-xs);
-  line-height: 1.55;
+  line-height: var(--leading-ui);
 }
 
 .legend {
@@ -137,7 +137,7 @@
   border-radius: var(--radius-lg);
   color: var(--text-tertiary);
   font-size: var(--text-sm);
-  line-height: 1.6;
+  line-height: var(--leading-read);
   text-align: center;
 }
 

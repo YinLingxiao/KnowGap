@@ -78,8 +78,8 @@
   border-radius: var(--radius);
   background: var(--bg-elevated);
   color: var(--text);
-  font-size: 16px;
-  line-height: 1.7;
+  font-size: var(--text-lg);
+  line-height: var(--leading-read);
   resize: vertical;
   transition:
     border-color var(--duration-fast) var(--ease),
@@ -151,7 +151,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   font-family: var(--font-sans);
-  font-size: 10.5px;
+  font-size: var(--text-2xs);
 }
 
 @keyframes enter {

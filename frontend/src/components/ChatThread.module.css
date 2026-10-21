@@ -57,7 +57,7 @@
   height: 24px;
   border-radius: 50%;
   box-shadow: 0 0 0 3px var(--bg);
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-weight: 600;
 }
 
@@ -67,8 +67,8 @@
 }
 
 .avatarStudent {
-  background: linear-gradient(135deg, #f0b866, #d9822b);
-  color: #ffffff;
+  background: var(--bg-active);
+  color: var(--text-secondary);
 }
 
 .body {
@@ -112,9 +112,9 @@
 
 .answer {
   color: var(--text);
-  font-size: 16px;
+  font-size: var(--text-lg);
   font-weight: 600;
-  line-height: 1.7;
+  line-height: var(--leading-read);
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -122,24 +122,24 @@
 .reasoning {
   margin-top: 4px;
   color: var(--text);
-  font-size: 16px;
-  line-height: 1.7;
+  font-size: var(--text-lg);
+  line-height: var(--leading-read);
   white-space: pre-wrap;
   word-break: break-word;
 }
 
 .studentText {
   color: var(--text);
-  font-size: 16px;
-  line-height: 1.7;
+  font-size: var(--text-lg);
+  line-height: var(--leading-read);
   white-space: pre-wrap;
   word-break: break-word;
 }
 
 .tutorText {
   color: var(--text);
-  font-size: 16px;
-  line-height: 1.75;
+  font-size: var(--text-lg);
+  line-height: var(--leading-read);
   white-space: pre-wrap;
   word-break: break-word;
 }

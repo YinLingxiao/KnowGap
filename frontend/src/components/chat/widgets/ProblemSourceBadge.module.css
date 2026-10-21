@@ -17,7 +17,7 @@
   max-width: 260px;
   padding: 0 9px;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-weight: 600;
   cursor: pointer;
   transition: background var(--t-hover) var(--ease), color var(--t-hover) var(--ease);
@@ -76,7 +76,7 @@
 .moreBtn:focus-visible,
 .closeBtn:focus-visible,
 .link:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: 2px;
 }
 

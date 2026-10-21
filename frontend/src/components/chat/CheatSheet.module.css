@@ -185,13 +185,13 @@
 .qHint {
   margin-left: auto;
   color: var(--text-tertiary);
-  font-size: 11px;
+  font-size: var(--text-xs);
   white-space: nowrap;
 }
 
 .qBody {
   font-size: var(--text-sm);
-  line-height: 1.55;
+  line-height: var(--leading-ui);
 }
 
 .list {
@@ -223,7 +223,7 @@
   border-radius: 999px;
   color: var(--tone);
   background: var(--tone-soft);
-  font-size: 11px;
+  font-size: var(--text-xs);
   line-height: 18px;
 }
 
@@ -257,7 +257,7 @@
   border-radius: 4px;
   color: var(--accent-text);
   background: var(--accent-soft);
-  font-size: 11px;
+  font-size: var(--text-xs);
   line-height: 17px;
 }
 
@@ -331,7 +331,7 @@
 .sheetFoot {
   margin-top: 10px;
   color: var(--text-tertiary);
-  font-size: 11px;
+  font-size: var(--text-xs);
   text-align: center;
 }
 
@@ -421,7 +421,7 @@
 
   .qBody {
     font-size: 10px;
-    line-height: 1.4;
+    line-height: var(--leading-ui);
   }
 
   .qHint {
