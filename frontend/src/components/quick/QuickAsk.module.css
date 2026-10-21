@@ -1,0 +1,230 @@
+.stage {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  min-height: 100dvh;
+  padding: 18vh 16px 16px;
+  background: var(--bg-app-shell);
+}
+
+/* 桌面浮窗是透明无边框窗口：页面本身透明（见 QuickAsk 里的 effect），只露出面板 */
+:global(html[data-quick-window]) .stage {
+  min-height: 0;
+  padding: 12px 16px 20px;
+  background: transparent;
+}
+
+.panel {
+  width: 100%;
+  max-width: 608px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--bg-elevated) 92%, transparent);
+  backdrop-filter: blur(18px) saturate(1.4);
+  box-shadow: var(--shadow-popover);
+  overflow: hidden;
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 10px 6px 16px;
+  /* 无边框窗口：输入条之外的空白区域可拖动 */
+  -webkit-app-region: drag;
+}
+
+.input,
+.send,
+.space select,
+.actions button {
+  -webkit-app-region: no-drag;
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+  height: 36px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-xl);
+  letter-spacing: -0.01em;
+}
+
+.input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.send {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--accent-solid);
+  color: var(--on-accent);
+  cursor: pointer;
+  transition: background var(--t-hover) var(--ease), opacity var(--t-hover) var(--ease);
+}
+
+.send:hover:not(:disabled) {
+  background: var(--accent-solid-hover);
+}
+
+.send:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.spin {
+  animation: spin 900ms linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 12px 10px 16px;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.space {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.space select {
+  max-width: 220px;
+  height: 24px;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text-secondary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.space select:focus-visible {
+  outline: 2px solid var(--accent-soft-strong);
+  outline-offset: 1px;
+}
+
+.hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.result {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.asked {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.answer {
+  max-height: 300px;
+  overflow-y: auto;
+  font-size: var(--text-md);
+  overscroll-behavior: contain;
+}
+
+.status {
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+}
+
+.error {
+  color: var(--red);
+  font-size: var(--text-sm);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 4px;
+}
+
+.state {
+  margin-right: auto;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.ghost,
+.primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: background var(--t-hover) var(--ease), color var(--t-hover) var(--ease);
+}
+
+.ghost {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.ghost:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.primary {
+  border: 1px solid transparent;
+  background: var(--accent-solid);
+  color: var(--on-accent);
+}
+
+.primary:hover {
+  background: var(--accent-solid-hover);
+}
+
+.notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 16px;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+@media (max-width: 520px) {
+  .hint {
+    display: none;
+  }
+}
