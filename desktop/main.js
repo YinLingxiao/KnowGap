@@ -1,8 +1,12 @@
 const { app, BrowserWindow, dialog, globalShortcut, ipcMain, nativeTheme, screen } = require("electron");
 const { spawn } = require("child_process");
 const http = require("http");
+const fs = require("fs");
 const net = require("net");
 const path = require("path");
+
+// 页面 origin 随端口变化，换端口会丢掉 localStorage（登录、演示模式、草稿等），所以优先复用固定端口
+const PREFERRED_PORT = 38617;
 
 let backend = null;
 let stopping = false;
@@ -29,15 +33,51 @@ function staticPath() {
   return path.join(__dirname, "..", "frontend", "out");
 }
 
-function freePort() {
+function freePort(wanted = 0) {
   return new Promise((resolve, reject) => {
     const server = net.createServer();
     server.once("error", reject);
-    server.listen(0, "127.0.0.1", () => {
+    server.listen(wanted, "127.0.0.1", () => {
       const { port } = server.address();
       server.close(() => resolve(port));
     });
   });
+}
+
+function portFile() {
+  return path.join(app.getPath("userData"), "port.json");
+}
+
+function lastPort() {
+  try {
+    const port = Number(JSON.parse(fs.readFileSync(portFile(), "utf8")).port);
+    return Number.isInteger(port) && port > 0 && port < 65536 ? port : null;
+  } catch {
+    return null;
+  }
+}
+
+async function pickPort() {
+  const tried = new Set();
+  for (const wanted of [lastPort(), PREFERRED_PORT]) {
+    if (!wanted || tried.has(wanted)) continue;
+    tried.add(wanted);
+    try {
+      return await freePort(wanted);
+    } catch {
+      // 被占用就试下一个
+    }
+  }
+  return freePort();
+}
+
+function rememberPort(port) {
+  try {
+    fs.mkdirSync(app.getPath("userData"), { recursive: true });
+    fs.writeFileSync(portFile(), JSON.stringify({ port }));
+  } catch {
+    // 记不住只是下次可能换端口，不影响启动
+  }
 }
 
 function waitHealth(port) {
@@ -195,7 +235,7 @@ ipcMain.handle("open-in-main", (_event, conversationId) => {
 });
 
 async function open() {
-  const port = await freePort();
+  const port = await pickPort();
   const exe = backendPath();
   const folder = staticPath();
   backend = spawn(exe, ["--port", String(port), "--static", folder], {
@@ -206,6 +246,7 @@ async function open() {
     if (!stopping && code) dialog.showErrorBox("KnowGap", `后端已退出（${code}）`);
   });
   await waitHealth(port);
+  rememberPort(port);
   appOrigin = `http://127.0.0.1:${port}`;
   mainWindow = new BrowserWindow({
     width: 1280,
