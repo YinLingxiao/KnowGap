@@ -30,6 +30,7 @@ import { ConversationSidebar } from "./ConversationSidebar";
 import { MemoryDrawer } from "./MemoryDrawer";
 import { MessageList } from "./MessageList";
 import { CreateSpaceDialog } from "./CreateSpaceDialog";
+import { CoachmarkHost } from "../onboarding/Coachmark";
 import { Welcome } from "../onboarding/Welcome";
 import { SpacesPage } from "./SpacesPage";
 import { AgendaPage } from "../agenda/AgendaPage";
@@ -371,7 +372,8 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
   );
 
   return (
-    <div className={cx(styles.app, (gate !== "app" || !sidebarOpen || zen) && styles.sidebarClosed, narrow && styles.narrow, zen && styles.zen)}>
+    <div className={cx(styles.app, (gate !== "app" || !sidebarOpen || zen) && styles.sidebarClosed, narrow && styles.narrow, zen && styles.zen)} data-coachmark="spotlight">
+      <CoachmarkHost userId={user.id} enabled={gate === "app"} />
       <ReminderScheduler userId={user.id} subjects={chat.subjects} />
       <DesktopBridge />
       {narrow && (

@@ -257,7 +257,7 @@ export function AgendaPage(props: AgendaPageProps) {
   }
 
   return (
-    <div className={styles.page}>
+    <div className={styles.page} data-coachmark="agenda">
       <header className={styles.top}>
         {!props.sidebarOpen && (
           <button type="button" className={styles.iconBtn} onClick={props.onOpenSidebar} aria-label="展开侧栏" title="展开侧栏">

@@ -507,6 +507,7 @@ export function MessageList({
                     <div
                       className={cx(streaming && styles.streaming, fold.folded && styles.folded)}
                       {...(!streaming && { [SELECTABLE_ATTR]: "" })}
+                      {...(finished && message.content.length >= 80 ? { "data-coachmark": "select" } : {})}
                     >
                       <Markdown text={message.content} />
                     </div>
