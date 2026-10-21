@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import {
   ArrowLeftRight, Brain, ChevronRight, CircleAlert, Dumbbell, FileText, Folder,
-  FolderKanban, Mic, PanelLeftOpen, RotateCcw, X,
+  Mic, PanelLeftOpen, RotateCcw, X,
 } from "lucide-react";
 import { useChat } from "@/hooks/useChat";
 import type { HealthState } from "@/hooks/useWorkbench";
@@ -15,7 +15,6 @@ import type { Problem } from "@/lib/types";
 import { createMaterialClient } from "@/lib/api/material-client";
 import { chatApi } from "@/lib/chat/api";
 import type { SpaceInput } from "@/lib/chat/types";
-import { studiedLabel } from "@/lib/chat/space";
 import type { AuthUser } from "@/lib/api/auth";
 import { applyAppearance, readAppearance } from "@/lib/appearance";
 import { AuthView } from "../auth/AuthView";
@@ -40,6 +39,8 @@ import { OPEN_AGENDA_EVENT } from "./AgendaToolCard";
 import { SubjectPage } from "./SubjectPage";
 import { SubjectPicker } from "./SubjectPicker";
 import { FocusCapsule } from "../focus/FocusCapsule";
+import { TodayPanel } from "../home/TodayPanel";
+import todayStyles from "../home/TodayPanel.module.css";
 import styles from "./ChatApp.module.css";
 
 const NARROW = "(max-width: 860px)";
@@ -53,13 +54,6 @@ const STARTERS = [
   { icon: Dumbbell, label: "联网搜真题练习", color: "#10b981", text: "请帮我搜几道关于「在此填写知识点」的经典真题或母题来练手：" },
   { icon: FileText, label: "编程代码实验台", color: "#f59e0b", text: "请先讲清「在此填写编程/算法概念」的核心原理，然后给我一个带 TODO 挖空的 `code_playground` 代码实验台让我动手补全并运行：" },
 ];
-
-function formatZhDate(iso: string): string {
-  const m = Number(iso.slice(5, 7));
-  const d = Number(iso.slice(8, 10));
-  if (Number.isFinite(m) && Number.isFinite(d) && m > 0 && d > 0) return `${m}月${d}日`;
-  return iso.slice(5, 10);
-}
 
 /** 首次登录前置破冰访谈的 3 轮辅助快捷回答胶囊 */
 const ONBOARDING_QUICK_REPLIES: string[][] = [
@@ -619,7 +613,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
             </div>
           </>
         ) : (
-          <div className={styles.home}>
+          <div className={cx(styles.home, todayStyles.homeViewport)}>
             {!sidebarOpen && (
               <button className={cx(styles.iconButton, styles.floatingToggle)} onClick={() => setSidebarOpen(true)} aria-label="展开侧栏" title="展开侧栏">
                 <PanelLeftOpen size={16} />
@@ -637,7 +631,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
               </button>
             </div>
 
-            <div className={styles.homeInner}>
+            <div className={cx(styles.homeInner, todayStyles.homeContent)}>
               <div className={styles.heroHead}>
                 <div className={styles.brandLine}>
                   <Image src="/brand/knowgap-logo-v1.png" alt="" width={20} height={20} className={styles.greetingLogo} />
@@ -708,98 +702,27 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
                 </div>
               </div>
 
-              {/* 间隔重温微追问提醒（P1-5 Spaced Micro-Review） */}
-              {reviewTarget && !chat.draft && (
-                <div className={styles.spacedReviewBanner}>
-                  <div className={styles.spacedReviewBody}>
-                    <span className={styles.spacedReviewTag}>待巩固闪回</span>
-                    <span className={styles.spacedReviewText}>
-                      <strong>{reviewTarget.topic}</strong>：{reviewTarget.summary}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    className={styles.spacedReviewBtn}
-                    onClick={() => {
-                      chat.setDraft(
-                        `针对我之前在「${reviewTarget.topic}」上的易错点（${reviewTarget.summary}），请出 1 道简短的随堂微测题检验我是否已经想通。`,
-                      );
-                      document.getElementById(COMPOSER_ID)?.focus();
-                    }}
-                  >
-                    1 分钟靶向自测 →
-                  </button>
-                </div>
-              )}
-
-              {/* LobeHub 风格：最近话题双行列表 */}
-              {!chat.draftSubjectId && recentTopics.length > 0 && (
-                <section className={styles.resume} aria-labelledby="recent-topics-title">
-                  <div className={styles.resumeHead}>
-                    <h3 id="recent-topics-title" className={styles.resumeTitle}>
-                      <span>最近话题</span>
-                      <span className={styles.resumeCountBadge}>{recentTopics.length}</span>
-                    </h3>
-                  </div>
-                  <ul className={styles.resumeList} data-stagger>
-                    {recentTopics.map((item) => (
-                      <li key={item.id}>
-                        <button className={styles.lobeRow} onClick={() => showConversation(item.id)}>
-                          <span className={styles.lobeRowIcon} aria-hidden>
-                            <Image src="/brand/knowgap-logo-v1.png" alt="" width={16} height={16} />
-                          </span>
-                          <div className={styles.lobeRowBody}>
-                            <div className={styles.lobeRowTop}>
-                              <span className={styles.lobeRowTitle}>{item.title}</span>
-                              <span className={styles.lobeRowDate}>{formatZhDate(item.updatedAt)}</span>
-                            </div>
-                            {item.preview && <p className={styles.lobeRowPreview}>{item.preview}</p>}
-                          </div>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              )}
-
-              {/* LobeHub 风格：继续学习空间双行列表 */}
-              {!chat.draftSubjectId && recentSpaces.length > 0 && (
-                <section className={styles.resume} aria-labelledby="resume-title">
-                  <div className={styles.resumeHead}>
-                    <h3 id="resume-title" className={styles.resumeTitle}>
-                      <span>学习空间</span>
-                      <span className={styles.resumeCountBadge}>{chat.subjects.length}</span>
-                    </h3>
-                    <button type="button" className={styles.cockpitHeadBtn} onClick={() => setView({ type: "spaces" })}>
-                      <span>查看全部 →</span>
-                    </button>
-                  </div>
-                  <ul className={styles.resumeList} data-stagger>
-                    {recentSpaces.map((subject) => (
-                      <li key={subject.id}>
-                        <button className={styles.lobeRow} onClick={() => openSpace(subject.id)}>
-                          <span
-                            className={styles.lobeRowIcon}
-                            style={{ background: `color-mix(in srgb, ${subject.color} 16%, transparent)`, color: subject.color }}
-                            aria-hidden
-                          >
-                            <FolderKanban size={13} />
-                          </span>
-                          <div className={styles.lobeRowBody}>
-                            <div className={styles.lobeRowTop}>
-                              <span className={styles.lobeRowTitle}>{subject.name}</span>
-                              <span className={styles.lobeRowDate}>{studiedLabel(subject.progress.lastStudiedAt)}</span>
-                            </div>
-                            <p className={styles.lobeRowPreview}>
-                              {subject.goal || `${subject.progress.openThreads} 个进行中 Thread · ${subject.progress.toReview} 个待巩固认知`}
-                            </p>
-                          </div>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              )}
+              <TodayPanel
+                conversations={chat.conversations}
+                recentTopics={recentTopics}
+                recentSpaces={recentSpaces}
+                reviewTarget={reviewTarget}
+                showReview={!chat.draft}
+                onReview={() => {
+                  if (!reviewTarget) return;
+                  chat.setDraft(
+                    `针对我之前在「${reviewTarget.topic}」上的易错点（${reviewTarget.summary}），请出 1 道简短的随堂微测题检验我是否已经想通。`,
+                  );
+                  document.getElementById(COMPOSER_ID)?.focus();
+                }}
+                onPlanReview={() => {
+                  chat.setDraft("让 AI 帮我排这周的复习");
+                  document.getElementById(COMPOSER_ID)?.focus();
+                }}
+                onOpenConversation={showConversation}
+                onOpenSpace={openSpace}
+                onOpenSpaces={() => setView({ type: "spaces" })}
+              />
             </div>
           </div>
         )}
