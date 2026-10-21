@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Brain, CalendarDays, CheckCircle2, ChevronDown, ChevronRight, Download, FileText, Folder, GraduationCap, History, Link2, ListTodo,
   Maximize2, MessagesSquare, Mic, Minimize2, MoreHorizontal, NotebookPen,
-  PanelLeftOpen, Plus, RotateCcw, Settings, SlidersHorizontal, Target, Trash2, Upload, X,
+  PanelLeftOpen, Plus, RotateCcw, Settings, SlidersHorizontal, Target, Trash2, Upload, X, Zap,
 } from "lucide-react";
 import { WIDGET_ASK_EVENT } from "./LearningWidget";
 import type { ChatController } from "@/hooks/useChat";
@@ -17,6 +17,7 @@ import { API_BASE_URL } from "@/lib/config";
 import { cx } from "@/lib/cx";
 import type { CourseMaterial, Problem } from "@/lib/types";
 import { Button } from "../ui/Button";
+import { CheatSheet } from "./CheatSheet";
 import { Composer } from "./Composer";
 import { Markdown } from "./Markdown";
 import { MemoryItem } from "./MemoryDrawer";
@@ -117,6 +118,7 @@ export function SubjectPage({
   const [pagesView, setPagesView] = useState<"edit" | "split" | "preview">("split");
   const [pagesNotice, setPagesNotice] = useState<string | null>(null);
   const [customAnchor, setCustomAnchor] = useState("");
+  const [cheatSheetOpen, setCheatSheetOpen] = useState(false);
 
   const showPanel = (next: Panel) => {
     setPanel(next);
@@ -370,6 +372,10 @@ export function SubjectPage({
           </div>
 
           <div className={styles.tools} role="group" aria-label="空间操作">
+            <button type="button" className={styles.overviewBtn} onClick={() => setCheatSheetOpen(true)} title="生成考前急救一页纸">
+              <Zap size={13} aria-hidden />
+              <span>考前一页纸</span>
+            </button>
             <button
               type="button"
               className={cx(styles.overviewBtn, isOverviewOn && styles.overviewBtnOn)}
@@ -409,6 +415,10 @@ export function SubjectPage({
             </div>
           )}
         </header>
+
+        {cheatSheetOpen && (
+          <CheatSheet subject={subject} notes={pages.id === subject.id ? pages.text : ""} onClose={() => setCheatSheetOpen(false)} />
+        )}
 
         {confirmDelete && (
           <div className={styles.confirm} role="group">
