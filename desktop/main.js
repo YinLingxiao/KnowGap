@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain, nativeTheme } = require("electron");
+const { app, BrowserWindow, dialog, globalShortcut, ipcMain, nativeTheme, screen } = require("electron");
 const { spawn } = require("child_process");
 const http = require("http");
 const net = require("net");
@@ -6,6 +6,15 @@ const path = require("path");
 
 let backend = null;
 let stopping = false;
+let mainWindow = null;
+let quickWindow = null;
+let quickShortcut = null;
+let appOrigin = "";
+
+const QUICK_SHORTCUTS = ["Alt+Space", "CommandOrControl+Shift+K"];
+const QUICK_WIDTH = 640;
+const QUICK_MIN_HEIGHT = 120;
+const QUICK_MAX_HEIGHT = 560;
 if (process.platform === "win32") {
   app.setAppUserModelId("app.knowgap.desktop");
 }
@@ -65,8 +74,11 @@ function stopBackend() {
   backend = null;
 }
 
-ipcMain.handle("select-folder", async () => {
-  const result = await dialog.showOpenDialog({ properties: ["openDirectory"] });
+ipcMain.handle("select-folder", async (_event, defaultPath) => {
+  const result = await dialog.showOpenDialog({
+    properties: ["openDirectory"],
+    defaultPath: typeof defaultPath === "string" && defaultPath ? defaultPath : undefined,
+  });
   return result.canceled ? null : result.filePaths[0];
 });
 
@@ -75,9 +87,111 @@ ipcMain.handle("set-theme", (_event, theme) => {
   nativeTheme.themeSource = next;
   const bg = nativeTheme.shouldUseDarkColors ? "#111215" : "#ffffff";
   for (const win of BrowserWindow.getAllWindows()) {
-    if (!win.isDestroyed()) win.setBackgroundColor(bg);
+    // 快问浮窗是透明窗口，设置底色会让面板外的区域变成实色
+    if (!win.isDestroyed() && win !== quickWindow) win.setBackgroundColor(bg);
   }
   return nativeTheme.shouldUseDarkColors ? "dark" : "light";
+});
+
+function placeQuickWindow() {
+  const cursor = screen.getCursorScreenPoint();
+  const { workArea } = screen.getDisplayNearestPoint(cursor);
+  const [, height] = quickWindow.getSize();
+  const x = Math.round(workArea.x + (workArea.width - QUICK_WIDTH) / 2);
+  const y = Math.round(workArea.y + workArea.height * 0.22);
+  quickWindow.setBounds({ x, y, width: QUICK_WIDTH, height });
+}
+
+function createQuickWindow() {
+  quickWindow = new BrowserWindow({
+    width: QUICK_WIDTH,
+    height: QUICK_MIN_HEIGHT,
+    show: false,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    movable: true,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    hasShadow: true,
+    title: "KnowGap 快问",
+    backgroundColor: "#00000000",
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+  quickWindow.setAlwaysOnTop(true, "floating");
+  quickWindow.on("blur", () => {
+    if (quickWindow && !quickWindow.webContents.isDevToolsOpened()) quickWindow.hide();
+  });
+  quickWindow.on("closed", () => {
+    quickWindow = null;
+  });
+  // 静态导出产物是 quick.html；后端 StaticFiles 不会把 /quick 映射到 quick.html，所以直接请求文件名
+  void quickWindow.loadURL(`${appOrigin}/quick.html`);
+}
+
+function toggleQuickWindow() {
+  if (!appOrigin) return;
+  if (!quickWindow || quickWindow.isDestroyed()) createQuickWindow();
+  if (quickWindow.isVisible() && quickWindow.isFocused()) {
+    quickWindow.hide();
+    return;
+  }
+  placeQuickWindow();
+  quickWindow.show();
+  quickWindow.focus();
+  quickWindow.webContents.send("quick-shown");
+}
+
+function registerQuickShortcut() {
+  for (const accelerator of QUICK_SHORTCUTS) {
+    try {
+      if (globalShortcut.register(accelerator, toggleQuickWindow)) {
+        quickShortcut = accelerator;
+        console.log(`[KnowGap] 快问浮窗快捷键：${accelerator}`);
+        return;
+      }
+      console.warn(`[KnowGap] 快捷键 ${accelerator} 注册失败（可能被系统或其他应用占用），尝试下一个`);
+    } catch (error) {
+      console.warn(`[KnowGap] 快捷键 ${accelerator} 注册出错：${error.message}`);
+    }
+  }
+  console.warn("[KnowGap] 快问浮窗快捷键全部注册失败，浮窗不可用");
+}
+
+function focusMainWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) return null;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+  return mainWindow;
+}
+
+ipcMain.handle("quick-hide", () => {
+  if (quickWindow && !quickWindow.isDestroyed()) quickWindow.hide();
+});
+
+ipcMain.handle("quick-resize", (_event, height) => {
+  if (!quickWindow || quickWindow.isDestroyed()) return;
+  const next = Math.max(QUICK_MIN_HEIGHT, Math.min(QUICK_MAX_HEIGHT, Math.round(Number(height) || 0)));
+  const [width, current] = quickWindow.getSize();
+  if (next !== current) quickWindow.setSize(width, next);
+});
+
+ipcMain.handle("quick-shortcut", () => quickShortcut);
+
+ipcMain.handle("open-in-main", (_event, conversationId) => {
+  if (quickWindow && !quickWindow.isDestroyed()) quickWindow.hide();
+  const win = focusMainWindow();
+  if (win && typeof conversationId === "string" && conversationId) {
+    win.webContents.send("open-conversation", conversationId);
+  }
 });
 
 async function open() {
@@ -92,7 +206,8 @@ async function open() {
     if (!stopping && code) dialog.showErrorBox("KnowGap", `后端已退出（${code}）`);
   });
   await waitHealth(port);
-  const window = new BrowserWindow({
+  appOrigin = `http://127.0.0.1:${port}`;
+  mainWindow = new BrowserWindow({
     width: 1280,
     height: 820,
     minWidth: 900,
@@ -107,7 +222,13 @@ async function open() {
       nodeIntegration: false,
     },
   });
-  await window.loadURL(`http://127.0.0.1:${port}/`);
+  mainWindow.on("closed", () => {
+    mainWindow = null;
+    // 隐藏的浮窗也算打开的窗口，主窗口关掉时一并销毁，否则 window-all-closed 不会触发
+    if (quickWindow && !quickWindow.isDestroyed()) quickWindow.destroy();
+  });
+  await mainWindow.loadURL(`${appOrigin}/`);
+  registerQuickShortcut();
 }
 
 app.whenReady().then(open).catch((error) => {
@@ -116,7 +237,13 @@ app.whenReady().then(open).catch((error) => {
   app.quit();
 });
 
-app.on("before-quit", stopBackend);
+app.on("before-quit", () => {
+  if (quickWindow && !quickWindow.isDestroyed()) quickWindow.destroy();
+  stopBackend();
+});
+app.on("will-quit", () => {
+  globalShortcut.unregisterAll();
+});
 app.on("window-all-closed", () => {
   stopBackend();
   app.quit();

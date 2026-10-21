@@ -1,10 +1,20 @@
 """Subjects: Project-like folders that own conversations, instructions, course files and memories."""
 
 from fastapi import APIRouter, HTTPException, Response
+from pydantic import BaseModel, Field
+
+from app.chat.cheatsheet import build_cheatsheet
+from app.chat.insights import subject_insights
 
 from app.chat.schemas import Conversation, ConversationSummary, CreateSubject, CreateThread, Subject, UpdateSubject
 from app.chat.store import ChatStore
 from app.auth.deps import current_student
+
+
+class CheatSheetRequest(BaseModel):
+    force: bool = False
+    # The space's Pages notes live in the browser; the client may send them as extra source material.
+    notes: str = Field(default="", max_length=20000)
 
 
 def subject_router(store: ChatStore, service=None) -> APIRouter:
@@ -39,6 +49,21 @@ def subject_router(store: ChatStore, service=None) -> APIRouter:
         if store.subject(subject_id, current_student()) is None:
             raise HTTPException(404, "学习空间不存在。")
         return store.usage(current_student(), subject_id=subject_id)
+
+    @router.get("/{subject_id}/insights")
+    def get_insights(subject_id: str):
+        insights = subject_insights(store, current_student(), subject_id)
+        if insights is None:
+            raise HTTPException(404, "学习空间不存在或已删除。")
+        return insights
+
+    @router.post("/{subject_id}/cheatsheet")
+    async def cheatsheet(subject_id: str, body: CheatSheetRequest | None = None):
+        body = body or CheatSheetRequest()
+        sheet = await build_cheatsheet(store, service, current_student(), subject_id, notes=body.notes, force=body.force)
+        if sheet is None:
+            raise HTTPException(404, "学习空间不存在或已删除。")
+        return sheet
 
     @router.get("/{subject_id}/threads", response_model=list[ConversationSummary])
     def list_threads(subject_id: str):

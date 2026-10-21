@@ -278,7 +278,8 @@ export function useChat(notify: Notify, userId: string) {
           break;
         case "analysis":
           patchMessages(id, (messages) => upsert(upsert(messages, event.userMessage), event.assistantMessage));
-          if (event.userMessage?.memoryChanges.length) void loadMemories();
+          void loadMemories();
+          void refreshList();
           break;
         case "tool_approval":
           patchMessages(id, (messages) => messages.map((m) => (m.id === assistantId ? { ...m, pendingApproval: event } : m)));

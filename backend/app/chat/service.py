@@ -12,6 +12,7 @@ Message lifecycle:
 
 import asyncio
 import json
+import re
 import logging
 import time
 from collections.abc import AsyncIterator, Callable
@@ -22,8 +23,9 @@ from app.agent_tools import (
 from app.agent_tools.guard import ToolError
 from app.agents.llm import ChatModel, ProviderError
 from app.chat.agent import (
-    active_exercise, analysis_messages, chat_messages, dialogue, resolution_messages, review_messages,
-    validate_analysis, validate_resolution,
+    HISTORY_CHARS, HISTORY_MESSAGES, active_exercise, analysis_messages, chat_messages,
+    compress_history_messages, deterministic_compress_fallback, dialogue, resolution_messages,
+    review_messages, validate_analysis, validate_resolution,
 )
 from app.chat.store import ChatStore, INTERRUPTED
 from app.chat.checkpoints import resume_state
@@ -33,8 +35,10 @@ from app.chat.skills.problem_drill_skill import SEARCH_TOOL, drill_plan, guard_r
 from app.chat.coordination import cancel_deliveries, dispatch, next_delivery, report
 from app.memory.store import new_id
 from app.services.materials import MaterialStore
+from app.vision.settings import ServiceModels
 
 logger = logging.getLogger(__name__)
+_PROFILE_LABEL_RE = re.compile(r"^\s*\[(?:Identity|Preference|Context|Activity|Experience)\]\s*")
 ANALYSIS_TIMEOUT = 60
 MAX_TOOL_ROUNDS = 8
 THREAD_CONCURRENCY = 2
@@ -93,6 +97,7 @@ class ChatService:
         self.approvals: dict[str, asyncio.Future] = {}
         self.reviews: set[asyncio.Task] = set()
         self.tasks: set[asyncio.Task] = set()
+        self.compressing: set[str] = set()
         self.closing = False
 
     async def close(self) -> None:
@@ -137,6 +142,19 @@ class ChatService:
         if self.settings is None:
             return False
         return bool(self.settings.agent_config().get(key))
+
+    def _background_model(self, model):
+        """Analysis, review and compression use the separate memory model when one is configured."""
+        if self.settings is None or not hasattr(model, "settings"):
+            return model
+        try:
+            memory = ServiceModels(self.settings).config().memory_model
+        except Exception:
+            return model
+        if not (memory.enabled and memory.model) or memory.model == model.settings.llm_model:
+            return model
+        return type(model)(model.settings.model_copy(update={"llm_model": memory.model}),
+                           getattr(model, "transport", None))
 
     def _auto_approve(self) -> bool:
         return self._agent_flag("auto_approve")
@@ -517,9 +535,11 @@ class ChatService:
             thinking_depth = (self.settings.agent_config().get("reasoning_effort", "medium")
                               if self.settings is not None else "medium")
             custom_skills = self.store.list_custom_skills(student_id)
+            compressed_summary, compressed_seq = self.store.get_context_summary(generation.conversation_id)
             messages = chat_messages(
                 history, memories, exercise, sources, subject, role, snapshot, thinking_depth, conv_title,
-                custom_skills=custom_skills,
+                custom_skills=custom_skills, compressed_summary=compressed_summary,
+                compressed_up_to_seq=compressed_seq,
             )
             ctx = ToolContext(
                 workspace_of(self.settings), self.store, student_id, generation.conversation_id,
@@ -663,7 +683,7 @@ class ChatService:
                     start_seq = user_rows[-10]["seq"]
                     turns = dialogue([row for row in history if row["seq"] >= start_seq], bounded=False)
                     turns.append({"role": "assistant", "content": text})
-                    task = asyncio.create_task(self._review(student_id, model, turns,
+                    task = asyncio.create_task(self._review(student_id, self._background_model(model), turns,
                                                             generation.conversation_id, assistant_id))
                     self.reviews.add(task)
                     task.add_done_callback(self.reviews.discard)
@@ -672,7 +692,8 @@ class ChatService:
                 if role["role"] == "main" and any(item["name"] == "dispatch_thread" and item["ok"] for item in tool_log):
                     queue.put_nowait(("analysis", {"skipped": True}))
                 else:
-                    await self._analyze(student_id, generation, history, user_text, text, memories, exercise, model,
+                    await self._analyze(student_id, generation, history, user_text, text, memories, exercise,
+                                        self._background_model(model),
                                         subject_id)
             except Exception:
                 # The reply is already complete and stored; note-taking problems must not mark it failed.
@@ -793,10 +814,88 @@ class ChatService:
         self.store.merge_meta(generation.assistant_message_id, {
             "used_memory_ids": result["used_memory_ids"], "suggested_problem_id": result["suggested_problem_id"],
         })
+        user_turns = sum(1 for row in history if row["role"] == "user")
+        # Topic naming: once, on the first turn. Manual renames and exercise titles stay untouched.
+        if result.get("topic_title") and user_turns == 1 and exercise is None:
+            self.store.set_auto_title(generation.conversation_id, result["topic_title"])
+        # Profile notes come from self-introductions early in a conversation, not from every turn.
+        if user_turns <= 3:
+            self._record_profile(student_id, result.get("profile_ops") or [])
+        # Compress only when the verbatim part (rows after the last summary) reaches the window limits.
+        _, compressed_seq = self.store.get_context_summary(generation.conversation_id)
+        fresh = [row for row in history if int(row["seq"]) > compressed_seq]
+        fresh_chars = sum(len(row["content"] or "") for row in fresh) + len(reply or "")
+        if len(fresh) >= HISTORY_MESSAGES or fresh_chars >= HISTORY_CHARS:
+            self._compress_later(student_id, generation.conversation_id, model)
         generation.queue.put_nowait(("analysis", {
+            "conversation": self._conversation(student_id, generation.conversation_id),
             "user_message": self._message(student_id, user_id),
             "assistant_message": self._message(student_id, generation.assistant_message_id),
         }))
+
+    def _record_profile(self, student_id: str, ops: list[dict]) -> None:
+        if not ops:
+            return
+        existing = [" ".join(_PROFILE_LABEL_RE.sub("", entry).split()) for entry in
+                    re.split(r"\s*§\s*", self.store.agent_notes(student_id).get("user", "")) if entry.strip()]
+        approve = self._agent_flag("memory_write_approval")
+        for op in ops:
+            content = " ".join(op["content"].split())
+            # Exact-match dedup is not enough: the same fact comes back reworded on every turn.
+            if any(content in old or old in content for old in existing if old):
+                continue
+            self.store.apply_agent_memory(student_id, "add", "user", f"[{op['layer']}] {content}", None, approve)
+            existing.append(content)
+
+    def _compress_later(self, student_id: str, conversation_id: str, model: ChatModel) -> None:
+        if conversation_id in self.compressing or self.closing:
+            return
+        self.compressing.add(conversation_id)
+
+        async def run() -> None:
+            try:
+                await self.compress_conversation(student_id, conversation_id, model=self._background_model(model))
+            except Exception:
+                logger.warning("Auto context compression skipped", exc_info=True)
+            finally:
+                self.compressing.discard(conversation_id)
+
+        task = asyncio.create_task(run())
+        self.tasks.add(task)
+        task.add_done_callback(self.tasks.discard)
+
+    async def compress_conversation(
+        self, student_id: str, conversation_id: str, *, model: ChatModel | None = None,
+    ) -> dict:
+        conversation = self.store.conversation(conversation_id, student_id)
+        if conversation is None:
+            raise LookupError("会话不存在或已删除。")
+        history = self.store.history(conversation_id)
+        prev_summary, prev_seq = self.store.get_context_summary(conversation_id)
+        user_seqs = [int(row["seq"]) for row in history if row["role"] == "user" and row["status"] != "failed"]
+        # The two latest user turns and their replies always stay verbatim.
+        cutoff = user_seqs[-2] - 1 if len(user_seqs) >= 3 else prev_seq
+        rows = [row for row in history if prev_seq < int(row["seq"]) <= cutoff]
+        turns = dialogue(rows, bounded=False)
+        if not turns:
+            return {"conversation_id": conversation_id, "summary": prev_summary, "compressed_turns": 0,
+                    "up_to_seq": prev_seq}
+        summary_text = ""
+        try:
+            raw = await asyncio.wait_for(
+                self._complete_json(model or self._background_model(self.model()),
+                                    compress_history_messages(turns, prev_summary), conversation_id, None, "compress"),
+                20,
+            )
+            if isinstance(raw, dict) and isinstance(raw.get("summary"), str) and raw["summary"].strip():
+                summary_text = raw["summary"].strip()[:1800]
+        except Exception:
+            logger.warning("LLM compression failed; using deterministic summary")
+        if not summary_text:
+            summary_text = deterministic_compress_fallback(turns, prev_summary)
+        self.store.save_context_summary(conversation_id, summary_text, cutoff)
+        return {"conversation_id": conversation_id, "summary": summary_text, "compressed_turns": len(turns),
+                "up_to_seq": cutoff}
 
     async def draft_resolution(self, student_id: str, conversation_id: str) -> dict:
         conversation = self.store.conversation(conversation_id, student_id)

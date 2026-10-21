@@ -331,21 +331,26 @@ export function ServiceModelsSection() {
       <div className={styles.group}>
         <div className={styles.groupTitle}>
           <Database size={16} aria-hidden />
-          <div><h4>记忆与后台服务</h4><p>预留独立轻量模型；关闭时继续复用主力逻辑模型。</p></div>
+          <div>
+            <h4>通用后台与记忆服务（话题自动命名 / 会话历史压缩 / 档案信息生成）</h4>
+            <p>统一驱动首轮话题自动命名、长对话自动上下文压缩、五层白盒学习者档案生成与记忆分析；关闭独立模型时自动复用主力逻辑模型。</p>
+          </div>
         </div>
         <article className={styles.compactCard}>
           <Toggle id={`${id}-memory-enabled`} checked={form.memory.enabled} disabled={disabled}
-            title="使用独立记忆模型" description="用于记忆摘要等后台任务；具体运行时由公共聊天服务挂载"
+            title="使用独立后台与记忆模型" description="用于话题自动命名、会话历史压缩、档案信息生成与五层白盒记忆提取"
             onChange={(enabled) => update({ memory: { ...form.memory, enabled } })} />
           <label className={styles.field} htmlFor={`${id}-memory-model`}>
-            <span className={styles.fieldLabel}>记忆模型名称</span>
+            <span className={styles.fieldLabel}>后台与记忆模型名称</span>
             <input id={`${id}-memory-model`} className={styles.input} value={form.memory.model}
-              placeholder="留空则复用主力逻辑模型" disabled={disabled || !form.memory.enabled}
+              placeholder="例如 deepseek-flash（留空则复用主力逻辑模型）" disabled={disabled || !form.memory.enabled}
               onChange={(event) => update({ memory: { ...form.memory, model: event.target.value } })}
               spellCheck={false} autoComplete="off" />
           </label>
-          <p className={styles.effective}>当前：<strong>{config.memoryModel.effective.model || "未配置"}</strong>
-            <span>来自 {sourceText(config.memoryModel.effective.source)}</span></p>
+          <p className={styles.effective}>
+            当前生效模型：<strong>{config.memoryModel.effective.model || "未配置"}</strong>
+            <span>来自 {sourceText(config.memoryModel.effective.source)} · 已启用：话题自动命名 · 会话历史自动压缩 · 档案信息生成</span>
+          </p>
         </article>
       </div>
 

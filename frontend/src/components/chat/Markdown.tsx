@@ -32,6 +32,7 @@ export function CopyButton({ text, label = "复制", className }: { text: string
     <button
       type="button"
       className={className ?? styles.copy}
+      data-copied={copied ? "true" : undefined}
       onClick={async () => {
         if (await copyText(text)) {
           setCopied(true);
@@ -66,7 +67,14 @@ const components: Components = {
     return (
       <div className={styles.codeBlock}>
         <div className={styles.codeHead}>
-          <span className={styles.lang}>{language || "代码"}</span>
+          <span className={styles.codeMeta}>
+            <span className={styles.dots} aria-hidden>
+              <i />
+              <i />
+              <i />
+            </span>
+            <span className={styles.lang}>{language || "代码"}</span>
+          </span>
           <CopyButton text={code} label="复制代码" />
         </div>
         <pre className={styles.pre}>

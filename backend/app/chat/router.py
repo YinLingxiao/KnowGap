@@ -205,6 +205,18 @@ def chat_router(store: ChatStore, service: ChatService) -> APIRouter:
             raise HTTPException(404, "会话不存在或已删除。")
         return Response(status_code=204)
 
+    @router.get("/conversations/{conversation_id}/context-summary")
+    async def get_context_summary(conversation_id: str):
+        require(conversation_id)
+        summary, up_to_seq = store.get_context_summary(conversation_id)
+        return {"conversation_id": conversation_id, "summary": summary, "up_to_seq": up_to_seq}
+
+    @router.post("/conversations/{conversation_id}/compress")
+    async def compress_conversation(conversation_id: str):
+        require(conversation_id)
+        require_idle(conversation_id)
+        return await service.compress_conversation(current_student(), conversation_id)
+
     @router.post("/conversations/{conversation_id}/messages")
     async def send_message(conversation_id: str, body: SendMessage):
         require(conversation_id)

@@ -1,22 +1,26 @@
-/* 输入框：支持首页大卡片（Hero）与会话底栏（Dock，参照 Claude Project 双层结构） */
+/* 输入框：支持首页大卡片（Hero）与会话底栏（Dock）。Linear 精密工业风：镜面高光 + 细描边胶囊 + 毛玻璃浮层 */
 .composer {
+  --hl: rgba(255, 255, 255, 0.08);
+  --glass: color-mix(in srgb, var(--bg-elevated) 84%, transparent);
+  --bar-bg: color-mix(in srgb, var(--bg-subtle) 70%, transparent);
+
   width: 100%;
   max-width: min(var(--chat-w), 100%);
   margin: 0 auto;
 }
 
 .hero {
-  max-width: 640px;
+  max-width: 720px;
 }
 
 .box {
   position: relative;
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-xl);
+  border: 1px solid var(--border);
+  border-radius: 16px;
   background: var(--bg-elevated);
-  box-shadow: var(--shadow-elevated);
+  box-shadow: var(--shadow-card);
   transition: border-color var(--t-hover) var(--ease-out), box-shadow var(--t-ui) var(--ease-out);
 }
 
@@ -25,12 +29,46 @@
 }
 
 .box:focus-within {
-  border-color: color-mix(in srgb, var(--accent) 55%, var(--border-strong));
-  box-shadow: var(--shadow-elevated), 0 0 0 3px var(--accent-soft);
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-elevated);
 }
 
 .locked .input {
   color: var(--text-secondary);
+}
+
+/* LobeHub 风格顶部 Markdown 格式编辑工具栏 */
+.formatToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: color-mix(in srgb, var(--bg-subtle) 55%, transparent);
+  border-radius: 15px 15px 0 0;
+}
+
+.formatBtn {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 26px;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  transition: background-color var(--t-hover) var(--ease-out), color var(--t-hover) var(--ease-out);
+}
+
+.formatBtn:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.formatSep {
+  width: 1px;
+  height: 14px;
+  margin: 0 5px;
+  background: var(--border);
 }
 
 .inputRow {
@@ -76,6 +114,10 @@
   color: var(--text-tertiary);
 }
 
+.input::selection {
+  background: var(--accent-soft-strong, var(--accent-soft));
+}
+
 .ghostOverlay {
   grid-area: stack;
   min-height: 28px;
@@ -109,6 +151,7 @@
   margin-left: 6px;
   padding: 0 5px;
   border: 1px solid var(--border-strong);
+  border-bottom-width: 2px;
   border-radius: 4px;
   background: var(--bg-subtle);
   color: var(--text-tertiary);
@@ -127,6 +170,7 @@
   color: var(--accent-text);
 }
 
+/* 底栏 */
 .toolbar {
   display: flex;
   align-items: center;
@@ -161,17 +205,42 @@
   position: relative;
 }
 
-.tool {
-  display: inline-grid;
-  place-items: center;
-  width: 26px;
+.imageSlot {
+  display: inline-flex;
+}
+
+/* 26px 轻量底栏工具项（参照 LobeHub：平时无外框，悬停浮现微底色） */
+.tool,
+.pill,
+.effortBtn,
+.imageSlot > button,
+.imageSlot > div > button:first-of-type {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
   height: 26px;
-  border-radius: var(--radius);
+  min-width: 26px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
   color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  white-space: nowrap;
   transition:
     background-color var(--t-hover) var(--ease-out),
+    border-color var(--t-hover) var(--ease-out),
     color var(--t-hover) var(--ease-out),
-    transform var(--t-hover) var(--ease-spring);
+    transform var(--t-press) var(--ease-out);
+}
+
+.tool {
+  width: 24px;
+  padding: 0;
 }
 
 .tool > svg {
@@ -183,43 +252,85 @@
 }
 
 .tool:hover:not(:disabled),
-.tool[aria-expanded="true"] {
+.tool[aria-expanded="true"],
+.pill:hover,
+.effortBtn:hover,
+.effortBtn[aria-expanded="true"],
+.imageSlot > button:hover:not(:disabled),
+.imageSlot > div > button:first-of-type:hover:not(:disabled) {
+  border-color: var(--border-strong);
   background: var(--bg-hover);
   color: var(--text);
 }
 
-.tool:disabled {
+.tool:active:not(:disabled),
+.pill:active,
+.effortBtn:active,
+.imageSlot > button:active:not(:disabled),
+.imageSlot > div > button:first-of-type:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.tool:focus-visible,
+.pill:focus-visible,
+.effortBtn:focus-visible,
+.imageSlot button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.tool:disabled,
+.imageSlot > button:disabled,
+.imageSlot > div > button:first-of-type:disabled {
   opacity: 0.4;
 }
 
-/* 右下角模型与思考深度选择器（参照 Claude: Sonnet 5.5 High ◔） */
-.effortBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 26px;
-  padding: 0 8px;
-  border-radius: var(--radius);
-  color: var(--text-secondary);
-  font-size: 12px;
-  transition:
-    background-color var(--t-hover) var(--ease-out),
-    color var(--t-hover) var(--ease-out);
+.pill {
+  color: var(--text-tertiary);
 }
 
-.effortBtn:hover,
-.effortBtn[aria-expanded="true"] {
-  background: var(--bg-hover);
-  color: var(--text);
+.pillActive {
+  color: var(--accent-text);
+}
+
+.pillOn,
+.pillOn:hover {
+  border-color: color-mix(in srgb, var(--accent) 38%, var(--border));
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.pillText {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pillTextShrink {
+  max-width: 110px;
+}
+
+/* 右下角：模型名（等宽）· 思考档位信号格 */
+.effortBtn {
+  gap: 7px;
+  padding: 0 9px 0 8px;
 }
 
 .effortModel {
   color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 11px;
   font-weight: 500;
+  letter-spacing: -0.01em;
 }
 
 .effortLevel {
   color: var(--text-tertiary);
+}
+
+.effortModel + .effortLevel {
+  padding-left: 7px;
+  border-left: 1px solid var(--border-strong);
 }
 
 .effortBtn:hover .effortLevel,
@@ -227,27 +338,173 @@
   color: var(--text-secondary);
 }
 
-.gaugeSvg {
+.signal {
+  display: inline-flex;
   flex-shrink: 0;
+  align-items: flex-end;
+  gap: 2px;
+  height: 10px;
 }
 
+.signal i {
+  display: block;
+  width: 3px;
+  border-radius: 1px;
+  background: var(--border-strong);
+  transition: background-color var(--t-hover) var(--ease-out);
+}
+
+.signal i:nth-child(1) {
+  height: 4px;
+}
+
+.signal i:nth-child(2) {
+  height: 7px;
+}
+
+.signal i:nth-child(3) {
+  height: 10px;
+}
+
+.signal i.signalOn {
+  background: var(--accent);
+}
+
+/* 毛玻璃浮层：+ 菜单 / 思考强度 / 工作区 / 指令与引用 */
 .menu,
-.effortMenu {
+.effortMenu,
+.wsPopover,
+.cmdMenu {
   position: absolute;
   z-index: 30;
   bottom: calc(100% + 6px);
   padding: 6px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
-  background: var(--bg-elevated);
-  box-shadow: var(--shadow-popover);
-  animation: popover-up 180ms var(--ease-spring);
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(18px) saturate(1.35);
+  backdrop-filter: blur(18px) saturate(1.35);
+  box-shadow: inset 0 1px 0 var(--hl), var(--shadow-popover);
+  animation: popover-up 180ms var(--ease-out);
 }
 
 .menu {
   left: 0;
-  width: min(300px, calc(100vw - 32px));
+  width: min(230px, calc(100vw - 32px));
   transform-origin: bottom left;
+}
+
+.lobeMenuItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  transition: background-color var(--t-hover) var(--ease-out);
+}
+
+.lobeMenuItem:hover {
+  background: var(--bg-hover);
+}
+
+.lobeMenuLeft {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.lobeMenuLeft > svg {
+  flex-shrink: 0;
+  color: var(--text-secondary);
+}
+
+.lobeMenuPill {
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.lobeMenuArrow {
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+}
+
+.lobeMenuDivider {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--border-subtle);
+}
+
+.lobeSwitch {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  width: 32px;
+  height: 18px;
+  padding: 2px;
+  border-radius: 999px;
+  background: var(--border-strong);
+  transition: background-color 160ms var(--ease-out);
+}
+
+.lobeSwitch > i {
+  display: block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #ffffff;
+  transition: transform 160ms var(--ease-spring);
+}
+
+.lobeSwitchOn {
+  background: var(--ink-solid);
+}
+
+.lobeSwitchOn > i {
+  background: var(--on-ink);
+  transform: translateX(14px);
+}
+
+.lobeSubhead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 6px 6px;
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: 4px;
+}
+
+.lobeBackBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.lobeBackBtn:hover {
+  background: var(--bg-hover);
+}
+
+.lobeSubheadHint {
+  color: var(--text-tertiary);
+  font-size: 11px;
 }
 
 .effortMenu {
@@ -261,7 +518,7 @@
   top: calc(100% + 6px);
   bottom: auto;
   transform-origin: top center;
-  animation: popover-down 180ms var(--ease-spring);
+  animation: popover-down 180ms var(--ease-out);
 }
 
 @keyframes popover-up {
@@ -311,6 +568,10 @@
   background: var(--bg-hover);
 }
 
+.effortOption .signal {
+  align-self: center;
+}
+
 .effortOptionBody {
   display: flex;
   flex: 1;
@@ -341,13 +602,51 @@
   font-size: var(--text-xs);
 }
 
+/* 浮层底部键盘提示栏 */
+.kbdBar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 6px -6px -6px;
+  padding: 6px 12px;
+  border-top: 1px solid var(--border);
+  border-radius: 0 0 calc(var(--radius-lg) - 1px) calc(var(--radius-lg) - 1px);
+  background: var(--bar-bg);
+  color: var(--text-tertiary);
+  font-size: 10.5px;
+  user-select: none;
+}
+
+.kbdHint {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.kbdBar kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border: 1px solid var(--border-strong);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1;
+}
+
+/* 发送：LobeHub 标志性高对比圆形实心发送键 */
 .send {
   display: inline-grid;
   flex-shrink: 0;
   place-items: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 7px;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
   background: var(--ink-solid);
   color: var(--on-ink);
   transition:
@@ -357,9 +656,9 @@
 }
 
 .hero .send {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
 }
 
 .send:hover:not(:disabled) {
@@ -372,8 +671,9 @@
 }
 
 .send:disabled {
-  background: transparent;
-  color: var(--text-tertiary);
+  background: var(--ink-solid);
+  color: var(--on-ink);
+  opacity: 0.9;
 }
 
 .stop {
@@ -381,22 +681,16 @@
   color: var(--on-ink);
 }
 
+/* 工作区弹层 */
 .wsPopover {
-  position: absolute;
-  bottom: calc(100% + 6px);
   left: 0;
-  z-index: 30;
   display: flex;
   flex-direction: column;
   gap: 8px;
   width: min(310px, calc(100vw - 32px));
   padding: 10px 12px;
-  border: 1px solid var(--border-strong);
   border-radius: 12px;
-  background: var(--bg-elevated);
-  box-shadow: var(--shadow-popover);
   transform-origin: bottom left;
-  animation: popover-up 180ms var(--ease-spring);
 }
 
 .wsInput {
@@ -406,8 +700,10 @@
   border: 1px solid var(--border-strong);
   border-radius: 7px;
   background: var(--bg-subtle);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12);
   color: var(--text);
-  font-size: 12px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
 }
 
 .wsInput:focus {
@@ -419,6 +715,12 @@
   font-size: 11px;
 }
 
+.wsHint {
+  color: var(--text-tertiary);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
 .wsActions {
   display: flex;
   justify-content: flex-end;
@@ -427,12 +729,20 @@
 
 .wsBtn,
 .wsBtnPrimary {
-  height: 26px;
+  height: 24px;
   padding: 0 10px;
-  border-radius: 6px;
+  border-radius: 999px;
   font-size: 11.5px;
   font-weight: 500;
   white-space: nowrap;
+  transition:
+    background-color var(--t-hover) var(--ease-out),
+    transform var(--t-press) var(--ease-out);
+}
+
+.wsBtn:active,
+.wsBtnPrimary:active {
+  transform: scale(0.96);
 }
 
 .wsBtn {
@@ -448,48 +758,8 @@
 
 .wsBtnPrimary {
   background: var(--ink-solid);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
   color: var(--on-ink);
-}
-
-/* 内联底栏胶囊：帮我批准 / 工作区 / 费曼自测 */
-.pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: 24px;
-  padding: 0 8px;
-  border-radius: 999px;
-  color: var(--text-tertiary);
-  font-size: 11.5px;
-  white-space: nowrap;
-  transition:
-    background-color var(--t-hover) var(--ease-out),
-    color var(--t-hover) var(--ease-out);
-}
-
-.pill:hover {
-  background: var(--bg-hover);
-  color: var(--text-secondary);
-}
-
-.pillActive {
-  color: var(--accent-text);
-}
-
-.pillOn,
-.pillOn:hover {
-  background: var(--accent-soft);
-  color: var(--accent-text);
-}
-
-.pillText {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.pillTextShrink {
-  max-width: 110px;
 }
 
 /* 窄屏只保留图标，避免底栏挤成多行 */
@@ -499,37 +769,41 @@
     display: none;
   }
 
-  .effortModel {
+  .effortModel,
+  .effortModel + .effortLevel {
     display: none;
+  }
+
+  .effortBtn {
+    padding: 0 8px;
   }
 }
 
 /* `/` 快捷指令与 `@` 引用菜单（向上弹出，首页 Hero 向下） */
 .cmdMenu {
-  position: absolute;
   z-index: 40;
   right: 0;
-  bottom: calc(100% + 6px);
   left: 0;
   display: flex;
   flex-direction: column;
-  gap: 1px;
-  max-height: 280px;
-  padding: 6px;
-  overflow-y: auto;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-lg);
-  background: var(--bg-elevated);
-  box-shadow: var(--shadow-popover);
+  overflow: hidden;
   transform-origin: bottom left;
-  animation: popover-up 180ms var(--ease-spring);
 }
 
 .hero .cmdMenu {
   top: calc(100% + 6px);
   bottom: auto;
   transform-origin: top left;
-  animation: popover-down 180ms var(--ease-spring);
+  animation: popover-down 180ms var(--ease-out);
+}
+
+.cmdScroll {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 232px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .cmdItem {
@@ -537,14 +811,19 @@
   align-items: center;
   gap: 10px;
   width: 100%;
-  padding: 7px 8px;
+  padding: 6px 8px;
   border-radius: var(--radius);
   text-align: left;
-  transition: background-color var(--t-hover) var(--ease-out);
+  transition: background-color var(--t-hover) var(--ease-out), box-shadow var(--t-hover) var(--ease-out);
+}
+
+.cmdItem:hover {
+  background: var(--bg-hover);
 }
 
 .cmdItemActive {
   background: var(--bg-hover);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
 }
 
 .cmdIcon {
@@ -553,12 +832,14 @@
   place-items: center;
   width: 24px;
   height: 24px;
+  border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--bg-subtle);
   color: var(--text-secondary);
 }
 
 .cmdItemActive .cmdIcon {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
   background: var(--accent-soft);
   color: var(--accent-text);
 }
@@ -592,9 +873,14 @@
 .cmdKey,
 .cmdTag {
   flex-shrink: 0;
+  padding: 1px 5px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-subtle);
   color: var(--text-tertiary);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 10.5px;
+  line-height: 1.4;
 }
 
 .cmdTag {
@@ -605,4 +891,14 @@
   padding: 8px;
   color: var(--text-tertiary);
   font-size: 11.5px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .menu,
+  .effortMenu,
+  .wsPopover,
+  .cmdMenu,
+  .ghostOverlay {
+    animation: none;
+  }
 }
