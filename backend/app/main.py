@@ -34,6 +34,9 @@ from app.chat.subjects import subject_router
 from app.chat.service import ChatService
 from app.chat.store import ChatStore
 from app.code_sandbox.router import sandbox_router
+from app.vision.router import vision_router
+from app.vision.settings import ServiceModels
+from app.vision.store import VisionStore
 
 logger = logging.getLogger(__name__)
 DemoStudent = Literal["demo-student-001"]
@@ -79,11 +82,16 @@ def create_app(
     app.state.materials = library
     app.state.chat_service = chat_service
     app.state.auth = auth_store
+    vision_store = VisionStore.for_app(settings)
+    service_models = ServiceModels(ai_settings)
+    app.state.vision_store = vision_store
+    app.state.service_models = service_models
     app.include_router(material_router(library, lambda subject_id: chat_store.subject(subject_id, current_student()) is not None))
     app.include_router(chat_router(chat_store, chat_service))
     app.include_router(subject_router(chat_store, chat_service))
     app.include_router(auth_router(auth_store, chat_store, settings))
     app.include_router(sandbox_router(allowed_origins=settings.cors_origins))
+    app.include_router(vision_router(vision_store, service_models, cors_origins=settings.cors_origins))
 
     @app.middleware("http")
     async def bind_student(request: Request, call_next):

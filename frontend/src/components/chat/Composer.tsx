@@ -12,6 +12,9 @@ import type { ChatMessage } from "@/lib/chat/types";
 import { cx } from "@/lib/cx";
 import type { Problem } from "@/lib/types";
 import { WIDGET_ASK_EVENT } from "./LearningWidget";
+import { ImageAttach } from "./widgets/ImageAttach";
+import { withImageMarker } from "./widgets/visionData";
+import { WIDGET_SEND_EVENT, type WidgetSendDetail } from "./widgets/widgetEvents";
 import styles from "./Composer.module.css";
 
 export type ThinkingEffort = "off" | "low" | "medium" | "high";
@@ -326,6 +329,18 @@ export function Composer({
         textareaRef.current?.focus();
       }
     };
+    const onWidgetSend = (event: Event) => {
+      const detail = (event as CustomEvent<WidgetSendDetail>).detail;
+      if (!detail?.text) return;
+      if (detail.effort) {
+        setEffort(detail.effort);
+        try { localStorage.setItem(EFFORT_STORAGE_KEY, detail.effort); } catch { /* ignore */ }
+        window.dispatchEvent(new CustomEvent<ThinkingEffort>(EFFORT_EVENT, { detail: detail.effort }));
+        void chatApi.saveReasoningEffort(detail.effort).catch(() => {});
+      }
+      onChange(detail.text);
+      textareaRef.current?.focus();
+    };
     const onEnvSync = (event: Event) => {
       const detail = (event as CustomEvent<{ workspace: string; autoApprove: boolean; memoryWriteApproval: boolean }>).detail;
       if (detail) {
@@ -337,10 +352,12 @@ export function Composer({
     };
     window.addEventListener(EFFORT_EVENT, onSync);
     window.addEventListener(WIDGET_ASK_EVENT, onWidgetAsk);
+    window.addEventListener(WIDGET_SEND_EVENT, onWidgetSend);
     window.addEventListener(AGENT_ENV_EVENT, onEnvSync);
     return () => {
       window.removeEventListener(EFFORT_EVENT, onSync);
       window.removeEventListener(WIDGET_ASK_EVENT, onWidgetAsk);
+      window.removeEventListener(WIDGET_SEND_EVENT, onWidgetSend);
       window.removeEventListener(AGENT_ENV_EVENT, onEnvSync);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- subscribe once
@@ -710,6 +727,14 @@ export function Composer({
                 </div>
               )}
             </div>
+
+            <ImageAttach
+              disabled={generating || locked}
+              onUploaded={(img) => {
+                onChange(withImageMarker(value, img.marker));
+                textareaRef.current?.focus();
+              }}
+            />
 
             <button
               type="button"

@@ -17,6 +17,7 @@ import { cx } from "@/lib/cx";
 import { THEME_LABEL, useThemeChoice, type ThemeChoice } from "../ThemeToggle";
 import type { AIConfigStatus } from "@/lib/api/ai-config";
 import { ModelAccessCard, type ModelSignal } from "./ModelAccessCard";
+import { ServiceModelsSection } from "./ServiceModelsSection";
 import styles from "./Settings.module.css";
 
 declare global {
@@ -231,7 +232,7 @@ export function SettingsDialog({
                 {tab === "reflect" && <ReflectPane />}
                 {tab === "models" && (
                   <section>
-                    <h2 className={styles.sectionTitle}>模型接入</h2>
+                    <h2 className={styles.sectionTitle}>模型接入与服务模型分工</h2>
                     <EffortRow />
                     <ModelAccessCard
                       plain
@@ -241,6 +242,9 @@ export function SettingsDialog({
                       onCheckHealth={onCheckHealth}
                       onConfigChange={onConfigChange}
                     />
+                    <div style={{ marginTop: 18 }}>
+                      <ServiceModelsSection />
+                    </div>
                   </section>
                 )}
                 {tab === "workspace" && <WorkspacePane />}

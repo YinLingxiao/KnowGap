@@ -13,6 +13,8 @@ import { cx } from "@/lib/cx";
 import type { Problem } from "@/lib/types";
 import { CopyButton, Markdown } from "./Markdown";
 import { ThreadProposals } from "./ThreadProposals";
+import { VisionMarkedText } from "./widgets/ImageMarker";
+import { hasVisionMarker } from "./widgets/visionData";
 import styles from "./MessageList.module.css";
 
 const ASSESSMENT: Record<string, { label: string; tone: string }> = {
@@ -256,7 +258,9 @@ export function MessageList({
               const userPinned = pinnedIds.includes(message.id);
               return (
                 <div key={message.id} data-msg-id={message.id} className={cx(styles.row, styles.userRow)}>
-                  <div className={cx(styles.userBubble, userFold.folded && styles.folded)}>{message.content}</div>
+                  <div className={cx(styles.userBubble, userFold.folded && styles.folded)}>
+                    {hasVisionMarker(message.content) ? <VisionMarkedText text={message.content} /> : message.content}
+                  </div>
                   <div className={styles.userMeta}>
                     {userFold.long && (
                       <button className={styles.foldToggle} onClick={() => toggleFold(message, userFold.folded)} aria-expanded={!userFold.folded}>

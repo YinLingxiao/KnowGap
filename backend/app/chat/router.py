@@ -107,6 +107,10 @@ def chat_router(store: ChatStore, service: ChatService) -> APIRouter:
         conv = require(conversation_id)
         if conv.generating:
             return {"suggestion": "", "message_id": None}
+        if hasattr(service.settings, "_raw"):
+            sm = service.settings._raw().get("service_models")
+            if isinstance(sm, dict) and sm.get("suggest_reply_enabled") is False:
+                return {"suggestion": "", "message_id": None}
         history = [
             row for row in store.history(conversation_id)
             if row["status"] == "complete" and (row["content"] or "").strip()
