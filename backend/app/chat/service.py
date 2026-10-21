@@ -854,6 +854,31 @@ class ChatService:
             "assistant_message": self._message(student_id, generation.assistant_message_id),
         }))
 
+    async def start_from_topic(self, student_id: str, text: str) -> dict:
+        from app.chat.onboarding import INFER_PROMPT, fallback_space, opener_for, parse_inference
+        cleaned = " ".join((text or "").split()).strip()
+        if not cleaned or len(cleaned) > 200:
+            raise ValueError("请用一句话说明你最近在学什么。")
+        guessed = fallback_space(cleaned)
+        try:
+            raw = await asyncio.wait_for(self.model().complete_json([
+                {"role": "system", "content": INFER_PROMPT},
+                {"role": "user", "content": json.dumps({"text": cleaned}, ensure_ascii=False)},
+            ]), 8)
+            guessed = parse_inference(raw, cleaned)
+        except Exception:
+            logger.info("Space inference used the original wording")
+            guessed = fallback_space(cleaned)
+        subject = self.store.create_subject(student_id, guessed["name"], "", "", goal=guessed["goal"])
+        self.store.mark_onboarding(student_id, "completed")
+        return {
+            "subject_id": subject.id,
+            "conversation_id": subject.main_conversation_id,
+            "name": subject.name,
+            "goal": subject.goal,
+            "opener": opener_for(subject.name),
+        }
+
     def _record_profile(self, student_id: str, ops: list[dict]) -> None:
         if not ops:
             return

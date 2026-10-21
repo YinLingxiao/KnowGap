@@ -24,6 +24,16 @@ class ToolApprovalBody(BaseModel):
     allow: bool
 
 
+class WelcomeBody(BaseModel):
+    text: str = Field(min_length=1, max_length=200)
+
+
+class LearningPreferencesBody(BaseModel):
+    background: str = ""
+    explanation: str = ""
+    interaction: str = ""
+
+
 class AgentNoteBody(BaseModel):
     target: str = Field(pattern="^(user|memory)$")
     content: str = ""
@@ -307,6 +317,28 @@ def chat_router(store: ChatStore, service: ChatService) -> APIRouter:
         if state["conversation_id"]:
             service.stop(state["conversation_id"])
         return store.skip_onboarding(current_student())
+
+    @router.post("/onboarding/ack")
+    def ack_onboarding():
+        return store.mark_onboarding(current_student(), "completed")
+
+    @router.post("/onboarding/welcome")
+    async def welcome_onboarding(body: WelcomeBody):
+        try:
+            return await service.start_from_topic(current_student(), body.text)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from None
+
+    @router.get("/onboarding/preferences")
+    def get_learning_preferences():
+        return store.learning_preferences(current_student())
+
+    @router.put("/onboarding/preferences")
+    def put_learning_preferences(body: LearningPreferencesBody):
+        try:
+            return store.save_learning_preferences(current_student(), body.model_dump())
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from None
 
     @router.post("/onboarding/restart", response_model=Conversation)
     def restart_onboarding():

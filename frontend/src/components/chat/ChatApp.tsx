@@ -30,7 +30,7 @@ import { ConversationSidebar } from "./ConversationSidebar";
 import { MemoryDrawer } from "./MemoryDrawer";
 import { MessageList } from "./MessageList";
 import { CreateSpaceDialog } from "./CreateSpaceDialog";
-import { OnboardingStage } from "./OnboardingStage";
+import { Welcome } from "../onboarding/Welcome";
 import { SpacesPage } from "./SpacesPage";
 import { AgendaPage } from "../agenda/AgendaPage";
 import { ReminderScheduler } from "../agenda/ReminderScheduler";
@@ -53,25 +53,6 @@ const STARTERS = [
   { icon: Mic, label: "费曼反转自测", color: "#3b82f6", text: "我想用费曼学习法自测：请你扮演有疑惑的同桌听我讲，并在我讲漏边界条件时追问我：" },
   { icon: Dumbbell, label: "联网搜真题练习", color: "#10b981", text: "请帮我搜几道关于「在此填写知识点」的经典真题或母题来练手：" },
   { icon: FileText, label: "编程代码实验台", color: "#f59e0b", text: "请先讲清「在此填写编程/算法概念」的核心原理，然后给我一个带 TODO 挖空的 `code_playground` 代码实验台让我动手补全并运行：" },
-];
-
-/** 首次登录前置破冰访谈的 3 轮辅助快捷回答胶囊 */
-const ONBOARDING_QUICK_REPLIES: string[][] = [
-  [
-    "我正在学一门课程，想把基础概念弄清楚",
-    "我正在准备考试，希望围绕薄弱点练习",
-    "我在自主探索新领域，目标还在慢慢明确",
-  ],
-  [
-    "先给我一个具体的例子或直观类比，顺着例子理解概念最容易懂",
-    "先给核心结论和对比表格，再展开细节，别铺垫太长",
-    "推导过程要严谨，把前因后果和适用边界一步步讲透",
-  ],
-  [
-    "做题时先给一小步提示让我自己想，别直接泄底完整答案",
-    "讲完核心概念后随手考我 1 道小题，帮我检验是不是真懂了",
-    "卡住时直接给我正误对比和完整解析，这样效率最高",
-  ],
 ];
 
 /** 主区域显示什么：对话、学习空间总览、某个学习空间，或通用资料 */
@@ -125,12 +106,9 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
   const [viewRestored, setViewRestored] = useState(false);
   const [health, setHealth] = useState<HealthState>("checking");
   const [modelConfigured, setModelConfigured] = useState<boolean | null>(null);
-  const [onboardingMode, setOnboardingMode] = useState(false);
-  const [onboardingConvId, setOnboardingConvId] = useState<string | null>(null);
-  const [interview, setInterview] = useState<Awaited<ReturnType<typeof chatApi.onboardingStatus>> | null>(null);
-  const [profileEntries, setProfileEntries] = useState<Record<string, string>>({});
-  const [interviewError, setInterviewError] = useState("");
-  const [profileSaving, setProfileSaving] = useState(false);
+  const [gate, setGate] = useState<"checking" | "welcome" | "app">("checking");
+  const [welcomeBusy, setWelcomeBusy] = useState(false);
+  const [welcomeError, setWelcomeError] = useState("");
 
   useEffect(() => {
     const query = window.matchMedia(NARROW);
@@ -188,60 +166,72 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
     setViewRestored(true);
   }, [user.id]);
 
-  // 首次登录检测：若尚未完成前置破冰引导（onboarded === false），自动进入 AI 主动发问的三问三答对话
   useEffect(() => {
     if (DATA_SOURCE !== "api") return;
     let cancelled = false;
     chatApi.onboardingStatus()
-      .then(async (status) => {
+      .then((status) => {
         if (cancelled) return;
-        setInterview(status);
-        if (cancelled || status.status === "completed" || status.status === "skipped") return;
-        const conv = await chatApi.startOnboarding();
-        if (cancelled) return;
-        setOnboardingConvId(conv.id);
-        setOnboardingMode(true);
-        setSidebarOpen(false);
-        setView({ type: "chat" });
-        openConversation(conv.id);
-        void chat.refreshList();
+        setGate(status.status === "not_started" ? "welcome" : "app");
       })
-      .catch(() => setInterviewError("无法读取初识进度，请刷新重试。"));
+      .catch(() => {
+        if (!cancelled) setWelcomeError("读不到进度，请刷新重试。");
+      });
     return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once per authenticated user
   }, [user.id]);
 
-  const finishOnboarding = useCallback(async (openCreateSpace = false) => {
-    if (!interview || profileSaving) return;
-    setProfileSaving(true);
-    try {
-      if (interview.ready) await chatApi.completeOnboarding(interview.version, profileEntries);
-      else await chatApi.skipOnboarding();
-    } catch (error) {
-      setInterviewError(error instanceof Error ? error.message : "保存失败，请重试。");
-      setProfileSaving(false);
-      return;
-    }
-    setProfileSaving(false);
-    setOnboardingMode(false);
+  const enterSpace = useCallback(async (subjectId: string, conversationId: string, opener?: string) => {
+    await chat.loadSubjects();
+    setView({ type: "subject", id: subjectId });
+    setGate("app");
     if (!narrow) setSidebarOpen(true);
-    chat.newChat();
-    if (openCreateSpace) {
-      setSpaceDialog({ select: false });
-    }
-  }, [chat, narrow, interview, profileEntries, profileSaving]);
+    await chat.openConversation(conversationId);
+    if (opener) await chat.sendTo(conversationId, opener);
+  }, [chat, narrow, setView]);
 
-  useEffect(() => {
-    if (!onboardingMode || !onboardingConvId || chat.streams[onboardingConvId]) return;
-    let cancelled = false;
-    chatApi.onboardingStatus().then((next) => {
-      if (cancelled) return;
-      setInterview(next);
-      setProfileEntries(Object.fromEntries(Object.entries(next.draft)
-        .filter(([, item]) => !item.declined).map(([key, item]) => [key, item.value])));
-    }).catch(() => setInterviewError("进度同步失败，请刷新重试。"));
-    return () => { cancelled = true; };
-  }, [onboardingMode, onboardingConvId, chat.streams]);
+  const answerWelcome = useCallback(async (text: string) => {
+    if (welcomeBusy) return;
+    setWelcomeBusy(true);
+    setWelcomeError("");
+    try {
+      const result = await chatApi.welcome(text);
+      await enterSpace(result.subjectId, result.conversationId, result.opener);
+    } catch (error) {
+      setWelcomeError(error instanceof Error ? error.message : "没能建好空间，请重试。");
+    } finally {
+      setWelcomeBusy(false);
+    }
+  }, [enterSpace, welcomeBusy]);
+
+  const browseDemo = useCallback(async () => {
+    if (welcomeBusy) return;
+    setWelcomeBusy(true);
+    setWelcomeError("");
+    try {
+      const seeded = await chatApi.seedDemo();
+      await chatApi.ackOnboarding();
+      await enterSpace(seeded.subjectId, seeded.conversationId);
+    } catch (error) {
+      setWelcomeError(error instanceof Error ? error.message : "演示空间没能打开，请重试。");
+    } finally {
+      setWelcomeBusy(false);
+    }
+  }, [enterSpace, welcomeBusy]);
+
+  const skipWelcome = useCallback(async () => {
+    if (welcomeBusy) return;
+    setWelcomeBusy(true);
+    setWelcomeError("");
+    try {
+      await chatApi.skipOnboarding();
+      setGate("app");
+      if (!narrow) setSidebarOpen(true);
+    } catch (error) {
+      setWelcomeError(error instanceof Error ? error.message : "跳过失败，请重试。");
+    } finally {
+      setWelcomeBusy(false);
+    }
+  }, [narrow, welcomeBusy]);
 
   const subjectMissing = view.type === "subject" && viewRestored && !chat.listLoading
     && !chat.subjects.some((subject) => subject.id === view.id);
@@ -359,18 +349,6 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
   const contextSubjectName = contextSubjectId ? subjectNames[contextSubjectId] ?? null : null;
   const title = chat.activeConversation?.title ?? (chat.activeId ? "加载中…" : "新对话");
   const thread = chat.activeThread;
-  const isOnboardingChat = Boolean(
-    onboardingMode && chat.activeId && (chat.activeId === onboardingConvId || title.startsWith("初识引导")),
-  );
-  const lastThreadMsg = thread?.messages[thread.messages.length - 1];
-  const onboardingFinished = isOnboardingChat
-    && Boolean(interview?.ready)
-    && phase === null
-    && lastThreadMsg?.role === "assistant"
-    && lastThreadMsg?.status === "complete";
-  const quickReplies = isOnboardingChat && !onboardingFinished && phase === null
-    ? ONBOARDING_QUICK_REPLIES[["background", "explanation", "interaction"].indexOf(interview?.stage ?? "background")] ?? []
-    : [];
   const failure = chat.sendFailure && chat.sendFailure.conversationId === chat.activeId ? chat.sendFailure : null;
   const blankFailure = chat.sendFailure && !chat.activeId ? chat.sendFailure : null;
   const shownFailure = failure ?? blankFailure;
@@ -393,7 +371,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
   );
 
   return (
-    <div className={cx(styles.app, (!sidebarOpen || zen) && styles.sidebarClosed, narrow && styles.narrow, zen && styles.zen)}>
+    <div className={cx(styles.app, (gate !== "app" || !sidebarOpen || zen) && styles.sidebarClosed, narrow && styles.narrow, zen && styles.zen)}>
       <ReminderScheduler userId={user.id} subjects={chat.subjects} />
       <DesktopBridge />
       {narrow && (
@@ -440,8 +418,15 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
       </aside>
 
       <main className={styles.main}>
-        {!onboardingMode && interviewError && <p role="alert">{interviewError}<button onClick={() => window.location.reload()}>刷新重试</button></p>}
-        {materialsOpen ? (
+        {gate !== "app" ? (
+          <Welcome
+            busy={welcomeBusy || gate === "checking"}
+            error={welcomeError}
+            onAnswer={(text) => void answerWelcome(text)}
+            onDemo={() => void browseDemo()}
+            onSkip={() => void skipWelcome()}
+          />
+        ) : materialsOpen ? (
           <MaterialLibrary
             enabled
             unassigned
@@ -500,33 +485,6 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
               <p className={styles.muted}>{subjectMissing ? "这个学习空间已不存在。" : "正在读取学习空间…"}</p>
             </div>
           )
-        ) : chat.activeId && isOnboardingChat ? (
-          <OnboardingStage
-            messages={thread?.messages ?? []}
-            stage={interview?.stage ?? "background"}
-            ready={onboardingFinished}
-            phase={phase}
-            modelConfigured={modelConfigured}
-            quickReplies={quickReplies}
-            profileEntries={profileEntries}
-            profileSaving={profileSaving}
-            error={interviewError || shownFailure?.error.message || thread?.error?.message || ""}
-            onChangeProfile={(key, value) => setProfileEntries((old) => ({ ...old, [key]: value }))}
-            onSendAnswer={(text) => {
-              setInterviewError("");
-              return chat.sendTo(chat.activeId!, text);
-            }}
-            onConfirm={(createSpace) => void finishOnboarding(createSpace)}
-            onSkip={() => {
-              void chatApi.skipOnboarding().then(() => {
-                setOnboardingMode(false);
-                chat.newChat();
-                setSidebarOpen(!narrow);
-              }).catch(() => setInterviewError("跳过失败，请重试。"));
-            }}
-            onOpenModelSettings={() => openSettings("models")}
-            onOpenMemories={() => openMemories()}
-          />
         ) : chat.activeId ? (
           <>
               <header className={styles.topbar}>
@@ -745,18 +703,9 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
               onUpdate={chat.updateMemory}
               onDelete={chat.deleteMemory}
               onOpenConversation={(id) => { showConversation(id); if (narrow) setMemoryOpen(false); }}
-              onStartOnboarding={async () => {
-                try {
-                  const conv = await chatApi.startOnboarding();
-                  setOnboardingConvId(conv.id);
-                  setOnboardingMode(true);
-                  setMemoryOpen(false);
-                  setView({ type: "chat" });
-                  openConversation(conv.id);
-                  setSidebarOpen(false);
-                } catch {
-                  push({ tone: "error", title: "无法继续完善画像，请重试" });
-                }
+              onStartOnboarding={() => {
+                setMemoryOpen(false);
+                openSettings("preferences");
               }}
             />
           </aside>
@@ -775,16 +724,6 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
           onConfigChange={handleConfigChange}
           onLogout={onLogout}
           onRename={onRename}
-          onRestartOnboarding={async () => {
-            const conv = await chatApi.restartOnboarding();
-            setOnboardingConvId(conv.id);
-            setOnboardingMode(true);
-            setSettingsOpen(false);
-            setView({ type: "chat" });
-            openConversation(conv.id);
-            setSidebarOpen(false);
-            void chat.refreshList();
-          }}
           onClose={() => setSettingsOpen(false)}
         />
       )}

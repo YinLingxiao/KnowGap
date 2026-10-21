@@ -338,7 +338,7 @@ export function MemoryDrawer(props: MemoryDrawerProps) {
         <h2 id="memory-title" className={styles.title}>学习记忆</h2>
         {props.onStartOnboarding && (
           <button type="button" className={styles.profileInterviewBtn} onClick={props.onStartOnboarding}>
-            初识访谈
+            学习偏好
           </button>
         )}
         <button className={styles.iconButton} onClick={props.onRefresh} disabled={loading} aria-label="刷新" title="刷新">

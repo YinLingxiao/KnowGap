@@ -35,6 +35,7 @@ from app.chat.service import ChatService
 from app.chat.store import ChatStore
 from app.agenda.router import agenda_router
 from app.code_sandbox.router import sandbox_router
+from app.demo.router import demo_router
 from app.focus.router import focus_router
 from app.vision.router import vision_router
 from app.vision.settings import ServiceModels
@@ -97,6 +98,7 @@ def create_app(
     app.include_router(sandbox_router(allowed_origins=settings.cors_origins))
     app.include_router(vision_router(vision_store, service_models, cors_origins=settings.cors_origins))
     app.include_router(focus_router(store))
+    app.include_router(demo_router(chat_store))
 
     @app.middleware("http")
     async def bind_student(request: Request, call_next):

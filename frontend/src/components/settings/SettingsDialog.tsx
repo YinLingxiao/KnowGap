@@ -46,7 +46,7 @@ declare global {
   }
 }
 
-export type SettingsTab = "general" | "account" | "usage" | "memory" | "reflect" | "models" | "workspace" | "skills";
+export type SettingsTab = "general" | "account" | "usage" | "memory" | "preferences" | "reflect" | "models" | "workspace" | "skills";
 type Tab = SettingsTab;
 type Effort = "off" | "low" | "medium" | "high";
 
@@ -61,6 +61,7 @@ const GROUPS: Array<{ title: string; items: Array<{ key: Tab; label: string; ico
       { key: "account", label: "账号", icon: User },
       { key: "usage", label: "用量", icon: Gauge },
       { key: "memory", label: "记忆", icon: Brain },
+      { key: "preferences", label: "学习偏好", icon: Sparkles },
       { key: "reflect", label: "复盘 (Reflect)", icon: Sparkles },
     ],
   },
@@ -153,11 +154,10 @@ interface SettingsDialogProps {
   initialTab?: SettingsTab;
   onLogout?: () => void;
   onRename?: (name: string) => Promise<void>;
-  onRestartOnboarding?: () => Promise<void> | void;
 }
 
 export function SettingsDialog({
-  source, health, studentId, modelSignal, onCheckHealth, onConfigChange, onClose, user, initialTab = "general", onLogout, onRename, onRestartOnboarding,
+  source, health, studentId, modelSignal, onCheckHealth, onConfigChange, onClose, user, initialTab = "general", onLogout, onRename,
 }: SettingsDialogProps) {
   const ref = useRef<HTMLDialogElement>(null);
   const [tab, setTab] = useState<Tab>(initialTab);
@@ -240,12 +240,13 @@ export function SettingsDialog({
                     studentId={studentId}
                     onLogout={onLogout}
                     onRename={onRename}
-                    onRestart={onRestartOnboarding}
+                    onOpenPreferences={() => setTab("preferences")}
                     onClose={onClose}
                   />
                 )}
                 {tab === "usage" && <UsagePane />}
                 {tab === "memory" && <MemoryPane />}
+                {tab === "preferences" && <PreferencesPane />}
                 {tab === "reflect" && <ReflectPane />}
                 {tab === "models" && (
                   <section>
@@ -420,14 +421,84 @@ function GeneralPane({ userId }: { userId: string }) {
   );
 }
 
+function PreferencesPane() {
+  const [entries, setEntries] = useState({ background: "", explanation: "", interaction: "" });
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let live = true;
+    chatApi.learningPreferences().then((next) => { if (live) setEntries(next); }).catch(() => { if (live) setNote("读不到已保存的偏好。"); });
+    return () => { live = false; };
+  }, []);
+
+  const fields = [
+    ["background", "学习背景", "最近在学什么，学到哪了"],
+    ["explanation", "讲解偏好", "先看例子，还是先看定义"],
+    ["interaction", "互动偏好", "先给提示，还是直接解析"],
+  ] as const;
+
+  return (
+    <section>
+      <h2 className={styles.sectionTitle}>学习偏好</h2>
+      <p className={styles.settingRowDesc}>可选。写完才会记住，不填也能直接学。</p>
+      <form
+        className={styles.fields}
+        onSubmit={(event) => {
+          event.preventDefault();
+          setBusy(true);
+          setNote("");
+          void chatApi.saveLearningPreferences(entries)
+            .then((saved) => { setEntries(saved); setNote("已记住"); })
+            .catch((error: unknown) => setNote(error instanceof Error ? error.message : "没能保存"))
+            .finally(() => setBusy(false));
+        }}
+      >
+        {fields.map(([key, label, placeholder]) => (
+          <label key={key} className={styles.fieldFull}>
+            <span className={styles.fieldLabel}>{label}</span>
+            <input
+              className={styles.input}
+              maxLength={220}
+              aria-label={label}
+              placeholder={placeholder}
+              value={entries[key]}
+              onChange={(event) => setEntries((current) => ({ ...current, [key]: event.target.value }))}
+            />
+          </label>
+        ))}
+        <button className={styles.rowBtnPrimary} type="submit" disabled={busy}>记住这些偏好</button>
+      </form>
+      <SettingRow title="演示数据" desc="删掉本账号里导入的演示空间、日程和专注记录。">
+        <button
+          className={styles.rowBtn}
+          type="button"
+          disabled={busy}
+          onClick={() => {
+            setBusy(true);
+            setNote("");
+            void chatApi.resetDemo()
+              .then(() => setNote("演示数据已清除"))
+              .catch((error: unknown) => setNote(error instanceof Error ? error.message : "没能清除"))
+              .finally(() => setBusy(false));
+          }}
+        >
+          清除演示数据
+        </button>
+      </SettingRow>
+      {note && <p className={styles.fieldHint}>{note}</p>}
+    </section>
+  );
+}
+
 function AccountPane({
-  user, studentId, onLogout, onRename, onRestart, onClose,
+  user, studentId, onLogout, onRename, onOpenPreferences, onClose,
 }: {
   user?: AuthUser;
   studentId: string;
   onLogout?: () => void;
   onRename?: (name: string) => Promise<void>;
-  onRestart?: () => Promise<void> | void;
+  onOpenPreferences?: () => void;
   onClose: () => void;
 }) {
   const [name, setName] = useState(user?.displayName || "演示学习者");
@@ -569,9 +640,9 @@ function AccountPane({
             </SettingRow>
           )}
 
-          <SettingRow title="学习画像初识访谈" desc="重新发起三问三答初识对话，校准你的 USER 长期画像。">
-            <button className={styles.rowBtn} type="button" onClick={() => void onRestart?.()}>
-              重新进行初识访谈
+          <SettingRow title="学习偏好" desc="可选。写下背景和讲法，之后的讲解会按这个来。">
+            <button className={styles.rowBtn} type="button" onClick={() => onOpenPreferences?.()}>
+              去填写
             </button>
           </SettingRow>
 

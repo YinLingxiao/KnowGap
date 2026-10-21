@@ -309,6 +309,31 @@ export const chatApi = {
   async skipOnboarding(): Promise<void> {
     await request(root, "/api/onboarding/skip", { method: "POST" });
   },
+  async ackOnboarding(): Promise<void> {
+    await request(root, "/api/onboarding/ack", { method: "POST" });
+  },
+  async welcome(text: string): Promise<{ subjectId: string; conversationId: string; name: string; goal: string; opener: string }> {
+    const data = await request<Wire>(root, "/api/onboarding/welcome", { method: "POST", body: JSON.stringify({ text }) });
+    return {
+      subjectId: data.subject_id, conversationId: data.conversation_id,
+      name: data.name, goal: data.goal ?? "", opener: data.opener,
+    };
+  },
+  async learningPreferences(): Promise<{ background: string; explanation: string; interaction: string }> {
+    const data = await request<Wire>(root, "/api/onboarding/preferences", { cache: "no-store" });
+    return { background: data.background ?? "", explanation: data.explanation ?? "", interaction: data.interaction ?? "" };
+  },
+  async saveLearningPreferences(entries: { background: string; explanation: string; interaction: string }): Promise<{ background: string; explanation: string; interaction: string }> {
+    const data = await request<Wire>(root, "/api/onboarding/preferences", { method: "PUT", body: JSON.stringify(entries) });
+    return { background: data.background ?? "", explanation: data.explanation ?? "", interaction: data.interaction ?? "" };
+  },
+  async seedDemo(): Promise<{ subjectId: string; conversationId: string; name: string }> {
+    const data = await request<Wire>(root, "/api/demo/seed", { method: "POST" });
+    return { subjectId: data.subject_id, conversationId: data.conversation_id, name: data.name };
+  },
+  async resetDemo(): Promise<void> {
+    await request(root, "/api/demo/seed", { method: "DELETE" });
+  },
   async resumeThread(id: string, messageId: string): Promise<void> {
     await request(root, `${path(id)}/messages/${encodeURIComponent(messageId)}/resume`, { method: "POST" });
   },

@@ -1069,11 +1069,57 @@ class ChatStore:
         return self.start_onboarding(student_id)
 
     def skip_onboarding(self, student_id: str) -> dict:
+        return self.mark_onboarding(student_id, "skipped")
+
+    def mark_onboarding(self, student_id: str, status: str) -> dict:
         from app.chat.onboarding import state
+        if status not in {"completed", "skipped"}:
+            raise ValueError("状态无效。")
         with self.connection() as db:
             db.execute("INSERT OR IGNORE INTO onboarding_sessions(student_id) VALUES (?)", (student_id,))
-            db.execute("UPDATE onboarding_sessions SET status='skipped', version=version+1 WHERE student_id=? AND status != 'completed'", (student_id,))
+            if status == "skipped":
+                db.execute(
+                    "UPDATE onboarding_sessions SET status='skipped', version=version+1 WHERE student_id=? AND status != 'completed'",
+                    (student_id,),
+                )
+            else:
+                db.execute(
+                    "UPDATE onboarding_sessions SET status='completed', version=version+1 WHERE student_id=? AND status != 'completed'",
+                    (student_id,),
+                )
             return state(db, student_id)
+
+    def learning_preferences(self, student_id: str) -> dict:
+        from app.chat.onboarding import FIELDS, LABELS
+        from app.memory.curated import split_entries
+        with self.connection() as db:
+            notes = split_entries(read_all(db, student_id)["user"])
+        found = {key: "" for key in FIELDS}
+        for key in FIELDS:
+            prefix = f"{LABELS[key]}："
+            for entry in notes:
+                if entry.startswith(prefix):
+                    found[key] = entry[len(prefix):]
+        return found
+
+    def save_learning_preferences(self, student_id: str, entries: dict) -> dict:
+        from app.chat.onboarding import FIELDS, LABELS
+        from app.memory.curated import join_entries, split_entries
+        if set(entries) - set(FIELDS):
+            raise ValueError("画像字段无效。")
+        additions = []
+        for key, value in entries.items():
+            if not isinstance(value, str) or len(value) > 220:
+                raise ValueError("画像条目过长或格式无效。")
+            if value.strip():
+                additions.append(f"{LABELS[key]}：{value.strip()}")
+        with self.connection() as db:
+            db.execute("BEGIN IMMEDIATE")
+            notes = split_entries(read_all(db, student_id)["user"])
+            replaced = tuple(f"{LABELS[key]}：" for key in entries)
+            kept = [entry for entry in notes if not entry.startswith(replaced)]
+            write_note(db, student_id, "user", join_entries(kept + additions), now())
+        return self.learning_preferences(student_id)
 
     def frozen_notes(self, conversation_id: str, student_id: str) -> str:
         with self.connection() as db:
