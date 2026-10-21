@@ -555,7 +555,8 @@ class ChatService:
             if role["role"] == "thread":
                 ctx.report_progress = lambda arguments: self._progress(student_id, generation, ctx, arguments)
             definitions = [tool for tool in DEFINITIONS if (
-                tool["function"]["name"] in {"dispatch_thread", "propose_threads", "session_search", "memory"}
+                tool["function"]["name"] in {"dispatch_thread", "propose_threads", "session_search", "memory",
+                                             "agenda_list", "agenda_add", "agenda_update"}
                 if role["role"] == "main" else tool["function"]["name"] not in {"dispatch_thread", "propose_threads"}
                 and (role["role"] == "thread" or tool["function"]["name"] != "report_progress")
             )]

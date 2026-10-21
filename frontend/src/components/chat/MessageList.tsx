@@ -15,6 +15,7 @@ import { CopyButton, Markdown } from "./Markdown";
 import { SELECTABLE_ATTR, SelectionToolbar } from "./SelectionToolbar";
 import { ThreadProposals } from "./ThreadProposals";
 import { VisionMarkedText } from "./widgets/ImageMarker";
+import { AGENDA_TOOLS, AgendaToolCard } from "./AgendaToolCard";
 import { hasVisionMarker } from "./widgets/visionData";
 import styles from "./MessageList.module.css";
 
@@ -31,6 +32,9 @@ const TOOL_LABELS: Record<string, string> = {
   bash: "执行终端命令",
   session_search: "检索历史会话",
   memory: "更新长期笔记",
+  agenda_list: "查看日程",
+  agenda_add: "写入日程",
+  agenda_update: "调整日程",
 };
 
 /** 超过该字符数或行数的消息可折叠 */
@@ -385,7 +389,8 @@ export function MessageList({
             }
             const visibleTools = message.toolCalls.filter((call) => ![
               "dispatch_thread", "propose_threads", "report_progress", "exercise_reference", "plan_steps",
-            ].includes(call.name));
+            ].includes(call.name) && !AGENDA_TOOLS.has(call.name));
+            const agendaCalls = message.toolCalls.filter((call) => AGENDA_TOOLS.has(call.name) && call.name !== "agenda_list");
             const used = message.usedMemoryIds.filter((id) => memoriesById[id]);
             const outside = [...new Set(used.map((id) => memoriesById[id].subjectId)
               .filter((id): id is string => Boolean(id) && id !== conversationSubjectId))];
@@ -419,6 +424,7 @@ export function MessageList({
                     ))}
                   </div>
                 )}
+                {agendaCalls.map((call) => <AgendaToolCard key={call.id} call={call} />)}
                 {visibleTools.length > 0 && (
                   <div className={cx(styles.toolChecklist, styles.traceBox)}>
                     <div className={styles.traceHead}>

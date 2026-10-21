@@ -4,6 +4,7 @@ import asyncio
 import json
 from pathlib import Path
 
+from app.agent_tools import agenda as agenda_tools
 from app.agent_tools import bash as bash_tool
 from app.agent_tools import files
 from app.agent_tools import problem_search
@@ -199,6 +200,9 @@ DEFINITIONS = [
 NEEDS_APPROVAL = {"write", "edit", "bash"}
 
 
+DEFINITIONS += agenda_tools.DEFINITIONS
+
+
 def _without_trailing_commas(raw: str) -> str:
     """Repair JSON punctuation only; commas/quotes inside string values are data."""
     result = []
@@ -342,6 +346,8 @@ async def run(name: str, arguments: dict, ctx) -> str:
             text = await problem_search.run(arguments, ctx)
         elif name == problem_drill_skill.VERIFY_TOOL:
             text = await problem_drill_skill.run_verify(arguments, ctx)
+        elif name in agenda_tools.NAMES:
+            text = await asyncio.to_thread(agenda_tools.run, name, arguments, ctx)
         elif name == "session_search":
             limit = arguments.get("limit", 5)
             text = ctx.store.search_messages(
