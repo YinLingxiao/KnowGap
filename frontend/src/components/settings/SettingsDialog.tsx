@@ -16,6 +16,7 @@ import type { DataSource } from "@/lib/config";
 import { cx } from "@/lib/cx";
 import { THEME_LABEL, useThemeChoice, type ThemeChoice } from "../ThemeToggle";
 import type { AIConfigStatus } from "@/lib/api/ai-config";
+import { FocusHeatmap } from "../focus/FocusHeatmap";
 import { ModelAccessCard, type ModelSignal } from "./ModelAccessCard";
 import { ServiceModelsSection } from "./ServiceModelsSection";
 import styles from "./Settings.module.css";
@@ -896,6 +897,8 @@ function ReflectPane() {
   return (
     <section>
       <h2 className={styles.sectionTitle}>复盘 (Reflect)</h2>
+      <p className={styles.sectionLabel}>近 12 周专注</p>
+      <FocusHeatmap />
       <div className={styles.reflectStats}>
         <div className={styles.reflectStatCard}>
           <span className={styles.reflectStatValue}>{toReview.length}</span>
