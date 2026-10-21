@@ -34,6 +34,7 @@ import { OnboardingStage } from "./OnboardingStage";
 import { SpacesPage } from "./SpacesPage";
 import { AgendaPage } from "../agenda/AgendaPage";
 import { ReminderScheduler } from "../agenda/ReminderScheduler";
+import { TaskComposer } from "../agenda/TaskComposer";
 import { OPEN_AGENDA_EVENT } from "./AgendaToolCard";
 import { SubjectPage } from "./SubjectPage";
 import { SubjectPicker } from "./SubjectPicker";
@@ -887,6 +888,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
         />
       )}
       <Toaster toasts={toasts} onDismiss={dismiss} />
+      <TaskComposer subjects={chat.subjects} />
     </div>
   );
 }

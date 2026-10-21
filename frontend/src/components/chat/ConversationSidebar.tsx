@@ -7,6 +7,7 @@ import {
   Search, Settings, SlidersHorizontal, Trash2, X,
 } from "lucide-react";
 import type { ApiError } from "@/lib/api/errors";
+import { COMPOSE_TASK_EVENT } from "@/lib/agenda/types";
 import type { ConversationSummary, Subject } from "@/lib/chat/types";
 import { cx } from "@/lib/cx";
 import { ThemeToggle } from "../ThemeToggle";
@@ -266,6 +267,11 @@ export function ConversationSidebar(props: SidebarProps) {
         >
           <Plus size={15} aria-hidden />
           <span>新对话</span>
+        </button>
+        <button className={styles.navItem} onClick={() => window.dispatchEvent(new CustomEvent(COMPOSE_TASK_EVENT))} title="添加任务（Q）">
+          <Plus size={15} aria-hidden />
+          <span>添加任务</span>
+          <kbd className={styles.composeKey}>Q</kbd>
         </button>
         <div className={styles.navRow}>
           <button className={cx(styles.navItem, props.spacesActive && styles.navActive)} onClick={props.onOpenSpaces}>

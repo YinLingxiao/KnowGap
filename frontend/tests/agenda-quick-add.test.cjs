@@ -30,6 +30,41 @@ const deadline = (text, now = WED) => parse(text, now).fields.deadlineDate;
 const start = (text, now = WED) => parse(text, now).fields.scheduledStartAt;
 const minutes = (text) => parse(text).fields.durationMinutes;
 
+test('reminders are separate from duration, retain offsets and map to input', () => {
+  const text = '明天15:00 复习 45分钟 提醒我提前 30 分钟';
+  const result = parse(text);
+  assert.equal(result.title, '复习');
+  assert.equal(result.fields.durationMinutes, 45);
+  assert.equal(result.fields.reminderMinutes, 30);
+  assert.equal(quickAddToInput(result.fields).reminderMinutes, 30);
+  const token = result.tokens.find(item => item.field === 'reminderMinutes');
+  assert.equal(text.slice(token.start, token.end), '提醒我提前 30 分钟');
+  const cancelled = parse(text, WED, SUBJECTS, [token.key]);
+  assert.equal(cancelled.fields.reminderMinutes, undefined);
+  assert.equal(cancelled.fields.durationMinutes, 45);
+  assert.ok(cancelled.title.includes('提醒我提前 30 分钟'));
+});
+
+test('supported reminder offsets, zero, and unsupported values', () => {
+  for (const value of [5, 10, 15, 30, 60, 120]) {
+    assert.equal(parse(`复习 提醒我提前 ${value} 分钟`).fields.reminderMinutes, value);
+  }
+  assert.equal(parse('复习 提醒我提前1天').fields.reminderMinutes, 1440);
+  assert.equal(parse('复习 提醒提前2小时').fields.reminderMinutes, 120);
+  assert.equal(quickAddToInput(parse('复习 提醒我准时').fields).reminderMinutes, 0);
+  const unsupported = parse('复习 提醒我提前25分钟');
+  assert.equal(unsupported.title, '复习 提醒我提前25分钟');
+  assert.equal(unsupported.fields.durationMinutes, null);
+  assert.equal(unsupported.fields.reminderMinutes, undefined);
+  assert.equal(parse('复习 提醒我提前30分钟').fields.scheduledStartAt, null);
+});
+
+test('weekend means this Saturday, or today on Sunday', () => {
+  assert.equal(date('本周末 复习'), '2026-10-24');
+  assert.equal(date('这周末 复习', MONTH_END), '2026-10-31');
+  assert.equal(date('周末 复习', SUN), '2026-10-25');
+});
+
 test('the full example resolves every field and leaves only the title', () => {
   const result = parse('明天下午3点 复习戴维南定理 #电路原理 p1 45分钟');
   assert.equal(result.title, '复习戴维南定理');

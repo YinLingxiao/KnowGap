@@ -1,0 +1,102 @@
+.dialog {
+  position: fixed;
+  inset: 12vh 0 auto;
+  width: min(600px, calc(100vw - 24px));
+  max-height: 80dvh;
+  margin: 0 auto;
+  padding: 0;
+  overflow: auto;
+  border: 0;
+  border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-popover);
+  color: var(--text);
+  font-size: var(--text-sm);
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) var(--bg-elevated);
+}
+.dialog::backdrop { background: color-mix(in srgb, var(--text) 25%, transparent); }
+.dialog button { cursor: pointer; }
+.dialog button:disabled { opacity: .5; cursor: not-allowed; }
+.dialog :is(button, input, textarea):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px 8px; }
+.header h2 { margin: 0; font-size: var(--text-sm); font-weight: 500; color: var(--text-secondary); }
+.header > button, .panelHead button { display: grid; place-items: center; width: 28px; height: 28px; border-radius: var(--radius-sm); color: var(--text-secondary); }
+.header > button:hover, .panelHead button:hover { background: var(--bg-hover); }
+.body { min-width: 0; border: 0; margin: 0; padding: 4px 20px 16px; }
+.titleField { position: relative; margin-bottom: 8px; }
+.title, .mirror { width: 100%; height: 36px; padding: 4px 0; font: inherit; font-size: var(--text-xl); font-weight: 550; line-height: 28px; letter-spacing: normal; }
+.mirror { position: absolute; inset: 0; overflow: hidden; white-space: pre; pointer-events: none; color: transparent; }
+.mirror mark { padding: 0; border-radius: 3px; color: transparent; background: var(--accent-soft-strong); box-shadow: 0 1px 0 var(--accent); }
+.title { position: relative; display: block; border: 0; outline: none; background: transparent; color: var(--text); caret-color: var(--accent); }
+.title:focus-visible { outline: none !important; }
+.titleField:focus-within { box-shadow: 0 1px 0 var(--border-strong); }
+.title::placeholder { color: var(--text-tertiary); font-weight: 400; }
+.expand, .ai { display: inline-flex; align-items: center; gap: 5px; min-height: 28px; color: var(--text-secondary); }
+.expand:hover, .ai:hover { color: var(--accent-text); }
+.notes { display: flex; flex-direction: column; gap: 6px; color: var(--text-secondary); font-size: var(--text-xs); }
+.notes textarea { width: 100%; min-height: 76px; max-height: 200px; resize: vertical; line-height: 1.6; }
+.dialog :is(textarea, input:not(.title)) { min-width: 0; padding: 7px 9px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg); color: var(--text); font: inherit; caret-color: var(--accent); }
+.dialog ::selection { background: var(--accent-soft-strong); color: var(--text); }
+.fields { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 16px; }
+.fieldButton { display: inline-flex; min-width: 0; max-width: 100%; border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-secondary); }
+.fieldButton[data-active="true"] { background: var(--accent-soft); border-color: var(--border-strong); color: var(--accent-text); }
+.fieldButton > button { display: flex; align-items: center; gap: 5px; min-width: 0; min-height: 30px; padding: 4px 7px; text-align: left; }
+.fieldButton > button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fieldButton svg { flex-shrink: 0; }
+.fieldButton > button:hover:not(:disabled) { background: var(--bg-hover); }
+.fieldButton > .clear { padding: 4px; }
+.hint { margin: 8px 0 0; color: var(--text-tertiary); font-size: var(--text-xs); line-height: 1.6; overflow-wrap: anywhere; }
+.panel { margin-top: 12px; padding: 10px 12px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-panel); }
+.panelHead { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-weight: 500; }
+.presets { display: flex; flex-wrap: wrap; gap: 6px; }
+.presets button { display: inline-flex; align-items: center; gap: 4px; min-height: 30px; padding: 4px 9px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-elevated); }
+.presets button:hover { border-color: var(--accent); }
+.dateFields { display: grid; grid-template-columns: 1.25fr 1fr 1fr; gap: 10px; margin-top: 12px; }
+.dateFields label { display: flex; flex-direction: column; gap: 6px; min-width: 0; color: var(--text-secondary); font-size: var(--text-xs); }
+.dateFields input { width: 100%; }
+.options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3px; max-height: 200px; overflow: auto; }
+.options button { display: flex; align-items: center; gap: 7px; min-height: 34px; padding: 6px 8px; border-radius: var(--radius-sm); text-align: left; overflow-wrap: anywhere; }
+.options button:hover { background: var(--bg-hover); }
+.options button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-text); }
+.options button > svg:last-child:not(:first-child) { margin-left: auto; flex-shrink: 0; }
+.dot { display: inline-block; flex-shrink: 0; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.labelEntry { display: flex; gap: 6px; margin-bottom: 8px; }
+.labelEntry input { flex: 1; }
+.labelEntry button { display: grid; place-items: center; width: 32px; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.recognized { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: 12px; color: var(--text-tertiary); font-size: 11px; }
+.recognized button { display: inline-flex; align-items: center; gap: 3px; padding: 2px 4px; color: var(--accent-text); border-radius: 3px; background: var(--accent-soft); }
+.ai { margin-top: 14px; }
+.footer { display: flex; align-items: center; gap: 8px; padding: 14px 20px; border-top: 1px solid var(--border); }
+.destination { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.footer button { display: inline-flex; justify-content: center; align-items: center; gap: 5px; min-height: 34px; padding: 6px 12px; border-radius: var(--radius-sm); font-weight: 500; }
+.cancel { background: var(--bg-hover); color: var(--text-secondary); }
+.submit { background: var(--accent-solid); color: var(--on-accent); }
+.submit:hover:not(:disabled) { background: var(--accent-solid-hover); }
+.shortcuts { margin: -4px 20px 12px; color: var(--text-tertiary); font-size: 11px; text-align: right; }
+.error { margin: 0 20px 12px; color: var(--red); overflow-wrap: anywhere; }
+.inlineSuccess { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 0 20px 12px; color: var(--text-secondary); }
+.inlineSuccess button { color: var(--accent-text); }
+.confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 20px 12px; padding: 10px; background: var(--bg-panel); border-radius: var(--radius-sm); }
+.confirm span { flex: 1; }
+.confirm button { padding: 6px; color: var(--accent-text); }
+.toast { position: fixed; z-index: 1000; bottom: 24px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; width: max-content; max-width: calc(100vw - 24px); padding: 12px 16px; border-radius: var(--radius); background: var(--bg-elevated); color: var(--text); box-shadow: var(--shadow-popover); font-size: var(--text-sm); }
+.toast span { min-width: 0; overflow-wrap: anywhere; }
+.toast button { flex-shrink: 0; color: var(--accent-text); }
+.toast button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.spin { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (max-width: 480px) {
+  .dialog { inset-block-start: 5dvh; max-height: 90dvh; }
+  .header { padding-inline: 14px; }
+  .body { padding-inline: 14px; }
+  .title, .mirror { font-size: var(--text-lg); }
+  .dateFields { grid-template-columns: 1fr 1fr; }
+  .dateFields label:first-child { grid-column: 1 / -1; }
+  .footer { flex-wrap: wrap; padding-inline: 14px; }
+  .destination { flex-basis: 100%; margin-bottom: 4px; }
+  .footer .cancel { margin-left: auto; }
+  .shortcuts { font-size: 10px; text-align: center; }
+}
+@media (pointer: coarse) { .dialog button { min-height: 40px; } }
+@media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
