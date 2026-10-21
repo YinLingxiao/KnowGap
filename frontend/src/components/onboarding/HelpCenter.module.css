@@ -106,24 +106,25 @@
   color: var(--accent-text);
 }
 
-table {
+.keys {
   width: 100%;
   margin-top: 8px;
   border-collapse: collapse;
   font-size: var(--text-sm);
 }
 
-th, td {
+.keys th,
+.keys td {
   padding: 6px 0;
   text-align: left;
   border-bottom: 1px solid var(--border-subtle);
 }
 
-th {
+.keys th {
   width: 120px;
   font-weight: 500;
 }
 
-kbd {
+.keys kbd {
   font-family: inherit;
 }

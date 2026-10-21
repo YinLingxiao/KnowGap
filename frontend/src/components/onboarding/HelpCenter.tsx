@@ -97,7 +97,7 @@ export function HelpCenter({ desktop, userId, onClose, onTry }: HelpCenterProps)
           )}
           <section>
             <h3>快捷键</h3>
-            <table>
+            <table className={styles.keys}>
               <tbody>
                 {KEYS.map(([key, label]) => (
                   <tr key={key}>
