@@ -1,0 +1,143 @@
+.quick {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+  color: var(--text-tertiary);
+  transition: border-color var(--t-hover) var(--ease-out), background-color var(--t-hover) var(--ease-out);
+}
+
+.field:hover {
+  border-color: var(--border-strong);
+}
+
+.field:focus-within {
+  border-color: var(--accent);
+  background: var(--bg);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.fieldBusy {
+  opacity: 0.7;
+}
+
+.plus {
+  flex-shrink: 0;
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: var(--text-sm);
+}
+
+.input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.enterHint {
+  flex-shrink: 0;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 7px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.chip:hover {
+  border-color: currentColor;
+}
+
+.chipX {
+  opacity: 0.55;
+  font-size: 13px;
+}
+
+.chip:hover .chipX {
+  opacity: 1;
+}
+
+.chipDate {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.chipDeadline {
+  background: var(--red-soft);
+  color: var(--red);
+}
+
+.chipPriority {
+  background: var(--orange-soft);
+  color: var(--orange);
+}
+
+.chipSubject {
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.chipNeutral {
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--chip-dot, currentColor);
+}
+
+.titlePreview {
+  min-width: 0;
+  max-width: 100%;
+  margin-left: 4px;
+  overflow: hidden;
+  color: var(--text-tertiary);
+  font-size: 11.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.restore {
+  align-self: flex-start;
+  color: var(--text-tertiary);
+  font-size: 11.5px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.restore:hover {
+  color: var(--text);
+}
