@@ -6,7 +6,7 @@ const os = require('node:os');
 const path = require('node:path');
 const ts = require('typescript');
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'knowgap-chat-'));
-for (const name of ['lib/config.ts', 'lib/api/errors.ts', 'lib/api/http-client.ts', 'lib/chat/api.ts']) {
+for (const name of ['lib/config.ts', 'lib/api/errors.ts', 'lib/api/http-client.ts', 'lib/chat/plan.ts', 'lib/chat/api.ts']) {
   const output = path.join(temp, name.replace(/\.ts$/, '.js'));
   fs.mkdirSync(path.dirname(output), { recursive: true });
   let js = ts.transpileModule(fs.readFileSync(path.join(__dirname, '../src', name), 'utf8'), {

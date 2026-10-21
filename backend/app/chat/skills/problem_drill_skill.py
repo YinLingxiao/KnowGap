@@ -169,6 +169,16 @@ def guess_knowledge_point(text: str) -> str | None:
     return kp if re.search(r"[一-鿿A-Za-z]", kp) else None
 
 
+# 「先讲概念，再出一道小题」「分步骤带我学」：讲解优先的学习请求，由教学流程出题，不交给真题检索接管
+_LESSON_FIRST_RE = re.compile(r"先讲|先讲解|讲清|讲讲|带我学|分步骤|一步步|循序|从概念|先教")
+_REAL_PROBLEM_RE = re.compile(r"真题|母题|好题|刷题|考研题|竞赛题")
+
+
+def lesson_first(text: str) -> bool:
+    """讲解优先、没有要真题的学习请求：本轮不提供真题检索工具，题目由教学流程现场出。"""
+    return bool(_LESSON_FIRST_RE.search(text or "")) and not _REAL_PROBLEM_RE.search(text or "")
+
+
 def wants_problems(text: str) -> bool:
     """用户本轮是在要题（而不是提交作答、问「对不对」）。"""
     return bool(parse_more_request(text)) or bool(_ASK_RE.search(text or ""))
@@ -190,7 +200,8 @@ def drill_plan(role: str, user_text: str, delegated_task: str | None = None, del
     if role == "thread":
         active = infer_thread_skill(delegated_task or text, delegated_skill) == "socratic_practice"
     elif role == "chat":
-        active = not _FEYNMAN_RE.search(text) and bool(_PRACTICE_RE.search(text))
+        active = (not _FEYNMAN_RE.search(text) and bool(_PRACTICE_RE.search(text))
+                  and not lesson_first(text))
     else:
         active = False
     if not active:
@@ -801,7 +812,9 @@ def guard_reply(text: str, tool_log: list[dict] | None = None, *, require_source
     # 只在没有任何测验卡、也没有被拦截的题时补；被拦截的保留隐藏提示，不悄悄换成别的题
     if require and report["kept"] == 0 and not report["blocked"]:
         text = _append_found_quizzes(text, tool_log, allowed, report, rendered)
-    if drill_active and not searched and (report["blocked"] or not re.search(r"[？?]", text)):
+    if drill_active and not searched and (
+        report["blocked"] or (not re.search(r"[？?]", text) and len(text.strip()) < 160)
+    ):
         # 用户在要题、本轮没检索（知识点太宽，服务端没代为搜题），模型却：
         # - 出了题：题一定是编的，周围的正文（「这是例1的改编题」）也不可信；或
         # - 既没出题也没追问（「好的，我们来出几道题…」然后结束）：用户什么都拿不到。

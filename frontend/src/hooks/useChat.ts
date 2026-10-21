@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError, toApiError } from "@/lib/api/errors";
 import { chatApi } from "@/lib/chat/api";
+import { PLAN_EVENT, type PlanEventDetail } from "@/lib/chat/plan";
 import type {
   ChatMessage, Conversation, ConversationSummary, LearnerMemory, LearnerMemoryStatus, SpaceInput, StreamEvent, Subject,
 } from "@/lib/chat/types";
@@ -299,6 +300,9 @@ export function useChat(notify: Notify, userId: string) {
             const toolCalls = current ? m.toolCalls.map((call) => (call.id === event.id ? next : call)) : [...m.toolCalls, next];
             return { ...m, pendingApproval: null, toolCalls };
           }));
+          break;
+        case "plan":
+          window.dispatchEvent(new CustomEvent<PlanEventDetail>(PLAN_EVENT, { detail: { conversationId: id, plan: event.plan } }));
           break;
       }
     };

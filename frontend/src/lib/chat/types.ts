@@ -1,5 +1,6 @@
 /** 自由对话的视图模型；接口字段映射见 ./api.ts */
 import type { SourceReference } from "@/lib/types";
+import type { LearningPlan, PlanChange } from "./plan";
 
 export type MessageStatus = "complete" | "streaming" | "failed" | "cancelled";
 export type MemoryKind = "misconception" | "mastery" | "preference";
@@ -130,6 +131,7 @@ export interface ChatMessage {
   checkpointBlockedReason?: string | null;
   threadProposals?: ThreadProposal[];
   threadUpdate?: { threadId: string; title: string; status: ExecutionStatus; summary: string } | null;
+  planChanges?: PlanChange[];
   createdAt: string;
 }
 
@@ -198,4 +200,5 @@ export type StreamEvent =
   | { type: "analysis"; userMessage: ChatMessage | null; assistantMessage: ChatMessage | null; skipped: boolean }
   | { type: "tool_start"; id: string; name: string; arguments: string }
   | { type: "tool_end"; id: string; name: string; ok: boolean; output: string }
-  | { type: "tool_approval"; id: string; name: string; arguments: string };
+  | { type: "tool_approval"; id: string; name: string; arguments: string }
+  | { type: "plan"; plan: LearningPlan };

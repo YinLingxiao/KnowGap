@@ -503,3 +503,12 @@ def test_prompt_variants():
     assert "search_good_problems" in drill.PROBLEM_DRILL_SKILL and "report_progress" in drill.problem_drill_prompt("thread")
     assert drill._REPORT_STEP not in drill.problem_drill_prompt("chat")
     assert drill.VERIFY_DEFINITION["function"]["name"] == drill.VERIFY_TOOL
+
+
+def test_lesson_first_requests_are_not_taken_over_by_problem_search():
+    from app.chat.skills.problem_drill_skill import drill_plan
+
+    lesson = "我想学二叉树的中序遍历，请分步骤带我学：先讲概念，再出一道小题让我做，最后总结"
+    assert drill_plan("chat", lesson) == (False, None)
+    active, _ = drill_plan("chat", "先讲讲二叉树中序遍历，再找几道真题练手")
+    assert active

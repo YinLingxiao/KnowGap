@@ -10,6 +10,7 @@ import {
 import type { StreamPhase } from "@/hooks/useChat";
 import { getAIConfig } from "@/lib/api/ai-config";
 import { uploadImage } from "@/lib/api/vision-client";
+import { PlanBar } from "./PlanBar";
 import { chatApi } from "@/lib/chat/api";
 import type { ChatMessage } from "@/lib/chat/types";
 import { cx } from "@/lib/cx";
@@ -796,6 +797,7 @@ export function Composer({
 
   return (
     <div className={cx(styles.composer, hero && styles.hero)}>
+      {!hero && <PlanBar conversationId={conversationId} busy={generating || busy} />}
       <div className={cx(styles.box, locked && styles.locked)}>
         {/* LobeHub 风格：顶部 Markdown 格式工具栏（由 + 菜单中的「格式工具」开关控制） */}
         {attachNote && <p className={styles.wsError} role="status">{attachNote}</p>}

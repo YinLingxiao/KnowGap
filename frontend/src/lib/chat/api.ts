@@ -3,6 +3,7 @@ import { ApiError } from "@/lib/api/errors";
 import { authHeader, mapSource, request, type WireSource } from "@/lib/api/http-client";
 import { API_BASE_URL } from "@/lib/config";
 import type { Problem } from "@/lib/types";
+import { mapPlan, mapPlanChanges } from "./plan";
 import type {
   ChatMessage, Conversation, ConversationSummary, LearnerMemory, LearnerMemoryStatus, MemoryChange, SpaceInput,
   StreamEvent, Subject, TokenUsage, SpaceUsage,
@@ -66,6 +67,7 @@ function mapMessage(data: Wire): ChatMessage {
       threadId: data.thread_summary.thread_id, title: data.thread_summary.title, summary: data.thread_summary.summary,
       takeaways: data.thread_summary.takeaways ?? [], memoryIds: data.thread_summary.memory_ids ?? [],
     } : null,
+    planChanges: mapPlanChanges(data.plan_changes),
     createdAt: data.created_at,
   };
 }
@@ -140,6 +142,8 @@ function mapEvent(type: string, data: Wire): StreamEvent | null {
       return { type: "tool_approval", id: String(data.id), name: String(data.name ?? ""), arguments: String(data.arguments ?? "") };
     case "tool_end":
       return { type: "tool_end", id: String(data.id), name: String(data.name ?? ""), ok: Boolean(data.ok), output: String(data.output ?? "") };
+    case "plan":
+      return { type: "plan", plan: mapPlan(data) };
     default:
       return null;
   }

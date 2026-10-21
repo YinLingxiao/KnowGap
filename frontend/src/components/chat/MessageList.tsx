@@ -15,6 +15,7 @@ import { CopyButton, Markdown } from "./Markdown";
 import { SELECTABLE_ATTR, SelectionToolbar } from "./SelectionToolbar";
 import { ThreadProposals } from "./ThreadProposals";
 import { VisionMarkedText } from "./widgets/ImageMarker";
+import type { PlanChange } from "@/lib/chat/plan";
 import { AGENDA_TOOLS, AgendaToolCard } from "./AgendaToolCard";
 import { hasVisionMarker } from "./widgets/visionData";
 import styles from "./MessageList.module.css";
@@ -147,6 +148,22 @@ function ResumeCheckpoint({ onResume }: { onResume: () => Promise<void> }) {
 const EXECUTION_LABEL: Record<string, string> = {
   queued: "排队中", working: "进行中", waiting: "待确认", idle: "空闲", failed: "失败", cancelled: "已取消",
 };
+
+const PLAN_MARK: Record<string, { label: string; tone: "done" | "ask" | "start" | "skip" }> = {
+  done: { label: "完成", tone: "done" },
+  awaiting_learner: { label: "等你回答", tone: "ask" },
+  in_progress: { label: "开始", tone: "start" },
+  skipped: { label: "跳过", tone: "skip" },
+};
+
+/** 每个步骤只保留本轮最后一次变化；新增为待开始的步骤不单独标记 */
+function planMarksOf(changes: PlanChange[] | undefined) {
+  const last = new Map<string, PlanChange>();
+  for (const change of changes ?? []) last.set(change.stepId || change.title, change);
+  return [...last.entries()]
+    .filter(([, change]) => PLAN_MARK[change.to])
+    .map(([key, change]) => ({ key, title: change.title, ...PLAN_MARK[change.to] }));
+}
 
 export function MessageList({
   conversationId, messages, problems, memoriesById, conversationSubjectId, subjectNames, phase, followNonce, topSlot,
@@ -376,19 +393,10 @@ export function MessageList({
             }
             const streaming = message.status === "streaming";
             const isLast = message === last && message.replyTo === lastUser?.id;
-            const planCalls = message.toolCalls.filter((call) => call.name === "plan_steps");
-            let planSteps: Array<{ title: string; status: string }> = [];
-            if (planCalls.length > 0) {
-              const latestPlan = planCalls[planCalls.length - 1];
-              try {
-                const rawPlan = JSON.parse(latestPlan.output || latestPlan.arguments || "{}");
-                if (Array.isArray(rawPlan.steps)) {
-                  planSteps = rawPlan.steps.filter((s: unknown) => Boolean(s && typeof s === "object" && "title" in s));
-                }
-              } catch { /* ignore malformed partial JSON */ }
-            }
+            // 计划属于整段对话，由输入框上方的计划条展示；这里只在发生变化的回复里留一行时间线标记
+            const planMarks = planMarksOf(message.planChanges);
             const visibleTools = message.toolCalls.filter((call) => ![
-              "dispatch_thread", "propose_threads", "report_progress", "exercise_reference", "plan_steps",
+              "dispatch_thread", "propose_threads", "report_progress", "exercise_reference", "plan_steps", "update_plan",
             ].includes(call.name) && !AGENDA_TOOLS.has(call.name));
             const agendaCalls = message.toolCalls.filter((call) => AGENDA_TOOLS.has(call.name) && call.name !== "agenda_list");
             const used = message.usedMemoryIds.filter((id) => memoriesById[id]);
@@ -406,21 +414,15 @@ export function MessageList({
                     <span>New</span>
                   </div>
                 )}
-                {planSteps.length > 0 && (
-                  <div className={styles.planCard} role="status" aria-label="执行步骤">
-                    {planSteps.map((step, stepIdx) => (
-                      <div key={`${stepIdx}-${step.title}`} className={styles.planStepRow}>
-                        {step.status === "completed" ? (
-                          <CheckCircle2 size={14} className={styles.planIconDone} aria-hidden />
-                        ) : step.status === "in_progress" ? (
-                          <Circle size={14} className={styles.planIconActive} aria-hidden />
-                        ) : (
-                          <CircleDashed size={14} className={styles.planIconPending} aria-hidden />
-                        )}
-                        <span className={cx(styles.planStepText, step.status === "pending" && styles.planStepMuted)}>
-                          {step.title}
-                        </span>
-                      </div>
+                {planMarks.length > 0 && (
+                  <div className={styles.planMarks} role="status">
+                    {planMarks.map((mark) => (
+                      <span key={mark.key} className={cx(styles.planMark, styles[`planMark_${mark.tone}`])}>
+                        {mark.tone === "done" ? <CheckCircle2 size={12} aria-hidden />
+                          : mark.tone === "ask" ? <CircleAlert size={12} aria-hidden />
+                            : <Circle size={12} aria-hidden />}
+                        <span>{mark.label}：{mark.title}</span>
+                      </span>
                     ))}
                   </div>
                 )}

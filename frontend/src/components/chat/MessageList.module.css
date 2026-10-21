@@ -1063,3 +1063,35 @@
     transition: none;
   }
 }
+
+/* 学习计划的时间线标记：只在计划发生变化的回复顶部出现一行 */
+.planMarks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 8px;
+}
+
+.planMark {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+}
+
+.planMark > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.planMark_done > svg { color: var(--green); }
+.planMark_ask { border-color: var(--accent); color: var(--accent-text); }
+.planMark_ask > svg { color: var(--accent); }
+.planMark_start > svg { color: var(--accent); }
+.planMark_skip { color: var(--text-tertiary); text-decoration: line-through; }

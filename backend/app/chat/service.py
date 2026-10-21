@@ -32,7 +32,7 @@ from app.chat.plan import PlanStore, brief
 from app.chat.checkpoints import resume_state
 from app.chat.usage import normalize_usage
 from app.chat.schemas import DispatchThread, ProposeThreads, ReportProgress
-from app.chat.skills.problem_drill_skill import SEARCH_TOOL, drill_plan, guard_reply, wants_problems
+from app.chat.skills.problem_drill_skill import SEARCH_TOOL, drill_plan, guard_reply, lesson_first, wants_problems
 from app.chat.coordination import cancel_deliveries, dispatch, next_delivery, report
 from app.memory.store import new_id
 from app.services.materials import MaterialStore
@@ -572,6 +572,9 @@ class ChatService:
             )]
             if exercise is None:
                 definitions = [tool for tool in definitions if tool["function"]["name"] != "exercise_reference"]
+            if role["role"] == "chat" and lesson_first(user_text):
+                # 「先讲概念再出题」由教学流程现场出题；顺手检索真题会触发严格溯源，把随堂小题隐藏掉
+                definitions = [tool for tool in definitions if tool["function"]["name"] != SEARCH_TOOL]
             state = generation.checkpoint or {
                 "version": 1, "role": role["role"], "phase": "model", "rounds": 0, "messages": messages,
                 "parts": parts, "tool_log": tool_log, "tool_messages": tool_messages,
