@@ -183,6 +183,16 @@
   opacity: 0.5;
 }
 
+.reminderIcon {
+  color: var(--text-secondary);
+}
+
+.reminderHint {
+  margin-top: 4px;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+}
+
 .textBtn {
   flex-shrink: 0;
   color: var(--text-tertiary);

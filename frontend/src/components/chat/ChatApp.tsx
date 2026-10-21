@@ -33,6 +33,7 @@ import { CreateSpaceDialog } from "./CreateSpaceDialog";
 import { OnboardingStage } from "./OnboardingStage";
 import { SpacesPage } from "./SpacesPage";
 import { AgendaPage } from "../agenda/AgendaPage";
+import { ReminderScheduler } from "../agenda/ReminderScheduler";
 import { OPEN_AGENDA_EVENT } from "./AgendaToolCard";
 import { SubjectPage } from "./SubjectPage";
 import { SubjectPicker } from "./SubjectPicker";
@@ -397,6 +398,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
 
   return (
     <div className={cx(styles.app, (!sidebarOpen || zen) && styles.sidebarClosed, narrow && styles.narrow, zen && styles.zen)}>
+      <ReminderScheduler userId={user.id} subjects={chat.subjects} />
       {narrow && (
         <button
           className={cx(styles.backdrop, sidebarOpen && styles.backdropOpen)}

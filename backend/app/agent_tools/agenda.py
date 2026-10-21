@@ -24,6 +24,8 @@ _TASK_FIELDS = {
     "scheduled_date": {"type": "string", "description": "计划哪天做，YYYY-MM-DD；按 turn_context.today 推算相对日期"},
     "scheduled_start_at": {"type": "string", "description": "计划几点开始，本地时间 YYYY-MM-DDTHH:MM；不需要具体时刻就省略"},
     "duration_minutes": {"type": "integer", "description": "预计时长，5~720 分钟"},
+    "reminder_minutes": {"type": ["integer", "null"], "enum": [0, 5, 10, 15, 30, 60, 120, 1440, None],
+                         "description": "开始前提醒分钟数：0 准时，5/10/15/30/60/120/1440；null 清空提醒。仅有开始时间时生效"},
     "deadline_date": {"type": "string", "description": "硬截止日（考试/交作业），YYYY-MM-DD，与计划日期独立"},
     "priority": {"type": "integer", "description": "1 最高 ~ 4 普通，默认 4"},
     "notes": {"type": "string", "description": "可选的备注，例如要复习的误区或题号"},
@@ -76,7 +78,8 @@ DEFINITIONS = [
 def _brief(task: dict) -> dict:
     keys = ("id", "title", "scheduled_date", "scheduled_start_at", "duration_minutes", "deadline_date",
             "priority", "status", "source", "parent_id", "subject_id")
-    return {key: task[key] for key in keys if task.get(key) not in (None, "", [])}
+    return {**{key: task[key] for key in keys if task.get(key) not in (None, "", [])},
+            "reminder_minutes": task.get("reminder_minutes")}
 
 
 def _validated(model, data: dict):
