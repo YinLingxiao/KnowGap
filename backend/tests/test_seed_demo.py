@@ -78,6 +78,13 @@ def _assert_demo(store, student):
         assert any(item.startswith(prefix) for item in profile)
 
 
+def _agenda_focus_counts(store):
+    with store.connection() as conn:
+        tasks = conn.execute("SELECT COUNT(*) FROM agenda_tasks WHERE student_id = ?", (STUDENT,)).fetchone()[0]
+        focus = conn.execute("SELECT COUNT(*) FROM focus_sessions WHERE student_id = ?", (STUDENT,)).fetchone()[0]
+    return tasks, focus
+
+
 def test_seed_demo_is_idempotent_and_reset_keeps_user_data(tmp_path, capsys):
     assert resolve_db(str(tmp_path)) == (tmp_path / "knowgap.sqlite3").resolve()
     db = tmp_path / "app.sqlite3"
@@ -98,10 +105,17 @@ def test_seed_demo_is_idempotent_and_reset_keeps_user_data(tmp_path, capsys):
     snap = _snap(store, STUDENT)
     assert any(item.topic == "用户自己的矩阵" for item in store.memories(STUDENT))
 
+    with store.connection() as conn:
+        conn.execute("INSERT INTO agenda_tasks(id, student_id, title, created_at, updated_at) "
+                     "VALUES ('task-user-own', ?, '用户自己的待办', 'x', 'x')", (STUDENT,))
+    counts = _agenda_focus_counts(store)
+    assert counts[0] >= 8 and counts[1] > 20
+
     main(["--db", str(db), "--student", STUDENT])
     store = open_store(db)
     assert _snap(store, STUDENT) == snap
     _assert_demo(store, STUDENT)
+    assert _agenda_focus_counts(store) == counts
 
     main(["--db", str(db), "--student", STUDENT, "--reset"])
     store = open_store(db)
@@ -115,4 +129,5 @@ def test_seed_demo_is_idempotent_and_reset_keeps_user_data(tmp_path, capsys):
     notes = store.agent_notes(STUDENT)["user"]
     assert "我喜欢先看例题" in notes and PROFILE_MARK not in notes
     assert store.subject(other.id, "other-student") is not None
+    assert _agenda_focus_counts(store) == (1, 0)
     assert "reset" in capsys.readouterr().out

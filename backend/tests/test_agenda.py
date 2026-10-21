@@ -255,6 +255,17 @@ def test_breakdown_unavailable_and_invalid_response(tmp_path, reply):
         assert listed(client) == []
 
 
+def test_breakdown_drops_only_malformed_children(tmp_path):
+    raw = {"parent": {"title": "期末"}, "children": [{"title": "好步骤", "scheduled_start_at": "2026-10-22T09:00"},
+                                                     {"title": ""}, {"title": "也好", "priority": 9}]}
+    with TestClient(create_app(isolated_settings(tmp_path), chat_model=FakeChat(analyses=[raw]))) as client:
+        response = client.post(BASE + "/breakdown", json={"goal": "期末", "today": "2026-10-21"})
+    assert response.status_code == 200, response.text
+    children = response.json()["children"]
+    assert [child["title"] for child in children] == ["好步骤"]
+    assert children[0]["scheduled_date"] == "2026-10-22"
+
+
 def test_breakdown_timeout_and_input_validation(tmp_path, monkeypatch):
     class Slow(FakeChat):
         async def complete_json(self, messages):

@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import argparse
+import json
+import random
 import sys
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -36,14 +38,89 @@ PROFILE_ENTRIES = (
 )
 
 
+AGENDA_PREFIX = "task-seed-demo-"
+FOCUS_PREFIX = "focus-seed-demo-"
+
+
+def _subject_id(db, student_id: str, name: str) -> str | None:
+    row = db.execute("SELECT id, deadline FROM subjects WHERE student_id = ? AND name = ?", (student_id, name)).fetchone()
+    return row["id"] if row else None
+
+
 def seed_agenda(store: ChatStore, student_id: str) -> None:
-    # TODO: 日程任务表尚在其他会话开发，合并后在此写入带演示标记的日程，并让 --reset 只删这些行。
-    pass
+    """演示日程：固定 id，重复运行不会重复插入；闪回任务由日程后端根据误区记忆自动生成。"""
+    from app.agenda.store import ensure
+
+    ensure(store)
+    today = date.today()
+    day = lambda offset: (today + timedelta(days=offset)).isoformat()  # noqa: E731
+    stamp = datetime.now(timezone.utc).isoformat()
+    with store.connection() as db:
+        ds = _subject_id(db, student_id, DS_NAME)
+        circuit = _subject_id(db, student_id, CIRCUIT_NAME)
+        rows = [
+            # id 后缀, 标题, 父任务, 优先级, 标签, 空间, 计划日期, 开始时间, 时长, 截止日, 状态, 来源
+            ("queue", "复习循环队列判满条件（演示）", None, 1, ["数据结构"], ds, day(0), f"{day(0)}T15:00", 45, None, "open", "manual"),
+            ("tree", "整理二叉树三种遍历的笔记（演示）", None, 2, ["数据结构", "笔记"], ds, day(1), None, None, None, "open", "manual"),
+            ("stack", "完成栈的出栈序列练习（演示）", None, 3, ["数据结构"], ds, day(0), f"{day(0)}T09:30", 30, None, "done", "manual"),
+            ("final", "期末冲刺：数据结构（演示）", None, 1, ["期末"], ds, None, None, None, day(10), "open", "ai_breakdown"),
+            ("final-1", "哈希冲突两种处理方法对比", "final", 2, ["期末"], ds, day(2), f"{day(2)}T19:00", 60, None, "open", "ai_breakdown"),
+            ("final-2", "图的 BFS / DFS 手推三道题", "final", 2, ["期末"], ds, day(4), f"{day(4)}T14:00", 90, None, "open", "ai_breakdown"),
+            ("final-3", "整卷模拟一套并订正", "final", 1, ["期末"], ds, day(8), f"{day(8)}T09:00", 120, None, "open", "ai_breakdown"),
+            ("thevenin", "戴维南定理例题 3 道（演示）", None, 3, ["电路原理"], circuit, day(2), f"{day(2)}T10:00", 45, day(5), "open", "manual"),
+        ]
+        for suffix, title, parent, priority, labels, subject, scheduled, start, minutes, deadline, status, source in rows:
+            db.execute(
+                "INSERT OR IGNORE INTO agenda_tasks(id, student_id, title, notes, parent_id, priority, labels, subject_id, "
+                "scheduled_date, scheduled_start_at, duration_minutes, deadline_date, status, completed_at, source, "
+                "sort_order, created_at, updated_at) VALUES (?, ?, ?, '', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)",
+                (AGENDA_PREFIX + suffix, student_id, title, AGENDA_PREFIX + parent if parent else None, priority,
+                 json.dumps(labels, ensure_ascii=False), subject, scheduled, start, minutes, deadline, status,
+                 stamp if status == "done" else None, source, stamp, stamp),
+            )
 
 
 def seed_focus(store: ChatStore, student_id: str) -> None:
-    # TODO: 专注记录表尚在其他会话开发，合并后在此写入演示专注记录，并让 --reset 只删这些行。
-    pass
+    """演示专注记录：最近 12 周、固定随机种子，热力图每次看起来一样。"""
+    from app.focus.store import FocusStore
+
+    FocusStore(store).ensure()
+    rng = random.Random(20261024)
+    today = datetime.now().astimezone().replace(hour=0, minute=0, second=0, microsecond=0)
+    with store.connection() as db:
+        ds = _subject_id(db, student_id, DS_NAME)
+        index = 0
+        for back in range(83, -1, -1):
+            # 越接近考试越勤快：后几周专注天数更多
+            if rng.random() > 0.35 + 0.5 * (83 - back) / 83:
+                continue
+            for _ in range(rng.choice((1, 1, 2, 3))):
+                index += 1
+                minutes = rng.choice((25, 25, 45, 15))
+                started = today - timedelta(days=back) + timedelta(hours=rng.choice((9, 14, 16, 20)), minutes=rng.randrange(0, 50))
+                ended = started + timedelta(minutes=minutes)
+                db.execute(
+                    "INSERT OR IGNORE INTO focus_sessions(id, student_id, task_id, subject_id, title, planned_minutes, "
+                    "started_at, ended_at, actual_seconds, status, note) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, 'completed', ?)",
+                    (f"{FOCUS_PREFIX}{index:03d}", student_id, ds, "数据结构专注（演示）", minutes,
+                     started.isoformat(), ended.isoformat(), minutes * 60, "演示专注记录"),
+                )
+
+
+def _reset_agenda_and_focus(db, student_id: str, subject_ids: list[str]) -> None:
+    tables = {row["name"] for row in db.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+    if "agenda_tasks" in tables:
+        db.execute("DELETE FROM agenda_tasks WHERE student_id = ? AND id LIKE ?", (student_id, f"{AGENDA_PREFIX}%"))
+        if subject_ids:
+            # 由演示误区自动生成的闪回任务也一并清掉
+            placeholders = ",".join("?" * len(subject_ids))
+            db.execute(
+                f"DELETE FROM agenda_tasks WHERE student_id = ? AND source = 'review' AND memory_id IN "
+                f"(SELECT id FROM learner_memories WHERE student_id = ? AND subject_id IN ({placeholders}))",
+                (student_id, student_id, *subject_ids),
+            )
+    if "focus_sessions" in tables:
+        db.execute("DELETE FROM focus_sessions WHERE student_id = ? AND id LIKE ?", (student_id, f"{FOCUS_PREFIX}%"))
 
 
 def resolve_db(explicit: str | None) -> Path:
@@ -354,6 +431,7 @@ def reset(path: Path, student_id: str) -> None:
     with store.connection() as db:
         db.execute("BEGIN IMMEDIATE")
         subject_ids = _seed_subject_ids(db, student_id)
+        _reset_agenda_and_focus(db, student_id, subject_ids)
         if subject_ids:
             placeholders = ",".join("?" * len(subject_ids))
             db.execute(
