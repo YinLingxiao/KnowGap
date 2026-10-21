@@ -1,0 +1,442 @@
+/* 考前一页纸：Linear 式紧凑排版，四宫格；只用 globals.css 的设计变量 */
+.backdrop {
+  position: fixed;
+  z-index: 60;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-app-shell);
+  animation: fade 180ms var(--ease-out);
+}
+
+@keyframes fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.toolTitle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: var(--text-sm);
+  color: var(--text);
+}
+
+.toolTitle svg {
+  color: var(--accent);
+}
+
+.toolMeta {
+  margin-left: 6px;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.toolActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.close {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin-left: 2px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  background: transparent;
+  cursor: pointer;
+}
+
+.close:hover {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+
+.scroller {
+  flex: 1;
+  overflow: auto;
+  padding: 16px;
+}
+
+.notice {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 1120px;
+  margin: 0 auto 12px;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--amber);
+  background: var(--amber-soft);
+  font-size: var(--text-xs);
+}
+
+.noticeError {
+  color: var(--red);
+  background: var(--red-soft);
+}
+
+.notice button {
+  margin-left: auto;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.sheet {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 18px 20px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  color: var(--text);
+  background: var(--bg);
+  box-shadow: var(--shadow-card);
+}
+
+.sheetHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 16px;
+  padding-bottom: 10px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.sheetHead h2 {
+  margin: 0;
+  font-size: var(--text-xl);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.sheetMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.quadrant {
+  --tone: var(--accent);
+  --tone-soft: var(--accent-soft);
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-top: 2px solid var(--tone);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
+.red { --tone: var(--red); --tone-soft: var(--red-soft); }
+.green { --tone: var(--green); --tone-soft: var(--green-soft); }
+.accent { --tone: var(--accent); --tone-soft: var(--accent-soft); }
+.amber { --tone: var(--amber); --tone-soft: var(--amber-soft); }
+
+.qHead {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.qIndex {
+  color: var(--tone);
+  font-weight: 700;
+}
+
+.qHead h3 {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 650;
+}
+
+.qHint {
+  margin-left: auto;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.qBody {
+  font-size: var(--text-sm);
+  line-height: 1.55;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.list > li::marker {
+  color: var(--tone);
+  font-weight: 600;
+}
+
+.itemHead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.itemTitle {
+  display: block;
+  font-weight: 600;
+}
+
+.pill {
+  padding: 0 6px;
+  border-radius: 999px;
+  color: var(--tone);
+  background: var(--tone-soft);
+  font-size: 11px;
+  line-height: 18px;
+}
+
+.quote {
+  margin: 3px 0 0;
+  padding: 2px 8px;
+  border-left: 2px solid var(--tone);
+  color: var(--text-secondary);
+  background: var(--tone-soft);
+  font-size: var(--text-xs);
+}
+
+.takeaways {
+  margin: 3px 0 0;
+  padding-left: 16px;
+  color: var(--text-secondary);
+}
+
+.sub {
+  display: flex;
+  gap: 6px;
+  margin: 2px 0 0;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+}
+
+.sub > span {
+  flex: none;
+  align-self: flex-start;
+  padding: 0 5px;
+  border-radius: 4px;
+  color: var(--accent-text);
+  background: var(--accent-soft);
+  font-size: 11px;
+  line-height: 17px;
+}
+
+.subWarn > span {
+  color: var(--red);
+  background: var(--red-soft);
+}
+
+.table {
+  width: 100%;
+  margin-bottom: 8px;
+  border-collapse: collapse;
+  font-size: var(--text-xs);
+}
+
+.table th,
+.table td {
+  padding: 4px 6px;
+  border: 1px solid var(--border-subtle);
+  text-align: left;
+  vertical-align: top;
+}
+
+.table th {
+  color: var(--text-secondary);
+  background: var(--bg-subtle);
+  font-weight: 600;
+}
+
+.table td:first-child,
+.table td:nth-child(2) {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.tip {
+  display: block;
+  color: var(--text-tertiary);
+}
+
+.quiz {
+  gap: 5px;
+}
+
+.answer {
+  margin-top: 2px;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+}
+
+.answer summary {
+  width: fit-content;
+  color: var(--text-tertiary);
+  cursor: pointer;
+}
+
+.empty {
+  margin: 0;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.shimmer {
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% { opacity: 0.45; }
+}
+
+.sheetFoot {
+  margin-top: 10px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  text-align: center;
+}
+
+/* Markdown 组件默认是阅读排版，这里压成高密度 */
+.md :global(.katex-display) {
+  margin: 2px 0;
+}
+
+.md {
+  min-width: 0;
+}
+
+.md > div {
+  max-width: none;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.md > div > :global(*) {
+  margin: 0;
+}
+
+@media (max-width: 760px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .scroller {
+    padding: 12px 8px;
+  }
+
+  .sheet {
+    padding: 14px 12px 10px;
+  }
+}
+
+@media print {
+  /* 打印用系统纸面色，深色主题下也是白底黑字 */
+  .backdrop {
+    --bg: Canvas;
+    --bg-subtle: Canvas;
+    --text: CanvasText;
+    --text-secondary: CanvasText;
+    --text-tertiary: GrayText;
+    --border: GrayText;
+    --border-subtle: GrayText;
+    position: static;
+    display: block;
+    color-scheme: light;
+    background: Canvas;
+    animation: none;
+  }
+
+  .toolbar,
+  .notice {
+    display: none;
+  }
+
+  .scroller {
+    overflow: visible;
+    padding: 0;
+  }
+
+  .sheet {
+    max-width: none;
+    padding: 0;
+    border: 0;
+    box-shadow: none;
+    font-size: 10px;
+  }
+
+  .sheetHead h2 {
+    font-size: 15px;
+  }
+
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .quadrant {
+    padding: 6px 8px;
+    break-inside: avoid;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .qBody {
+    font-size: 10px;
+    line-height: 1.4;
+  }
+
+  .qHint {
+    display: none;
+  }
+
+  .sub,
+  .quote,
+  .answer,
+  .table,
+  .sheetMeta {
+    font-size: 9px;
+  }
+
+  .answer summary {
+    display: none;
+  }
+}
