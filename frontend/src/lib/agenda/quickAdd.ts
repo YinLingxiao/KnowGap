@@ -24,6 +24,8 @@ export interface QuickAddToken {
   label: string;
   /** subject 类 Chip 对应的空间 id */
   subjectId?: string;
+  /** 提醒复用 time 类样式，避免破坏现有 QuickAdd 的 kind 映射。 */
+  field?: "reminderMinutes";
 }
 
 export interface QuickAddFields {
@@ -35,6 +37,7 @@ export interface QuickAddFields {
   scheduledStartAt: string | null;
   durationMinutes: number | null;
   deadlineDate: string | null;
+  reminderMinutes?: number | null;
 }
 
 export interface QuickAddResult {
@@ -56,6 +59,7 @@ const DATE_SRC = [
   "\\d{1,2}月\\d{1,2}[日号]",
   "(?:下周|下星期|下礼拜|本周|这周|周|星期|礼拜)[一二三四五六日天]",
   "大后天|后天|明天|今天|明日|今日",
+  "本周末|这周末|周末",
   "\\d{1,2}号",
 ].join("|");
 
@@ -118,6 +122,7 @@ function resolveDate(raw: string, today: Date): Date | null {
   }
 
   if (raw in RELATIVE_DAYS) return addDays(today, RELATIVE_DAYS[raw]);
+  if (/^(本周末|这周末|周末)$/.test(raw)) return addDays(today, Math.max(0, 5 - mondayIndex(today)));
 
   match = /^(\d{1,2})号$/.exec(raw);
   if (match) {
@@ -251,6 +256,22 @@ export function parseQuickAdd(
   let priority: TaskPriority = 4;
   let subjectId: string | null = null;
   const labels: string[] = [];
+  let reminderMinutes: number | undefined;
+
+  // 先占住完整提醒短语，取消或不支持的提醒也不能误识别成任务时长。
+  for (const match of matchesOf(["提醒我?\\s*(?:提前\\s*\\d+\\s*(?:分钟|小时|天)|准时)"], "", text)) {
+    const key = `time:${match.raw}`;
+    const value = /准时/.test(match.raw) ? 0 : (() => {
+      const part = /(\d+)\s*(分钟|小时|天)/.exec(match.raw)!;
+      return Number(part[1]) * (part[2] === "天" ? 1440 : part[2] === "小时" ? 60 : 1);
+    })();
+    if (skip.has(key) || reminderMinutes !== undefined || ![0, 5, 10, 15, 30, 60, 120, 1440].includes(value)) {
+      reserved.push(match);
+      continue;
+    }
+    reminderMinutes = value;
+    accept("time", match, value === 0 ? "准时提醒" : `提前 ${value} 分钟提醒`, { field: "reminderMinutes" });
+  }
 
   // 1. 截止日：「截止X」「ddl X」「X前」，其中可带一个时间，截止日只取日期
   const deadlineSources = [
@@ -354,6 +375,7 @@ export function parseQuickAdd(
       scheduledStartAt: scheduledYmd && clock ? `${scheduledYmd}T${pad(clock.hour)}:${pad(clock.minute)}` : null,
       durationMinutes,
       deadlineDate,
+      ...(reminderMinutes !== undefined ? { reminderMinutes } : {}),
     },
   };
 }
@@ -367,5 +389,6 @@ export function quickAddToInput(fields: QuickAddFields): TaskInput {
   if (fields.scheduledStartAt) input.scheduledStartAt = fields.scheduledStartAt;
   if (fields.durationMinutes !== null) input.durationMinutes = fields.durationMinutes;
   if (fields.deadlineDate) input.deadlineDate = fields.deadlineDate;
+  if (fields.reminderMinutes != null) input.reminderMinutes = fields.reminderMinutes;
   return input;
 }

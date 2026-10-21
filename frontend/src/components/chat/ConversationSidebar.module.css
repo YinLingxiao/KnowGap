@@ -1,4 +1,5 @@
 /* 侧栏：Linear Carbon & Alabaster 高密度工程侧栏（32px 行高 / 6px 圆角 / 13px 字号） */
+.composeKey { margin-left: auto; color: var(--text-tertiary); font-size: var(--text-xs); }
 .sidebar {
   display: flex;
   flex-direction: column;
