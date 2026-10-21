@@ -444,9 +444,15 @@
   gap: 2px;
   min-width: 0;
   padding: 2px;
+  overflow-x: auto;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--bg-subtle);
+  scrollbar-width: none;
+}
+
+.panelTabs::-webkit-scrollbar {
+  display: none;
 }
 
 .panelTabPill,

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Brain, CalendarDays, CheckCircle2, ChevronDown, ChevronRight, Download, FileText, Folder, GraduationCap, History, Link2, ListTodo,
   Maximize2, MessagesSquare, Mic, Minimize2, MoreHorizontal, NotebookPen,
-  PanelLeftOpen, Plus, RotateCcw, Settings, SlidersHorizontal, Target, Trash2, Upload, X, Zap,
+  PanelLeftOpen, Plus, RotateCcw, Settings, SlidersHorizontal, Target, Trash2, Upload, Waypoints, X, Zap,
 } from "lucide-react";
 import { WIDGET_ASK_EVENT } from "./LearningWidget";
 import type { ChatController } from "@/hooks/useChat";
@@ -18,6 +18,7 @@ import { cx } from "@/lib/cx";
 import type { CourseMaterial, Problem } from "@/lib/types";
 import { Button } from "../ui/Button";
 import { CheatSheet } from "./CheatSheet";
+import { ConceptGraph, type AttackTarget } from "./ConceptGraph";
 import { Composer } from "./Composer";
 import { Markdown } from "./Markdown";
 import { MemoryItem } from "./MemoryDrawer";
@@ -28,6 +29,7 @@ import styles from "./SubjectPage.module.css";
 type Panel =
   | { mode: "list" }
   | { mode: "pages" }
+  | { mode: "graph" }
   | { mode: "thread"; id: string }
   | { mode: "info"; section: "about" | "files" | "memory" };
 
@@ -74,6 +76,7 @@ function readPanel(subjectId: string): Panel {
     const parsed: unknown = JSON.parse(localStorage.getItem(`knowgap.space.panel.v1:${API_BASE_URL}:${subjectId}`) ?? "null");
     if (!parsed || typeof parsed !== "object" || !("mode" in parsed)) return { mode: "list" };
     if (parsed.mode === "pages") return { mode: "pages" };
+    if (parsed.mode === "graph") return { mode: "graph" };
     if (parsed.mode === "thread" && "id" in parsed && typeof parsed.id === "string") return { mode: "thread", id: parsed.id };
     if (parsed.mode === "info" && "section" in parsed && (parsed.section === "about" || parsed.section === "files" || parsed.section === "memory")) {
       return { mode: "info", section: parsed.section };
@@ -273,6 +276,23 @@ export function SubjectPage({
   const openThread = (id: string) => {
     showPanel({ mode: "thread", id });
     void chat.loadConversation(id);
+  };
+
+  const attackFromGraph = async (target: AttackTarget) => {
+    const title = `专项：${target.label}`.trim().slice(0, 60);
+    const prompt = target.kind === "misconception"
+      ? `针对我之前在「${target.label}」上的薄弱点（${target.summary}），请开启一个专项巩固 Thread 带我彻底搞懂并做一道题验证。`
+      : `请围绕待解锁概念「${target.label}」（${target.summary}）开启专项学习，从我已经掌握的内容往前推进一步，并做一道题验证。`;
+    const anchorMessageId = [...(main?.messages ?? [])].reverse().find((message) => message.id)?.id;
+    const thread = await chatApi.createThread(subject.id, {
+      title,
+      clientRequestId: globalThis.crypto.randomUUID(),
+      ...(anchorMessageId ? { anchorMessageId } : {}),
+    });
+    await chat.loadConversation(thread.id);
+    openThread(thread.id);
+    void refreshThreads();
+    void chat.sendTo(thread.id, prompt);
   };
 
   const beginResolve = async (id: string) => {
@@ -624,6 +644,17 @@ export function SubjectPage({
                 <button
                   type="button"
                   role="tab"
+                  aria-selected={panel.mode === "graph"}
+                  className={cx(styles.panelTabPill, panel.mode === "graph" && styles.panelTabActive)}
+                  onClick={() => setPanel({ mode: "graph" })}
+                  title="知识迷雾拓扑图"
+                >
+                  <Waypoints size={13} aria-hidden />
+                  <span>图谱</span>
+                </button>
+                <button
+                  type="button"
+                  role="tab"
                   aria-selected={panel.mode === "info" && panel.section === "files"}
                   className={cx(styles.panelIconTab, panel.mode === "info" && panel.section === "files" && styles.panelTabActive)}
                   onClick={() => setPanel({ mode: "info", section: "files" })}
@@ -725,6 +756,14 @@ export function SubjectPage({
               onOpen={openThread}
               onResolve={(id) => void beginResolve(id)}
               onReopen={(id) => void reopen(id)}
+            />
+          )}
+          {panel.mode === "graph" && (
+            <ConceptGraph
+              subjectId={subject.id}
+              subjectName={subject.name}
+              onAttack={attackFromGraph}
+              onOpenThread={openThread}
             />
           )}
           {panel.mode === "pages" && (
