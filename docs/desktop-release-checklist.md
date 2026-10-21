@@ -199,7 +199,7 @@ Get-ChildItem "desktop\dist\win-unpacked\resources\backend"
 | 4.9 | 通过 | 考前一页纸覆盖层打开，四宫格生成，可关闭 |
 | 4.10 | 通过 | 选中 AI 回复后出现「追问这句 / 举个通俗例子 / 摘录到空间笔记」工具条 |
 | 4.11 | 通过 | `SendKeys` 发送真实 `Alt+Space`，透明浮窗出现，`quick.html` 正常渲染 |
-| 4.12 | 未验证 | `Alt+Space` 注册成功，未触发回退分支；需按 4.12 手动制造冲突后验证 |
+| 4.12 | 通过 | 先用 `RegisterHotKey` 占用 Alt+Space，应用日志输出「快捷键 Alt+Space 注册失败…尝试下一个」并注册 Ctrl+Shift+K；真实按下 Ctrl+Shift+K 后浮窗出现 |
 | 4.13 | 通过 | `/quick.html` 与 `/quick` 均 200（`ExportStaticFiles` 回退） |
 | 4.14 | 通过 | 浮窗提问 → 回复 → 「在主窗口打开」→ 主窗口切到同一对话 |
 | 4.15 | 通过 | 重启后端口仍为 62533（`port.json` 复用），无需重新登录 |
