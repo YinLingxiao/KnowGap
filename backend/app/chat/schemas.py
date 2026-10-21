@@ -230,6 +230,12 @@ class ToolCallRecord(BaseModel):
     ok: bool = True
 
 
+class PreferencePrompt(BaseModel):
+    id: str
+    text: str
+    content: str
+
+
 class ChatMessage(BaseModel):
     id: str
     conversation_id: str
@@ -254,6 +260,8 @@ class ChatMessage(BaseModel):
     thread_update: ThreadUpdate | None = None
     thread_proposals: list[ThreadProposal] = Field(default_factory=list)
     pending_approval: dict | None = None
+    preference_prompt: PreferencePrompt | None = None
+    next_actions: list[Literal["quiz", "schedule", "save_note", "weak_points"]] = Field(default_factory=list)
     checkpoint_available: bool = False
     checkpoint_blocked_reason: str | None = None
     created_at: str

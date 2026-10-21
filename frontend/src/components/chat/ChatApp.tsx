@@ -544,6 +544,15 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
                   onStartExercise={(problemId) => void chat.startExercise(problemId)}
                   onOpenMemories={openMemories}
                   onDecideTool={(approvalId, allow) => void chat.decideTool(approvalId, allow)}
+                  onSendText={(text) => void chat.sendTo(chat.activeId!, text)}
+                  onOpenWeakPoints={chat.activeConversation?.subjectId ? () => {
+                    const subjectId = chat.activeConversation?.subjectId;
+                    if (!subjectId) return;
+                    try {
+                      localStorage.setItem(`knowgap.space.panel.v1:${API_BASE_URL}:${subjectId}`, JSON.stringify({ mode: "graph" }));
+                    } catch { /* 面板打不开时仍进入空间 */ }
+                    openSpace(subjectId);
+                  } : undefined}
                 />
               )
             ) : (

@@ -126,6 +126,8 @@ export interface ChatMessage {
   truncated: boolean;
   toolCalls: ToolCallView[];
   pendingApproval: ToolApproval | null;
+  preferencePrompt: { id: string; text: string; content: string } | null;
+  nextActions: Array<"quiz" | "schedule" | "save_note" | "weak_points">;
   threadSummary: ThreadSummary | null;
   checkpointAvailable?: boolean;
   checkpointBlockedReason?: string | null;

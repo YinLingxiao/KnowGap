@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import {
   ArrowDown, ArrowUpRight, BookOpenCheck, Brain, CheckCircle2, ChevronDown, ChevronRight, ChevronUp,
   Circle, CircleAlert, CircleDashed, CircleStop, CornerDownRight, Dumbbell, FileDown, FileText, Pin, PinOff,
@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import type { StreamPhase } from "@/hooks/useChat";
 import { toApiError } from "@/lib/api/errors";
+import { chatApi } from "@/lib/chat/api";
 import type { ChatMessage, LearnerMemory } from "@/lib/chat/types";
 import { cx } from "@/lib/cx";
 import type { Problem } from "@/lib/types";
@@ -88,6 +89,23 @@ interface MessageListProps {
   onConfirmProposal?: (messageId: string, proposalId: string) => Promise<string>;
   onResumeCheckpoint?: (messageId: string) => Promise<void>;
   onDecideTool?: (approvalId: string, allow: boolean) => void;
+  onSendText?: (text: string) => void;
+  onOpenWeakPoints?: () => void;
+}
+
+const NEXT_LABEL = { quiz: "考考我", schedule: "排进日程", save_note: "存进笔记", weak_points: "看看我的薄弱点" } as const;
+const NEXT_TEXT = { quiz: "考考我", schedule: "把接下来的复习排进日程", save_note: "把刚才讲的存进笔记" } as const;
+
+function useSummaryCard() {
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const read = () => setVisible(Boolean(document.querySelector('[aria-label="学习小结"]')));
+    read();
+    const observer = new MutationObserver(read);
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, []);
+  return visible;
 }
 
 function ExerciseCard({ problem, fallback }: { problem: Problem | undefined; fallback: string }) {
@@ -168,7 +186,21 @@ function planMarksOf(changes: PlanChange[] | undefined) {
 export function MessageList({
   conversationId, messages, problems, memoriesById, conversationSubjectId, subjectNames, phase, followNonce, topSlot,
   onRegenerate, onStartExercise, onOpenMemories, onOpenSummary, onDecideTool, onConfirmProposal, onResumeCheckpoint,
+  onSendText, onOpenWeakPoints,
 }: MessageListProps) {
+  const summaryCard = useSummaryCard();
+  const [settledPrompts, setSettledPrompts] = useState<Set<string>>(new Set());
+  const [sentActions, setSentActions] = useState<Set<string>>(new Set());
+  const decidePreference = (id: string, allow: boolean) => {
+    setSettledPrompts((current) => new Set(current).add(id));
+    void chatApi.decidePreference(id, allow).catch(() => {
+      setSettledPrompts((current) => {
+        const next = new Set(current);
+        next.delete(id);
+        return next;
+      });
+    });
+  };
   const scrollRef = useRef<HTMLDivElement>(null);
   const following = useRef(true);
   const [showJump, setShowJump] = useState(false);
@@ -534,6 +566,39 @@ export function MessageList({
                   </p>
                 )}
                 {message.truncated && <p className={styles.stopped}>回复达到长度上限，可以让我继续说完。</p>}
+
+                {finished && (message.preferencePrompt || message.nextActions?.length > 0) && (
+                  <div className={styles.nudges}>
+                    {message.preferencePrompt && !settledPrompts.has(message.preferencePrompt.id) && (
+                      <p className={styles.nudge}>
+                        <span>{message.preferencePrompt.text}</span>
+                        <button type="button" onClick={() => decidePreference(message.preferencePrompt!.id, true)}>记住</button>
+                        <button type="button" onClick={() => decidePreference(message.preferencePrompt!.id, false)}>不用</button>
+                      </p>
+                    )}
+                    <div className={styles.nudge}>
+                      {(message.nextActions ?? []).filter((action) => {
+                        if (sentActions.has(`${message.id}:${action}`)) return false;
+                        if ((action === "schedule" || action === "save_note") && summaryCard) return false;
+                        if (action === "weak_points") return Boolean(onOpenWeakPoints);
+                        return Boolean(onSendText);
+                      }).map((action) => (
+                        <button
+                          key={action}
+                          type="button"
+                          className={styles.nextBtn}
+                          onClick={() => {
+                            setSentActions((current) => new Set(current).add(`${message.id}:${action}`));
+                            if (action === "weak_points") onOpenWeakPoints?.();
+                            else onSendText?.(NEXT_TEXT[action]);
+                          }}
+                        >
+                          {NEXT_LABEL[action]}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {message.sources.length > 0 && (
                   <ul className={styles.sources}>

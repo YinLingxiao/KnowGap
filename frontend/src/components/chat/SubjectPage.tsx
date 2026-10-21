@@ -579,6 +579,8 @@ export function SubjectPage({
               return id;
             }}
             onDecideTool={(approvalId, allow) => void chat.decideTool(approvalId, allow)}
+            onSendText={(text) => void chat.sendTo(mainId, text)}
+            onOpenWeakPoints={() => showPanel({ mode: "graph" })}
           />
         ) : (
           <div className={styles.center}><p>正在读取主对话…</p></div>
@@ -861,6 +863,8 @@ export function SubjectPage({
                   onStartExercise={(problemId) => void chat.startExerciseOn(threadId, problemId)}
                   onOpenMemories={() => showPanel({ mode: "info", section: "memory" })}
                   onDecideTool={(approvalId, allow) => void chat.decideTool(approvalId, allow)}
+                  onSendText={(text) => void chat.sendTo(threadId, text)}
+                  onOpenWeakPoints={() => showPanel({ mode: "graph" })}
                 />
               )}
               <div className={styles.dock}>

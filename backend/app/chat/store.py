@@ -12,7 +12,7 @@ import unicodedata
 
 from app.chat.schemas import (
     ChatMessage, Conversation, ConversationSummary, ExerciseAttempt, LearnerMemory, MemoryChange, MemoryEvidence,
-    ToolCallRecord,
+    ToolCallRecord, PreferencePrompt,
     MessageAnchor, SpaceProgress, Subject, ThreadSummary, ThreadUpdate,
 )
 from app.chat.skills import ONBOARDING_FIRST_MESSAGE, ONBOARDING_TITLE
@@ -71,6 +71,23 @@ def topic_terms(text: str) -> set[str]:
 
 def exercise_text(problem: Problem) -> str:
     return f"**{problem.title}**\n\n{problem.prompt}"
+
+
+_NEXT_ACTIONS = {"quiz", "schedule", "save_note", "weak_points"}
+
+
+def _preference_prompt(raw) -> PreferencePrompt | None:
+    if not isinstance(raw, dict) or raw.get("status", "pending") != "pending":
+        return None
+    if not all(isinstance(raw.get(key), str) and raw.get(key) for key in ("id", "text", "content")):
+        return None
+    return PreferencePrompt(id=raw["id"], text=raw["text"], content=raw["content"])
+
+
+def _next_actions(raw) -> list[str]:
+    if not isinstance(raw, list):
+        return []
+    return [item for item in raw if item in _NEXT_ACTIONS][:2]
 
 
 class ChatStore:
@@ -182,7 +199,9 @@ class ChatStore:
             self._migrate_spaces(db)
             ensure_notes(db)
             from app.chat.onboarding import ensure as ensure_onboarding
+            from app.chat.preferences import ensure as ensure_preferences
             ensure_onboarding(db)
+            ensure_preferences(db)
             ensure_fts(db)
             # A process that died mid-generation leaves "streaming" rows; they can never finish.
             db.execute(
@@ -765,6 +784,8 @@ class ChatStore:
             thread_update=ThreadUpdate(**meta["thread_update"]) if meta.get("thread_update") else None,
             thread_proposals=meta.get("thread_proposals", []),
             pending_approval=meta.get("pending_approval"),
+            preference_prompt=_preference_prompt(meta.get("preference_prompt")),
+            next_actions=_next_actions(meta.get("next_actions")),
             checkpoint_available=checkpoint_available, checkpoint_blocked_reason=checkpoint_blocked_reason,
             created_at=row["created_at"], updated_at=row["updated_at"],
         )
@@ -966,6 +987,18 @@ class ChatStore:
     def pending_notes(self, student_id: str) -> list[dict]:
         with self.connection() as db:
             return pending(db, student_id)
+
+    def queue_preference(self, student_id: str, message_id: str, content: str, existing: list[str]) -> dict | None:
+        from app.chat.preferences import queue
+        with self.connection() as db:
+            db.execute("BEGIN IMMEDIATE")
+            return queue(db, student_id, message_id, content, existing)
+
+    def decide_preference(self, student_id: str, prompt_id: str, allow: bool) -> str | None:
+        from app.chat.preferences import decide as settle
+        with self.connection() as db:
+            db.execute("BEGIN IMMEDIATE")
+            return settle(db, student_id, prompt_id, allow)
 
     def decide_pending(self, student_id: str, pending_id: str, allow: bool) -> str | None:
         with self.connection() as db:

@@ -54,6 +54,12 @@ function mapMessage(data: Wire): ChatMessage {
       id: String(data.pending_approval.id), name: String(data.pending_approval.name),
       arguments: String(data.pending_approval.arguments ?? ""),
     } : null,
+    preferencePrompt: data.preference_prompt && data.preference_prompt.id ? {
+      id: String(data.preference_prompt.id), text: String(data.preference_prompt.text ?? ""),
+      content: String(data.preference_prompt.content ?? ""),
+    } : null,
+    nextActions: (Array.isArray(data.next_actions) ? data.next_actions : []).filter((item: string) =>
+      item === "quiz" || item === "schedule" || item === "save_note" || item === "weak_points"),
     checkpointAvailable: Boolean(data.checkpoint_available),
     checkpointBlockedReason: data.checkpoint_blocked_reason ?? null,
     threadProposals: (data.thread_proposals ?? []).map((p: Wire) => ({
@@ -261,6 +267,9 @@ export const chatApi = {
     return data.map((item) => ({
       id: item.id, action: item.action, target: item.target, content: item.content ?? "", oldText: item.old_text ?? "",
     }));
+  },
+  async decidePreference(id: string, allow: boolean): Promise<void> {
+    await request(root, `/api/preferences/${encodeURIComponent(id)}`, { method: "POST", body: JSON.stringify({ allow }) });
   },
   async decidePending(id: string, allow: boolean): Promise<void> {
     await request(root, `/api/agent-memory/pending/${encodeURIComponent(id)}`, {

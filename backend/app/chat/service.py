@@ -539,6 +539,7 @@ class ChatService:
             custom_skills = self.store.list_custom_skills(student_id)
             compressed_summary, compressed_seq = self.store.get_context_summary(generation.conversation_id)
             plans = PlanStore(self.store)
+            plan_at_start = plans.read(generation.conversation_id, student_id)
             learning_plan, plan_user_events = (plans.context(generation.conversation_id, student_id)
                                                 if not generation.checkpoint else (None, []))
             messages = chat_messages(
@@ -708,7 +709,7 @@ class ChatService:
                 else:
                     await self._analyze(student_id, generation, history, user_text, text, memories, exercise,
                                         self._background_model(model),
-                                        subject_id)
+                                        subject_id, plan_at_start)
             except Exception:
                 # The reply is already complete and stored; note-taking problems must not mark it failed.
                 logger.exception("Learning analysis failed")
@@ -781,6 +782,7 @@ class ChatService:
 
     async def _analyze(
         self, student_id, generation, history, user_text, reply, memories, exercise, model, subject_id=None,
+        plan_at_start=None,
     ) -> None:
         user_id = generation.user_message_id
         if self.store.message_meta(user_id).get("analyzed"):
@@ -832,16 +834,25 @@ class ChatService:
             )
             changes += [{"action": change.action, "memory_id": change.memory.id} for change in recorded]
         self.store.merge_meta(user_id, {"analyzed": True, "attempt": result["attempt"], "memory_changes": changes})
-        self.store.merge_meta(generation.assistant_message_id, {
-            "used_memory_ids": result["used_memory_ids"], "suggested_problem_id": result["suggested_problem_id"],
-        })
         user_turns = sum(1 for row in history if row["role"] == "user")
+        prompt = self._record_profile(
+            student_id, result.get("profile_ops") or [], generation.assistant_message_id,
+        ) if user_turns <= 3 else None
+        from app.chat.next_actions import choose
+        actions = choose(
+            reply=reply, started=plan_at_start, after=plan,
+            repeated=self._repeated_misconception(student_id, generation.conversation_id, result["observations"]),
+        )
+        assistant_meta = {
+            "used_memory_ids": result["used_memory_ids"], "suggested_problem_id": result["suggested_problem_id"],
+            "next_actions": actions,
+        }
+        if prompt:
+            assistant_meta["preference_prompt"] = prompt
+        self.store.merge_meta(generation.assistant_message_id, assistant_meta)
         # Topic naming: once, on the first turn. Manual renames and exercise titles stay untouched.
         if result.get("topic_title") and user_turns == 1 and exercise is None:
             self.store.set_auto_title(generation.conversation_id, result["topic_title"])
-        # Profile notes come from self-introductions early in a conversation, not from every turn.
-        if user_turns <= 3:
-            self._record_profile(student_id, result.get("profile_ops") or [])
         # Compress only when the verbatim part (rows after the last summary) reaches the window limits.
         _, compressed_seq = self.store.get_context_summary(generation.conversation_id)
         fresh = [row for row in history if int(row["seq"]) > compressed_seq]
@@ -879,19 +890,42 @@ class ChatService:
             "opener": opener_for(subject.name),
         }
 
-    def _record_profile(self, student_id: str, ops: list[dict]) -> None:
+    def _repeated_misconception(self, student_id: str, conversation_id: str, observations: list[dict]) -> bool:
+        topics = [item["topic"] for item in observations if item.get("kind") == "misconception" and item.get("signal") == "supports"]
+        if not topics:
+            return False
+        with self.store.connection() as db:
+            rows = db.execute(
+                "SELECT m.topic AS topic, COUNT(*) AS n FROM learner_memory_evidence e "
+                "JOIN learner_memories m ON m.id = e.memory_id "
+                "WHERE m.student_id = ? AND m.kind = 'misconception' AND e.conversation_id = ? AND e.signal = 'supports' "
+                "GROUP BY m.id",
+                (student_id, conversation_id),
+            ).fetchall()
+        counts: dict[str, int] = {}
+        for row in rows:
+            counts[row["topic"]] = counts.get(row["topic"], 0) + row["n"]
+        return any(counts.get(topic, 0) >= 2 for topic in topics)
+
+    def _record_profile(self, student_id: str, ops: list[dict], message_id: str) -> dict | None:
         if not ops:
-            return
+            return None
         existing = [" ".join(_PROFILE_LABEL_RE.sub("", entry).split()) for entry in
                     re.split(r"\s*§\s*", self.store.agent_notes(student_id).get("user", "")) if entry.strip()]
         approve = self._agent_flag("memory_write_approval")
+        prompt = None
         for op in ops:
             content = " ".join(op["content"].split())
             # Exact-match dedup is not enough: the same fact comes back reworded on every turn.
             if any(content in old or old in content for old in existing if old):
                 continue
+            if op["layer"] == "Preference":
+                if prompt is None:
+                    prompt = self.store.queue_preference(student_id, message_id, content, existing)
+                continue
             self.store.apply_agent_memory(student_id, "add", "user", f"[{op['layer']}] {content}", None, approve)
             existing.append(content)
+        return prompt
 
     def _compress_later(self, student_id: str, conversation_id: str, model: ChatModel) -> None:
         if conversation_id in self.compressing or self.closing:

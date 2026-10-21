@@ -34,6 +34,10 @@ class LearningPreferencesBody(BaseModel):
     interaction: str = ""
 
 
+class PreferenceDecision(BaseModel):
+    allow: bool
+
+
 class AgentNoteBody(BaseModel):
     target: str = Field(pattern="^(user|memory)$")
     content: str = ""
@@ -332,6 +336,16 @@ def chat_router(store: ChatStore, service: ChatService) -> APIRouter:
     @router.get("/onboarding/preferences")
     def get_learning_preferences():
         return store.learning_preferences(current_student())
+
+    @router.post("/preferences/{prompt_id}")
+    def decide_preference(prompt_id: str, body: PreferenceDecision):
+        try:
+            result = store.decide_preference(current_student(), prompt_id, body.allow)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from None
+        if result is None:
+            raise HTTPException(404, "这条偏好已经处理过。")
+        return {"status": result, **store.agent_notes_view(current_student())}
 
     @router.put("/onboarding/preferences")
     def put_learning_preferences(body: LearningPreferencesBody):

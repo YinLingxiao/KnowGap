@@ -37,9 +37,12 @@ def test_profile_notes_skip_rewordings_and_later_turns(tmp_path):
         for index in range(4):
             send(client, conversation["id"], f"第{index + 1}轮", f"req-0000000{index + 1}")
         note = client.get("/api/agent-memory").json()["user"]
+        messages = client.get(f"/api/conversations/{conversation['id']}").json()["messages"]
     assert note.count("大二计算机专业学生") == 1
-    assert "[Preference] 喜欢先看例子" in note and "[Context] 下周考试" in note
+    assert "[Preference] 喜欢先看例子" not in note and "[Context] 下周考试" in note
     assert "第四轮不该写入" not in note
+    prompts = [item.get("preference_prompt") for item in messages if item.get("preference_prompt")]
+    assert len(prompts) == 1 and prompts[0]["content"] == "喜欢先看例子"
 
 
 def test_compression_replaces_early_turns_in_the_prompt(tmp_path):
