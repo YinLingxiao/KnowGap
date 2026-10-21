@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel, Field
 
 from app.chat.cheatsheet import build_cheatsheet
+from app.chat.concept_graph import build_concept_graph
 from app.chat.insights import subject_insights
 
 from app.chat.schemas import Conversation, ConversationSummary, CreateSubject, CreateThread, Subject, UpdateSubject
@@ -15,6 +16,10 @@ class CheatSheetRequest(BaseModel):
     force: bool = False
     # The space's Pages notes live in the browser; the client may send them as extra source material.
     notes: str = Field(default="", max_length=20000)
+
+
+class ConceptGraphRequest(BaseModel):
+    force: bool = False
 
 
 def subject_router(store: ChatStore, service=None) -> APIRouter:
@@ -64,6 +69,14 @@ def subject_router(store: ChatStore, service=None) -> APIRouter:
         if sheet is None:
             raise HTTPException(404, "学习空间不存在或已删除。")
         return sheet
+
+    @router.post("/{subject_id}/concept-graph")
+    async def concept_graph(subject_id: str, body: ConceptGraphRequest | None = None):
+        body = body or ConceptGraphRequest()
+        graph = await build_concept_graph(store, service, current_student(), subject_id, force=body.force)
+        if graph is None:
+            raise HTTPException(404, "学习空间不存在或已删除。")
+        return graph
 
     @router.get("/{subject_id}/threads", response_model=list[ConversationSummary])
     def list_threads(subject_id: str):
