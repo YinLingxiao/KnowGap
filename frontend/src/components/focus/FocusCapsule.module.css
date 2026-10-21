@@ -141,13 +141,13 @@
 .tip {
   color: var(--text-tertiary);
   font-size: var(--text-xs);
-  line-height: 1.5;
+  line-height: var(--leading-ui);
 }
 
 .bigClock {
   color: var(--text);
   font-family: var(--font-mono);
-  font-size: 28px;
+  font-size: var(--text-3xl);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;

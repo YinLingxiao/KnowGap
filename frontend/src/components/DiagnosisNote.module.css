@@ -50,16 +50,16 @@
 .finding {
   margin-top: 6px;
   color: var(--text);
-  font-size: 16px;
+  font-size: var(--text-lg);
   font-weight: 500;
-  line-height: 1.7;
+  line-height: var(--leading-read);
 }
 
 .evidence {
   margin-top: 4px;
   color: var(--text-tertiary);
   font-size: var(--text-xs);
-  line-height: 1.6;
+  line-height: var(--leading-read);
 }
 
 .quote {
@@ -74,7 +74,7 @@
 
 .compact .finding {
   margin-top: 4px;
-  font-size: 16px;
+  font-size: var(--text-lg);
 }
 
 .compact .evidence {

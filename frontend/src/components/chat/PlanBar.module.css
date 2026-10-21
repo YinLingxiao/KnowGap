@@ -179,7 +179,7 @@
   gap: 8px;
   padding: 6px 6px;
   border-radius: var(--radius);
-  line-height: 1.5;
+  line-height: var(--leading-ui);
 }
 
 .row:hover,
@@ -285,7 +285,7 @@
   border: 1px solid var(--border);
   border-radius: 999px;
   color: var(--text-tertiary);
-  font-size: 11px;
+  font-size: var(--text-xs);
   line-height: 16px;
   vertical-align: 1px;
 }

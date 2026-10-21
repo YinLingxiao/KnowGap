@@ -40,26 +40,50 @@
 
   --green: #168a53;
   --green-soft: rgb(22 138 83 / 10%);
-  --orange: #c26a0c;
-  --orange-soft: rgb(194 106 12 / 11%);
   --red: #d13838;
   --red-soft: rgb(209 56 56 / 9%);
-  --amber: #9e6f0e;
-  --amber-soft: rgb(158 111 14 / 10%);
+  --amber: #a86d0a;
+  --amber-soft: rgb(168 109 10 / 10%);
   --grey: #828896;
+
+  /* 颜色只表达语义：蓝=强调/进行中/链接，绿=完成/掌握，红=误区/逾期/危险，琥珀=待复习/提醒；
+     其余一律中性灰。历史上的 --orange 并入琥珀，避免同一种「提醒」出现两种暖色。 */
+  --orange: var(--amber);
+  --orange-soft: var(--amber-soft);
+  --on-solid: #ffffff;
+  --bg-media: #ffffff;
 
   --specular-top: inset 0 1px 0 rgba(255, 255, 255, 0.85);
   --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 0 0 1px rgba(15, 23, 42, 0.06);
   --shadow-elevated: 0 1px 3px rgb(15 23 42 / 5%), 0 8px 24px rgb(15 23 42 / 6%);
   --shadow-popover: 0 0 0 1px rgb(15 23 42 / 8%), 0 16px 40px rgb(15 23 42 / 14%);
 
+  /* 字号四级：xs 辅助/标签 · sm 界面正文 · md 阅读正文与输入 · lg 小标题；xl 起只给页面级标题。
+     --text-2xs 仅限角标、徽章数字、键帽，任何正文/按钮文字不得低于 --text-xs。 */
+  --text-2xs: 11px;
   --text-xs: 12px;
   --text-sm: 13px;
   --text-md: 14px;
-  --text-lg: 15px;
+  --text-lg: 16px;
   --text-read: 15px;
   --text-xl: 18px;
-  --text-2xl: 28px;
+  --text-2xl: 22px;
+  --text-3xl: 26px;
+
+  --leading-tight: 1.3;
+  --leading-ui: 1.5;
+  --leading-read: 1.65;
+
+  /* 4/8 间距阶梯 */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  --focus-ring: 2px solid var(--accent);
 
   --radius-sm: 6px;
   --radius: 8px;
@@ -136,12 +160,11 @@
 
     --green: #3ebd7e;
     --green-soft: rgb(62 189 126 / 13%);
-    --orange: #e5933a;
-    --orange-soft: rgb(229 147 58 / 13%);
     --red: #e56363;
     --red-soft: rgb(229 99 99 / 13%);
     --amber: #d9a23b;
     --amber-soft: rgb(217 162 59 / 13%);
+    --bg-media: #f2f3f5;
     --grey: #686f7e;
 
     --specular-top: inset 0 1px 0 rgba(255, 255, 255, 0.05);
@@ -187,12 +210,11 @@
 
   --green: #3ebd7e;
   --green-soft: rgb(62 189 126 / 13%);
-  --orange: #e5933a;
-  --orange-soft: rgb(229 147 58 / 13%);
   --red: #e56363;
   --red-soft: rgb(229 99 99 / 13%);
   --amber: #d9a23b;
   --amber-soft: rgb(217 162 59 / 13%);
+  --bg-media: #f2f3f5;
   --grey: #686f7e;
 
   --specular-top: inset 0 1px 0 rgba(255, 255, 255, 0.07);
@@ -222,7 +244,7 @@ body {
   color: var(--text);
   font-family: var(--font-sans);
   font-size: var(--text-md);
-  line-height: 1.55;
+  line-height: var(--leading-ui);
   font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -329,14 +351,14 @@ kbd {
   box-shadow: inset 0 -1px 0 var(--border-strong);
   color: var(--text-secondary);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--text-2xs);
   font-variant-numeric: tabular-nums;
   line-height: 1.4;
   white-space: nowrap;
 }
 
 :focus-visible:not(input):not(textarea) {
-  outline: 1.5px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: 2px;
 }
 

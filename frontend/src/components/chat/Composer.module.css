@@ -18,14 +18,14 @@
   display: flex;
   flex-direction: column;
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: var(--radius-xl);
   background: var(--bg-elevated);
   box-shadow: var(--shadow-card);
   transition: border-color var(--t-hover) var(--ease-out), box-shadow var(--t-ui) var(--ease-out);
 }
 
 .hero .box {
-  border-radius: 16px;
+  border-radius: var(--radius-xl);
 }
 
 .box:focus-within {
@@ -54,7 +54,7 @@
   place-items: center;
   width: 28px;
   height: 26px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   color: var(--text-secondary);
   transition: background-color var(--t-hover) var(--ease-out), color var(--t-hover) var(--ease-out);
 }
@@ -100,14 +100,14 @@
   outline: none;
   background: transparent;
   font-size: var(--text-md);
-  line-height: 1.55;
+  line-height: var(--leading-ui);
   resize: none;
 }
 
 .hero .input {
   min-height: 64px;
   font-size: var(--text-lg);
-  line-height: 1.6;
+  line-height: var(--leading-read);
 }
 
 .input::placeholder {
@@ -124,7 +124,7 @@
   padding: 2px 0;
   color: var(--text-tertiary);
   font-size: var(--text-md);
-  line-height: 1.55;
+  line-height: var(--leading-ui);
   white-space: pre-wrap;
   word-break: break-word;
   pointer-events: none;
@@ -156,7 +156,7 @@
   background: var(--bg-subtle);
   color: var(--text-tertiary);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--text-2xs);
   font-weight: 500;
   line-height: 1;
   vertical-align: middle;
@@ -172,6 +172,7 @@
 
 /* 底栏 */
 .toolbar {
+  container: composer-toolbar / inline-size;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -191,8 +192,10 @@
   min-width: 0;
 }
 
+/* 工具栏永远只占一行：左侧只有 + / 图片 / 状态徽标，模型名过长时截断 */
 .leftTools {
-  flex-wrap: wrap;
+  flex: 1;
+  flex-wrap: nowrap;
 }
 
 .rightTools {
@@ -211,7 +214,7 @@
 
 /* 26px 轻量底栏工具项（参照 LobeHub：平时无外框，悬停浮现微底色） */
 .tool,
-.pill,
+.statusBadge,
 .effortBtn,
 .imageSlot > button,
 .imageSlot > div > button:first-of-type {
@@ -226,7 +229,7 @@
   border-radius: 999px;
   background: transparent;
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 500;
   font-variant-numeric: tabular-nums;
   line-height: 1;
@@ -253,7 +256,7 @@
 
 .tool:hover:not(:disabled),
 .tool[aria-expanded="true"],
-.pill:hover,
+.statusBadge:hover:not(:disabled),
 .effortBtn:hover,
 .effortBtn[aria-expanded="true"],
 .imageSlot > button:hover:not(:disabled),
@@ -264,7 +267,7 @@
 }
 
 .tool:active:not(:disabled),
-.pill:active,
+.statusBadge:active:not(:disabled),
 .effortBtn:active,
 .imageSlot > button:active:not(:disabled),
 .imageSlot > div > button:first-of-type:active:not(:disabled) {
@@ -272,42 +275,36 @@
 }
 
 .tool:focus-visible,
-.pill:focus-visible,
+.statusBadge:focus-visible,
 .effortBtn:focus-visible,
 .imageSlot button:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring);
   outline-offset: 1px;
 }
 
 .tool:disabled,
+.statusBadge:disabled,
 .imageSlot > button:disabled,
 .imageSlot > div > button:first-of-type:disabled {
   opacity: 0.4;
 }
 
-.pill {
-  color: var(--text-tertiary);
+/* 左下角状态徽标：仅在开启「帮我批准」或绑定工作区时出现，强调色图标表示「已生效」 */
+.statusBadges {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 2px;
+  padding-left: 6px;
+  border-left: 1px solid var(--border);
 }
 
-.pillActive {
+.statusBadge {
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  padding: 0;
   color: var(--accent-text);
-}
-
-.pillOn,
-.pillOn:hover {
-  border-color: color-mix(in srgb, var(--accent) 38%, var(--border));
-  background: var(--accent-soft);
-  color: var(--accent-text);
-}
-
-.pillText {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.pillTextShrink {
-  max-width: 110px;
 }
 
 /* 右下角：模型名（等宽）· 思考档位信号格 */
@@ -317,9 +314,12 @@
 }
 
 .effortModel {
+  overflow: hidden;
+  max-width: 140px;
   color: var(--text-secondary);
+  text-overflow: ellipsis;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-weight: 500;
   letter-spacing: -0.01em;
 }
@@ -402,9 +402,9 @@
   width: 100%;
   height: 36px;
   padding: 0 10px;
-  border-radius: 8px;
+  border-radius: var(--radius);
   color: var(--text);
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
   text-align: left;
   transition: background-color var(--t-hover) var(--ease-out);
@@ -427,11 +427,15 @@
 }
 
 .lobeMenuPill {
+  overflow: hidden;
+  max-width: 96px;
   padding: 2px 7px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   border-radius: 999px;
   background: var(--bg-hover);
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: var(--text-2xs);
   font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
@@ -445,6 +449,13 @@
   height: 1px;
   margin: 4px 6px;
   background: var(--border-subtle);
+}
+
+.lobeMenuSection {
+  padding: 6px 10px 2px;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  font-weight: 500;
 }
 
 .lobeSwitch {
@@ -465,7 +476,7 @@
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  background: #ffffff;
+  background: var(--on-accent);
   transition: transform 160ms var(--ease-spring);
 }
 
@@ -492,9 +503,9 @@
   align-items: center;
   gap: 4px;
   padding: 2px 6px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   color: var(--text);
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 500;
 }
 
@@ -504,7 +515,7 @@
 
 .lobeSubheadHint {
   color: var(--text-tertiary);
-  font-size: 11px;
+  font-size: var(--text-xs);
 }
 
 .effortMenu {
@@ -541,7 +552,7 @@
   gap: 6px;
   padding: 4px 8px 6px;
   color: var(--text-tertiary);
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-weight: 500;
 }
 
@@ -588,8 +599,8 @@
 
 .effortOptionDesc {
   color: var(--text-tertiary);
-  font-size: 11px;
-  line-height: 1.35;
+  font-size: var(--text-xs);
+  line-height: var(--leading-tight);
 }
 
 .effortCheck {
@@ -613,7 +624,7 @@
   border-radius: 0 0 calc(var(--radius-lg) - 1px) calc(var(--radius-lg) - 1px);
   background: var(--bar-bg);
   color: var(--text-tertiary);
-  font-size: 10.5px;
+  font-size: var(--text-xs);
   user-select: none;
 }
 
@@ -635,7 +646,7 @@
   background: var(--bg-subtle);
   color: var(--text-secondary);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--text-2xs);
   line-height: 1;
 }
 
@@ -689,7 +700,7 @@
   gap: 8px;
   width: min(310px, calc(100vw - 32px));
   padding: 10px 12px;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   transform-origin: bottom left;
 }
 
@@ -698,12 +709,12 @@
   height: 32px;
   padding: 0 10px;
   border: 1px solid var(--border-strong);
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   background: var(--bg-subtle);
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12);
   color: var(--text);
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: var(--text-xs);
 }
 
 .wsInput:focus {
@@ -712,13 +723,13 @@
 
 .wsError {
   color: var(--red);
-  font-size: 11px;
+  font-size: var(--text-xs);
 }
 
 .wsHint {
   color: var(--text-tertiary);
-  font-size: 11px;
-  line-height: 1.5;
+  font-size: var(--text-xs);
+  line-height: var(--leading-ui);
 }
 
 .wsActions {
@@ -732,7 +743,7 @@
   height: 24px;
   padding: 0 10px;
   border-radius: 999px;
-  font-size: 11.5px;
+  font-size: var(--text-xs);
   font-weight: 500;
   white-space: nowrap;
   transition:
@@ -762,13 +773,15 @@
   color: var(--on-ink);
 }
 
-/* 窄屏只保留图标，避免底栏挤成多行 */
-@media (max-width: 560px) {
-  .pillTextHide,
-  .pillTextShrink {
+/* 窄输入框（学习空间窄列、Thread 面板）按自身宽度收起模型名，避免底栏挤成多行 */
+@container composer-toolbar (max-width: 380px) {
+  .effortModel,
+  .effortModel + .effortLevel {
     display: none;
   }
+}
 
+@media (max-width: 560px) {
   .effortModel,
   .effortModel + .effortLevel {
     display: none;
@@ -833,7 +846,7 @@
   width: 24px;
   height: 24px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--bg-subtle);
   color: var(--text-secondary);
 }
@@ -864,8 +877,8 @@
 .cmdDesc {
   overflow: hidden;
   color: var(--text-tertiary);
-  font-size: 11px;
-  line-height: 1.35;
+  font-size: var(--text-xs);
+  line-height: var(--leading-tight);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -879,8 +892,8 @@
   background: var(--bg-subtle);
   color: var(--text-tertiary);
   font-family: var(--font-mono);
-  font-size: 10.5px;
-  line-height: 1.4;
+  font-size: var(--text-2xs);
+  line-height: var(--leading-ui);
 }
 
 .cmdTag {
@@ -890,7 +903,7 @@
 .cmdEmpty {
   padding: 8px;
   color: var(--text-tertiary);
-  font-size: 11.5px;
+  font-size: var(--text-xs);
 }
 
 @media (prefers-reduced-motion: reduce) {

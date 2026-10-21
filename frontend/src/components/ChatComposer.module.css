@@ -29,7 +29,7 @@
   background: transparent;
   color: var(--text);
   font-size: var(--text-md);
-  line-height: 1.55;
+  line-height: var(--leading-ui);
   resize: none;
 }
 

@@ -16,7 +16,7 @@
 .instructions {
   color: var(--text-secondary);
   font-size: var(--text-xs);
-  line-height: 1.65;
+  line-height: var(--leading-read);
 }
 
 .editor {
@@ -47,8 +47,8 @@
   background: var(--bg-subtle);
   color: var(--text);
   font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 1.55;
+  font-size: var(--text-xs);
+  line-height: var(--leading-ui);
   resize: vertical;
 }
 
@@ -72,10 +72,10 @@
   height: 30px;
   padding: 0 14px;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--radius);
   background: var(--accent-solid);
   color: var(--on-accent);
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 600;
   transition: background-color var(--duration-fast) var(--ease-out), transform var(--t-press) var(--ease-out);
 }
@@ -105,7 +105,7 @@
 
 .askedNote {
   padding: 7px 12px;
-  border-radius: 8px;
+  border-radius: var(--radius);
   background: var(--accent-soft);
   color: var(--accent-text);
   font-size: var(--text-xs);
@@ -120,7 +120,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   font-size: var(--text-xs);
-  line-height: 1.55;
+  line-height: var(--leading-ui);
 }
 
 .bannerText {
@@ -184,7 +184,7 @@
   background: var(--bg-subtle);
   color: var(--text);
   font-size: var(--text-xs);
-  line-height: 1.5;
+  line-height: var(--leading-ui);
   text-align: left;
 }
 
@@ -199,7 +199,7 @@ button.diagItem:hover {
   border-radius: 999px;
   background: var(--red-soft);
   color: var(--red);
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-weight: 600;
 }
 
@@ -224,7 +224,7 @@ button.diagItem:hover {
   margin-top: 2px;
   color: var(--text-secondary);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--text-xs);
 }
 
 .warnings summary {
@@ -247,7 +247,7 @@ button.diagItem:hover {
 
 .outputLabel {
   color: var(--text-tertiary);
-  font-size: 11px;
+  font-size: var(--text-xs);
 }
 
 .pre {
@@ -260,8 +260,8 @@ button.diagItem:hover {
   background: var(--bg-subtle);
   color: var(--text);
   font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 1.55;
+  font-size: var(--text-xs);
+  line-height: var(--leading-ui);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -311,7 +311,7 @@ button.diagItem:hover {
   flex-shrink: 0;
   padding: 1px 8px;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-weight: 600;
 }
 

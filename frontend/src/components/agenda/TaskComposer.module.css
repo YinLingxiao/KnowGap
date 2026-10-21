@@ -18,7 +18,7 @@
 .dialog::backdrop { background: color-mix(in srgb, var(--text) 25%, transparent); }
 .dialog button { cursor: pointer; }
 .dialog button:disabled { opacity: .5; cursor: not-allowed; }
-.dialog :is(button, input, textarea):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.dialog :is(button, input, textarea):focus-visible { outline: var(--focus-ring); outline-offset: 2px; }
 .header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px 8px; }
 .header h2 { margin: 0; font-size: var(--text-sm); font-weight: 500; color: var(--text-secondary); }
 .header > button, .panelHead button { display: grid; place-items: center; width: 28px; height: 28px; border-radius: var(--radius-sm); color: var(--text-secondary); }
@@ -35,7 +35,7 @@
 .expand, .ai { display: inline-flex; align-items: center; gap: 5px; min-height: 28px; color: var(--text-secondary); }
 .expand:hover, .ai:hover { color: var(--accent-text); }
 .notes { display: flex; flex-direction: column; gap: 6px; color: var(--text-secondary); font-size: var(--text-xs); }
-.notes textarea { width: 100%; min-height: 76px; max-height: 200px; resize: vertical; line-height: 1.6; }
+.notes textarea { width: 100%; min-height: 76px; max-height: 200px; resize: vertical; line-height: var(--leading-read); }
 .dialog :is(textarea, input:not(.title)) { min-width: 0; padding: 7px 9px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg); color: var(--text); font: inherit; caret-color: var(--accent); }
 .dialog ::selection { background: var(--accent-soft-strong); color: var(--text); }
 .fields { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 16px; }
@@ -46,7 +46,7 @@
 .fieldButton svg { flex-shrink: 0; }
 .fieldButton > button:hover:not(:disabled) { background: var(--bg-hover); }
 .fieldButton > .clear { padding: 4px; }
-.hint { margin: 8px 0 0; color: var(--text-tertiary); font-size: var(--text-xs); line-height: 1.6; overflow-wrap: anywhere; }
+.hint { margin: 8px 0 0; color: var(--text-tertiary); font-size: var(--text-xs); line-height: var(--leading-read); overflow-wrap: anywhere; }
 .panel { margin-top: 12px; padding: 10px 12px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-panel); }
 .panelHead { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-weight: 500; }
 .presets { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -64,7 +64,7 @@
 .labelEntry { display: flex; gap: 6px; margin-bottom: 8px; }
 .labelEntry input { flex: 1; }
 .labelEntry button { display: grid; place-items: center; width: 32px; border: 1px solid var(--border); border-radius: var(--radius-sm); }
-.recognized { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: 12px; color: var(--text-tertiary); font-size: 11px; }
+.recognized { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: 12px; color: var(--text-tertiary); font-size: var(--text-xs); }
 .recognized button { display: inline-flex; align-items: center; gap: 3px; padding: 2px 4px; color: var(--accent-text); border-radius: 3px; background: var(--accent-soft); }
 .ai { margin-top: 14px; }
 .footer { display: flex; align-items: center; gap: 8px; padding: 14px 20px; border-top: 1px solid var(--border); }
@@ -73,7 +73,7 @@
 .cancel { background: var(--bg-hover); color: var(--text-secondary); }
 .submit { background: var(--accent-solid); color: var(--on-accent); }
 .submit:hover:not(:disabled) { background: var(--accent-solid-hover); }
-.shortcuts { margin: -4px 20px 12px; color: var(--text-tertiary); font-size: 11px; text-align: right; }
+.shortcuts { margin: -4px 20px 12px; color: var(--text-tertiary); font-size: var(--text-xs); text-align: right; }
 .error { margin: 0 20px 12px; color: var(--red); overflow-wrap: anywhere; }
 .inlineSuccess { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 0 20px 12px; color: var(--text-secondary); }
 .inlineSuccess button { color: var(--accent-text); }
@@ -83,7 +83,7 @@
 .toast { position: fixed; z-index: 1000; bottom: 24px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; width: max-content; max-width: calc(100vw - 24px); padding: 12px 16px; border-radius: var(--radius); background: var(--bg-elevated); color: var(--text); box-shadow: var(--shadow-popover); font-size: var(--text-sm); }
 .toast span { min-width: 0; overflow-wrap: anywhere; }
 .toast button { flex-shrink: 0; color: var(--accent-text); }
-.toast button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.toast button:focus-visible { outline: var(--focus-ring); outline-offset: 3px; }
 .spin { animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (max-width: 480px) {
@@ -96,7 +96,7 @@
   .footer { flex-wrap: wrap; padding-inline: 14px; }
   .destination { flex-basis: 100%; margin-bottom: 4px; }
   .footer .cancel { margin-left: auto; }
-  .shortcuts { font-size: 10px; text-align: center; }
+  .shortcuts { font-size: var(--text-xs); text-align: center; }
 }
 @media (pointer: coarse) { .dialog button { min-height: 40px; } }
 @media (prefers-reduced-motion: reduce) { .spin { animation: none; } }

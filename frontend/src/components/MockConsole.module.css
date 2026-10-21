@@ -99,7 +99,7 @@
 .note {
   color: var(--text-tertiary);
   font-size: var(--text-xs);
-  line-height: 1.55;
+  line-height: var(--leading-ui);
 }
 
 .group {

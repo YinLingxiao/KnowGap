@@ -12,7 +12,7 @@
   padding: 0 6px;
   border-radius: var(--radius-sm);
   color: var(--text-tertiary);
-  font-size: 12px;
+  font-size: var(--text-xs);
   white-space: nowrap;
   cursor: pointer;
   list-style: none;
@@ -80,6 +80,6 @@
 .detail p {
   margin-top: 8px;
   color: var(--text-tertiary);
-  font-size: 11px;
-  line-height: 1.55;
+  font-size: var(--text-xs);
+  line-height: var(--leading-ui);
 }

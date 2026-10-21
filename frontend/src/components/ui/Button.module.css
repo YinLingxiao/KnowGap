@@ -73,7 +73,7 @@
 
 .danger {
   background: var(--red);
-  color: #ffffff;
+  color: var(--on-solid);
 }
 
 .danger:hover:not(:disabled) {
@@ -90,7 +90,8 @@
   }
 }
 
-@media (any-pointer: coarse) {
+/* 只在主指针是触屏时加大点击区；带触屏的笔记本（主指针为鼠标）不应把按钮撑到 40px */
+@media (pointer: coarse) {
   .sm,
   .md,
   .lg {

@@ -792,7 +792,21 @@ export function Composer({
     };
   }, [mentions]);
 
-  const approveLabel = autoApprove ? "帮我批准 · 已开启" : "帮我批准";
+  const openPlusMenu = () => {
+    setPlusPane("root");
+    loadMentions();
+    setMenuOpen(true);
+  };
+
+  // 右键工作区入口：桌面端也能手动粘贴路径（左键走系统文件夹选择器）
+  const openWsManual = (event: { preventDefault: () => void }) => {
+    if (!hasFolderPicker) return;
+    event.preventDefault();
+    setMenuOpen(false);
+    setWsDraft(workspace);
+    setWsNote("");
+    setWsOpen(true);
+  };
   const popupId = `${inputId}-popup`;
 
   return (
@@ -982,8 +996,8 @@ export function Composer({
                 }}
                 aria-expanded={menuOpen}
                 aria-haspopup="menu"
-                aria-label="更多：附件、技能与格式工具"
-                title="添加附件、选择技能或开启格式工具"
+                aria-label="更多：附件、技能、工作区与对话设置"
+                title="添加附件、选择技能，或调整工作区与对话设置"
                 disabled={generating || locked}
               >
                 <Plus size={16} aria-hidden />
@@ -1044,17 +1058,46 @@ export function Composer({
                         className={styles.lobeMenuItem}
                         onClick={() => {
                           setMenuOpen(false);
-                          void pickWorkspaceFolder();
+                          onChange(FEYNMAN_PROMPT);
+                          textareaRef.current?.focus();
                         }}
+                        title="切换为费曼反转自测：由你讲给 AI 听，AI 负责挑刺追问"
                       >
                         <span className={styles.lobeMenuLeft}>
-                          <Target size={15} aria-hidden />
-                          <span>目标与工作区</span>
-                          {workspace && <span className={styles.lobeMenuPill}>{wsShortName}</span>}
+                          <Mic size={15} aria-hidden />
+                          <span>费曼自测</span>
                         </span>
                       </button>
 
                       <div className={styles.lobeMenuDivider} role="separator" />
+                      <p className={styles.lobeMenuSection}>对话设置</p>
+
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className={styles.lobeMenuItem}
+                        onClick={() => {
+                          setMenuOpen(false);
+                          void pickWorkspaceFolder();
+                        }}
+                        onContextMenu={openWsManual}
+                        aria-busy={wsPicking || undefined}
+                        title={
+                          hasFolderPicker
+                            ? workspace
+                              ? `当前工作区：${workspace}（点击重新选择文件夹，右键手动输入）`
+                              : "点击选择本地工作区文件夹"
+                            : workspace
+                              ? `当前工作区：${workspace}`
+                              : "绑定本地工作区文件夹"
+                        }
+                      >
+                        <span className={styles.lobeMenuLeft}>
+                          <Target size={15} aria-hidden />
+                          <span>目标与工作区</span>
+                          <span className={styles.lobeMenuPill}>{wsShortName}</span>
+                        </span>
+                      </button>
 
                       <button
                         type="button"
@@ -1078,10 +1121,11 @@ export function Composer({
                         aria-checked={autoApprove}
                         className={styles.lobeMenuItem}
                         onClick={() => void saveEnv(workspace, !autoApprove)}
+                        title="开启后 Agent 写入工作区文件无需逐次弹窗确认（终端命令仍需确认）"
                       >
                         <span className={styles.lobeMenuLeft}>
                           <ShieldCheck size={15} aria-hidden />
-                          <span>自动批准写入</span>
+                          <span>帮我批准</span>
                         </span>
                         <span className={cx(styles.lobeSwitch, autoApprove && styles.lobeSwitchOn)} aria-hidden>
                           <i />
@@ -1207,44 +1251,37 @@ export function Composer({
               />
             </span>
 
-            <button
-              type="button"
-              className={cx(styles.pill, autoApprove && styles.pillOn)}
-              onClick={() => void saveEnv(workspace, !autoApprove)}
-              aria-pressed={autoApprove}
-              title="开启后 Agent 写入工作区文件无需逐次弹窗确认（终端命令仍需确认）"
-            >
-              <ShieldCheck size={12} aria-hidden />
-              <span className={styles.pillText}>{approveLabel}</span>
-            </button>
-
+            {/* 状态徽标：只在开启自动批准 / 绑定工作区时出现，点击打开 + 菜单里的对应项 */}
             <div className={styles.menuAnchor} ref={wsRef}>
-              <button
-                type="button"
-                className={cx(styles.pill, workspace && styles.pillActive)}
-                onClick={() => void pickWorkspaceFolder()}
-                onContextMenu={(event) => {
-                  if (!hasFolderPicker) return;
-                  event.preventDefault();
-                  setWsDraft(workspace);
-                  setWsNote("");
-                  setWsOpen(true);
-                }}
-                aria-expanded={hasFolderPicker ? undefined : wsOpen}
-                aria-busy={wsPicking || undefined}
-                title={
-                  hasFolderPicker
-                    ? workspace
-                      ? `当前工作区：${workspace}（点击重新选择文件夹，右键手动输入）`
-                      : "点击选择本地工作区文件夹"
-                    : workspace
-                      ? `当前工作区：${workspace}`
-                      : "绑定本地工作区文件夹"
-                }
-              >
-                <FolderOpen size={12} aria-hidden />
-                <span className={cx(styles.pillText, styles.pillTextShrink)}>{wsShortName}</span>
-              </button>
+              {(autoApprove || workspace) && (
+                <span className={styles.statusBadges}>
+                  {autoApprove && (
+                    <button
+                      type="button"
+                      className={styles.statusBadge}
+                      onClick={openPlusMenu}
+                      disabled={generating || locked}
+                      aria-label="帮我批准已开启"
+                      title="帮我批准已开启：Agent 写入工作区文件无需逐次确认（终端命令仍需确认）。点击调整"
+                    >
+                      <ShieldCheck size={13} aria-hidden />
+                    </button>
+                  )}
+                  {workspace && (
+                    <button
+                      type="button"
+                      className={styles.statusBadge}
+                      onClick={openPlusMenu}
+                      onContextMenu={openWsManual}
+                      disabled={generating || locked}
+                      aria-label={`当前工作区：${wsShortName}`}
+                      title={`当前工作区：${workspace}（点击调整${hasFolderPicker ? "，右键手动输入" : ""}）`}
+                    >
+                      <FolderOpen size={13} aria-hidden />
+                    </button>
+                  )}
+                </span>
+              )}
 
               {wsOpen && (
                 <div className={styles.wsPopover} role="dialog" aria-label="工作区文件夹">
@@ -1293,19 +1330,6 @@ export function Composer({
                 </div>
               )}
             </div>
-
-            <button
-              type="button"
-              className={styles.pill}
-              onClick={() => {
-                onChange(FEYNMAN_PROMPT);
-                textareaRef.current?.focus();
-              }}
-              title="切换为费曼反转自测：由你讲给 AI 听，AI 负责挑刺追问"
-            >
-              <Mic size={12} aria-hidden />
-              <span className={cx(styles.pillText, styles.pillTextHide)}>费曼自测</span>
-            </button>
           </div>
 
           <div className={styles.rightTools}>

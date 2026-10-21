@@ -10,7 +10,7 @@
   grid-template-rows: repeat(7, 12px);
   gap: 3px;
   color: var(--text-tertiary);
-  font-size: 10px;
+  font-size: var(--text-2xs);
   line-height: 12px;
 }
 
