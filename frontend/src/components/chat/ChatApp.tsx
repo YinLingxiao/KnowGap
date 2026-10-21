@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import {
   ArrowLeftRight, Brain, ChevronRight, CircleAlert, Dumbbell, FileText, Folder,
@@ -325,6 +325,10 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
     openConversation(id);
     closeOverlays();
   };
+  // 桌面端 Spotlight 快问浮窗「在主窗口打开」：主进程把对话 id 发到这里
+  const showConversationRef = useRef(showConversation);
+  showConversationRef.current = showConversation;
+  useEffect(() => window.knowgap?.onOpenConversation?.((id) => showConversationRef.current(id)), []);
 
   if (DATA_SOURCE !== "api") {
     return (

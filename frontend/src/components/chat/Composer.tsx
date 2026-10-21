@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEv
 import {
   ArrowLeftRight, ArrowUp, AtSign, Bold, Check, ChevronDown, ChevronLeft, ChevronRight, Code, Dumbbell,
   FileText, FolderOpen, Italic, Layers, List, ListChecks, ListOrdered, ListTodo, MessageSquareQuote, Mic,
-  NotebookPen, Paperclip, Plus, ShieldCheck, Sigma, Sparkles, Square, SquareCode, Strikethrough, Target,
+  NotebookPen, Paperclip, Plus, Radar, ShieldCheck, Sigma, Sparkles, Square, SquareCode, Strikethrough, Target,
   Type, Workflow,
 } from "lucide-react";
 import type { StreamPhase } from "@/hooks/useChat";
@@ -78,6 +78,13 @@ const SLASH_COMMANDS: SlashCommand[] = [
     desc: "一步步演示机制的状态变化",
     prompt: "请用 `step_simulator` 分步推演微件，一步步演示这个机制的状态变化过程。",
     icon: <Workflow size={14} aria-hidden />,
+  },
+  {
+    id: "viva",
+    label: "模拟复试压力舱",
+    desc: "3 轮递进追问薄弱点，结束后给出五维能力雷达",
+    prompt: "请当我的复试老师，开始一场模拟复试，围绕「在此填写知识点」对我进行 3 轮压力追问：",
+    icon: <Radar size={14} aria-hidden />,
   },
   {
     id: "drill",
