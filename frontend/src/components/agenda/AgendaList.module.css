@@ -115,7 +115,7 @@
 
   position: relative;
   display: grid;
-  grid-template-columns: 18px 18px minmax(0, 1fr) auto 56px;
+  grid-template-columns: 18px 18px minmax(10em, 1fr) minmax(0, auto) 56px;
   align-items: center;
   gap: 6px;
   min-height: 34px;
@@ -152,7 +152,7 @@
 }
 
 .child {
-  grid-template-columns: 18px 18px minmax(0, 1fr) auto 56px;
+  grid-template-columns: 18px 18px minmax(10em, 1fr) minmax(0, auto) 56px;
   min-height: 30px;
   padding-left: 26px;
 }
@@ -286,6 +286,7 @@
   color: var(--text-tertiary);
   font-size: var(--text-xs);
   white-space: nowrap;
+  overflow: hidden;
 }
 
 .subject {
@@ -382,7 +383,7 @@
 }
 
 /* 窄列表（如学习空间右侧面板）：标题优先，标签、空间名和进度条让位 */
-@container agendalist (max-width: 520px) {
+@container agendalist (max-width: 720px) {
   .label,
   .subject,
   .progress {
