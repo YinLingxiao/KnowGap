@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import {
-  Brain, ChevronRight, FolderKanban, Loader, MoreHorizontal, PanelLeftClose, Pencil, Plus,
+  Brain, CalendarCheck, ChevronRight, FolderKanban, Loader, MoreHorizontal, PanelLeftClose, Pencil, Plus,
   Search, Settings, SlidersHorizontal, Trash2, X,
 } from "lucide-react";
 import type { ApiError } from "@/lib/api/errors";
@@ -30,6 +30,8 @@ interface SidebarProps {
   onOpenSpaces: () => void;
   onCreateSpace: () => void;
   spacesActive: boolean;
+  onOpenAgenda: () => void;
+  agendaActive: boolean;
   onRename: (id: string, title: string) => Promise<boolean>;
   onDelete: (id: string) => Promise<boolean>;
   onRetry: () => void;
@@ -206,7 +208,7 @@ export function ConversationSidebar(props: SidebarProps) {
     [conversations, keyword],
   );
 
-  const isNewChatActive = !activeId && !props.activeSubjectId && !props.spacesActive && !props.materialsActive;
+  const isNewChatActive = !activeId && !props.activeSubjectId && !props.spacesActive && !props.materialsActive && !props.agendaActive;
 
   return (
     <nav className={styles.sidebar} aria-label="对话">
@@ -272,6 +274,10 @@ export function ConversationSidebar(props: SidebarProps) {
             <Plus size={14} />
           </button>
         </div>
+        <button className={cx(styles.navItem, props.agendaActive && styles.navActive)} onClick={props.onOpenAgenda}>
+          <CalendarCheck size={15} aria-hidden />
+          <span>日程</span>
+        </button>
         <button className={styles.navItem} onClick={props.onOpenMemory}>
           <Brain size={15} aria-hidden />
           <span>学习记忆</span>

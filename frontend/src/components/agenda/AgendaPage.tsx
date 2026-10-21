@@ -9,6 +9,8 @@ import { agendaApi } from "@/lib/agenda/api";
 import type { AgendaTask, AgendaThread, TaskInput } from "@/lib/agenda/types";
 import type { Subject } from "@/lib/chat/types";
 import { cx } from "@/lib/cx";
+import { FocusHeatmap } from "../focus/FocusHeatmap";
+import AiBreakdownDialog from "./AiBreakdownDialog";
 import { AgendaList, type SubjectInfo } from "./AgendaList";
 import {
   buildGroups, compareSiblings, dispatchFocusStart, taskKey, threadKey, type GroupKey,
@@ -16,6 +18,7 @@ import {
 import { QuickAdd } from "./QuickAdd";
 import { TaskInspector } from "./TaskInspector";
 import { useAgenda } from "./useAgenda";
+import WeekCalendar from "./WeekCalendar";
 import styles from "./AgendaPage.module.css";
 
 type ViewMode = "list" | "week";
@@ -24,8 +27,8 @@ interface AgendaPageProps {
   subjects: Subject[];
   sidebarOpen: boolean;
   onOpenSidebar: () => void;
-  /** 打开某个 Thread（对话 id） */
-  onOpenThread: (threadId: string) => void;
+  /** 打开某个 Thread（对话 id 与所属空间） */
+  onOpenThread: (threadId: string, subjectId: string | null) => void;
   onNotify: (toast: { tone: "success" | "error" | "info"; title: string; description?: string }) => void;
 }
 
@@ -53,6 +56,8 @@ export function AgendaPage(props: AgendaPageProps) {
   const [collapsedGroups, setCollapsedGroups] = useState<ReadonlySet<GroupKey>>(new Set());
   const [collapsedParents, setCollapsedParents] = useState<ReadonlySet<string>>(new Set());
   const [exporting, setExporting] = useState(false);
+  const [breakdownOpen, setBreakdownOpen] = useState(false);
+  const [weekStart, setWeekStart] = useState<string | null>(null);
   const quickRef = useRef<HTMLInputElement>(null);
 
   const subjectInfos = useMemo<SubjectInfo[]>(
@@ -171,7 +176,8 @@ export function AgendaPage(props: AgendaPageProps) {
   );
 
   const failure = agenda.error ? describeError(agenda.error) : null;
-  const showInspector = mode === "list" && inspected;
+  const showInspector = Boolean(inspected);
+  const currentWeek = weekStart ?? mondayOf(today);
 
   return (
     <div className={styles.page}>
@@ -207,12 +213,8 @@ export function AgendaPage(props: AgendaPageProps) {
           </select>
         </label>
 
-        {/* TODO(集成)：AI 拆解弹窗由 agenda-calendar 会话交付 AiBreakdownDialog，见 docs/contracts/agenda.md 第 5 节。
-            集成时：import { AiBreakdownDialog }，在此按钮 onClick 里 setBreakdownOpen(true)，并在页面底部挂载
-            <AiBreakdownDialog open subjects={…} defaultSubjectId={subjectFilter} onClose onCreated={() => agenda.reload()} /> */}
-        <button type="button" className={styles.btn} disabled title="待集成：AI 拆解排期弹窗由另一会话交付">
+        <button type="button" className={styles.btn} onClick={() => setBreakdownOpen(true)}>
           <Sparkles size={13} aria-hidden />AI 拆解排期
-          <span className={styles.pending}>待集成</span>
         </button>
         <button type="button" className={styles.btn} onClick={() => void exportIcs()} disabled={exporting}>
           {exporting ? <LoaderCircle size={13} className={styles.spin} aria-hidden /> : <Download size={13} aria-hidden />}导出 .ics
@@ -257,7 +259,7 @@ export function AgendaPage(props: AgendaPageProps) {
                     collapsedParents={collapsedParents}
                     onSelect={setSelectedKey}
                     onOpenTask={openTask}
-                    onOpenThread={(thread) => { setSelectedKey(threadKey(thread.threadId)); props.onOpenThread(thread.threadId); }}
+                    onOpenThread={(thread) => { setSelectedKey(threadKey(thread.threadId)); props.onOpenThread(thread.threadId, thread.subjectId); }}
                     onToggleDone={toggleDone}
                     onFocusTask={focusTask}
                     onFocusThread={focusThread}
@@ -265,18 +267,28 @@ export function AgendaPage(props: AgendaPageProps) {
                     onToggleParent={toggleParent}
                   />
                 )}
+                {agenda.status === "ready" && (
+                  <section className={styles.heatmap} aria-label="12 周专注热力图">
+                    <FocusHeatmap />
+                  </section>
+                )}
               </div>
             </>
           ) : (
-            /* TODO(集成)：WeekCalendar 由 agenda-calendar 会话交付，props 见 docs/contracts/agenda.md 第 5 节。
-               集成时在此挂载 <WeekCalendar weekStart tasks threads today onWeekChange onSelectTask onSelectThread onReschedule onCreateAt />，
-               onReschedule 里调用 agenda.update(taskId, patch)。 */
-            <div className={styles.state} data-testid="week-calendar-slot">
-              <CalendarDays size={20} aria-hidden />
-              <h2>周历视图待集成</h2>
-              <p>周历由另一个会话以独立组件 WeekCalendar 交付，集成后会在这里显示。列表视图不受影响。</p>
-              <button type="button" className={styles.btn} onClick={() => setMode("list")}>回到列表</button>
-            </div>
+            <WeekCalendar
+              weekStart={currentWeek}
+              tasks={subjectFilter ? tasks.filter((task) => task.subjectId === subjectFilter) : tasks}
+              threads={subjectFilter ? threads.filter((thread) => thread.subjectId === subjectFilter) : threads}
+              today={today}
+              onWeekChange={setWeekStart}
+              onSelectTask={(id) => { setSelectedKey(taskKey(id)); setInspectedId(id); }}
+              onSelectThread={(id) => props.onOpenThread(id, threads.find((thread) => thread.threadId === id)?.subjectId ?? null)}
+              onReschedule={(taskId, patch) => void update(taskId, patch)}
+              onCreateAt={(slot) => void create({
+                title: "新任务", scheduledDate: slot.scheduledDate, scheduledStartAt: slot.scheduledStartAt,
+                durationMinutes: slot.scheduledStartAt ? 30 : null, subjectId: subjectFilter, source: "manual",
+              }).then((task) => { if (task) openTask(task); })}
+            />
           )}
         </div>
 
@@ -297,6 +309,29 @@ export function AgendaPage(props: AgendaPageProps) {
           </div>
         )}
       </div>
+
+      <AiBreakdownDialog
+        open={breakdownOpen}
+        subjects={props.subjects.map((subject) => ({
+          id: subject.id, name: subject.name, color: subject.color, deadline: subject.deadline,
+        }))}
+        defaultSubjectId={subjectFilter}
+        onClose={() => setBreakdownOpen(false)}
+        onCreated={(created) => {
+          setBreakdownOpen(false);
+          void agenda.reload();
+          onNotify({ tone: "success", title: `已加入 ${created.children.length + (created.parent ? 1 : 0)} 项任务` });
+        }}
+      />
     </div>
   );
+}
+
+/** 本地日期所在周的周一（YYYY-MM-DD） */
+function mondayOf(day: string): string {
+  const base = day ? new Date(`${day}T00:00:00`) : new Date();
+  const offset = (base.getDay() + 6) % 7;
+  base.setDate(base.getDate() - offset);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${base.getFullYear()}-${pad(base.getMonth() + 1)}-${pad(base.getDate())}`;
 }

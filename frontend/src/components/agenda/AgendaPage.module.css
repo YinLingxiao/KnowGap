@@ -236,3 +236,9 @@
     display: none;
   }
 }
+
+.heatmap {
+  margin: 24px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}

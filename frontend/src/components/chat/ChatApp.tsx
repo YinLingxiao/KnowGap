@@ -32,6 +32,7 @@ import { MessageList } from "./MessageList";
 import { CreateSpaceDialog } from "./CreateSpaceDialog";
 import { OnboardingStage } from "./OnboardingStage";
 import { SpacesPage } from "./SpacesPage";
+import { AgendaPage } from "../agenda/AgendaPage";
 import { SubjectPage } from "./SubjectPage";
 import { SubjectPicker } from "./SubjectPicker";
 import { FocusCapsule } from "../focus/FocusCapsule";
@@ -76,7 +77,7 @@ const ONBOARDING_QUICK_REPLIES: string[][] = [
 ];
 
 /** 主区域显示什么：对话、学习空间总览、某个学习空间，或通用资料 */
-type View = { type: "chat" } | { type: "subject"; id: string } | { type: "materials" } | { type: "spaces" };
+type View = { type: "chat" } | { type: "subject"; id: string } | { type: "materials" } | { type: "spaces" } | { type: "agenda" };
 
 function readView(userId: string): View {
   try {
@@ -85,6 +86,7 @@ function readView(userId: string): View {
       if (parsed.type === "subject" && "id" in parsed && typeof parsed.id === "string") return { type: "subject", id: parsed.id };
       if (parsed.type === "materials") return { type: "materials" };
       if (parsed.type === "spaces") return { type: "spaces" };
+      if (parsed.type === "agenda") return { type: "agenda" };
     }
   } catch { /* unavailable storage falls back to the chat view */ }
   return { type: "chat" };
@@ -415,6 +417,8 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
             onOpenSpaces={() => { setView({ type: "spaces" }); closeOverlays(); }}
             onCreateSpace={() => setSpaceDialog({ select: false })}
             spacesActive={view.type === "spaces"}
+            onOpenAgenda={() => { setView({ type: "agenda" }); closeOverlays(); }}
+            agendaActive={view.type === "agenda"}
             onRename={chat.renameConversation}
             onDelete={chat.deleteConversation}
             onRetry={() => void chat.refreshList()}
@@ -439,6 +443,22 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
             sidebarOpen={sidebarOpen}
             onOpenSidebar={() => setSidebarOpen(true)}
             onBack={() => setView({ type: "chat" })}
+          />
+        ) : view.type === "agenda" ? (
+          <AgendaPage
+            subjects={chat.subjects}
+            sidebarOpen={sidebarOpen}
+            onOpenSidebar={() => setSidebarOpen(true)}
+            onOpenThread={(threadId, subjectId) => {
+              if (!subjectId) return showConversation(threadId);
+              // 学习空间页挂载时会恢复上次打开的面板，预先写入即可直接打开这个 Thread
+              try {
+                localStorage.setItem(`knowgap.space.panel.v1:${API_BASE_URL}:${subjectId}`,
+                  JSON.stringify({ mode: "thread", id: threadId }));
+              } catch { /* 存储不可用时只打开空间 */ }
+              openSpace(subjectId);
+            }}
+            onNotify={push}
           />
         ) : view.type === "spaces" ? (
           <SpacesPage
