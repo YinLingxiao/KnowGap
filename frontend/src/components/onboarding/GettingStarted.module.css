@@ -1,0 +1,97 @@
+.card,
+.done {
+  width: min(720px, 100%);
+  margin: 0 auto 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+}
+
+.card header,
+.done {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.toggle,
+.close,
+.done button,
+.card li button {
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: var(--text-sm);
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.shut {
+  transform: rotate(-90deg);
+}
+
+.close {
+  color: var(--text-tertiary);
+}
+
+.card ul {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.card li button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 4px;
+  border-radius: var(--radius-sm);
+  text-align: left;
+}
+
+.card li button:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.card li button:disabled {
+  color: var(--text-tertiary);
+}
+
+.box {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+}
+
+.boxOn {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.done p {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.done button {
+  color: var(--accent-text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shut { transition: none; }
+}

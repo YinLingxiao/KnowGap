@@ -18,6 +18,7 @@ import { SPACE_PAGES_EVENT, spacePagesKey } from "@/lib/spacePages";
 import { cx } from "@/lib/cx";
 import type { CourseMaterial, Problem } from "@/lib/types";
 import { Button } from "../ui/Button";
+import { CHEATSHEET_OPENED_EVENT, OPEN_SPACE_PANEL_EVENT } from "../onboarding/coach";
 import { CheatSheet } from "./CheatSheet";
 import { ConceptGraph, type AttackTarget } from "./ConceptGraph";
 import { SpaceTasks } from "../agenda/SpaceTasks";
@@ -142,6 +143,20 @@ export function SubjectPage({
   useEffect(() => {
     setInstructions(subject.instructions);
   }, [subject.instructions]);
+
+  useEffect(() => {
+    const onPanel = (event: Event) => {
+      const detail = (event as CustomEvent<{ mode?: string; subjectId?: string }>).detail;
+      if (detail?.subjectId && detail.subjectId !== subject.id) return;
+      if (detail?.mode === "graph") showPanel({ mode: "graph" });
+      if (detail?.mode === "cheatsheet") {
+        setCheatSheetOpen(true);
+        window.dispatchEvent(new Event(CHEATSHEET_OPENED_EVENT));
+      }
+    };
+    window.addEventListener(OPEN_SPACE_PANEL_EVENT, onPanel);
+    return () => window.removeEventListener(OPEN_SPACE_PANEL_EVENT, onPanel);
+  }, [subject.id]);
 
   useEffect(() => {
     setPages({ id: subject.id, text: readPages(subject.id) });
@@ -402,7 +417,7 @@ export function SubjectPage({
           </div>
 
           <div className={styles.tools} role="group" aria-label="空间操作">
-            <button type="button" className={styles.overviewBtn} onClick={() => setCheatSheetOpen(true)} title="生成考前急救一页纸">
+            <button type="button" className={styles.overviewBtn} onClick={() => { setCheatSheetOpen(true); window.dispatchEvent(new Event(CHEATSHEET_OPENED_EVENT)); }} title="生成考前急救一页纸">
               <Zap size={13} aria-hidden />
               <span>考前一页纸</span>
             </button>
@@ -794,6 +809,7 @@ export function SubjectPage({
               subjectName={subject.name}
               onAttack={attackFromGraph}
               onOpenThread={openThread}
+              onStart={() => showPanel({ mode: "list" })}
             />
           )}
           {panel.mode === "pages" && (
@@ -998,7 +1014,10 @@ export function SubjectPage({
               {panel.section === "memory" && (
                 <div className={styles.memoriesPane}>
                   {spaceMemories.length === 0 ? (
-                    <p className={styles.muted}>还没有属于这里的记忆。</p>
+                    <div className={styles.muted}>
+                      <p>这个空间的误区和掌握会出现在这里。</p>
+                      <button type="button" onClick={() => showPanel({ mode: "list" })}>去主对话讲一讲</button>
+                    </div>
                   ) : (
                     spaceMemories.map((memory) => (
                       <MemoryItem

@@ -48,6 +48,7 @@ interface MemoryDrawerProps {
   onDelete: (id: string) => Promise<boolean>;
   onOpenConversation: (id: string) => void;
   onStartOnboarding?: () => void;
+  onPractice?: () => void;
 }
 
 export function MemoryItem({
@@ -368,8 +369,10 @@ export function MemoryDrawer(props: MemoryDrawerProps) {
       {error && <p className={styles.error}>{error.message}</p>}
       {!loading && !error && memories.length === 0 && (
         <div className={styles.empty}>
-          <p className={styles.emptyTitle}>{props.memories.length ? "这个范围里还没有记录" : "还没有学习记忆"}</p>
-          <p>多聊几句、说说你的理解或做一道练习，有依据的情况会出现在这里。</p>
+          <p className={styles.emptyTitle}>{props.memories.length ? "这个范围里还没有记录" : "学过的误区会出现在这里。"}</p>
+          {!props.memories.length && (props.onPractice || props.onStartOnboarding) && (
+            <button type="button" onClick={props.onPractice ?? props.onStartOnboarding}>去讲一个概念</button>
+          )}
         </div>
       )}
       {groups.map((kind) => {

@@ -318,6 +318,13 @@ export const chatApi = {
   async skipOnboarding(): Promise<void> {
     await request(root, "/api/onboarding/skip", { method: "POST" });
   },
+  async checklist(): Promise<{ explained: boolean; answered: boolean; scheduled: boolean; focused: boolean }> {
+    const data = await request<Wire>(root, "/api/onboarding/checklist", { cache: "no-store" });
+    return {
+      explained: Boolean(data.explained), answered: Boolean(data.answered),
+      scheduled: Boolean(data.scheduled), focused: Boolean(data.focused),
+    };
+  },
   async ackOnboarding(): Promise<void> {
     await request(root, "/api/onboarding/ack", { method: "POST" });
   },

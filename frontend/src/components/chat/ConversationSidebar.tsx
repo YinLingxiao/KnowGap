@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Image from "next/image";
 import {
-  Brain, CalendarCheck, ChevronRight, FolderKanban, ListPlus, Loader, MoreHorizontal, PanelLeftClose, Pencil, Plus,
+  Brain, CalendarCheck, ChevronRight, CircleHelp, FolderKanban, ListPlus, Loader, MoreHorizontal, PanelLeftClose, Pencil, Plus,
   Search, Settings, SlidersHorizontal, Trash2, X,
 } from "lucide-react";
 import type { ApiError } from "@/lib/api/errors";
@@ -41,6 +41,7 @@ interface SidebarProps {
   onOpenMemory: () => void;
   onOpenMaterials: () => void;
   onOpenSettings: () => void;
+  onOpenHelp: () => void;
   onCollapse: () => void;
   displayName?: string;
   avatarText?: string;
@@ -386,6 +387,9 @@ export function ConversationSidebar(props: SidebarProps) {
           {props.displayName || "演示学习者"}
           <small className={styles.userPlan}> · 本地版</small>
         </span>
+        <button className={styles.iconButton} onClick={props.onOpenHelp} aria-label="帮助" title="帮助">
+          <CircleHelp size={15} />
+        </button>
         <button className={styles.iconButton} onClick={props.onOpenSettings} aria-label="设置" title="设置">
           <Settings size={15} />
           {props.modelIssue && <span className={styles.alertDot} />}

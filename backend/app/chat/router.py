@@ -333,6 +333,10 @@ def chat_router(store: ChatStore, service: ChatService) -> APIRouter:
         except ValueError as exc:
             raise HTTPException(422, str(exc)) from None
 
+    @router.get("/onboarding/checklist")
+    def onboarding_checklist():
+        return store.learning_checklist(current_student())
+
     @router.get("/onboarding/preferences")
     def get_learning_preferences():
         return store.learning_preferences(current_student())

@@ -31,7 +31,11 @@ import { MemoryDrawer } from "./MemoryDrawer";
 import { MessageList } from "./MessageList";
 import { CreateSpaceDialog } from "./CreateSpaceDialog";
 import { CoachmarkHost } from "../onboarding/Coachmark";
+import { GettingStarted } from "../onboarding/GettingStarted";
+import { HelpCenter, type HelpAction } from "../onboarding/HelpCenter";
 import { Welcome } from "../onboarding/Welcome";
+import { CHEATSHEET_OPENED_EVENT, OPEN_SPACE_PANEL_EVENT, cheatsheetSeenKey } from "../onboarding/coach";
+import { FOCUS_START_EVENT } from "@/lib/agenda/types";
 import { SpacesPage } from "./SpacesPage";
 import { AgendaPage } from "../agenda/AgendaPage";
 import { ReminderScheduler } from "../agenda/ReminderScheduler";
@@ -108,6 +112,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
   const [health, setHealth] = useState<HealthState>("checking");
   const [modelConfigured, setModelConfigured] = useState<boolean | null>(null);
   const [gate, setGate] = useState<"checking" | "welcome" | "app">("checking");
+  const [helpOpen, setHelpOpen] = useState(false);
   const [welcomeBusy, setWelcomeBusy] = useState(false);
   const [welcomeError, setWelcomeError] = useState("");
 
@@ -165,6 +170,12 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
     const saved = readView(user.id);
     if (saved.type !== "chat") setViewState(saved);
     setViewRestored(true);
+  }, [user.id]);
+
+  useEffect(() => {
+    const mark = () => localStorage.setItem(cheatsheetSeenKey(user.id), "1");
+    window.addEventListener(CHEATSHEET_OPENED_EVENT, mark);
+    return () => window.removeEventListener(CHEATSHEET_OPENED_EVENT, mark);
   }, [user.id]);
 
   useEffect(() => {
@@ -412,6 +423,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
             onOpenMemory={() => { openMemories(); closeOverlays(); }}
             onOpenMaterials={() => { setView({ type: "materials" }); closeOverlays(); }}
             onOpenSettings={() => { openSettings(modelConfigured === false ? "models" : "general"); closeOverlays(); }}
+            onOpenHelp={() => { setHelpOpen(true); closeOverlays(); }}
             onCollapse={() => setSidebarOpen(false)}
             displayName={user.displayName}
             avatarText={user.avatarText}
@@ -671,6 +683,49 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
                 </div>
               </div>
 
+              <GettingStarted
+                userId={user.id}
+                onExplain={() => {
+                  const space = recentSpaces[0];
+                  if (space?.mainConversationId) {
+                    setView({ type: "subject", id: space.id });
+                    void chat.sendTo(space.mainConversationId, "用一个具体例子讲清一个核心概念");
+                    return;
+                  }
+                  setView({ type: "chat" });
+                  chat.setDraft("用一个具体例子讲清一个核心概念");
+                  document.getElementById(COMPOSER_ID)?.focus();
+                }}
+                onQuiz={() => {
+                  const space = recentSpaces[0];
+                  if (space?.mainConversationId) {
+                    setView({ type: "subject", id: space.id });
+                    void chat.sendTo(space.mainConversationId, "考考我");
+                    return;
+                  }
+                  chat.setDraft("考考我");
+                  document.getElementById(COMPOSER_ID)?.focus();
+                }}
+                onSchedule={() => setView({ type: "agenda" })}
+                onFocus={() => {
+                  window.dispatchEvent(new CustomEvent(FOCUS_START_EVENT, {
+                    detail: { taskId: null, title: "专注学习", subjectId: contextSubjectId },
+                  }));
+                }}
+                onSheet={() => {
+                  const space = recentSpaces[0];
+                  if (!space) {
+                    setView({ type: "spaces" });
+                    return;
+                  }
+                  setView({ type: "subject", id: space.id });
+                  window.setTimeout(() => {
+                    window.dispatchEvent(new CustomEvent(OPEN_SPACE_PANEL_EVENT, {
+                      detail: { mode: "cheatsheet", subjectId: space.id },
+                    }));
+                  }, 60);
+                }}
+              />
               <TodayPanel
                 conversations={chat.conversations}
                 recentTopics={recentTopics}
@@ -718,9 +773,62 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
                 setMemoryOpen(false);
                 openSettings("preferences");
               }}
+              onPractice={() => {
+                setMemoryOpen(false);
+                const space = recentSpaces[0];
+                if (space?.mainConversationId) {
+                  setView({ type: "subject", id: space.id });
+                  void chat.sendTo(space.mainConversationId, "用一个具体例子讲清一个核心概念");
+                  return;
+                }
+                chat.setDraft("用一个具体例子讲清一个核心概念");
+                document.getElementById(COMPOSER_ID)?.focus();
+              }}
             />
           </aside>
         </>
+      )}
+
+      {helpOpen && (
+        <HelpCenter
+          desktop={Boolean(window.knowgap)}
+          userId={user.id}
+          onClose={() => setHelpOpen(false)}
+          onTry={(action: HelpAction) => {
+            setHelpOpen(false);
+            const space = recentSpaces[0];
+            const openMain = (text: string) => {
+              if (space?.mainConversationId) {
+                setView({ type: "subject", id: space.id });
+                chat.setDraftFor(space.mainConversationId, text);
+                return;
+              }
+              setView({ type: "chat" });
+              chat.setDraft(text);
+              window.setTimeout(() => document.getElementById(COMPOSER_ID)?.focus(), 0);
+            };
+            if (action === "explain") openMain("用一个具体例子讲清一个核心概念");
+            else if (action === "quiz" || action === "select") openMain(action === "quiz" ? "考考我" : "选中我回复里的一句话，再追问");
+            else if (action === "viva") openMain("/viva ");
+            else if (action === "plan") openMain("先列一个学习计划，再讲第一个概念");
+            else if (action === "review" || action === "agenda" || action === "schedule") setView({ type: "agenda" });
+            else if (action === "focus") {
+              window.dispatchEvent(new CustomEvent(FOCUS_START_EVENT, {
+                detail: { taskId: null, title: "专注学习", subjectId: contextSubjectId },
+              }));
+            } else if (action === "graph" || action === "sheet") {
+              if (!space) { setView({ type: "spaces" }); return; }
+              setView({ type: "subject", id: space.id });
+              window.setTimeout(() => {
+                window.dispatchEvent(new CustomEvent(OPEN_SPACE_PANEL_EVENT, {
+                  detail: { mode: action === "graph" ? "graph" : "cheatsheet", subjectId: space.id },
+                }));
+              }, 60);
+            } else if (action === "spotlight") {
+              push({ tone: "info", title: "按 Alt+Space 随时快问" });
+            }
+          }}
+        />
       )}
 
       {settingsOpen && (

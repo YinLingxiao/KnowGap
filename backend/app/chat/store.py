@@ -1122,6 +1122,42 @@ class ChatStore:
                 )
             return state(db, student_id)
 
+    def learning_checklist(self, student_id: str) -> dict:
+        with self.connection() as db:
+            tables = {row["name"] for row in db.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+            explained = db.execute(
+                "SELECT 1 FROM conversation_messages m JOIN conversations c ON c.id = m.conversation_id "
+                "WHERE c.student_id = ? AND m.role = 'assistant' AND m.status = 'complete' "
+                "AND length(m.content) >= 80 AND c.title NOT LIKE '初识引导%' LIMIT 1",
+                (student_id,),
+            ).fetchone()
+            answered = db.execute(
+                "SELECT 1 FROM conversation_messages m JOIN conversations c ON c.id = m.conversation_id "
+                "WHERE c.student_id = ? AND ("
+                "m.meta_json LIKE '%\"assessment\": \"correct\"%' OR "
+                "(m.meta_json LIKE '%\"from\": \"awaiting_learner\"%' AND m.meta_json LIKE '%\"to\": \"done\"%')"
+                ") LIMIT 1",
+                (student_id,),
+            ).fetchone()
+            scheduled = None
+            focused = None
+            if "agenda_tasks" in tables:
+                scheduled = db.execute(
+                    "SELECT 1 FROM agenda_tasks WHERE student_id = ? AND source = 'ai_breakdown' LIMIT 1",
+                    (student_id,),
+                ).fetchone()
+            if "focus_sessions" in tables:
+                focused = db.execute(
+                    "SELECT 1 FROM focus_sessions WHERE student_id = ? AND status = 'completed' LIMIT 1",
+                    (student_id,),
+                ).fetchone()
+        return {
+            "explained": explained is not None,
+            "answered": answered is not None,
+            "scheduled": scheduled is not None,
+            "focused": focused is not None,
+        }
+
     def learning_preferences(self, student_id: str) -> dict:
         from app.chat.onboarding import FIELDS, LABELS
         from app.memory.curated import split_entries

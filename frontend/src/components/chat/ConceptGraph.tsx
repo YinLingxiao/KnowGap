@@ -172,12 +172,13 @@ function Mark({ kind }: { kind: GraphKind }) {
 }
 
 export function ConceptGraph({
-  subjectId, subjectName, onAttack, onOpenThread,
+  subjectId, subjectName, onAttack, onOpenThread, onStart,
 }: {
   subjectId: string;
   subjectName: string;
   onAttack: (target: AttackTarget) => Promise<void>;
   onOpenThread: (threadId: string) => void;
+  onStart?: () => void;
 }) {
   const [insights, setInsights] = useState<SubjectInsights | null>(null);
   const [fog, setFog] = useState<ConceptGraphResult | null>(null);
@@ -331,15 +332,15 @@ export function ConceptGraph({
         <p className={styles.empty}>正在整理这个空间的知识…</p>
       ) : !showGraph ? (
         <div className={styles.empty}>
-          <strong>这个空间还没有可画的概念</strong>
-          <p>先在主对话里讲讲你的理解，或上传讲义。误区、进行中的 Thread 和已掌握的概念会落到内环和中环；外环是下一阶段待解锁的概念。</p>
+          <strong>讲过的概念会画在这里。</strong>
+          {onStart && <button type="button" className={styles.toolBtn} onClick={onStart}>去主对话讲一讲</button>}
           {fogLoading && <p className={styles.muted}>正在根据空间目标推演外环…</p>}
         </div>
       ) : (
         <>
           {settled + pending === 0 && (
             <p className={styles.guide}>
-              还没有掌握记录或进行中的 Thread。先在主对话里讲一讲你的理解，或上传讲义。外环是下一阶段可以解锁的概念。
+              掌握和误区会落到环上。先在主对话里讲一讲你的理解。
             </p>
           )}
           <div className={styles.stage} ref={stageRef}>
