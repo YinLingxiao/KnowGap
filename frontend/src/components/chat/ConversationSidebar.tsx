@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import {
-  Brain, FolderKanban, GraduationCap, Loader, MoreHorizontal, PanelLeftClose, Pencil, Plus,
+  Brain, ChevronRight, FolderKanban, Loader, MoreHorizontal, PanelLeftClose, Pencil, Plus,
   Search, Settings, SlidersHorizontal, Trash2, X,
 } from "lucide-react";
 import type { ApiError } from "@/lib/api/errors";
@@ -39,6 +39,25 @@ interface SidebarProps {
   onCollapse: () => void;
   displayName?: string;
   avatarText?: string;
+}
+
+function SectionHeader({
+  label, count, open, onToggle,
+}: {
+  label: string;
+  count: number;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div className={styles.sectionHead}>
+      <button type="button" className={styles.sectionToggle} onClick={onToggle} aria-expanded={open}>
+        <ChevronRight size={12} className={cx(styles.chevron, open && styles.chevronOpen)} aria-hidden />
+        <span className={styles.sectionLabel}>{label}</span>
+        <span className={styles.count}>{count}</span>
+      </button>
+    </div>
+  );
 }
 
 function ConversationItem({
@@ -161,8 +180,11 @@ export function ConversationSidebar(props: SidebarProps) {
   const { conversations, subjects, loading, error, activeId, generatingIds } = props;
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
+  const [spacesOpen, setSpacesOpen] = useState(true);
+  const [recentsOpen, setRecentsOpen] = useState(true);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const keyword = query.trim().toLowerCase();
+  const searchActive = searchOpen || Boolean(query);
 
   useEffect(() => {
     if (searchOpen) searchInputRef.current?.focus();
@@ -190,14 +212,55 @@ export function ConversationSidebar(props: SidebarProps) {
     <nav className={styles.sidebar} aria-label="对话">
       <header className={styles.brand}>
         <Image src="/brand/knowgap-logo-v1.png" alt="KnowGap" width={22} height={22} className={styles.logo} />
+        <span className={styles.brandName} aria-hidden>KnowGap</span>
         <button className={styles.iconButton} onClick={props.onCollapse} aria-label="收起侧栏" title="收起侧栏">
           <PanelLeftClose size={16} />
         </button>
       </header>
 
       <div className={styles.nav}>
-        <button className={cx(styles.navItem, isNewChatActive && styles.navActive)} onClick={props.onNewChat}>
-          <Plus size={16} aria-hidden />
+        {searchActive ? (
+          <div className={cx(styles.searchField, styles.searchFieldActive)}>
+            <Search size={14} aria-hidden />
+            <input
+              ref={searchInputRef}
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              onBlur={() => {
+                if (!query) setSearchOpen(false);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  setQuery("");
+                  setSearchOpen(false);
+                }
+              }}
+              placeholder="筛选对话与空间…"
+              aria-label="搜索对话和学习空间"
+            />
+            {query && (
+              <button type="button" className={styles.searchClear} onClick={() => setQuery("")} aria-label="清空搜索">
+                <X size={12} />
+              </button>
+            )}
+          </div>
+        ) : (
+          <button
+            type="button"
+            className={styles.searchField}
+            onClick={() => setSearchOpen(true)}
+            aria-label="搜索对话和学习空间"
+          >
+            <Search size={14} aria-hidden />
+            <span>搜索</span>
+          </button>
+        )}
+
+        <button
+          className={cx(styles.navItem, isNewChatActive && styles.navActive)}
+          onClick={props.onNewChat}
+        >
+          <Plus size={15} aria-hidden />
           <span>新对话</span>
         </button>
         <div className={styles.navRow}>
@@ -222,101 +285,74 @@ export function ConversationSidebar(props: SidebarProps) {
 
       <div className={styles.scroll}>
         {filteredSpaces.length > 0 && (
-          <div className={styles.pinnedGroup}>
-            <div className={styles.recentsHead}>
-              <span className={styles.section}>空间</span>
-            </div>
-            <ul className={styles.list} data-stagger>
-              {filteredSpaces.map((subject) => (
-                <li key={subject.id} className={cx(styles.item, props.activeSubjectId === subject.id && styles.active)}>
-                  <button
-                    className={styles.itemButton}
-                    onClick={() => props.onOpenSubject(subject.id)}
-                    aria-current={props.activeSubjectId === subject.id ? "page" : undefined}
-                  >
-                    <GraduationCap size={14} style={{ color: subject.color, flexShrink: 0 }} aria-hidden />
-                    <span className={styles.itemTitle}>{subject.name}</span>
-                    {subject.progress.openThreads > 0 && (
-                      <span className={styles.spaceActiveDot} title={`${subject.progress.openThreads} 个 Thread 进行中`} aria-hidden />
-                    )}
-                  </button>
-                </li>
-              ))}
-            </ul>
+          <div className={styles.group}>
+            <SectionHeader
+              label="学习空间"
+              count={filteredSpaces.length}
+              open={spacesOpen}
+              onToggle={() => setSpacesOpen((value) => !value)}
+            />
+            {spacesOpen && (
+              <ul className={styles.list} data-stagger>
+                {filteredSpaces.map((subject) => (
+                  <li key={subject.id} className={cx(styles.item, props.activeSubjectId === subject.id && styles.active)}>
+                    <button
+                      className={styles.itemButton}
+                      onClick={() => props.onOpenSubject(subject.id)}
+                      aria-current={props.activeSubjectId === subject.id ? "page" : undefined}
+                    >
+                      <span className={styles.spaceRing} style={{ color: subject.color }} aria-hidden />
+                      <span className={styles.itemTitle}>{subject.name}</span>
+                      {subject.progress.openThreads > 0 && (
+                        <span
+                          className={styles.count}
+                          title={`${subject.progress.openThreads} 个 Thread 进行中`}
+                        >
+                          {subject.progress.openThreads}
+                        </span>
+                      )}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         )}
 
-        <div className={styles.recentsHead}>
-          <span className={styles.section}>最近</span>
-          <button
-            type="button"
-            className={cx(styles.recentsTool, (searchOpen || Boolean(query)) && styles.recentsToolOn)}
-            onClick={() => {
-              if (searchOpen) {
-                setQuery("");
-                setSearchOpen(false);
-              } else {
-                setSearchOpen(true);
-              }
-            }}
-            aria-label="搜索历史记录"
-            title="搜索"
-          >
-            <Search size={13} />
-          </button>
+        <div className={styles.group}>
+          <SectionHeader
+            label="最近对话"
+            count={recentChats.length}
+            open={recentsOpen}
+            onToggle={() => setRecentsOpen((value) => !value)}
+          />
+          {recentsOpen && (
+            error && conversations.length === 0 ? (
+              <div className={styles.listError}>
+                <p>{error.message}</p>
+                <button onClick={props.onRetry}>重新加载</button>
+              </div>
+            ) : loading && conversations.length === 0 && subjects.length === 0 ? (
+              <p className={styles.empty}>正在加载…</p>
+            ) : recentChats.length === 0 ? (
+              <p className={styles.empty}>{keyword ? "没有匹配的内容。" : "开始的新对话会显示在这里。"}</p>
+            ) : (
+              <ul className={styles.list} data-stagger>
+                {recentChats.map((conversation) => (
+                  <ConversationItem
+                    key={conversation.id}
+                    conversation={conversation}
+                    active={conversation.id === activeId}
+                    generating={generatingIds.includes(conversation.id)}
+                    onOpen={() => props.onOpen(conversation.id)}
+                    onRename={(title) => props.onRename(conversation.id, title)}
+                    onDelete={() => props.onDelete(conversation.id)}
+                  />
+                ))}
+              </ul>
+            )
+          )}
         </div>
-
-        <div className={cx(styles.inlineSearchWrap, (searchOpen || Boolean(query)) && styles.inlineSearchWrapOpen)}>
-          <div className={styles.inlineSearchInner}>
-            <div className={styles.inlineSearch}>
-              <Search size={12} aria-hidden />
-              <input
-                ref={searchInputRef}
-                value={query}
-                tabIndex={searchOpen || Boolean(query) ? 0 : -1}
-                onChange={(event) => setQuery(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Escape") {
-                    setQuery("");
-                    setSearchOpen(false);
-                  }
-                }}
-                placeholder="筛选最近记录…"
-                aria-label="搜索对话和学习空间"
-              />
-              {query && (
-                <button type="button" onClick={() => setQuery("")} aria-label="清空搜索">
-                  <X size={12} />
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {error && conversations.length === 0 ? (
-          <div className={styles.listError}>
-            <p>{error.message}</p>
-            <button onClick={props.onRetry}>重新加载</button>
-          </div>
-        ) : loading && conversations.length === 0 && subjects.length === 0 ? (
-          <p className={styles.empty}>正在加载…</p>
-        ) : recentChats.length === 0 ? (
-          <p className={styles.empty}>{keyword ? "没有匹配的内容。" : "开始的新对话会显示在这里。"}</p>
-        ) : (
-          <ul className={styles.list} data-stagger>
-            {recentChats.map((conversation) => (
-              <ConversationItem
-                key={conversation.id}
-                conversation={conversation}
-                active={conversation.id === activeId}
-                generating={generatingIds.includes(conversation.id)}
-                onOpen={() => props.onOpen(conversation.id)}
-                onRename={(title) => props.onRename(conversation.id, title)}
-                onDelete={() => props.onDelete(conversation.id)}
-              />
-            ))}
-          </ul>
-        )}
       </div>
 
       <footer className={styles.footer}>

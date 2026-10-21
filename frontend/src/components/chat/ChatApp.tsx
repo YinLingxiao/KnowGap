@@ -2,7 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
-import { Brain, ChevronRight, CircleAlert, Folder, Lightbulb, ListChecks, PanelLeftOpen, RotateCcw, Scale, X } from "lucide-react";
+import {
+  ArrowLeftRight, Brain, ChevronRight, CircleAlert, Dumbbell, FileText, Folder,
+  FolderKanban, Mic, PanelLeftOpen, RotateCcw, X,
+} from "lucide-react";
 import { useChat } from "@/hooks/useChat";
 import type { HealthState } from "@/hooks/useWorkbench";
 import { getAIConfig, type AIConfigStatus } from "@/lib/api/ai-config";
@@ -39,10 +42,18 @@ function viewKey(userId: string) {
 }
 
 const STARTERS = [
-  { icon: Lightbulb, label: "解释一个概念", text: "用直观的类比帮我理解：" },
-  { icon: ListChecks, label: "出一道练习题", text: "围绕下面的主题出一道题，先别给答案：" },
-  { icon: Scale, label: "对比两个概念", text: "对比这两个概念的区别与适用场景：" },
+  { icon: ArrowLeftRight, label: "对比迁移学习", color: "#f43f5e", text: "我之前学过 [某基础]，请用对比迁移的方式帮我理解当前概念，并列出异同点：" },
+  { icon: Mic, label: "费曼反转自测", color: "#3b82f6", text: "我想用费曼学习法自测：请你扮演有疑惑的同桌听我讲，并在我讲漏边界条件时追问我：" },
+  { icon: Dumbbell, label: "联网搜真题练习", color: "#10b981", text: "请帮我搜几道关于「在此填写知识点」的经典真题或母题来练手：" },
+  { icon: FileText, label: "编程代码实验台", color: "#f59e0b", text: "请先讲清「在此填写编程/算法概念」的核心原理，然后给我一个带 TODO 挖空的 `code_playground` 代码实验台让我动手补全并运行：" },
 ];
+
+function formatZhDate(iso: string): string {
+  const m = Number(iso.slice(5, 7));
+  const d = Number(iso.slice(8, 10));
+  if (Number.isFinite(m) && Number.isFinite(d) && m > 0 && d > 0) return `${m}月${d}日`;
+  return iso.slice(5, 10);
+}
 
 /** 首次登录前置破冰访谈的 3 轮辅助快捷回答胶囊 */
 const ONBOARDING_QUICK_REPLIES: string[][] = [
@@ -112,7 +123,6 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
   const [viewRestored, setViewRestored] = useState(false);
   const [health, setHealth] = useState<HealthState>("checking");
   const [modelConfigured, setModelConfigured] = useState<boolean | null>(null);
-  const [modelName, setModelName] = useState("");
   const [onboardingMode, setOnboardingMode] = useState(false);
   const [onboardingConvId, setOnboardingConvId] = useState<string | null>(null);
   const [interview, setInterview] = useState<Awaited<ReturnType<typeof chatApi.onboardingStatus>> | null>(null);
@@ -150,7 +160,6 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
     getAIConfig()
       .then((config) => {
         setModelConfigured(config.configured);
-        setModelName(config.model);
       })
       .catch(() => setModelConfigured(null));
   }, [checkHealth]);
@@ -303,7 +312,6 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
 
   const handleConfigChange = useCallback((config: AIConfigStatus) => {
     setModelConfigured(config.configured);
-    setModelName(config.model);
   }, []);
 
   const openMemories = (ids: string[] = []) => {
@@ -505,15 +513,17 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
                   )}
                   <span className={styles.titleText}>{title}</span>
                 </h1>
-                <button
-                  className={cx(styles.iconButton, memoryOpen && styles.iconButtonOn)}
-                  onClick={() => (memoryOpen ? setMemoryOpen(false) : openMemories())}
-                  aria-expanded={memoryOpen}
-                  aria-label="学习记忆"
-                  title="学习记忆"
-                >
-                  <Brain size={16} aria-hidden />
-                </button>
+                <div className={styles.topbarActions}>
+                  <button
+                    className={cx(styles.iconButton, memoryOpen && styles.iconButtonOn)}
+                    onClick={() => (memoryOpen ? setMemoryOpen(false) : openMemories())}
+                    aria-expanded={memoryOpen}
+                    aria-label="学习记忆"
+                    title="学习记忆"
+                  >
+                    <Brain size={16} aria-hidden />
+                  </button>
+                </div>
               </header>
             {thread && (thread.messages.length > 0 || !thread.loading) ? (
               thread.error && thread.messages.length === 0 ? (
@@ -575,16 +585,29 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
                 <PanelLeftOpen size={16} />
               </button>
             )}
+            <div className={styles.homeTopRight}>
+              <button
+                type="button"
+                className={cx(styles.iconButton, memoryOpen && styles.iconButtonOn)}
+                onClick={() => (memoryOpen ? setMemoryOpen(false) : openMemories())}
+                aria-label="学习记忆"
+                title="学习记忆"
+              >
+                <Brain size={15} aria-hidden />
+              </button>
+            </div>
+
             <div className={styles.homeInner}>
               <div className={styles.heroHead}>
+                <div className={styles.brandLine}>
+                  <Image src="/brand/knowgap-logo-v1.png" alt="" width={20} height={20} className={styles.greetingLogo} />
+                  <span>KnowGap AI</span>
+                </div>
                 <h2 className={styles.greeting}>
-                  <Image src="/brand/knowgap-logo-v1.png" alt="" width={28} height={28} className={styles.greetingLogo} />
-                  <span>{greeting(user.displayName)}</span>
+                  <span>{greeting(user.displayName)}。</span>
                 </h2>
-                <p className={styles.greetingSub}>
-                  直接提问开启对话，或选择下方的学习空间与诊断题。对话中的关键认知会自动提取原话依据并沉淀为长期记忆。
-                </p>
               </div>
+
               {failureBar}
               <Composer
                 hero
@@ -605,36 +628,45 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
                   if (ok && spaceId) setView({ type: "subject", id: spaceId });
                 }}
                 autoFocusKey="new"
-                placeholder={contextSubjectName ? `在「${contextSubjectName}」里，想弄明白什么？` : "今天想弄明白什么？"}
+                placeholder={contextSubjectName ? `在「${contextSubjectName}」里提问、演练或启动任务` : "提问、创建学习空间或启动自测任务"}
               />
-              <div className={styles.homeMeta}>
-                <SubjectPicker
-                  subjects={chat.subjects}
-                  value={chat.draftSubjectId}
-                  onChange={(subjectId) => chat.newChat(subjectId)}
-                  onCreate={() => setSpaceDialog({ select: true })}
-                />
-                <button className={cx(styles.modelChip, modelConfigured === false && styles.modelMissing)} onClick={() => openSettings("models")}>
-                  {modelConfigured === false ? (
-                    <>
-                      <CircleAlert size={13} aria-hidden />
-                      未配置模型
-                    </>
-                  ) : (
-                    modelName || "模型"
-                  )}
-                </button>
-              </div>
-              {!chat.draft && (
-                <div className={styles.starters} data-stagger>
-                  {STARTERS.map(({ icon: Icon, label, text }) => (
-                    <button key={label} className={styles.starter} onClick={() => { chat.setDraft(text); document.getElementById(COMPOSER_ID)?.focus(); }}>
-                      <Icon size={13} aria-hidden />
-                      {label}
+
+              {/* LobeHub 风格：输入框正下方的细长水平快捷条 */}
+              <div className={styles.lobeStrip}>
+                <div className={styles.stripLeft}>
+                  <span className={styles.stripLabel}>快捷</span>
+                  {STARTERS.map(({ icon: Icon, label, color, text }) => (
+                    <button
+                      key={label}
+                      type="button"
+                      className={styles.stripItem}
+                      onClick={() => {
+                        chat.setDraft(text);
+                        document.getElementById(COMPOSER_ID)?.focus();
+                      }}
+                    >
+                      <span className={styles.stripIconBadge} style={{ background: color }} aria-hidden>
+                        <Icon size={10} />
+                      </span>
+                      <span>{label}</span>
                     </button>
                   ))}
                 </div>
-              )}
+                <div className={styles.stripRight}>
+                  <SubjectPicker
+                    subjects={chat.subjects}
+                    value={chat.draftSubjectId}
+                    onChange={(subjectId) => chat.newChat(subjectId)}
+                    onCreate={() => setSpaceDialog({ select: true })}
+                  />
+                  {modelConfigured === false && (
+                    <button className={cx(styles.cockpitHeadBtn, styles.modelMissing)} onClick={() => openSettings("models")}>
+                      <CircleAlert size={12} aria-hidden />
+                      <span>未配置模型</span>
+                    </button>
+                  )}
+                </div>
+              </div>
 
               {/* 间隔重温微追问提醒（P1-5 Spaced Micro-Review） */}
               {reviewTarget && !chat.draft && (
@@ -660,24 +692,29 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
                 </div>
               )}
 
-              {!chat.draftSubjectId && recentSpaces.length > 0 && (
-                <section className={styles.resume} aria-labelledby="resume-title">
-                  <h3 id="resume-title" className={styles.resumeTitle}>继续学习空间</h3>
+              {/* LobeHub 风格：最近话题双行列表 */}
+              {!chat.draftSubjectId && recentTopics.length > 0 && (
+                <section className={styles.resume} aria-labelledby="recent-topics-title">
+                  <div className={styles.resumeHead}>
+                    <h3 id="recent-topics-title" className={styles.resumeTitle}>
+                      <span>最近话题</span>
+                      <span className={styles.resumeCountBadge}>{recentTopics.length}</span>
+                    </h3>
+                  </div>
                   <ul className={styles.resumeList} data-stagger>
-                    {recentSpaces.map((subject) => (
-                      <li key={subject.id}>
-                        <button className={styles.resumeItem} onClick={() => openSpace(subject.id)}>
-                          <div className={styles.resumeItemTop}>
-                            <span className={styles.resumeDot} style={{ background: subject.color }} aria-hidden />
-                            <span className={styles.resumeName}>{subject.name}</span>
-                            <span className={styles.resumeMeta}>
-                              {subject.progress.openThreads > 0 && `${subject.progress.openThreads} 个 Thread 进行中 · `}
-                              {subject.progress.toReview > 0 && `${subject.progress.toReview} 个待巩固 · `}
-                              {studiedLabel(subject.progress.lastStudiedAt)}
-                            </span>
-                            <ChevronRight size={14} className={styles.resumeArrow} aria-hidden />
+                    {recentTopics.map((item) => (
+                      <li key={item.id}>
+                        <button className={styles.lobeRow} onClick={() => showConversation(item.id)}>
+                          <span className={styles.lobeRowIcon} aria-hidden>
+                            <Image src="/brand/knowgap-logo-v1.png" alt="" width={16} height={16} />
+                          </span>
+                          <div className={styles.lobeRowBody}>
+                            <div className={styles.lobeRowTop}>
+                              <span className={styles.lobeRowTitle}>{item.title}</span>
+                              <span className={styles.lobeRowDate}>{formatZhDate(item.updatedAt)}</span>
+                            </div>
+                            {item.preview && <p className={styles.lobeRowPreview}>{item.preview}</p>}
                           </div>
-                          {subject.goal && <p className={styles.resumePreview}>{subject.goal}</p>}
                         </button>
                       </li>
                     ))}
@@ -685,22 +722,38 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
                 </section>
               )}
 
-              {/* 参照 LobeHub 图 3 首页底部「最近话题」双行摘要流 */}
-              {!chat.draftSubjectId && recentTopics.length > 0 && (
-                <section className={styles.resume} aria-labelledby="recent-topics-title">
-                  <h3 id="recent-topics-title" className={styles.resumeTitle}>
-                    最近话题 <span className={styles.resumeCountBadge}>{recentTopics.length}</span>
-                  </h3>
+              {/* LobeHub 风格：继续学习空间双行列表 */}
+              {!chat.draftSubjectId && recentSpaces.length > 0 && (
+                <section className={styles.resume} aria-labelledby="resume-title">
+                  <div className={styles.resumeHead}>
+                    <h3 id="resume-title" className={styles.resumeTitle}>
+                      <span>学习空间</span>
+                      <span className={styles.resumeCountBadge}>{chat.subjects.length}</span>
+                    </h3>
+                    <button type="button" className={styles.cockpitHeadBtn} onClick={() => setView({ type: "spaces" })}>
+                      <span>查看全部 →</span>
+                    </button>
+                  </div>
                   <ul className={styles.resumeList} data-stagger>
-                    {recentTopics.map((item) => (
-                      <li key={item.id}>
-                        <button className={styles.resumeItem} onClick={() => showConversation(item.id)}>
-                          <div className={styles.resumeItemTop}>
-                            <span className={styles.resumeName}>{item.title}</span>
-                            <span className={styles.resumeMeta}>{item.updatedAt.slice(5, 10)}</span>
-                            <ChevronRight size={14} className={styles.resumeArrow} aria-hidden />
+                    {recentSpaces.map((subject) => (
+                      <li key={subject.id}>
+                        <button className={styles.lobeRow} onClick={() => openSpace(subject.id)}>
+                          <span
+                            className={styles.lobeRowIcon}
+                            style={{ background: `color-mix(in srgb, ${subject.color} 16%, transparent)`, color: subject.color }}
+                            aria-hidden
+                          >
+                            <FolderKanban size={13} />
+                          </span>
+                          <div className={styles.lobeRowBody}>
+                            <div className={styles.lobeRowTop}>
+                              <span className={styles.lobeRowTitle}>{subject.name}</span>
+                              <span className={styles.lobeRowDate}>{studiedLabel(subject.progress.lastStudiedAt)}</span>
+                            </div>
+                            <p className={styles.lobeRowPreview}>
+                              {subject.goal || `${subject.progress.openThreads} 个进行中 Thread · ${subject.progress.toReview} 个待巩固认知`}
+                            </p>
                           </div>
-                          {item.preview && <p className={styles.resumePreview}>{item.preview}</p>}
                         </button>
                       </li>
                     ))}

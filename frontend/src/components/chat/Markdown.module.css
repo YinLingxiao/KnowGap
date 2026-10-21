@@ -7,6 +7,10 @@
   text-wrap: pretty;
 }
 
+.markdown ::selection {
+  background: var(--accent-soft-strong, var(--accent-soft));
+}
+
 .markdown > :first-child {
   margin-top: 0;
 }
@@ -61,12 +65,17 @@
   margin: 3px 0 0;
 }
 
+/* 引用块：知隙蓝 2px 实心导轨 + 半透明底色 */
 .markdown blockquote {
-  padding: 8px 16px;
-  border-left: 3px solid var(--accent);
-  border-radius: var(--radius-sm) var(--radius) var(--radius) var(--radius-sm);
-  background: var(--bg-subtle);
+  padding: 8px 14px;
+  border-left: 2px solid var(--accent);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
   color: var(--text-secondary);
+}
+
+.markdown blockquote > :last-child {
+  margin-bottom: 0;
 }
 
 .markdown a {
@@ -80,9 +89,16 @@
   text-decoration-color: currentColor;
 }
 
+.markdown a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
 .markdown hr {
   margin: 20px 0;
   border: 0;
+  border-top: 1px solid var(--border);
 }
 
 .markdown strong {
@@ -91,17 +107,23 @@
 }
 
 .inline {
-  padding: 2px 6px;
+  padding: 1px 5px;
+  border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--bg-subtle);
   color: var(--text);
-  font-size: 0.88em;
+  font-family: var(--font-mono); /* taste-skill-ignore */
+  font-size: 0.86em;
+  font-variant-ligatures: none;
 }
 
+/* 代码终端：金属顶栏 + 内阴影代码区 */
 .codeBlock {
   overflow: hidden;
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
   background: var(--bg-subtle);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 .codeHead {
@@ -109,69 +131,182 @@
   align-items: center;
   justify-content: space-between;
   height: 32px;
-  padding: 0 8px 0 14px;
+  padding: 0 6px 0 12px;
+  border-bottom: 1px solid var(--border-strong);
   background: var(--bg-hover);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
   color: var(--text-tertiary);
   font-size: var(--text-xs);
 }
 
+.codeMeta {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.dots i {
+  display: block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--border-strong);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 10%, transparent);
+}
+
+.dots i:last-child {
+  background: color-mix(in srgb, var(--accent) 70%, var(--border-strong));
+}
+
 .lang {
+  overflow: hidden;
+  font-family: var(--font-mono); /* taste-skill-ignore */
+  font-size: 11px;
   font-weight: 500;
+  letter-spacing: 0.02em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pre {
   margin: 0;
   padding: 12px 14px;
   overflow-x: auto;
+  background: color-mix(in srgb, var(--bg) 55%, var(--bg-subtle));
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.1);
   font-family: var(--font-mono); /* taste-skill-ignore */
   font-size: 13px;
   line-height: 1.65;
   white-space: pre;
+  font-variant-ligatures: none;
+  scrollbar-color: var(--border-strong) transparent;
+  scrollbar-width: thin;
 }
 
 .copy {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  height: 24px;
+  height: 22px;
   padding: 0 8px;
-  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  border-radius: 999px;
   color: var(--text-tertiary);
-  font-size: var(--text-xs);
-  transition: background-color var(--t-hover) var(--ease-out), color var(--t-hover) var(--ease-out);
+  font-size: 11px;
+  font-weight: 500;
+  transition:
+    background-color var(--t-hover) var(--ease-out),
+    border-color var(--t-hover) var(--ease-out),
+    color var(--t-hover) var(--ease-out),
+    transform var(--t-press) var(--ease-out);
 }
 
 .copy:hover {
+  border-color: var(--border-strong);
   background: var(--bg-active);
   color: var(--text);
 }
 
+.copy:active {
+  transform: scale(0.96);
+}
+
+.copy:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.copy[data-copied="true"] {
+  border-color: color-mix(in srgb, var(--green) 40%, var(--border));
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+/* 表格：高对比表头 + 1px 锐利网格线 */
 .tableWrap {
   overflow-x: auto;
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
-  background: var(--bg-subtle);
+  background: var(--bg-elevated);
+  scrollbar-color: var(--border-strong) transparent;
+  scrollbar-width: thin;
 }
 
 .tableWrap table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
 }
 
 .tableWrap th,
 .tableWrap td {
-  padding: 9px 14px;
+  padding: 8px 14px;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
   text-align: left;
   vertical-align: top;
 }
 
+.tableWrap th:last-child,
+.tableWrap td:last-child {
+  border-right: 0;
+}
+
+.tableWrap tbody tr:last-child td {
+  border-bottom: 0;
+}
+
 .tableWrap th {
-  background: var(--bg-hover);
-  color: var(--text-secondary);
-  font-size: var(--text-xs);
+  border-bottom-color: var(--border-strong);
+  background: var(--bg-active);
+  color: var(--text);
+  font-size: 11.5px;
   font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.tableWrap tbody tr {
+  transition: background-color var(--t-hover) var(--ease-out);
+}
+
+.tableWrap tbody tr:hover td {
+  background: var(--bg-hover);
 }
 
 .tableWrap tr > :first-child {
   font-weight: 500;
+}
+
+/* 公式块（KaTeX display） */
+.markdown :global(.katex-display) {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--bg-subtle);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  scrollbar-color: var(--border-strong) transparent;
+  scrollbar-width: thin;
+}
+
+.markdown :global(.katex-display > .katex) {
+  text-align: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .copy,
+  .tableWrap tbody tr {
+    transition: none;
+  }
 }

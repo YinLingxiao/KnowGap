@@ -2,7 +2,7 @@
 
 import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import {
-  ArrowDown, ArrowUpRight, BookOpenCheck, Brain, CheckCircle2, ChevronDown, ChevronUp,
+  ArrowDown, ArrowUpRight, BookOpenCheck, Brain, CheckCircle2, ChevronDown, ChevronRight, ChevronUp,
   Circle, CircleAlert, CircleDashed, CircleStop, CornerDownRight, Dumbbell, FileDown, FileText, Pin, PinOff,
   RotateCcw, Zap,
 } from "lucide-react";
@@ -139,6 +139,10 @@ function ResumeCheckpoint({ onResume }: { onResume: () => Promise<void> }) {
   );
 }
 
+const EXECUTION_LABEL: Record<string, string> = {
+  queued: "排队中", working: "进行中", waiting: "待确认", idle: "空闲", failed: "失败", cancelled: "已取消",
+};
+
 export function MessageList({
   conversationId, messages, problems, memoriesById, conversationSubjectId, subjectNames, phase, followNonce, topSlot,
   onRegenerate, onStartExercise, onOpenMemories, onOpenSummary, onDecideTool, onConfirmProposal, onResumeCheckpoint,
@@ -225,7 +229,8 @@ export function MessageList({
           {pinnedMessages.length > 0 && (
             <nav className={styles.pinBar} aria-label="置顶消息">
               <Pin size={12} className={styles.pinBarIcon} aria-hidden />
-              {pinnedMessages.map((pinned) => (
+              <span className={styles.pinCount}>{String(pinnedMessages.length).padStart(2, "0")}</span>
+              {pinnedMessages.map((pinned, pinIdx) => (
                 <button
                   key={pinned.id}
                   type="button"
@@ -233,7 +238,8 @@ export function MessageList({
                   onClick={() => jumpToMessage(pinned.id)}
                   title={pinned.content}
                 >
-                  {pinPreview(pinned.content)}
+                  <span className={styles.pinIndex} aria-hidden>{String(pinIdx + 1).padStart(2, "0")}</span>
+                  <span className={styles.pinText}>{pinPreview(pinned.content)}</span>
                 </button>
               ))}
             </nav>
@@ -325,6 +331,7 @@ export function MessageList({
                     title={card.summary}
                   >
                     <i className={cx(styles.pillDot, isIdle ? styles.dot_hollow : styles[`dot_${card.status}`])} aria-hidden />
+                    <span className={styles.pillId}>{EXECUTION_LABEL[card.status] ?? card.status}</span>
                     <span className={styles.pillTitle}>{card.title}</span>
                     {card.summary && <span className={styles.pillSummary}>{card.summary}</span>}
                   </button>
@@ -412,12 +419,19 @@ export function MessageList({
                   </div>
                 )}
                 {visibleTools.length > 0 && (
-                  <div className={styles.toolChecklist}>
+                  <div className={cx(styles.toolChecklist, styles.traceBox)}>
+                    <div className={styles.traceHead}>
+                      <span className={styles.traceTitle}>工具调用</span>
+                      <span className={styles.traceBadge}>
+                        {visibleTools.filter((call) => Boolean(call.output)).length}/{visibleTools.length} 步
+                      </span>
+                    </div>
                     {visibleTools.map((call) => {
                       const done = Boolean(call.output);
                       return (
                         <details key={call.id} className={styles.toolCheckItem}>
                           <summary>
+                            <ChevronRight size={12} className={styles.traceChevron} aria-hidden />
                             {done ? (
                               call.ok ? (
                                 <CheckCircle2 size={14} className={styles.toolIconDone} aria-hidden />
@@ -522,7 +536,7 @@ export function MessageList({
                 )}
 
                 {!streaming && (
-                  <div className={styles.assistantMeta}>
+                  <div className={cx(styles.assistantMeta, styles.metaBar)}>
                     {used.length > 0 && (
                       <button className={cx(styles.note, styles.memoryNote)} onClick={() => onOpenMemories(used)}>
                         <Brain size={12} aria-hidden />
@@ -541,27 +555,29 @@ export function MessageList({
                         做这道练习：{suggested.title}
                       </button>
                     )}
-                    {message.content && message.status !== "failed" && <CopyButton text={message.content} className={styles.action} />}
                     {message.content && message.status !== "failed" && (
-                      <button
-                        className={cx(styles.action, pinned && styles.actionOn)}
-                        onClick={() => togglePin(message.id)}
-                        aria-pressed={pinned}
-                        title={pinned ? "取消置顶" : "置顶这条消息"}
-                      >
-                        {pinned ? <PinOff size={13} aria-hidden /> : <Pin size={13} aria-hidden />}
-                        <span>{pinned ? "取消置顶" : "置顶"}</span>
-                      </button>
-                    )}
-                    {finished && (
-                      <button
-                        className={cx(styles.action, savedId === message.id && styles.actionOn)}
-                        onClick={() => saveToPage(message)}
-                        title="把这条回复存入学习空间的笔记页"
-                      >
-                        <FileDown size={13} aria-hidden />
-                        <span>{savedId === message.id ? "已发送到笔记" : "存入空间笔记"}</span>
-                      </button>
+                      <div className={styles.actionGroup} role="group" aria-label="消息操作">
+                        <CopyButton text={message.content} className={styles.action} />
+                        <button
+                          className={cx(styles.action, pinned && styles.actionOn)}
+                          onClick={() => togglePin(message.id)}
+                          aria-pressed={pinned}
+                          title={pinned ? "取消置顶" : "置顶这条消息"}
+                        >
+                          {pinned ? <PinOff size={13} aria-hidden /> : <Pin size={13} aria-hidden />}
+                          <span>{pinned ? "取消置顶" : "置顶"}</span>
+                        </button>
+                        {finished && (
+                          <button
+                            className={cx(styles.action, savedId === message.id && styles.actionOn)}
+                            onClick={() => saveToPage(message)}
+                            title="把这条回复存入学习空间的笔记页"
+                          >
+                            <FileDown size={13} aria-hidden />
+                            <span>{savedId === message.id ? "已发送到笔记" : "存入空间笔记"}</span>
+                          </button>
+                        )}
+                      </div>
                     )}
                     {isLast && message.status !== "failed" && (
                       <button className={styles.action} onClick={onRegenerate} disabled={phase !== null && phase !== "analyzing"}>

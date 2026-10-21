@@ -7,11 +7,12 @@
   place-items: center;
   padding: 24px;
   background: rgb(0 0 0 / 52%);
-  backdrop-filter: blur(4px);
-  animation: backdrop-fade 200ms var(--ease-out);
+  backdrop-filter: blur(8px);
+  animation: backdrop-fade 220ms var(--ease-out);
 }
 
 .dialog {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -22,9 +23,18 @@
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-xl);
   background: var(--bg-elevated);
-  box-shadow: var(--shadow-popover);
+  box-shadow: var(--shadow-popover), inset 0 1px 0 rgb(255 255 255 / 6%);
   transform-origin: center;
-  animation: modal-spring 240ms var(--ease-spring);
+  animation: modal-spring 280ms var(--ease-spring);
+}
+
+.dialog::before {
+  content: "";
+  position: absolute;
+  inset: 0 20px auto;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 22%), transparent);
+  pointer-events: none;
 }
 
 @keyframes backdrop-fade {
@@ -37,7 +47,15 @@
 @keyframes modal-spring {
   from {
     opacity: 0;
-    transform: translateY(10px) scale(0.96);
+    transform: translateY(12px) scale(0.965);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .backdrop,
+  .dialog,
+  .colorPopover {
+    animation: none;
   }
 }
 

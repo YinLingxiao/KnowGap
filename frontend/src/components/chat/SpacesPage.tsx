@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  ArrowUpDown, GraduationCap, MoreHorizontal, PanelLeftOpen,
+  ArrowUpDown, GraduationCap, LayoutGrid, List, MoreHorizontal, PanelLeftOpen,
   Plus, Search, X,
 } from "lucide-react";
 import { levelLabel, studiedLabel } from "@/lib/chat/space";
@@ -32,11 +32,20 @@ export function SpacesPage(props: SpacesPageProps) {
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [sort, setSort] = useState<SortKey>("studied");
+  const [layout, setLayout] = useState<"grid" | "list">("grid");
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
   const [menuId, setMenuId] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const sortRef = useRef<HTMLDivElement>(null);
+  const totalOpenThreads = useMemo(
+    () => props.subjects.reduce((sum, s) => sum + (s.progress.openThreads ?? 0), 0),
+    [props.subjects],
+  );
+  const totalReview = useMemo(
+    () => props.subjects.reduce((sum, s) => sum + (s.progress.toReview ?? 0), 0),
+    [props.subjects],
+  );
 
   useEffect(() => {
     if (searchOpen) searchInputRef.current?.focus();
@@ -75,9 +84,34 @@ export function SpacesPage(props: SpacesPageProps) {
 
       <div className={styles.container}>
         <header className={styles.header}>
-          <h1>学习空间</h1>
+          <div className={styles.titleGroup}>
+            <h1>学习空间</h1>
+            <span className={styles.summaryBadge}>
+              {props.subjects.length} 空间 · {totalOpenThreads} 进行中 Thread · {totalReview} 待巩固
+            </span>
+          </div>
 
           <div className={styles.actions}>
+            <div className={styles.layoutSwitch} role="group" aria-label="视图切换">
+              <button
+                type="button"
+                className={cx(styles.layoutBtn, layout === "grid" && styles.layoutBtnOn)}
+                onClick={() => setLayout("grid")}
+                aria-label="卡片网格视图"
+                title="卡片网格视图"
+              >
+                <LayoutGrid size={14} />
+              </button>
+              <button
+                type="button"
+                className={cx(styles.layoutBtn, layout === "list" && styles.layoutBtnOn)}
+                onClick={() => setLayout("list")}
+                aria-label="Linear 紧凑列表视图"
+                title="Linear 紧凑列表视图"
+              >
+                <List size={14} />
+              </button>
+            </div>
             <div className={cx(styles.searchBox, (searchOpen || Boolean(query)) && styles.searchBoxOpen)}>
               <button
                 type="button"
@@ -180,7 +214,7 @@ export function SpacesPage(props: SpacesPageProps) {
         ) : shown.length === 0 ? (
           <p className={styles.muted}>没有匹配的学习空间。</p>
         ) : (
-          <div className={styles.grid} data-stagger>
+          <div className={cx(styles.grid, layout === "list" && styles.listMode)} data-stagger>
             {shown.map((subject) => (
               <article
                 key={subject.id}

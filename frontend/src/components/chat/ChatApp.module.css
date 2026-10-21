@@ -1,10 +1,10 @@
-/* 整体布局：参照 Claude Web（左侧栏 + 1px 细分隔线 + 居中主画布 + 丝滑收折过渡） */
+/* 整体布局：Linear 2026 桌面端架构（底层暗色底壳 + 左侧高密度边栏 + 右侧内嵌圆角悬浮主画布 Inset Viewport） */
 .app {
   display: grid;
   grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
   height: 100dvh;
   overflow: hidden;
-  background: var(--bg);
+  background: var(--bg-app-shell, var(--bg-sidebar));
   transition: grid-template-columns var(--t-sidebar) var(--ease-out);
 }
 
@@ -16,8 +16,8 @@
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  border-right: 1px solid var(--border);
-  background: var(--bg-sidebar);
+  border-right: 1px solid transparent;
+  background: var(--bg-app-shell, var(--bg-sidebar));
   transition: border-color var(--t-sidebar) var(--ease-out);
 }
 
@@ -55,6 +55,7 @@
   bottom: 0;
   left: 0;
   width: min(280px, 86vw);
+  border-right: 1px solid var(--border);
   box-shadow: var(--shadow-popover);
   transform: translateX(0);
   transition: transform var(--t-sidebar) var(--ease-out);
@@ -76,7 +77,8 @@
   z-index: 35;
   inset: 0;
   border: 0;
-  background: rgb(0 0 0 / 35%);
+  background: rgb(0 0 0 / 42%);
+  backdrop-filter: blur(3px);
   opacity: 0;
   pointer-events: none;
   transition: opacity var(--t-ui) var(--ease-out);
@@ -93,23 +95,74 @@
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  background: var(--bg-glow), var(--bg);
+  margin: 6px 6px 6px 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  box-shadow: var(--specular-top, inset 0 1px 0 rgba(255, 255, 255, 0.04));
   overflow: hidden;
+  transition: margin var(--t-sidebar) var(--ease-out);
+}
+
+.sidebarClosed .main {
+  margin: 6px;
+}
+
+.narrow .main {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .main > * {
   animation: view-in 240ms var(--ease-spring) backwards;
 }
 
-/* ---------------------------------------------------------------- 对话页 */
+/* ---------------------------------------------------------------- 对话页 Linear View Header */
 
 .topbar {
   display: flex;
   flex-shrink: 0;
   align-items: center;
   gap: 8px;
-  height: var(--topbar-h);
-  padding: 0 14px 0 16px;
+  height: 44px;
+  padding: 0 12px 0 14px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: color-mix(in srgb, var(--bg) 86%, transparent);
+  backdrop-filter: blur(12px);
+}
+
+.topbarActions {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.cmdBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+  font-size: 11.5px;
+  font-weight: 500;
+  box-shadow: var(--specular-top);
+  transition:
+    background-color var(--t-hover) var(--ease-out),
+    border-color var(--t-hover) var(--ease-out),
+    color var(--t-hover) var(--ease-out);
+}
+
+.cmdBtn:hover {
+  border-color: var(--border-strong);
+  background: var(--bg-hover);
+  color: var(--text);
 }
 
 .title {
@@ -272,15 +325,17 @@
   color: var(--text-tertiary);
 }
 
-/* ---------------------------------------------------------------- 首页：严格居中，参照 Claude Web */
+/* ---------------------------------------------------------------- 首页：参照 LobeHub 极简左对齐布局 + 细长快捷条 + 双行话题列表 */
 
 .home {
+  position: relative;
   display: flex;
   flex: 1;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   min-height: 0;
-  padding: 24px 20px 10vh;
+  padding: 24px 24px 8vh;
   overflow-y: auto;
 }
 
@@ -288,8 +343,20 @@
 .floatingToggle {
   animation: toggle-pop 200ms var(--ease-spring) backwards;
   position: absolute;
-  top: 14px;
+  top: 10px;
   left: 12px;
+  z-index: 10;
+}
+
+/* 右上角极简工具图标（参照 LobeHub 右上角双图标） */
+.homeTopRight {
+  position: absolute;
+  top: 10px;
+  right: 14px;
+  z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 @keyframes toggle-pop {
@@ -304,125 +371,104 @@
   flex-direction: column;
   align-items: stretch;
   width: 100%;
-  max-width: 640px;
+  max-width: 720px;
+  margin: auto;
 }
 
 .heroHead {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 24px;
+  gap: 8px;
+  margin-bottom: 20px;
   text-align: center;
+}
+
+.brandLine {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--text);
+  font-size: 13.5px;
+  font-weight: 600;
 }
 
 .greeting {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  font-size: 30px;
+  gap: 10px;
+  font-size: 26px;
   font-weight: 600;
   line-height: 1.25;
-  letter-spacing: -0.015em;
+  letter-spacing: -0.02em;
   text-align: center;
   color: var(--text);
 }
 
 .greetingLogo {
-  filter: drop-shadow(0 4px 12px color-mix(in srgb, var(--accent) 34%, transparent));
+  border-radius: 6px;
 }
 
-.starters {
+/* LobeHub 风格：输入框正下方的细长水平快捷条 */
+.lobeStrip {
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
-  gap: 8px;
-  margin-top: 18px;
-}
-
-.starter {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 32px;
-  padding: 0 12px;
-  border: 1px solid var(--border-strong);
-  border-radius: 999px;
-  background: var(--bg-elevated);
-  color: var(--text-secondary);
-  font-size: var(--text-xs);
-  box-shadow: var(--shadow-card);
-}
-
-.starter > svg {
-  color: var(--accent);
-}
-
-.starter:hover {
-  border-color: color-mix(in srgb, var(--accent) 45%, var(--border-strong));
-  color: var(--text);
-  transform: translateY(-1px);
-}
-
-.greetingSub {
-  margin: 0 auto;
-  color: var(--text-tertiary);
-  font-size: var(--text-sm);
-  line-height: 1.6;
-  text-align: center;
-}
-
-.homeMeta {
-  display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 10px;
   margin-top: 8px;
-  padding: 0 4px;
+  padding: 6px 12px;
+  border-radius: 10px;
+  background: var(--bg-subtle);
 }
 
-.modelChip {
+.stripLeft {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.stripLabel {
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
+.stripItem {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 26px;
-  padding: 0 8px;
-  border-radius: var(--radius);
-  color: var(--text-tertiary);
-  font-size: var(--text-xs);
-  transition: background-color var(--t-hover) var(--ease-out), color var(--t-hover) var(--ease-out);
-}
-
-.modelChip:hover {
-  background: var(--bg-hover);
+  padding: 2px 4px;
+  border-radius: 6px;
   color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+  transition: opacity var(--t-hover) var(--ease-out), transform var(--t-press) var(--ease-out);
 }
 
-.modelMissing {
-  color: var(--orange);
+.stripItem:hover {
+  opacity: 0.85;
+  transform: translateY(-0.5px);
 }
 
-.resume {
-  margin-top: 30px;
+.stripIconBadge {
+  display: inline-grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  color: #ffffff;
 }
 
-.resumeTitle {
-  display: flex;
+.stripRight {
+  display: inline-flex;
+  flex-shrink: 0;
   align-items: center;
   gap: 6px;
-  padding: 0 10px 8px;
-  color: var(--text-tertiary);
-  font-size: var(--text-xs);
-  font-weight: 500;
-}
-
-.resumeCountBadge {
-  padding: 0 6px;
-  border-radius: 999px;
-  background: var(--bg-subtle);
-  color: var(--text-secondary);
-  font-size: 11px;
 }
 
 /* 间隔重温微追问提醒条 */
@@ -432,12 +478,11 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin-top: 18px;
-  padding: 10px 14px;
-  border: 1px solid color-mix(in srgb, var(--orange) 35%, var(--border-strong));
-  border-radius: 12px;
-  background: var(--bg-elevated);
-  box-shadow: var(--shadow-card);
+  margin-top: 12px;
+  padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--orange) 32%, var(--border));
+  border-radius: 10px;
+  background: var(--bg-subtle);
 }
 
 .spacedReviewBody {
@@ -452,7 +497,7 @@
 .spacedReviewTag {
   flex-shrink: 0;
   padding: 2px 7px;
-  border-radius: 999px;
+  border-radius: 5px;
   background: var(--orange-soft);
   color: var(--orange);
   font-size: 11px;
@@ -472,11 +517,11 @@
 
 .spacedReviewBtn {
   flex-shrink: 0;
-  height: 26px;
-  padding: 0 10px;
+  height: 24px;
+  padding: 0 9px;
   border: 1px solid var(--border-strong);
-  border-radius: 999px;
-  background: var(--bg-subtle);
+  border-radius: 6px;
+  background: var(--bg-elevated);
   color: var(--text);
   font-size: 11.5px;
   font-weight: 500;
@@ -487,79 +532,126 @@
   background: var(--bg-hover);
 }
 
+/* LobeHub 风格底部列表区（最近话题 & 学习空间） */
+.resume {
+  margin-top: 28px;
+}
+
+.resumeHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 4px 10px;
+}
+
+.resumeTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.resumeCountBadge {
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.cockpitHeadBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 5px;
+  color: var(--text-tertiary);
+  font-size: 11.5px;
+  transition: background-color var(--t-hover) var(--ease-out), color var(--t-hover) var(--ease-out);
+}
+
+.cockpitHeadBtn:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
 .resumeList {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
 
-.resumeItem {
+.lobeRow {
   display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 3px;
+  align-items: flex-start;
+  gap: 12px;
   width: 100%;
-  padding: 9px 12px;
+  padding: 10px 8px;
   border-radius: 10px;
   text-align: left;
   transition: background-color var(--t-hover) var(--ease-out);
 }
 
-.resumeItemTop {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-}
-
-.resumePreview {
-  overflow: hidden;
-  color: var(--text-tertiary);
-  font-size: 12px;
-  line-height: 1.45;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.resumeItem:hover {
+.lobeRow:hover {
   background: var(--bg-hover);
 }
 
-.resumeDot {
+.lobeRowIcon {
+  display: inline-grid;
   flex-shrink: 0;
-  width: 8px;
-  height: 8px;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin-top: 1px;
   border-radius: 50%;
+  background: var(--bg-subtle);
+  color: var(--accent);
 }
 
-.resumeName {
-  overflow: hidden;
+.lobeRowBody {
+  display: flex;
   flex: 1;
+  flex-direction: column;
+  gap: 3px;
   min-width: 0;
-  font-size: var(--text-md);
-  font-weight: 500;
+}
+
+.lobeRowTop {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.lobeRowTitle {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.resumeMeta {
+.lobeRowDate {
   flex-shrink: 0;
   color: var(--text-tertiary);
-  font-size: var(--text-xs);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
 }
 
-.resumeArrow {
-  flex-shrink: 0;
+.lobeRowPreview {
+  overflow: hidden;
   color: var(--text-tertiary);
-  opacity: 0;
-  transform: translateX(-3px);
-  transition: opacity var(--t-hover) var(--ease-out), transform var(--t-hover) var(--ease-out);
-}
-
-.resumeItem:hover .resumeArrow,
-.resumeItem:focus-visible .resumeArrow {
-  opacity: 1;
-  transform: none;
+  font-size: 12.5px;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ---------------------------------------------------------------- 首次登录前置破冰访谈 */

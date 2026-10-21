@@ -5,14 +5,15 @@
     "Microsoft YaHei UI", "Microsoft YaHei", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", "Cascadia Code", "SF Mono", Consolas, monospace;
 
-  /* 浅色模式：纯净雪白 + 冷雾银灰 + 知隙蓝 */
+  /* 浅色模式 Linear Alabaster & Ink：浅雾灰底壳衬托纯白悬浮主画布 */
+  --bg-app-shell: #f1f3f6;
   --bg: #ffffff;
-  --bg-sidebar: #f5f6f8;
+  --bg-sidebar: #f1f3f6;
   --bg-panel: #f7f8fa;
   --bg-elevated: #ffffff;
   --bg-subtle: #f1f3f6;
-  --bg-hover: #eaedf2;
-  --bg-active: #e1e5ec;
+  --bg-hover: rgba(15, 23, 42, 0.05);
+  --bg-active: rgba(15, 23, 42, 0.08);
   --bg-user-bubble: #eef2ff;
   --bg-glow: radial-gradient(900px 480px at 18% -8%, rgb(59 130 246 / 6%), transparent 70%);
 
@@ -22,7 +23,7 @@
 
   --text: #111318;
   --text-secondary: #525866;
-  --text-tertiary: #7b8190;
+  --text-tertiary: #667085;
 
   --ink-solid: #111318;
   --ink-solid-hover: #262a34;
@@ -47,7 +48,8 @@
   --amber-soft: rgb(158 111 14 / 10%);
   --grey: #828896;
 
-  --shadow-card: 0 1px 2px rgb(15 23 42 / 4%), 0 0 0 1px rgb(15 23 42 / 2%);
+  --specular-top: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 0 0 1px rgba(15, 23, 42, 0.06);
   --shadow-elevated: 0 1px 3px rgb(15 23 42 / 5%), 0 8px 24px rgb(15 23 42 / 6%);
   --shadow-popover: 0 0 0 1px rgb(15 23 42 / 8%), 0 16px 40px rgb(15 23 42 / 14%);
 
@@ -99,28 +101,29 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    /* Obsidian & Cobalt：曜石黑与知隙蓝（呼应蓝色品牌 Logo，告别黄褐 Claude 皮囊） */
-    --bg: #111215;
-    --bg-sidebar: #0c0d10;
-    --bg-panel: #0e1014;
-    --bg-elevated: #181a1f;
-    --bg-subtle: #15171c;
-    --bg-hover: #1e2128;
-    --bg-active: #262a33;
-    --bg-user-bubble: #192234;
-    --bg-glow: radial-gradient(900px 480px at 18% -8%, rgb(79 128 245 / 8%), transparent 70%);
+    /* LobeHub & Linear Pure Carbon：纯净深邃碳黑阶梯 */
+    --bg-app-shell: #060608;
+    --bg-sidebar: #09090b;
+    --bg: #08080a;
+    --bg-panel: #101013;
+    --bg-subtle: #141418;
+    --bg-elevated: #141417;
+    --bg-hover: rgba(255, 255, 255, 0.05);
+    --bg-active: rgba(255, 255, 255, 0.08);
+    --bg-user-bubble: #181f2e;
+    --bg-glow: none;
 
-    --border: rgb(255 255 255 / 7%);
-    --border-subtle: rgb(255 255 255 / 5%);
-    --border-strong: rgb(255 255 255 / 13%);
+    --border: rgba(255, 255, 255, 0.075);
+    --border-subtle: rgba(255, 255, 255, 0.045);
+    --border-strong: rgba(255, 255, 255, 0.11);
 
-    --text: #f0f2f5;
-    --text-secondary: #9ba1ae;
-    --text-tertiary: #686f7e;
+    --text: #f2f3f5;
+    --text-secondary: #989ea8;
+    --text-tertiary: #6e7480;
 
-    --ink-solid: #f0f2f5;
-    --ink-solid-hover: #dcdfe6;
-    --on-ink: #0c0d10;
+    --ink-solid: #ffffff;
+    --ink-solid-hover: #e5e7eb;
+    --on-ink: #08080a;
 
     --accent: #4f80f5;
     --accent-hover: #6390f8;
@@ -141,35 +144,37 @@
     --amber-soft: rgb(217 162 59 / 13%);
     --grey: #686f7e;
 
-    --shadow-card: inset 0 1px 0 rgb(255 255 255 / 4%), 0 2px 8px rgb(0 0 0 / 24%);
-    --shadow-elevated: inset 0 1px 0 rgb(255 255 255 / 5%), 0 8px 28px rgb(0 0 0 / 34%);
-    --shadow-popover: 0 0 0 1px rgb(255 255 255 / 9%), 0 16px 40px rgb(0 0 0 / 55%);
+    --specular-top: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.28);
+    --shadow-elevated: 0 8px 28px rgba(0, 0, 0, 0.36);
+    --shadow-popover: 0 20px 48px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.09);
   }
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #111215;
-  --bg-sidebar: #0c0d10;
-  --bg-panel: #0e1014;
-  --bg-elevated: #181a1f;
-  --bg-subtle: #15171c;
-  --bg-hover: #1e2128;
-  --bg-active: #262a33;
-  --bg-user-bubble: #192234;
-  --bg-glow: radial-gradient(900px 480px at 18% -8%, rgb(79 128 245 / 8%), transparent 70%);
+  --bg-app-shell: #060608;
+  --bg-sidebar: #09090b;
+  --bg: #08080a;
+  --bg-panel: #101013;
+  --bg-subtle: #141418;
+  --bg-elevated: #141417;
+  --bg-hover: rgba(255, 255, 255, 0.05);
+  --bg-active: rgba(255, 255, 255, 0.08);
+  --bg-user-bubble: #181f2e;
+  --bg-glow: none;
 
-  --border: rgb(255 255 255 / 7%);
-  --border-subtle: rgb(255 255 255 / 5%);
-  --border-strong: rgb(255 255 255 / 13%);
+  --border: rgba(255, 255, 255, 0.075);
+  --border-subtle: rgba(255, 255, 255, 0.045);
+  --border-strong: rgba(255, 255, 255, 0.11);
 
-  --text: #f0f2f5;
-  --text-secondary: #9ba1ae;
-  --text-tertiary: #686f7e;
+  --text: #f2f3f5;
+  --text-secondary: #989ea8;
+  --text-tertiary: #6e7480;
 
-  --ink-solid: #f0f2f5;
-  --ink-solid-hover: #dcdfe6;
-  --on-ink: #0c0d10;
+  --ink-solid: #ffffff;
+  --ink-solid-hover: #e5e7eb;
+  --on-ink: #08080a;
 
   --accent: #4f80f5;
   --accent-hover: #6390f8;
@@ -190,9 +195,10 @@
   --amber-soft: rgb(217 162 59 / 13%);
   --grey: #686f7e;
 
-  --shadow-card: inset 0 1px 0 rgb(255 255 255 / 4%), 0 2px 8px rgb(0 0 0 / 24%);
-  --shadow-elevated: inset 0 1px 0 rgb(255 255 255 / 5%), 0 8px 28px rgb(0 0 0 / 34%);
-  --shadow-popover: 0 0 0 1px rgb(255 255 255 / 9%), 0 16px 40px rgb(0 0 0 / 55%);
+  --specular-top: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  --shadow-card: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 2px 6px rgba(0, 0, 0, 0.32), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  --shadow-elevated: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 10px 30px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.07);
+  --shadow-popover: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 20px 48px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.1);
 }
 
 *,
@@ -233,22 +239,41 @@ p {
   text-wrap: pretty;
 }
 
+/* 回退路径（明暗不变、减弱动态、浏览器不支持 View Transitions）：
+   所有元素在同一帧换色。只给部分标签加过渡会让文字先变、背景晚变，看起来像局部延迟变色。 */
 html.theme-switching,
-html.theme-switching body,
-html.theme-switching aside,
-html.theme-switching main,
-html.theme-switching div,
-html.theme-switching section,
-html.theme-switching header,
-html.theme-switching footer,
-html.theme-switching button,
-html.theme-switching input,
-html.theme-switching textarea {
-  transition:
-    background-color 180ms var(--ease),
-    border-color 180ms var(--ease),
-    color 180ms var(--ease),
-    box-shadow 180ms var(--ease);
+html.theme-switching *,
+html.theme-switching *::before,
+html.theme-switching *::after {
+  transition: none !important;
+}
+
+/* 深浅色切换：
+   无论 expand（深->浅，由按钮向外扩散）还是 contract（浅->深，由四周向按钮收缩），
+   永远保持底层 ::view-transition-old(root) 100% 无裁剪静止衬底 (z-index: 1)，
+   仅对顶层 ::view-transition-new(root) (z-index: 9999) 应用 var(--vt-clip-from) -> var(--vt-clip-to)。
+   contract 使用 path(evenodd, 外矩形 + 收缩内圆洞) 裁剪新视图，彻底根除 Chromium 裁剪旧快照引发的合成闪烁。 */
+html[data-vt-dir],
+html[data-vt-dir] *,
+html[data-vt-dir] *::before,
+html[data-vt-dir] *::after {
+  transition: none !important;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+html[data-vt-dir]::view-transition-old(root) {
+  z-index: 1;
+}
+
+html[data-vt-dir]::view-transition-new(root) {
+  z-index: 9999;
+  /* 第 0 帧静态保护：在 transition.ready 挂载 Web Animation 前，新视图严格保持起始裁剪态（0% 可见），绝不抢跑闪屏 */
+  clip-path: var(--vt-clip-from);
 }
 
 button,
@@ -289,6 +314,25 @@ code,
 kbd {
   font-family: var(--font-mono);
   font-variant-ligatures: none;
+}
+
+/* Linear 风格微立体键帽 */
+kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  padding: 1px 5px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-subtle);
+  box-shadow: inset 0 -1px 0 var(--border-strong);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.4;
+  white-space: nowrap;
 }
 
 :focus-visible:not(input):not(textarea) {

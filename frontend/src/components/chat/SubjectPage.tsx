@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Brain, CheckCircle2, ChevronDown, ChevronRight, Download, FileText, Folder, GraduationCap, History, Link2, ListTodo,
+  Brain, CalendarDays, CheckCircle2, ChevronDown, ChevronRight, Download, FileText, Folder, GraduationCap, History, Link2, ListTodo,
   Maximize2, MessagesSquare, Mic, Minimize2, MoreHorizontal, NotebookPen,
-  PanelLeftOpen, Plus, RotateCcw, Settings, SlidersHorizontal, Trash2, Upload, X,
+  PanelLeftOpen, Plus, RotateCcw, Settings, SlidersHorizontal, Target, Trash2, Upload, X,
 } from "lucide-react";
 import { WIDGET_ASK_EVENT } from "./LearningWidget";
 import type { ChatController } from "@/hooks/useChat";
@@ -350,11 +350,23 @@ export function SubjectPage({
             </button>
           )}
           <span className={styles.spaceIcon} style={{ color: subject.color }} aria-hidden>
-            <GraduationCap size={16} />
+            <GraduationCap size={13} />
           </span>
           <div className={styles.heading}>
             <h1>{subject.name}</h1>
             {levelLabel(subject.level) && <span className={styles.tag}>{levelLabel(subject.level)}</span>}
+            {subject.deadline && (
+              <span className={styles.metaPill} title={`截止 ${subject.deadline}`}>
+                <CalendarDays size={11} aria-hidden />
+                <span>{subject.deadline}</span>
+              </span>
+            )}
+            {subject.goal && (
+              <span className={cx(styles.metaPill, styles.metaGoal)} title={`目标：${subject.goal}`}>
+                <Target size={11} aria-hidden />
+                <span>{subject.goal}</span>
+              </span>
+            )}
           </div>
 
           <div className={styles.tools} role="group" aria-label="空间操作">
@@ -472,7 +484,7 @@ export function SubjectPage({
                   <section className={styles.anchorCard} aria-label="迁移学习先验锚点">
                     <div className={styles.anchorHead}>
                       <Link2 size={13} aria-hidden />
-                      <strong>🔗 迁移学习先验锚点</strong>
+                      <strong>迁移学习先验锚点</strong>
                     </div>
                     <p className={styles.anchorDesc}>
                       选一个你已经掌握的旧知，AI 会把「{subject.name}」的新概念与它做对比映射，并提醒负迁移误区。
@@ -608,7 +620,8 @@ export function SubjectPage({
                   aria-label="课程资料"
                   title="课程资料"
                 >
-                  <FileText size={14} />
+                  <FileText size={14} aria-hidden />
+                  <span className={styles.tabLabel}>资料</span>
                 </button>
                 <button
                   type="button"
@@ -619,7 +632,8 @@ export function SubjectPage({
                   aria-label="空间学习记忆"
                   title={`空间学习记忆 (${spaceMemories.length})`}
                 >
-                  <Brain size={14} />
+                  <Brain size={14} aria-hidden />
+                  <span className={styles.tabLabel}>记忆</span>
                 </button>
                 <button
                   type="button"
@@ -630,7 +644,8 @@ export function SubjectPage({
                   aria-label="空间概览与教学说明"
                   title="空间概览与教学说明"
                 >
-                  <SlidersHorizontal size={14} />
+                  <SlidersHorizontal size={14} aria-hidden />
+                  <span className={styles.tabLabel}>概览</span>
                 </button>
               </div>
             )}
@@ -698,6 +713,8 @@ export function SubjectPage({
               doneThreads={doneThreads}
               usage={usage?.conversations ?? {}}
               onOpen={openThread}
+              onResolve={(id) => void beginResolve(id)}
+              onReopen={(id) => void reopen(id)}
             />
           )}
           {panel.mode === "pages" && (
@@ -835,7 +852,10 @@ export function SubjectPage({
 
                     {spaceMemories.filter((m) => m.kind === "misconception" && m.status !== "resolved").length > 0 && (
                       <div className={styles.footprintGroup}>
-                        <p className={styles.footprintGroupHead}>🔴 待攻克薄弱点</p>
+                        <p className={styles.footprintGroupHead}>
+                          <i className={cx(styles.headDot, styles.headDotRed)} aria-hidden />
+                          待攻克薄弱点
+                        </p>
                         {spaceMemories
                           .filter((m) => m.kind === "misconception" && m.status !== "resolved")
                           .map((m) => (
@@ -865,7 +885,10 @@ export function SubjectPage({
 
                     {(doneThreads.length > 0 || spaceMemories.some((m) => m.kind === "mastery" || m.status === "resolved")) && (
                       <div className={styles.footprintGroup}>
-                        <p className={styles.footprintGroupHead}>🟢 已掌握与已归档</p>
+                        <p className={styles.footprintGroupHead}>
+                          <i className={cx(styles.headDot, styles.headDotGreen)} aria-hidden />
+                          已掌握与已归档
+                        </p>
                         {doneThreads.map((t) => (
                           <button
                             key={t.id}
@@ -953,14 +976,60 @@ export function SubjectPage({
 
 const executionLabel = { queued: "已排队", working: "正在执行", waiting: "等待你", idle: "本轮完成", failed: "执行失败", cancelled: "已停止" };
 
+type RingKind = "idle" | "working" | "waiting" | "failed" | "done";
+
+function ringKind(status: ConversationSummary["executionStatus"], resolved: boolean): RingKind {
+  if (resolved) return "done";
+  if (status === "working" || status === "queued") return "working";
+  if (status === "waiting") return "waiting";
+  if (status === "failed") return "failed";
+  return "idle";
+}
+
+/** Linear 式状态圆环：进行中蓝色弧环、已完成绿色实心勾、空闲虚线环。 */
+function StatusRing({ kind }: { kind: RingKind }) {
+  return (
+    <svg className={cx(styles.ring, styles[`ring_${kind}`])} width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden>
+      {kind === "done" ? (
+        <>
+          <circle cx="8" cy="8" r="7" fill="currentColor" />
+          <path d="M4.8 8.2 7 10.4l4.2-4.6" stroke="var(--bg-panel)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+        </>
+      ) : kind === "working" ? (
+        <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeDasharray="28 10" transform="rotate(-90 8 8)" />
+      ) : kind === "idle" ? (
+        <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2.4 2.6" />
+      ) : (
+        <>
+          <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.6" />
+          <path d="M8 5v3.4M8 10.6v.1" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        </>
+      )}
+    </svg>
+  );
+}
+
+function shortTime(iso: string, now = Date.now()): string {
+  const time = new Date(iso).getTime();
+  if (Number.isNaN(time)) return "";
+  const minutes = Math.floor(Math.max(0, now - time) / 60_000);
+  if (minutes < 1) return "刚刚";
+  if (minutes < 60) return `${minutes} 分钟前`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} 小时前`;
+  return `${Math.floor(hours / 24)} 天前`;
+}
+
 function ThreadList({
-  subjectName, openThreads, doneThreads, usage, onOpen,
+  subjectName, openThreads, doneThreads, usage, onOpen, onResolve, onReopen,
 }: {
   subjectName: string;
   openThreads: ConversationSummary[];
   doneThreads: ConversationSummary[];
   usage: Record<string, TokenUsage>;
   onOpen: (id: string) => void;
+  onResolve: (id: string) => void;
+  onReopen: (id: string) => void;
 }) {
   const workingCount = openThreads.filter((item) => item.executionStatus === "working").length;
   const isEmpty = openThreads.length + doneThreads.length === 0;
@@ -990,29 +1059,70 @@ function ThreadList({
             { label: "空闲", items: openThreads.filter((item) => !item.executionStatus || item.executionStatus === "idle" || item.executionStatus === "cancelled") },
           ].filter((group) => group.items.length > 0).map((group) => (
             <section key={group.label}>
-              <p className={styles.group}>{group.label} · {group.items.length}</p>
-              <ul>{group.items.map((item) => (
-                <li key={item.id}>
-                  <button onClick={() => onOpen(item.id)}>
-                    <span className={styles.threadTitle}>
-                      <i className={cx(styles.state, styles[`state_${item.executionStatus ?? "idle"}`])} aria-hidden />
-                      <span className={styles.threadTitleText}>{item.title}</span>
-                    </span>
-                    <small>{item.executionStatus ? executionLabel[item.executionStatus] : "空闲"}{item.preview ? ` · ${plainText(item.preview)}` : ""}</small>
-                  </button>
-                  {usage[item.id] && <div className={styles.threadUsage}><UsageStats usage={usage[item.id]} align="right" /></div>}
-                </li>
-              ))}</ul>
+              <p className={styles.group}>
+                <span>{group.label}</span>
+                <span className={styles.groupCount}>{group.items.length}</span>
+              </p>
+              <ul className={styles.rowList}>{group.items.map((item) => {
+                const kind = ringKind(item.executionStatus, false);
+                const running = kind === "working";
+                return (
+                  <li key={item.id} className={styles.row}>
+                    <button type="button" className={styles.rowMain} onClick={() => onOpen(item.id)}>
+                      <StatusRing kind={kind} />
+                      <span className={styles.rowBody}>
+                        <span className={styles.rowTitle}>{item.title}</span>
+                        {item.preview && <span className={styles.rowSummary}>{plainText(item.preview)}</span>}
+                      </span>
+                      <span className={styles.rowMeta}>
+                        <span className={cx(styles.badge, styles[`badge_${item.executionStatus ?? "idle"}`])}>
+                          {item.executionStatus ? executionLabel[item.executionStatus] : "空闲"}
+                        </span>
+                        <span className={styles.rowTime}>{shortTime(item.updatedAt)}</span>
+                      </span>
+                    </button>
+                    <div className={styles.rowActions}>
+                      <button
+                        type="button"
+                        className={styles.rowAction}
+                        disabled={running}
+                        onClick={() => onResolve(item.id)}
+                        title={running ? "执行中，完成后可归档" : "已解决（合并小结回主对话）"}
+                      >
+                        归档总结
+                      </button>
+                    </div>
+                    {usage[item.id] && <div className={styles.threadUsage}><UsageStats usage={usage[item.id]} align="right" /></div>}
+                  </li>
+                );
+              })}</ul>
             </section>
           ))}
-          {doneThreads.length > 0 && <p className={styles.group}>已解决 · {doneThreads.length}</p>}
-          <ul className={styles.done}>
+          {doneThreads.length > 0 && (
+            <p className={styles.group}>
+              <span>已解决</span>
+              <span className={styles.groupCount}>{doneThreads.length}</span>
+            </p>
+          )}
+          <ul className={styles.rowList}>
             {doneThreads.map((item) => (
-              <li key={item.id}>
-                <button onClick={() => onOpen(item.id)}>
-                  <span className={styles.threadTitleText}>{item.title}</span>
-                  {item.preview && <small>{plainText(item.preview)}</small>}
+              <li key={item.id} className={cx(styles.row, styles.rowDone)}>
+                <button type="button" className={styles.rowMain} onClick={() => onOpen(item.id)}>
+                  <StatusRing kind="done" />
+                  <span className={styles.rowBody}>
+                    <span className={styles.rowTitle}>{item.title}</span>
+                    {item.preview && <span className={styles.rowSummary}>{plainText(item.preview)}</span>}
+                  </span>
+                  <span className={styles.rowMeta}>
+                    <span className={cx(styles.badge, styles.badge_done)}>已解决</span>
+                    <span className={styles.rowTime}>{shortTime(item.updatedAt)}</span>
+                  </span>
                 </button>
+                <div className={styles.rowActions}>
+                  <button type="button" className={styles.rowAction} onClick={() => onReopen(item.id)}>
+                    重新开启
+                  </button>
+                </div>
                 {usage[item.id] && <div className={styles.threadUsage}><UsageStats usage={usage[item.id]} align="right" /></div>}
               </li>
             ))}
@@ -1099,7 +1209,7 @@ function Files({ subjectId, onChange }: { subjectId: string; onChange: () => voi
           </span>
         </div>
         {!wsTree.workspace ? (
-          <p className={styles.muted}>尚未绑定本地工作区目录。可在输入框左下方点击「未选择工作区」绑定本地文件夹。</p>
+          <p className={styles.muted}>尚未绑定本地工作区目录。点击输入框左下方的「未选择工作区」即可选择本地文件夹。</p>
         ) : wsTree.entries.length === 0 ? (
           <p className={styles.muted}>该工作区文件夹为空。</p>
         ) : (

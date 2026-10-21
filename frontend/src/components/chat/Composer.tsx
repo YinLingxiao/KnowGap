@@ -1,12 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent, type ReactNode } from "react";
 import {
-  ArrowLeftRight, ArrowUp, AtSign, Check, ChevronDown, Dumbbell, FileText, FolderOpen, ListChecks, Mic,
-  NotebookPen, Plus, ShieldCheck, Sparkles, Square, Workflow,
+  ArrowLeftRight, ArrowUp, AtSign, Bold, Check, ChevronDown, ChevronLeft, ChevronRight, Code, Dumbbell,
+  FileText, FolderOpen, Italic, Layers, List, ListChecks, ListOrdered, ListTodo, MessageSquareQuote, Mic,
+  NotebookPen, Paperclip, Plus, ShieldCheck, Sigma, Sparkles, Square, SquareCode, Strikethrough, Target,
+  Type, Workflow,
 } from "lucide-react";
 import type { StreamPhase } from "@/hooks/useChat";
 import { getAIConfig } from "@/lib/api/ai-config";
+import { uploadImage } from "@/lib/api/vision-client";
 import { chatApi } from "@/lib/chat/api";
 import type { ChatMessage } from "@/lib/chat/types";
 import { cx } from "@/lib/cx";
@@ -76,6 +79,20 @@ const SLASH_COMMANDS: SlashCommand[] = [
     icon: <Workflow size={14} aria-hidden />,
   },
   {
+    id: "drill",
+    label: "联网搜真题练习",
+    desc: "检索真实考研/竞赛母题并生成靶向测验卡",
+    prompt: "请帮我搜几道关于「在此填写知识点」的经典真题或母题来练手：",
+    icon: <Dumbbell size={14} aria-hidden />,
+  },
+  {
+    id: "code",
+    label: "编程代码实验台",
+    desc: "生成带 TODO 挖空的脚手架并在本地沙盒编译运行",
+    prompt: "请先讲清「在此填写编程/算法概念」的核心原理，然后给我一个带 TODO 挖空的 `code_playground` 代码实验台让我动手补全并运行：",
+    icon: <FileText size={14} aria-hidden />,
+  },
+  {
     id: "note",
     label: "结构化讲义整理",
     desc: "把讨论要点整理成复习讲义",
@@ -110,35 +127,14 @@ function detectTrigger(text: string, caret: number): InputTrigger | null {
 
 const MENTION_TTL_MS = 30_000;
 
-/** 参照 Claude 右下角的三段式圆环思考深度图标 */
+/** 三格等宽信号条，表示思考强度档位 */
 function ThinkingGauge({ segments }: { segments: number }) {
   return (
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden className={styles.gaugeSvg}>
-      {/* 右上弧段 (1/3) */}
-      <path
-        d="M 8 2 A 6 6 0 0 1 13.2 11"
-        stroke={segments >= 1 ? "var(--accent)" : "currentColor"}
-        strokeOpacity={segments >= 1 ? 1 : 0.3}
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-      {/* 底部弧段 (2/3) */}
-      <path
-        d="M 11.8 12.6 A 6 6 0 0 1 4.2 12.6"
-        stroke={segments >= 2 ? "var(--accent)" : "currentColor"}
-        strokeOpacity={segments >= 2 ? 1 : 0.3}
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-      {/* 左上弧段 (3/3) */}
-      <path
-        d="M 2.8 11 A 6 6 0 0 1 8 2"
-        stroke={segments >= 3 ? "var(--accent)" : "currentColor"}
-        strokeOpacity={segments >= 3 ? 1 : 0.3}
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-    </svg>
+    <span className={styles.signal} aria-hidden>
+      {[1, 2, 3].map((level) => (
+        <i key={level} className={segments >= level ? styles.signalOn : undefined} />
+      ))}
+    </span>
   );
 }
 
@@ -149,8 +145,8 @@ interface ComposerProps {
   onStop: () => void;
   phase: StreamPhase | null;
   busy: boolean;
-  problems: Problem[];
-  onStartExercise: (problemId: string) => void;
+  problems?: Problem[];
+  onStartExercise?: (problemId: string) => void;
   autoFocusKey: string;
   inputId?: string;
   placeholder?: string;
@@ -216,13 +212,16 @@ function deriveInstantSuggestion(messages?: ChatMessage[]): string {
 }
 
 export function Composer({
-  value, onChange, onSend, onStop, phase, busy, problems, onStartExercise, autoFocusKey,
+  value, onChange, onSend, onStop, phase, busy, problems = [], onStartExercise, autoFocusKey,
   placeholder = "继续提问，或说说你的理解…", hero = false, inputId = COMPOSER_ID,
   conversationId, messages,
 }: ComposerProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const attachInputRef = useRef<HTMLInputElement>(null);
   const composing = useRef(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [plusPane, setPlusPane] = useState<"root" | "skills" | "exercises">("root");
+  const [formatBarOpen, setFormatBarOpen] = useState(false);
   const [effortOpen, setEffortOpen] = useState(false);
   const [wsOpen, setWsOpen] = useState(false);
   const [effort, setEffort] = useState<ThinkingEffort>("medium");
@@ -232,6 +231,9 @@ export function Composer({
   const [autoApprove, setAutoApprove] = useState<boolean>(false);
   const [memApproval, setMemApproval] = useState<boolean>(false);
   const [wsNote, setWsNote] = useState<string>("");
+  const [attachNote, setAttachNote] = useState("");
+  const [wsPicking, setWsPicking] = useState<boolean>(false);
+  const [hasFolderPicker, setHasFolderPicker] = useState<boolean>(false);
   const [llmGhost, setLlmGhost] = useState<string>("");
   const [trigger, setTrigger] = useState<InputTrigger | null>(null);
   const [activeIdx, setActiveIdx] = useState(0);
@@ -287,6 +289,10 @@ export function Composer({
   const activeGhost = !hero && !generating && !locked && lastCompletedAssistantId
     ? (llmGhost || instantGhost)
     : "";
+
+  useEffect(() => {
+    setHasFolderPicker(Boolean(window.knowgap?.selectFolder));
+  }, []);
 
   useEffect(() => {
     try {
@@ -431,14 +437,41 @@ export function Composer({
       setAutoApprove(saved.autoApprove);
       window.dispatchEvent(new CustomEvent(AGENT_ENV_EVENT, { detail: saved }));
       setWsOpen(false);
+      return true;
     } catch (err) {
       setWsNote(err instanceof Error ? err.message : "工作区路径无效");
+      return false;
     }
   };
 
   const wsShortName = workspace
     ? workspace.replace(/[\\/]+$/, "").split(/[\\/]/).pop() || workspace
     : "未选择工作区";
+
+  // 桌面端点击工作区胶囊直接唤起系统文件夹选择器，选完立即绑定；
+  // 浏览器端没有原生能力，退回弹层手动填写路径。
+  const pickWorkspaceFolder = async () => {
+    setWsNote("");
+    const picker = typeof window !== "undefined" ? window.knowgap?.selectFolder : undefined;
+    if (!picker) {
+      setWsDraft(workspace);
+      setWsOpen(true);
+      return;
+    }
+    if (wsPicking) return;
+    setWsPicking(true);
+    try {
+      const picked = await picker(workspace || undefined);
+      if (!picked) return;
+      const saved = await saveEnv(picked, autoApprove);
+      if (!saved) {
+        setWsDraft(picked);
+        setWsOpen(true);
+      }
+    } finally {
+      setWsPicking(false);
+    }
+  };
 
   const canSend = Boolean(value.trim()) && !generating && !locked;
   const activeEffort = EFFORT_OPTIONS.find((item) => item.id === effort) ?? EFFORT_OPTIONS[2];
@@ -568,12 +601,177 @@ export function Composer({
     if (canSend) onSend();
   };
 
+  const applyFormat = (
+    kind: "bold" | "italic" | "strike" | "ul" | "ol" | "task" | "quote" | "math" | "code" | "codeblock",
+  ) => {
+    const el = textareaRef.current;
+    const start = el ? el.selectionStart : value.length;
+    const end = el ? el.selectionEnd : value.length;
+    const selected = value.slice(start, end);
+    const before = value.slice(0, start);
+    const after = value.slice(end);
+
+    let replacement = "";
+    let selStart = start;
+    let selEnd = end;
+
+    if (kind === "bold") {
+      const inner = selected || "加粗文本";
+      replacement = `**${inner}**`;
+      selStart = start + 2;
+      selEnd = selStart + inner.length;
+    } else if (kind === "italic") {
+      const inner = selected || "斜体文本";
+      replacement = `*${inner}*`;
+      selStart = start + 1;
+      selEnd = selStart + inner.length;
+    } else if (kind === "strike") {
+      const inner = selected || "删除线文本";
+      replacement = `~~${inner}~~`;
+      selStart = start + 2;
+      selEnd = selStart + inner.length;
+    } else if (kind === "code") {
+      const inner = selected || "code";
+      replacement = `\`${inner}\``;
+      selStart = start + 1;
+      selEnd = selStart + inner.length;
+    } else if (kind === "math") {
+      const inner = selected || "x^2 + y^2 = r^2";
+      if (inner.includes("\n")) {
+        replacement = `$$\n${inner}\n$$`;
+        selStart = start + 3;
+        selEnd = selStart + inner.length;
+      } else {
+        replacement = `$${inner}$`;
+        selStart = start + 1;
+        selEnd = selStart + inner.length;
+      }
+    } else if (kind === "codeblock") {
+      const inner = selected || "// 在此输入代码";
+      const prefix = before && !before.endsWith("\n") ? "\n" : "";
+      replacement = `${prefix}\`\`\`\n${inner}\n\`\`\`\n`;
+      selStart = start + prefix.length + 4;
+      selEnd = selStart + inner.length;
+    } else {
+      const prefixMap: Record<"ul" | "ol" | "task" | "quote", string> = {
+        ul: "- ",
+        ol: "1. ",
+        task: "- [ ] ",
+        quote: "> ",
+      };
+      const linePrefix = prefixMap[kind];
+      const needNewline = before && !before.endsWith("\n") ? "\n" : "";
+      const lines = (selected || "列表项").split("\n");
+      const formatted = lines
+        .map((line, i) => (kind === "ol" ? `${i + 1}. ${line}` : `${linePrefix}${line}`))
+        .join("\n");
+      replacement = `${needNewline}${formatted}`;
+      selStart = start + needNewline.length + linePrefix.length;
+      selEnd = start + replacement.length;
+    }
+
+    onChange(before + replacement + after);
+    requestAnimationFrame(() => {
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(selStart, selEnd);
+    });
+  };
+
+  const handleAttachFiles = async (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    if (files.length === 0) return;
+    let nextValue = value;
+    const skipped: string[] = [];
+    for (const file of files) {
+      if (/^image\/(png|jpe?g|webp)$/i.test(file.type)) {
+        try {
+          const uploaded = await uploadImage(file);
+          nextValue = withImageMarker(nextValue, uploaded.marker);
+        } catch {
+          skipped.push(file.name);
+        }
+      } else {
+        try {
+          const text = (await file.text()).slice(0, 6000);
+          const ext = file.name.includes(".") ? file.name.split(".").pop() ?? "" : "";
+          const block = `\n📎 附件：\`${file.name}\`\n\`\`\`${ext}\n${text}\n\`\`\`\n`;
+          // Never cut a block in half: an unclosed fence would swallow the rest of the message.
+          if (nextValue.length + block.length > 12000) skipped.push(file.name);
+          else nextValue += block;
+        } catch {
+          skipped.push(file.name);
+        }
+      }
+    }
+    setAttachNote(skipped.length ? `未能添加：${skipped.join("、")}（上传失败或超出长度）` : "");
+    onChange(nextValue);
+    requestAnimationFrame(() => textareaRef.current?.focus());
+  };
+
+  const skillItems = useMemo(() => {
+    const customSkills = mentions.filter((m) => m.kind === "skill");
+    return {
+      builtin: SLASH_COMMANDS,
+      custom: customSkills,
+      totalCount: SLASH_COMMANDS.length + customSkills.length,
+    };
+  }, [mentions]);
+
   const approveLabel = autoApprove ? "帮我批准 · 已开启" : "帮我批准";
   const popupId = `${inputId}-popup`;
 
   return (
     <div className={cx(styles.composer, hero && styles.hero)}>
       <div className={cx(styles.box, locked && styles.locked)}>
+        {/* LobeHub 风格：顶部 Markdown 格式工具栏（由 + 菜单中的「格式工具」开关控制） */}
+        {attachNote && <p className={styles.wsError} role="status">{attachNote}</p>}
+        {formatBarOpen && (
+          <div className={styles.formatToolbar} role="toolbar" aria-label="Markdown 格式工具栏">
+            <button type="button" className={styles.formatBtn} onClick={() => applyFormat("bold")} title="加粗 (**文本**)" aria-label="加粗">
+              <Bold size={14} />
+            </button>
+            <button type="button" className={styles.formatBtn} onClick={() => applyFormat("italic")} title="斜体 (*文本*)" aria-label="斜体">
+              <Italic size={14} />
+            </button>
+            <button type="button" className={styles.formatBtn} onClick={() => applyFormat("strike")} title="删除线 (~~文本~~)" aria-label="删除线">
+              <Strikethrough size={14} />
+            </button>
+            <span className={styles.formatSep} aria-hidden />
+            <button type="button" className={styles.formatBtn} onClick={() => applyFormat("ul")} title="无序列表 (- )" aria-label="无序列表">
+              <List size={14} />
+            </button>
+            <button type="button" className={styles.formatBtn} onClick={() => applyFormat("ol")} title="有序列表 (1. )" aria-label="有序列表">
+              <ListOrdered size={14} />
+            </button>
+            <button type="button" className={styles.formatBtn} onClick={() => applyFormat("task")} title="任务列表 (- [ ] )" aria-label="任务列表">
+              <ListTodo size={14} />
+            </button>
+            <span className={styles.formatSep} aria-hidden />
+            <button type="button" className={styles.formatBtn} onClick={() => applyFormat("quote")} title="引用块 (> )" aria-label="引用块">
+              <MessageSquareQuote size={14} />
+            </button>
+            <button type="button" className={styles.formatBtn} onClick={() => applyFormat("math")} title="LaTeX 数学公式 ($...$)" aria-label="数学公式">
+              <Sigma size={14} />
+            </button>
+            <button type="button" className={styles.formatBtn} onClick={() => applyFormat("code")} title="行内代码 (`...`)" aria-label="行内代码">
+              <Code size={14} />
+            </button>
+            <button type="button" className={styles.formatBtn} onClick={() => applyFormat("codeblock")} title="代码块 (```...```)" aria-label="代码块">
+              <SquareCode size={14} />
+            </button>
+          </div>
+        )}
+
+        <input
+          ref={attachInputRef}
+          type="file"
+          multiple
+          hidden
+          accept="image/png,image/jpeg,image/webp,.md,.txt,.py,.c,.cpp,.h,.js,.ts,.tsx,.json,.csv"
+          onChange={(e) => void handleAttachFiles(e)}
+        />
         {popupOpen && trigger && (
           <div className={styles.cmdMenu} role="listbox" id={popupId} aria-label={trigger.kind === "slash" ? "快捷指令" : "引用"}>
             {trigger.kind === "slash" ? (
@@ -582,26 +780,28 @@ export function Composer({
                   <Sparkles size={12} aria-hidden />
                   快捷指令
                 </p>
-                {slashItems.map((cmd, idx) => (
-                  <button
-                    key={cmd.id}
-                    type="button"
-                    role="option"
-                    aria-selected={idx === activeIdx}
-                    className={cx(styles.cmdItem, idx === activeIdx && styles.cmdItemActive)}
-                    ref={(el) => { if (el && idx === activeIdx) el.scrollIntoView({ block: "nearest" }); }}
-                    onMouseDown={(e) => e.preventDefault()}
-                    onMouseEnter={() => setActiveIdx(idx)}
-                    onClick={() => pickSlash(cmd)}
-                  >
-                    <span className={styles.cmdIcon}>{cmd.icon}</span>
-                    <span className={styles.cmdBody}>
-                      <span className={styles.cmdTitle}>{cmd.label}</span>
-                      <span className={styles.cmdDesc}>{cmd.desc}</span>
-                    </span>
-                    <code className={styles.cmdKey}>/{cmd.id}</code>
-                  </button>
-                ))}
+                <div className={styles.cmdScroll}>
+                  {slashItems.map((cmd, idx) => (
+                    <button
+                      key={cmd.id}
+                      type="button"
+                      role="option"
+                      aria-selected={idx === activeIdx}
+                      className={cx(styles.cmdItem, idx === activeIdx && styles.cmdItemActive)}
+                      ref={(el) => { if (el && idx === activeIdx) el.scrollIntoView({ block: "nearest" }); }}
+                      onMouseDown={(e) => e.preventDefault()}
+                      onMouseEnter={() => setActiveIdx(idx)}
+                      onClick={() => pickSlash(cmd)}
+                    >
+                      <span className={styles.cmdIcon}>{cmd.icon}</span>
+                      <span className={styles.cmdBody}>
+                        <span className={styles.cmdTitle}>{cmd.label}</span>
+                        <span className={styles.cmdDesc}>{cmd.desc}</span>
+                      </span>
+                      <code className={styles.cmdKey}>/{cmd.id}</code>
+                    </button>
+                  ))}
+                </div>
               </>
             ) : (
               <>
@@ -609,31 +809,33 @@ export function Composer({
                   <AtSign size={12} aria-hidden />
                   引用 Skill 或工作区文件
                 </p>
-                {mentionItems.map((item, idx) => (
-                  <button
-                    key={item.key}
-                    type="button"
-                    role="option"
-                    aria-selected={idx === activeIdx}
-                    className={cx(styles.cmdItem, idx === activeIdx && styles.cmdItemActive)}
-                    ref={(el) => { if (el && idx === activeIdx) el.scrollIntoView({ block: "nearest" }); }}
-                    onMouseDown={(e) => e.preventDefault()}
-                    onMouseEnter={() => setActiveIdx(idx)}
-                    onClick={() => pickMention(item)}
-                  >
-                    <span className={styles.cmdIcon}>
-                      {item.kind === "skill" ? <Sparkles size={14} aria-hidden /> : <FileText size={14} aria-hidden />}
-                    </span>
-                    <span className={styles.cmdBody}>
-                      <span className={styles.cmdTitle}>{item.name}</span>
-                      <span className={styles.cmdDesc}>{item.hint}</span>
-                    </span>
-                    <span className={styles.cmdTag}>{item.kind === "skill" ? "Skill" : "文件"}</span>
-                  </button>
-                ))}
-                {popupCount === 0 && (
-                  <p className={styles.cmdEmpty}>{mentionsLoading ? "正在读取 Skills 与工作区文件…" : "没有匹配的 Skill 或文件"}</p>
-                )}
+                <div className={styles.cmdScroll}>
+                  {mentionItems.map((item, idx) => (
+                    <button
+                      key={item.key}
+                      type="button"
+                      role="option"
+                      aria-selected={idx === activeIdx}
+                      className={cx(styles.cmdItem, idx === activeIdx && styles.cmdItemActive)}
+                      ref={(el) => { if (el && idx === activeIdx) el.scrollIntoView({ block: "nearest" }); }}
+                      onMouseDown={(e) => e.preventDefault()}
+                      onMouseEnter={() => setActiveIdx(idx)}
+                      onClick={() => pickMention(item)}
+                    >
+                      <span className={styles.cmdIcon}>
+                        {item.kind === "skill" ? <Sparkles size={14} aria-hidden /> : <FileText size={14} aria-hidden />}
+                      </span>
+                      <span className={styles.cmdBody}>
+                        <span className={styles.cmdTitle}>{item.name}</span>
+                        <span className={styles.cmdDesc}>{item.hint}</span>
+                      </span>
+                      <span className={styles.cmdTag}>{item.kind === "skill" ? "Skill" : "文件"}</span>
+                    </button>
+                  ))}
+                  {popupCount === 0 && (
+                    <p className={styles.cmdEmpty}>{mentionsLoading ? "正在读取 Skills 与工作区文件…" : "没有匹配的 Skill 或文件"}</p>
+                  )}
+                </div>
               </>
             )}
           </div>
@@ -693,48 +895,242 @@ export function Composer({
               <button
                 type="button"
                 className={styles.tool}
-                onClick={() => setMenuOpen((open) => !open)}
+                onClick={() => {
+                  setMenuOpen((open) => {
+                    const next = !open;
+                    if (next) {
+                      setPlusPane("root");
+                      loadMentions();
+                    }
+                    return next;
+                  });
+                }}
                 aria-expanded={menuOpen}
                 aria-haspopup="menu"
-                aria-label="更多：带入练习题"
-                title="带入练习题"
-                disabled={generating || problems.length === 0}
+                aria-label="更多：附件、技能与格式工具"
+                title="添加附件、选择技能或开启格式工具"
+                disabled={generating || locked}
               >
                 <Plus size={16} aria-hidden />
               </button>
               {menuOpen && (
                 <div className={styles.menu} role="menu">
-                  <p className={styles.menuLabel}>
-                    <Dumbbell size={12} aria-hidden />
-                    带入一道练习题
-                  </p>
-                  {problems.map((problem) => (
-                    <button
-                      key={problem.id}
-                      role="menuitem"
-                      className={styles.menuItem}
-                      onClick={() => {
-                        setMenuOpen(false);
-                        onStartExercise(problem.id);
-                      }}
-                    >
-                      <span>{problem.title}</span>
-                      {problem.inputSequence && problem.outputSequence && (
-                        <code>{problem.inputSequence.join("")} → {problem.outputSequence.join("")}</code>
+                  {plusPane === "root" ? (
+                    <>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className={styles.lobeMenuItem}
+                        onClick={() => {
+                          setMenuOpen(false);
+                          attachInputRef.current?.click();
+                        }}
+                      >
+                        <span className={styles.lobeMenuLeft}>
+                          <Paperclip size={15} aria-hidden />
+                          <span>附件</span>
+                        </span>
+                        <ChevronRight size={14} className={styles.lobeMenuArrow} aria-hidden />
+                      </button>
+
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className={styles.lobeMenuItem}
+                        onClick={() => setPlusPane("skills")}
+                      >
+                        <span className={styles.lobeMenuLeft}>
+                          <Layers size={15} aria-hidden />
+                          <span>技能</span>
+                          <span className={styles.lobeMenuPill}>自动 | {skillItems.totalCount}</span>
+                        </span>
+                        <ChevronRight size={14} className={styles.lobeMenuArrow} aria-hidden />
+                      </button>
+
+                      {onStartExercise && problems.length > 0 && (
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className={styles.lobeMenuItem}
+                          onClick={() => setPlusPane("exercises")}
+                        >
+                          <span className={styles.lobeMenuLeft}>
+                            <Dumbbell size={15} aria-hidden />
+                            <span>练习题</span>
+                            <span className={styles.lobeMenuPill}>{problems.length}</span>
+                          </span>
+                          <ChevronRight size={14} className={styles.lobeMenuArrow} aria-hidden />
+                        </button>
                       )}
-                    </button>
-                  ))}
+
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className={styles.lobeMenuItem}
+                        onClick={() => {
+                          setMenuOpen(false);
+                          void pickWorkspaceFolder();
+                        }}
+                      >
+                        <span className={styles.lobeMenuLeft}>
+                          <Target size={15} aria-hidden />
+                          <span>目标与工作区</span>
+                          {workspace && <span className={styles.lobeMenuPill}>{wsShortName}</span>}
+                        </span>
+                      </button>
+
+                      <div className={styles.lobeMenuDivider} role="separator" />
+
+                      <button
+                        type="button"
+                        role="menuitemcheckbox"
+                        aria-checked={formatBarOpen}
+                        className={styles.lobeMenuItem}
+                        onClick={() => setFormatBarOpen((v) => !v)}
+                      >
+                        <span className={styles.lobeMenuLeft}>
+                          <Type size={15} aria-hidden />
+                          <span>格式工具</span>
+                        </span>
+                        <span className={cx(styles.lobeSwitch, formatBarOpen && styles.lobeSwitchOn)} aria-hidden>
+                          <i />
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        role="menuitemcheckbox"
+                        aria-checked={autoApprove}
+                        className={styles.lobeMenuItem}
+                        onClick={() => void saveEnv(workspace, !autoApprove)}
+                      >
+                        <span className={styles.lobeMenuLeft}>
+                          <ShieldCheck size={15} aria-hidden />
+                          <span>自动批准写入</span>
+                        </span>
+                        <span className={cx(styles.lobeSwitch, autoApprove && styles.lobeSwitchOn)} aria-hidden>
+                          <i />
+                        </span>
+                      </button>
+                    </>
+                  ) : plusPane === "exercises" ? (
+                    <>
+                      <div className={styles.lobeSubhead}>
+                        <button
+                          type="button"
+                          className={styles.lobeBackBtn}
+                          onClick={() => setPlusPane("root")}
+                        >
+                          <ChevronLeft size={14} aria-hidden />
+                          <span>返回</span>
+                        </button>
+                        <span className={styles.lobeSubheadHint}>带入一道人工校验的练习题</span>
+                      </div>
+                      <div className={styles.cmdScroll}>
+                        {problems.map((problem) => (
+                          <button
+                            key={problem.id}
+                            type="button"
+                            role="menuitem"
+                            className={styles.cmdItem}
+                            onClick={() => {
+                              setMenuOpen(false);
+                              setPlusPane("root");
+                              onStartExercise?.(problem.id);
+                            }}
+                          >
+                            <span className={styles.cmdIcon}><Dumbbell size={14} aria-hidden /></span>
+                            <span className={styles.cmdBody}>
+                              <span className={styles.cmdTitle}>{problem.title}</span>
+                              {problem.inputSequence && problem.outputSequence && (
+                                <span className={styles.cmdDesc}>
+                                  {problem.inputSequence.join("")} → {problem.outputSequence.join("")}
+                                </span>
+                              )}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className={styles.lobeSubhead}>
+                        <button
+                          type="button"
+                          className={styles.lobeBackBtn}
+                          onClick={() => setPlusPane("root")}
+                        >
+                          <ChevronLeft size={14} aria-hidden />
+                          <span>返回</span>
+                        </button>
+                        <span className={styles.lobeSubheadHint}>输入 / 也可快速唤出</span>
+                      </div>
+                      <div className={styles.cmdScroll}>
+                        {skillItems.builtin.map((cmd) => (
+                          <button
+                            key={cmd.id}
+                            type="button"
+                            role="menuitem"
+                            className={styles.cmdItem}
+                            onClick={() => {
+                              setMenuOpen(false);
+                              setPlusPane("root");
+                              onChange(cmd.prompt);
+                              requestAnimationFrame(() => {
+                                const el = textareaRef.current;
+                                if (el) {
+                                  el.focus();
+                                  el.setSelectionRange(cmd.prompt.length, cmd.prompt.length);
+                                }
+                              });
+                            }}
+                          >
+                            <span className={styles.cmdIcon}>{cmd.icon}</span>
+                            <span className={styles.cmdBody}>
+                              <span className={styles.cmdTitle}>{cmd.label}</span>
+                              <span className={styles.cmdDesc}>{cmd.desc}</span>
+                            </span>
+                            <code className={styles.cmdTag}>/{cmd.id}</code>
+                          </button>
+                        ))}
+                        {skillItems.custom.map((sk) => (
+                          <button
+                            key={sk.key}
+                            type="button"
+                            role="menuitem"
+                            className={styles.cmdItem}
+                            onClick={() => {
+                              setMenuOpen(false);
+                              setPlusPane("root");
+                              const next = `${value ? `${value} ` : ""}@[${sk.name}] `;
+                              onChange(next);
+                              requestAnimationFrame(() => textareaRef.current?.focus());
+                            }}
+                          >
+                            <span className={styles.cmdIcon}><Sparkles size={14} aria-hidden /></span>
+                            <span className={styles.cmdBody}>
+                              <span className={styles.cmdTitle}>{sk.name}</span>
+                              <span className={styles.cmdDesc}>{sk.hint}</span>
+                            </span>
+                            <span className={styles.cmdTag}>自定义</span>
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
             </div>
 
-            <ImageAttach
-              disabled={generating || locked}
-              onUploaded={(img) => {
-                onChange(withImageMarker(value, img.marker));
-                textareaRef.current?.focus();
-              }}
-            />
+            <span className={styles.imageSlot}>
+              <ImageAttach
+                disabled={generating || locked}
+                onUploaded={(img) => {
+                  onChange(withImageMarker(value, img.marker));
+                  textareaRef.current?.focus();
+                }}
+              />
+            </span>
 
             <button
               type="button"
@@ -751,9 +1147,25 @@ export function Composer({
               <button
                 type="button"
                 className={cx(styles.pill, workspace && styles.pillActive)}
-                onClick={() => setWsOpen((v) => !v)}
-                aria-expanded={wsOpen}
-                title={workspace ? `当前工作区：${workspace}` : "绑定本地工作区文件夹"}
+                onClick={() => void pickWorkspaceFolder()}
+                onContextMenu={(event) => {
+                  if (!hasFolderPicker) return;
+                  event.preventDefault();
+                  setWsDraft(workspace);
+                  setWsNote("");
+                  setWsOpen(true);
+                }}
+                aria-expanded={hasFolderPicker ? undefined : wsOpen}
+                aria-busy={wsPicking || undefined}
+                title={
+                  hasFolderPicker
+                    ? workspace
+                      ? `当前工作区：${workspace}（点击重新选择文件夹，右键手动输入）`
+                      : "点击选择本地工作区文件夹"
+                    : workspace
+                      ? `当前工作区：${workspace}`
+                      : "绑定本地工作区文件夹"
+                }
               >
                 <FolderOpen size={12} aria-hidden />
                 <span className={cx(styles.pillText, styles.pillTextShrink)}>{wsShortName}</span>
@@ -762,6 +1174,9 @@ export function Composer({
               {wsOpen && (
                 <div className={styles.wsPopover} role="dialog" aria-label="工作区文件夹">
                   <p className={styles.menuLabel}>工作区文件夹（Agent 读写目录）</p>
+                  {!hasFolderPicker && (
+                    <p className={styles.wsHint}>浏览器内无法读取本地绝对路径，请粘贴文件夹路径；桌面版点击即可直接选择文件夹。</p>
+                  )}
                   <input
                     className={styles.wsInput}
                     value={wsDraft}
@@ -770,12 +1185,12 @@ export function Composer({
                   />
                   {wsNote && <p className={styles.wsError}>{wsNote}</p>}
                   <div className={styles.wsActions}>
-                    {typeof window !== "undefined" && window.knowgap?.selectFolder && (
+                    {hasFolderPicker && (
                       <button
                         type="button"
                         className={styles.wsBtn}
                         onClick={() => {
-                          void window.knowgap?.selectFolder().then((picked) => {
+                          void window.knowgap?.selectFolder?.(wsDraft.trim() || workspace || undefined).then((picked) => {
                             if (picked) setWsDraft(picked);
                           });
                         }}

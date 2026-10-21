@@ -34,24 +34,73 @@
 
 .header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 28px;
+  gap: 14px;
+  margin-bottom: 22px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.titleGroup {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .header h1 {
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 600;
   line-height: 1.3;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.015em;
   color: var(--text);
+}
+
+.summaryBadge {
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-subtle);
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
 }
 
 .actions {
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+.layoutSwitch {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg-subtle);
+}
+
+.layoutBtn {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 24px;
+  border-radius: 5px;
+  color: var(--text-tertiary);
+  transition: background-color var(--t-hover) var(--ease-out), color var(--t-hover) var(--ease-out);
+}
+
+.layoutBtn:hover {
+  color: var(--text-secondary);
+}
+
+.layoutBtnOn {
+  background: var(--bg-elevated);
+  color: var(--text);
+  box-shadow: var(--specular-top), 0 1px 2px rgba(0, 0, 0, 0.16);
 }
 
 .iconBtn {
@@ -240,11 +289,57 @@
   opacity: 0.25;
 }
 
-/* 双列卡片网格 */
+/* 双列卡片网格 & Linear 紧凑列表模式 */
 .grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+  gap: 14px;
+}
+
+.listMode {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+}
+
+.listMode .card {
+  min-height: 46px;
+  border-radius: 8px;
+}
+
+.listMode .card::before {
+  inset: 0 auto 0 0;
+  width: 3px;
+  height: 100%;
+}
+
+.listMode .card:hover,
+.listMode .card:focus-within {
+  transform: none;
+}
+
+.listMode .cardMain {
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 42px 8px 14px;
+}
+
+.listMode .cardIcon {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+}
+
+.listMode .cardBody {
+  flex: 1;
+  min-width: 0;
+}
+
+.listMode .meta {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
 }
 
 .card {
