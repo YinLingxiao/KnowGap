@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Check, Plus, Repeat, Trash2, X } from "lucide-react";
+import { Bell, Check, Plus, Repeat, Trash2, X } from "lucide-react";
 import type { AgendaTask, TaskPatch, TaskPriority } from "@/lib/agenda/types";
 import { cx } from "@/lib/cx";
 import { Markdown } from "../chat/Markdown";
@@ -133,6 +133,7 @@ export function TaskInspector(props: TaskInspectorProps) {
             </span>
           ) : task.source === "ai_breakdown" ? "AI 拆解的任务" : "任务"}
         </span>
+        {task.reminderMinutes !== null && <Bell size={13} className={styles.reminderIcon} aria-label="已设置提醒" />}
         <button type="button" className={styles.iconBtn} onClick={props.onClose} aria-label="关闭详情" title="关闭（Esc）">
           <X size={15} />
         </button>
@@ -218,6 +219,23 @@ export function TaskInspector(props: TaskInspectorProps) {
               onChange={(event) => setStartTime(event.target.value)}
             />
           </div>
+        </Field>
+
+        <Field label="提醒">
+          <select
+            className={styles.control}
+            value={task.reminderMinutes ?? ""}
+            aria-label="提醒"
+            aria-describedby={!task.scheduledStartAt ? `reminder-hint-${task.id}` : undefined}
+            disabled={!task.scheduledStartAt}
+            onChange={(event) => patch({ reminderMinutes: event.target.value === "" ? null : Number(event.target.value) })}
+          >
+            <option value="">不提醒</option>
+            <option value={0}>准时</option>
+            {[5, 10, 15, 30, 60, 120].map((minutes) => <option key={minutes} value={minutes}>{minutes} 分钟前</option>)}
+            <option value={1440}>1 天前</option>
+          </select>
+          {!task.scheduledStartAt && <p id={`reminder-hint-${task.id}`} className={styles.reminderHint}>先设置开始时间</p>}
         </Field>
 
         <Field label="时长">

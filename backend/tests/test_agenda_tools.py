@@ -85,6 +85,25 @@ def test_tools_are_registered():
     assert {"agenda_list", "agenda_add", "agenda_update"} <= names
 
 
+def test_tools_write_update_clear_and_validate_reminders(tmp_path):
+    ctx, store = ctx_for(tmp_path)
+    result = call("agenda_add", {"tasks": [{"title": "提醒", "scheduled_start_at": "2026-10-22T10:00",
+                                         "reminder_minutes": 0}]}, ctx)
+    task = result["tasks"][0]
+    assert task["reminder_minutes"] == 0
+    updated = call("agenda_update", {"task_id": task["id"], "reminder_minutes": 15}, ctx)
+    assert updated["updated"]["reminder_minutes"] == 15
+    with store.connection() as db:
+        assert db.execute("SELECT reminder_minutes FROM agenda_tasks WHERE id=?", (task["id"],)).fetchone()[0] == 15
+    cleared = call("agenda_update", {"task_id": task["id"], "reminder_minutes": None}, ctx)
+    assert cleared["updated"]["reminder_minutes"] is None
+    for value in (1, True, "5"):
+        with pytest.raises(ToolError):
+            call("agenda_add", {"tasks": [{"title": "坏提醒", "reminder_minutes": value}]}, ctx)
+        with pytest.raises(ToolError):
+            call("agenda_update", {"task_id": task["id"], "reminder_minutes": value}, ctx)
+
+
 class PlanningChat(FakeChat):
     async def stream(self, messages, tools=None):
         self.calls.append(messages)

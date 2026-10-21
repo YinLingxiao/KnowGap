@@ -37,5 +37,9 @@ def calendar(tasks):
             if not task["scheduled_date"]:
                 title = "截止：" + title
         lines += ["BEGIN:VEVENT", "UID:" + task["id"] + "@knowgap", "DTSTAMP:" + stamp, *timing,
-                  "SUMMARY:" + escape(title), "DESCRIPTION:" + escape(task["notes"]), "END:VEVENT"]
+                  "SUMMARY:" + escape(title), "DESCRIPTION:" + escape(task["notes"])]
+        if task["scheduled_start_at"] and task.get("reminder_minutes") is not None:
+            lines += ["BEGIN:VALARM", f"TRIGGER:-PT{task['reminder_minutes']}M", "ACTION:DISPLAY",
+                      "DESCRIPTION:" + escape(task["title"]), "END:VALARM"]
+        lines.append("END:VEVENT")
     return ("\r\n".join(fold(line) for line in [*lines, "END:VCALENDAR"]) + "\r\n").encode("utf-8")

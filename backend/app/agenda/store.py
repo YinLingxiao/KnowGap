@@ -32,6 +32,10 @@ def ensure(store):
                 PRIMARY KEY(student_id, memory_id)
             );
         """)
+        # Serialize the check/add pair across concurrent first requests.
+        db.execute("BEGIN IMMEDIATE")
+        if "reminder_minutes" not in {row["name"] for row in db.execute("PRAGMA table_info(agenda_tasks)")}:
+            db.execute("ALTER TABLE agenda_tasks ADD COLUMN reminder_minutes INTEGER")
 
 
 def task(row):
@@ -71,7 +75,7 @@ def references(db, student, data, task_id=None):
 def insert(db, student, data):
     data = {"notes": "", "parent_id": None, "priority": 4, "labels": [], "subject_id": None,
             "thread_id": None, "scheduled_date": None, "scheduled_start_at": None,
-            "duration_minutes": None, "deadline_date": None, "status": "open", "completed_at": None,
+            "duration_minutes": None, "deadline_date": None, "reminder_minutes": None, "status": "open", "completed_at": None,
             "source": "manual", "memory_id": None, "review_step": None, "sort_order": 0, **data}
     data.update(id=new_id("task"), student_id=student, created_at=now(), updated_at=now())
     data["labels"] = json.dumps(data["labels"], ensure_ascii=False)

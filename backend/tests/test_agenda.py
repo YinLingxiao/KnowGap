@@ -283,3 +283,52 @@ def test_migration_repeatable_across_app_restart(tmp_path):
         task = create(client)
     with TestClient(create_app(settings, chat_model=FakeChat())) as client:
         assert listed(client)[0]["id"] == task["id"]
+
+
+def test_reminder_old_database_migration_idempotent(client):
+    from app.agenda.store import ensure
+    task = create(client)
+    store = client.app.state.store
+    with store.connection() as db:
+        db.execute("ALTER TABLE agenda_tasks DROP COLUMN reminder_minutes")
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        list(pool.map(lambda _: ensure(store), range(8)))
+    assert listed(client)[0]["id"] == task["id"]
+    assert listed(client)[0]["reminder_minutes"] is None
+    assert patch(client, task, reminder_minutes=10).json()["reminder_minutes"] == 10
+    ensure(store)
+    assert listed(client)[0]["reminder_minutes"] == 10
+
+
+@pytest.mark.parametrize("minutes", [None, 0, 5, 10, 15, 30, 60, 120, 1440])
+def test_reminder_roundtrip_and_clear(client, minutes):
+    task = create(client, reminder_minutes=minutes)
+    assert task["reminder_minutes"] == minutes
+    assert listed(client)[0]["reminder_minutes"] == minutes
+    assert patch(client, task, reminder_minutes=minutes).json()["reminder_minutes"] == minutes
+    assert patch(client, task, reminder_minutes=None).json()["reminder_minutes"] is None
+    assert listed(client)[0]["reminder_minutes"] is None
+
+
+@pytest.mark.parametrize("minutes", [-1, 1, 7, 1441, True, False, "5", 5.0, [], {}])
+def test_reminder_invalid_create_patch_and_draft(client, minutes):
+    from app.agenda.schemas import TaskDraft
+    from pydantic import ValidationError
+    assert client.post(BASE + "/tasks", json={"title": "提醒", "reminder_minutes": minutes}).status_code == 422
+    task = create(client, reminder_minutes=5)
+    assert patch(client, task, reminder_minutes=minutes).status_code == 422
+    assert listed(client)[0]["reminder_minutes"] == 5
+    with pytest.raises(ValidationError):
+        TaskDraft(title="提醒", reminder_minutes=minutes)
+
+
+@pytest.mark.parametrize("minutes", [0, 10, 1440])
+def test_ics_reminder_only_for_timed_events(client, minutes):
+    create(client, title="复习,定理;\\\n继续", scheduled_date="2026-10-22",
+           scheduled_start_at="2026-10-22T10:00", reminder_minutes=minutes)
+    create(client, title="全天提醒不触发", scheduled_date="2026-10-22", reminder_minutes=minutes)
+    create(client, title="无提醒", scheduled_date="2026-10-22", scheduled_start_at="2026-10-22T11:00")
+    text = client.get(BASE + "/export.ics").text.replace("\r\n ", "")
+    assert text.count("BEGIN:VALARM") == text.count("END:VALARM") == 1
+    assert f"BEGIN:VALARM\r\nTRIGGER:-PT{minutes}M\r\nACTION:DISPLAY\r\n" in text
+    assert "DESCRIPTION:复习\\,定理\\;\\\\\\n继续\r\nEND:VALARM\r\nEND:VEVENT" in text

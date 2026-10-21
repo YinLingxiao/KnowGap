@@ -29,6 +29,15 @@ Priority = Annotated[int, Field(strict=True, ge=1, le=4)]
 Duration = Annotated[int, Field(strict=True, ge=5, le=720)]
 
 
+def valid_reminder(value: int) -> int:
+    if value not in (0, 5, 10, 15, 30, 60, 120, 1440):
+        raise ValueError("提醒仅支持 0/5/10/15/30/60/120/1440 分钟或 null")
+    return value
+
+
+Reminder = Annotated[int, Field(strict=True), AfterValidator(valid_reminder)]
+
+
 class TaskDraft(BaseModel):
     model_config = ConfigDict(extra="forbid")
     title: Title
@@ -38,6 +47,7 @@ class TaskDraft(BaseModel):
     scheduled_date: Day | None = None
     scheduled_start_at: Start | None = None
     duration_minutes: Duration | None = None
+    reminder_minutes: Reminder | None = None
     deadline_date: Day | None = None
 
     @model_validator(mode="after")
@@ -66,6 +76,7 @@ class TaskPatch(BaseModel):
     scheduled_date: Day | None = None
     scheduled_start_at: Start | None = None
     duration_minutes: Duration | None = None
+    reminder_minutes: Reminder | None = None
     deadline_date: Day | None = None
     source: Literal["manual", "ai_breakdown"] | None = None
     status: Literal["open", "done", "cancelled"] | None = None
