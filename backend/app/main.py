@@ -33,6 +33,7 @@ from app.chat.router import chat_router
 from app.chat.subjects import subject_router
 from app.chat.service import ChatService
 from app.chat.store import ChatStore
+from app.agenda.router import agenda_router
 from app.code_sandbox.router import sandbox_router
 from app.vision.router import vision_router
 from app.vision.settings import ServiceModels
@@ -88,6 +89,7 @@ def create_app(
     app.state.service_models = service_models
     app.include_router(material_router(library, lambda subject_id: chat_store.subject(subject_id, current_student()) is not None))
     app.include_router(chat_router(chat_store, chat_service))
+    app.include_router(agenda_router(chat_store, chat))
     app.include_router(subject_router(chat_store, chat_service))
     app.include_router(auth_router(auth_store, chat_store, settings))
     app.include_router(sandbox_router(allowed_origins=settings.cors_origins))
