@@ -134,7 +134,7 @@ Rename-Item "$env:APPDATA\knowgap-desktop\ai-settings.json.bak" "ai-settings.jso
 
 ### 4.11 手动验证说明
 
-真实全局快捷键无法在自动化环境中可靠模拟，必须在**桌面会话**里亲手按键。
+真实全局快捷键必须在**桌面会话**里亲手按一次（本次已用 `SendKeys` 发送真实 `Alt+Space` 验证通过）。
 若 `Alt+Space` 被 PowerToys Run、输入法等占用，应用会输出注册失败日志并自动改注册 `Ctrl+Shift+K`；两个都失败时浮窗不可用，需要先释放快捷键再重启应用。
 
 ---
@@ -174,3 +174,38 @@ Get-ChildItem "desktop\dist\win-unpacked\resources\backend"
 3. **崩溃后后端可能残留**：正常关闭会 `taskkill /t /f` 清理；若 Electron 主进程被强杀，`knowgap.exe` 可能残留并占用端口，下次启动会换端口（登录态随 origin 变化）。现场遇到时先 `Stop-Process -Name knowgap -Force`。
 4. **安装包未签名**：对外分发会触发 SmartScreen；现场用本机构建产物演示。
 5. **Alt+Space 是系统级热键**，与 PowerToys Run 等冲突时自动回退 Ctrl+Shift+K，需现场确认实际生效的键。
+6. **后端依赖未锁定**：`backend/requirements.txt` 里 fastapi/uvicorn/pydantic 等未固定版本。全新 venv 会解析到比开发机更新的版本（本轮：fastapi 0.157.0 / starlette 1.9.0，开发机是 0.143.1 / 1.8.0），两套都验证通过，但长期不可复现。`requirements.txt` 不在本次可改范围，建议后续锁定。
+7. **卸载会留下空的安装目录**：NSIS 卸载后 `%LOCALAPPDATA%\Programs\knowgap-desktop` 仍存在（0 个文件），快捷方式和注册表项已清除，`%APPDATA%\knowgap-desktop` 数据保留。属 electron-builder/NSIS 默认行为。
+8. **打包必须在干净检出里做**：多个会话共用同一工作区时，别人未提交的改动会被 `next build` 打进安装包。本轮最终包是在 `git worktree`（仅 `2e659cd` + 本分支修复）里构建的。
+
+---
+
+## 7. 本轮验证记录（2026-10-21）
+
+- 环境：Windows 11 26300，Node 24.14.1，npm 10.9.9，Python 3.14.3；Electron 33.2.1，electron-builder 25.1.8，PyInstaller 6.22.3。
+- 代码：`feat/desktop-release`（基于 `2e659cd`），干净 worktree 构建，不含并行会话未提交改动。
+- 产物：`desktop/dist/KnowGap Setup 0.2.0.exe`，119,519,317 字节（114.0 MB），SHA256 `AD7B3B838B2A281E307D6DE1DBF970C6E8D9123C3F51A162BBCD449BAF2E0146`。
+
+| # | 结果 | 说明 |
+| --- | --- | --- |
+| 4.1 | 通过 | 1 个 `resources\backend\knowgap.exe`，父进程为 `KnowGap.exe`，`--port 62533` |
+| 4.2 | 通过 | `/health` → `{"status":"ok"}` |
+| 4.3 | 通过 | 登录页正常渲染；静态资源 200；无白屏 |
+| 4.4 | 通过 | 「使用本机演示身份直接进入」→ 主界面 |
+| 4.5 | 通过 | 真实 DeepSeek 流式回复；侧栏出现对话；token 统计正常 |
+| 4.6 | 通过 | 临时移走 `ai-settings.json` 后发送，显示「模型未配置，请在『设置 → 模型接入』填写 API 地址、模型名称和 API Key。」；首页有「未配置模型」入口 |
+| 4.7 | 通过 | 改模型名 → 保存 → 「已保存，立即生效」；`PUT /api/ai/config 200`；`ai-settings.json` 更新；留空 Key 时密钥保留 |
+| 4.8 | 通过 | 新建「数据结构」空间，空间页与 Thread 侧栏正常 |
+| 4.9 | 通过 | 考前一页纸覆盖层打开，四宫格生成，可关闭 |
+| 4.10 | 通过 | 选中 AI 回复后出现「追问这句 / 举个通俗例子 / 摘录到空间笔记」工具条 |
+| 4.11 | 通过 | `SendKeys` 发送真实 `Alt+Space`，透明浮窗出现，`quick.html` 正常渲染 |
+| 4.12 | 未验证 | `Alt+Space` 注册成功，未触发回退分支；需按 4.12 手动制造冲突后验证 |
+| 4.13 | 通过 | `/quick.html` 与 `/quick` 均 200（`ExportStaticFiles` 回退） |
+| 4.14 | 通过 | 浮窗提问 → 回复 → 「在主窗口打开」→ 主窗口切到同一对话 |
+| 4.15 | 通过 | 重启后端口仍为 62533（`port.json` 复用），无需重新登录 |
+| 4.16 | 通过 | 重启后自动打开上次对话；空间/最近对话仍在 |
+| 4.17 | 通过 | 关闭主窗口后无 `KnowGap.exe` / `knowgap.exe` 残留，端口释放 |
+| 4.18 | 通过 | 数据在 `%APPDATA%\knowgap-desktop`，重启后 `sqlite3`/`ai-settings.json`/`port.json`/`logs` 均在 |
+| 4.19 | 通过 | 二次启动进程立即退出，仅保留一个后端 |
+
+安装包：静默安装 exit 0 → 开始菜单与桌面快捷方式生成 → 安装版启动、`/health` 与 `/quick` 均 200 → 卸载 exit 0，快捷方式/注册表清除，`%APPDATA%` 数据保留（安装目录留空，见限制 7）。
