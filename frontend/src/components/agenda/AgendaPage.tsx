@@ -319,7 +319,7 @@ export function AgendaPage(props: AgendaPageProps) {
       </header>
 
       <div className={styles.body}>
-        <AgendaRail view={view} counts={counts} subjects={subjectInfos} onChange={setView} />
+        <AgendaRail view={view} counts={counts} subjects={subjectInfos} onChange={setView} onAdd={() => dispatchCompose({ subjectId: spaceId })} />
         <div className={cx(styles.content, showInspector && styles.withInspector)}>
           <div className={styles.mainCol}>{main}</div>
           {showInspector && inspected && (

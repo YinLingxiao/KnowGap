@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarDays, CalendarRange, Inbox, Star, type LucideIcon } from "lucide-react";
+import { CalendarDays, CalendarRange, Inbox, Plus, Star, type LucideIcon } from "lucide-react";
 import { cx } from "@/lib/cx";
 import type { SubjectInfo } from "./AgendaList";
 import { spaceIdOf, spaceView, VIEW_LABELS, type AgendaViewKey, type ViewCounts } from "./agendaModel";
@@ -11,6 +11,7 @@ interface AgendaRailProps {
   counts: ViewCounts;
   subjects: SubjectInfo[];
   onChange: (view: AgendaViewKey) => void;
+  onAdd: () => void;
 }
 
 const FIXED: { key: "inbox" | "today" | "upcoming" | "week"; icon: LucideIcon }[] = [
@@ -21,12 +22,17 @@ const FIXED: { key: "inbox" | "today" | "upcoming" | "week"; icon: LucideIcon }[
 ];
 
 /** 日程页左侧导航；容器宽度 ≤640px 时由 CSS 切换为顶部下拉选择 */
-export function AgendaRail({ view, counts, subjects, onChange }: AgendaRailProps) {
+export function AgendaRail({ view, counts, subjects, onChange, onAdd }: AgendaRailProps) {
   const activeSpace = spaceIdOf(view);
 
   return (
     <>
       <nav className={styles.rail} aria-label="日程视图">
+        <button type="button" className={styles.add} onClick={onAdd} aria-keyshortcuts="Q" title="添加任务（Q）">
+          <span className={styles.addIcon} aria-hidden><Plus size={13} strokeWidth={2.5} /></span>
+          <span className={styles.name}>添加任务</span>
+          <kbd className={styles.addKey}>Q</kbd>
+        </button>
         <ul className={styles.list}>
           {FIXED.map(({ key, icon: Icon }) => (
             <li key={key}>

@@ -31,6 +31,22 @@
   font-size: var(--text-xs);
 }
 
+/* 收进输入框第一行时更紧凑，高度不超过一行文字 */
+.inline {
+  gap: 8px;
+  padding: 3px 3px 3px 10px;
+  box-shadow: none;
+}
+
+.inline p {
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.inline button {
+  height: 22px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .bubble {
     transition: none;

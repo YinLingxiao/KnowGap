@@ -5,6 +5,7 @@ import {
   COACH_COPY, COACH_IDS, LEGACY_COACH_IDS, coachSeenKey, coachSessionKey,
   type CoachId,
 } from "./coach";
+import { cx } from "@/lib/cx";
 import styles from "./Coachmark.module.css";
 
 const LEGACY = new Set<CoachId>(LEGACY_COACH_IDS);
@@ -43,18 +44,33 @@ function blockingInput() {
   return !emptyComposer();
 }
 
-function place(id: CoachId, node: HTMLElement) {
+type Box = { top: number; left?: number; right?: number; inline?: boolean };
+
+const BUBBLE_H = 44;
+
+/** 气泡不能压住标题、问候语这类正文，按锚点类型选位置 */
+function place(id: CoachId, node: HTMLElement): Box | null {
   const rect = node.getBoundingClientRect();
-  const bubble = 76;
-  const below = rect.bottom + 8;
-  const above = Math.max(8, rect.top - 8 - bubble);
-  const top = id === "slash" || below + bubble > window.innerHeight ? above : below;
-  return { top, left: Math.min(Math.max(8, rect.left), window.innerWidth - 368) };
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  if (id === "slash") {
+    // 只在输入框为空时出现：收进输入框第一行的右侧，那里没有文字；太窄放不下就不提示
+    if (rect.width < 520) return null;
+    return { top: rect.top - 1, right: Math.max(8, vw - rect.right), inline: true };
+  }
+  const visibleBottom = Math.min(rect.bottom, vh);
+  if (visibleBottom - Math.max(rect.top, 0) > vh * 0.5) {
+    // 整页锚点（日程页、整个应用）：像通知一样放在可见区域右下角
+    return { top: visibleBottom - BUBBLE_H - 16, right: Math.max(8, vw - Math.min(rect.right, vw) + 16) };
+  }
+  const left = Math.min(Math.max(8, rect.left), vw - 368);
+  if (rect.bottom + 8 + BUBBLE_H <= vh) return { top: rect.bottom + 8, left };
+  return { top: Math.max(8, rect.top - 8 - BUBBLE_H), left };
 }
 
 export function CoachmarkHost({ userId, enabled }: { userId: string; enabled: boolean }) {
   const [current, setCurrent] = useState<CoachId | null>(null);
-  const [box, setBox] = useState<{ top: number; left: number } | null>(null);
+  const [box, setBox] = useState<Box | null>(null);
   const [paused, setPaused] = useState(false);
   const [slashArmed, setSlashArmed] = useState(false);
   const currentRef = useRef<CoachId | null>(null);
@@ -132,10 +148,11 @@ export function CoachmarkHost({ userId, enabled }: { userId: string; enabled: bo
           node = found;
         }
       }
-      setCurrent(next);
-      if (next && node) {
+      const spot = next && node ? place(next, node) : null;
+      setCurrent(spot ? next : null);
+      if (next && spot) {
         rememberShown(userId, next);
-        setBox(place(next, node));
+        setBox(spot);
       } else {
         setBox(null);
       }
@@ -146,10 +163,14 @@ export function CoachmarkHost({ userId, enabled }: { userId: string; enabled: bo
     };
     schedule();
     const observer = new MutationObserver(schedule);
-    observer.observe(document.body, { childList: true, subtree: true });
+    // 侧栏收起、面板展开这类布局变化只改 class，也要重新定位
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["class"] });
     window.addEventListener("resize", schedule);
     window.addEventListener("scroll", schedule, true);
+    // 侧栏等宽度动画结束后再量一次，否则气泡停在动画开始前的位置
+    document.addEventListener("transitionend", schedule, true);
     return () => {
+      document.removeEventListener("transitionend", schedule, true);
       window.cancelAnimationFrame(frame);
       observer.disconnect();
       window.removeEventListener("resize", schedule);
@@ -159,7 +180,12 @@ export function CoachmarkHost({ userId, enabled }: { userId: string; enabled: bo
 
   if (!current || !box) return null;
   return (
-    <div className={styles.bubble} style={{ top: box.top, left: box.left }} role="dialog" aria-label={COACH_COPY[current]}>
+    <div
+      className={cx(styles.bubble, box.inline && styles.inline)}
+      style={{ top: box.top, left: box.left, right: box.right }}
+      role="dialog"
+      aria-label={COACH_COPY[current]}
+    >
       <p>{COACH_COPY[current]}</p>
       <button
         type="button"
