@@ -28,6 +28,7 @@ from app.chat.agent import (
     review_messages, validate_analysis, validate_resolution,
 )
 from app.chat.store import ChatStore, INTERRUPTED
+from app.chat.attachments import attachment_query, prepare_attachment_history
 from app.chat.plan import PlanStore, brief
 from app.chat.checkpoints import resume_state
 from app.chat.usage import normalize_usage
@@ -493,7 +494,8 @@ class ChatService:
             user_seqs = {row["id"]: row["seq"] for row in history if row["role"] == "user"}
             history = [row for row in history if user_seqs.get(row["reply_to"], row["seq"]) <= user_row["seq"]]
             history.sort(key=lambda row: (user_seqs.get(row["reply_to"], row["seq"]), row["seq"]))
-            user_text = user_row["content"]
+            history, attached_files = prepare_attachment_history(history, self.library, student_id)
+            user_text = next(row['content'] for row in history if row['id'] == generation.user_message_id)
             interview = self.store.onboarding_status(student_id)
             if interview["conversation_id"] == generation.conversation_id:
                 from app.chat.onboarding import EXTRACTION_PROMPT, QUESTIONS, apply_answer
@@ -524,7 +526,11 @@ class ChatService:
             memories = self.store.relevant_memories(
                 student_id, user_text, None, subject_id,
             )
-            sources = self.library.search_scoped(student_id, user_text[:600], 3, subject_id) if self.library else []
+            if self.library and attached_files:
+                sources = self.library.search(student_id, attachment_query(user_text)[:600], 5,
+                                              document_ids=[item['id'] for item in attached_files])
+            else:
+                sources = self.library.search_scoped(student_id, user_text[:600], 3, subject_id) if self.library else []
             model = self.model()
             finish = "stop"
             role = self.store.role_context(generation.conversation_id)
@@ -547,6 +553,7 @@ class ChatService:
                 custom_skills=custom_skills, compressed_summary=compressed_summary,
                 compressed_up_to_seq=compressed_seq,
                 learning_plan=learning_plan, plan_user_events=plan_user_events,
+                attached_files=attached_files,
             )
             ctx = ToolContext(
                 workspace_of(self.settings), self.store, student_id, generation.conversation_id,

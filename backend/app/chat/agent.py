@@ -16,6 +16,7 @@ from app.chat.prompts import (
 from app.chat.schemas import LearnerMemory, Subject
 from app.chat.skills import recommend_widget, select_skill_prompt
 from app.chat.store import quote_in
+from app.chat.attachments import attachment_query, readable_file_markers
 from app.models.schemas import Problem, SourceReference
 from app.services.problems import PROBLEMS, reference_for
 from app.services.reference_guard import declared_verdict
@@ -166,7 +167,7 @@ def dialogue(history: list[sqlite3.Row], *, include_tools: bool = False, bounded
                     }]},
                     {"role": "tool", "tool_call_id": call["id"], "content": call["output"]},
                 ])
-        content = row["content"]
+        content = readable_file_markers(row["content"])
         if tool_turns:
             content = content[sum(len(t.get("content") or "") for t in tool_turns if t["role"] == "assistant"):]
         if not content.strip() and not tool_turns:
@@ -222,20 +223,22 @@ def chat_messages(
     custom_skills: list[dict] | None = None, compressed_summary: str | None = None,
     compressed_up_to_seq: int = 0,
     learning_plan: dict | None = None, plan_user_events: list[str] | None = None,
+    attached_files: list[dict] | None = None,
 ) -> list[dict]:
     # Ordered from stable to volatile so provider prefix caches cover the prompt and the whole history;
     # only the trailing turn context (and the new message) is fresh input each turn.
     role_info = conversation_role or {"role": "chat"}
     role_name = role_info.get("role", "chat")
-    user_texts = [row["content"] for row in history if row["role"] == "user"]
+    user_texts = [readable_file_markers(row["content"]) for row in history if row["role"] == "user"]
     latest_user = user_texts[-1] if user_texts else ""
     active_skill = select_skill_prompt(
         role_name,
-        latest_user,
+        attachment_query(latest_user) if attached_files else latest_user,
         role_info.get("delegated_task"),
         role_info.get("delegated_skill"),
         conversation_title,
         earlier_user_texts=user_texts[:-1],
+        attached_files=attached_files,
     )
     if custom_skills:
         sample_text = f"{role_info.get('delegated_task') or ''} {latest_user}".lower()
@@ -291,6 +294,13 @@ def chat_messages(
     }
     if learning_plan:
         turn["learning_plan"] = learning_plan
+    if attached_files:
+        turn["attached_files"] = attached_files
+        by_id = {item['id']: item for item in attached_files}
+        for source, reference in zip(turn['course_sources'], sources):
+            if reference.document_id in by_id:
+                source['document_id'] = reference.document_id
+                source['unit_label'] = by_id[reference.document_id]['unit_label']
     if plan_user_events:
         turn["plan_user_events"] = plan_user_events
     if reported_prior_knowledge:
@@ -317,7 +327,7 @@ def chat_messages(
     effective_summary = ""
     if compressed_up_to_seq and (compressed_summary or "").strip():
         recent = [row for row in history if row["seq"] > compressed_up_to_seq or row["kind"] == "exercise"]
-        effective_summary = compressed_summary.strip()
+        effective_summary = readable_file_markers(compressed_summary.strip())
     transcript = dialogue(recent, include_tools=True)
     # Turns that still overflow the window before the next compression leave a cheap deterministic trace.
     full = dialogue(recent, bounded=False)
