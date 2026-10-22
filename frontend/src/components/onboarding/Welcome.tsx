@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import Image from "next/image";
 import { ArrowRight } from "lucide-react";
-import { getAIConfig } from "@/lib/api/ai-config";
 import styles from "./Welcome.module.css";
 
 const EXAMPLES = ["数据结构 · 期末", "电路原理", "考研数学"];
@@ -11,24 +10,13 @@ const EXAMPLES = ["数据结构 · 期末", "电路原理", "考研数学"];
 interface WelcomeProps {
   busy: boolean;
   error: string;
-  configVersion: string;
   onAnswer: (text: string) => void;
   onDemo: () => void;
   onSkip: () => void;
-  onConfigure: () => void;
 }
 
-export function Welcome({ busy, error, configVersion, onAnswer, onDemo, onSkip, onConfigure }: WelcomeProps) {
+export function Welcome({ busy, error, onAnswer, onDemo, onSkip }: WelcomeProps) {
   const [text, setText] = useState("");
-  const [needModel, setNeedModel] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    let live = true;
-    getAIConfig()
-      .then((config) => { if (live) setNeedModel(!config.configured); })
-      .catch(() => { if (live) setNeedModel(false); });
-    return () => { live = false; };
-  }, [configVersion]);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -36,35 +24,6 @@ export function Welcome({ busy, error, configVersion, onAnswer, onDemo, onSkip, 
     if (!trimmed || busy) return;
     onAnswer(trimmed);
   };
-
-  if (needModel === null) {
-    return (
-      <div className={styles.wrap}>
-        <div className={styles.card}>
-          <Image src="/brand/knowgap-logo-v1.png" alt="" width={36} height={36} className={styles.logo} />
-          <p className={styles.lead}>正在确认模型…</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (needModel) {
-    return (
-      <div className={styles.wrap}>
-        <div className={styles.card}>
-          <Image src="/brand/knowgap-logo-v1.png" alt="" width={36} height={36} className={styles.logo} />
-          <h1>先连上 AI 模型（约 1 分钟）</h1>
-          <p className={styles.lead}>填写任意 OpenAI 兼容服务的地址、Key 和模型名。</p>
-          <button className={styles.primary} type="button" onClick={onConfigure}>去填写</button>
-          {error && <p className={styles.error} role="alert">{error}</p>}
-          <div className={styles.links}>
-            <button type="button" disabled={busy} onClick={onDemo}>先逛逛演示空间</button>
-            <button type="button" disabled={busy} onClick={onSkip}>跳过，直接开始</button>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className={styles.wrap}>
@@ -98,6 +57,30 @@ export function Welcome({ busy, error, configVersion, onAnswer, onDemo, onSkip, 
           <button type="button" disabled={busy} onClick={onSkip}>跳过，直接开始</button>
         </div>
       </form>
+    </div>
+  );
+}
+
+export function ModelGate({ busy, error, configured, onConfigure, onRetry, onLogout }: {
+  busy: boolean;
+  error: string;
+  configured: boolean | null;
+  onConfigure: () => void;
+  onRetry: () => void;
+  onLogout: () => void;
+}) {
+  return (
+    <div className={styles.wrap}>
+      <section className={styles.card} aria-labelledby="model-gate-title" aria-busy={busy}>
+        <Image src="/brand/knowgap-logo-v1.png" alt="" width={36} height={36} className={styles.logo} />
+        <h1 id="model-gate-title">先连上 AI 模型</h1>
+        <p className={styles.lead}>填写 OpenAI 兼容服务的地址、Key 和模型名，保存并测试通过后继续。</p>
+        {busy && <p className={styles.lead} role="status">正在确认模型和学习进度…</p>}
+        {error && <p className={styles.error} role="alert">{error}</p>}
+        {configured === false && <button className={styles.primary} type="button" onClick={onConfigure}>去填写</button>}
+        {error && <button className={styles.primary} type="button" disabled={busy} onClick={onRetry}>重试</button>}
+        <button className={styles.logout} type="button" onClick={onLogout}>退出登录</button>
+      </section>
     </div>
   );
 }

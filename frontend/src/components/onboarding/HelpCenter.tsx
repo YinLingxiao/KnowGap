@@ -1,5 +1,7 @@
 "use client";
 
+import { useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { GUIDES_RESET_EVENT, checklistDismissKey, checklistDoneKey, resetCoachmarks } from "./coach";
 import styles from "./HelpCenter.module.css";
 
@@ -55,9 +57,53 @@ const KEYS = [
 ];
 
 export function HelpCenter({ desktop, userId, onClose, onTry }: HelpCenterProps) {
-  return (
-    <div className={styles.backdrop} role="presentation" onMouseDown={onClose}>
-      <div className={styles.panel} role="dialog" aria-labelledby="help-title" onMouseDown={(event) => event.stopPropagation()}>
+  const panel = useRef<HTMLDivElement>(null);
+  const close = useRef(onClose);
+  close.current = onClose;
+  const [position, setPosition] = useState({ left: 12, bottom: 56, maxHeight: 600 });
+
+  useLayoutEffect(() => {
+    const trigger = document.getElementById("help-trigger");
+    const place = () => {
+      const rect = trigger?.getBoundingClientRect();
+      const bottom = rect ? window.innerHeight - rect.top + 8 : 56;
+      setPosition({
+        left: Math.max(12, Math.min(rect?.left ?? 12, window.innerWidth - 492)),
+        bottom,
+        maxHeight: Math.max(120, Math.min(680, window.innerHeight - bottom - 12)),
+      });
+    };
+    place();
+    panel.current?.focus();
+    const outside = (event: PointerEvent) => {
+      if (event.target instanceof Node && !panel.current?.contains(event.target) && !trigger?.contains(event.target)) {
+        // Keep the dismissal click from taking focus away after cleanup restores it.
+        event.preventDefault();
+        close.current();
+      }
+    };
+    const keyboard = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        close.current();
+      }
+    };
+    document.addEventListener("pointerdown", outside);
+    window.addEventListener("keydown", keyboard, true);
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      document.removeEventListener("pointerdown", outside);
+      window.removeEventListener("keydown", keyboard, true);
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+      trigger?.focus({ preventScroll: true });
+    };
+  }, []);
+
+  return createPortal(
+      <div ref={panel} id="help-panel" className={styles.panel} style={{ left: position.left, bottom: position.bottom, maxHeight: position.maxHeight }} role="dialog" aria-labelledby="help-title" tabIndex={-1}>
         <header>
           <h2 id="help-title">帮助</h2>
           <button type="button" onClick={onClose} aria-label="关闭帮助">关闭</button>
@@ -123,7 +169,7 @@ export function HelpCenter({ desktop, userId, onClose, onTry }: HelpCenterProps)
             重新显示上手清单和提示
           </button>
         </footer>
-      </div>
-    </div>
+      </div>,
+    document.body,
   );
 }

@@ -11,6 +11,8 @@ import styles from "./GettingStarted.module.css";
 
 interface GettingStartedProps {
   userId: string;
+  hasSpace: boolean;
+  onCreateSpace: () => void;
   onExplain: () => void;
   onQuiz: () => void;
   onSchedule: () => void;
@@ -19,6 +21,7 @@ interface GettingStartedProps {
 }
 
 const ITEMS = [
+  ["space", "建一个学习空间", "onCreateSpace"],
   ["explained", "讲懂一个概念", "onExplain"],
   ["answered", "答对一道小题", "onQuiz"],
   ["scheduled", "让 AI 排一次复习", "onSchedule"],
@@ -62,6 +65,7 @@ export function GettingStarted(props: GettingStartedProps) {
   }, [userId]);
 
   const done = {
+    space: props.hasSpace,
     explained: flags.explained,
     answered: flags.answered,
     scheduled: flags.scheduled,
@@ -79,7 +83,7 @@ export function GettingStarted(props: GettingStartedProps) {
   if (celebrating) {
     return (
       <section className={styles.done} role="status">
-        <p>五件事都做完了</p>
+        <p>六件事都做完了</p>
         <button
           type="button"
           onClick={() => {
@@ -94,6 +98,7 @@ export function GettingStarted(props: GettingStartedProps) {
   }
 
   const actions = {
+    onCreateSpace: props.onCreateSpace,
     onExplain: props.onExplain,
     onQuiz: props.onQuiz,
     onSchedule: props.onSchedule,
