@@ -309,3 +309,47 @@
     box-shadow: var(--shadow-popover);
   }
 }
+
+/* 顶栏「…」菜单：放导出等低频操作 */
+.moreAnchor {
+  position: relative;
+}
+
+.moreMenu {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 4px);
+  right: 0;
+  display: grid;
+  min-width: 180px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-popover);
+}
+
+.moreItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.moreItem:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.moreItem:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CircleAlert, Download, LoaderCircle, PanelLeftOpen, RotateCcw, Sparkles } from "lucide-react";
+import { CircleAlert, Download, Ellipsis, LoaderCircle, PanelLeftOpen, RotateCcw, Sparkles } from "lucide-react";
 import { describeError } from "@/lib/api/errors";
 import { agendaApi } from "@/lib/agenda/api";
 import type { AgendaTask, AgendaThread, TaskInput } from "@/lib/agenda/types";
@@ -66,6 +66,21 @@ export function AgendaPage(props: AgendaPageProps) {
   const [inspectedId, setInspectedId] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [breakdownOpen, setBreakdownOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!moreOpen) return;
+    const close = (event: MouseEvent) => {
+      if (!moreRef.current?.contains(event.target as Node)) setMoreOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setMoreOpen(false); };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [moreOpen]);
   const [weekStart, setWeekStart] = useState<string | null>(null);
   const quickRef = useRef<HTMLInputElement>(null);
 
@@ -267,9 +282,34 @@ export function AgendaPage(props: AgendaPageProps) {
         <button type="button" className={styles.btn} onClick={() => setBreakdownOpen(true)} aria-label="AI 拆解排期" title="AI 拆解排期">
           <Sparkles size={13} aria-hidden />AI 拆解排期
         </button>
-        <button type="button" className={styles.btn} onClick={() => void exportIcs()} disabled={exporting} aria-label="导出 .ics" title="导出 .ics 日历文件">
-          {exporting ? <LoaderCircle size={13} className={styles.spin} aria-hidden /> : <Download size={13} aria-hidden />}导出 .ics
-        </button>
+        {/* 低频操作收进「…」菜单 */}
+        <div className={styles.moreAnchor} ref={moreRef}>
+          <button
+            type="button"
+            className={styles.iconBtn}
+            onClick={() => setMoreOpen((open) => !open)}
+            aria-haspopup="menu"
+            aria-expanded={moreOpen}
+            aria-label="更多操作"
+            title="更多操作"
+          >
+            {exporting ? <LoaderCircle size={15} className={styles.spin} aria-hidden /> : <Ellipsis size={16} aria-hidden />}
+          </button>
+          {moreOpen && (
+            <div className={styles.moreMenu} role="menu">
+              <button
+                type="button"
+                role="menuitem"
+                className={styles.moreItem}
+                disabled={exporting}
+                onClick={() => { setMoreOpen(false); void exportIcs(); }}
+              >
+                <Download size={14} aria-hidden />
+                <span>导出到日历（.ics）</span>
+              </button>
+            </div>
+          )}
+        </div>
       </header>
 
       <div className={styles.body}>

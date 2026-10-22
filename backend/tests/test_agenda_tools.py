@@ -128,3 +128,5 @@ def test_chat_turn_creates_agenda_task_visible_in_agenda_api(tmp_path):
         tasks = client.get("/api/agenda/tasks").json()["tasks"]
         assert [task["title"] for task in tasks] == ["明天下午复习栈"]
     assert "agenda_add" in model.tool_names
+    # 没绑定工作区（开发者模式关闭）时，文件与命令工具不提供给模型
+    assert not {"read", "write", "edit", "bash"} & set(model.tool_names)

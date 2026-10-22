@@ -16,7 +16,17 @@ from tests.test_chat import FakeChat, context_of
 STUDENT = "demo-student-001"
 
 
-def setup(tmp_path, model):
+class WorkspaceSettings:
+    """开发者模式：绑定了工作区，模型才拿得到文件与命令工具。"""
+
+    def __init__(self, path):
+        self.path = str(path)
+
+    def agent_config(self):
+        return {"workspace": self.path}
+
+
+def setup(tmp_path, model, workspace=False):
     base = Store(tmp_path / "coordination.sqlite3")
     base.initialize()
     MaterialStore(base).initialize()
@@ -24,7 +34,8 @@ def setup(tmp_path, model):
     store.initialize()
     sid = store.create_subject(STUDENT, "Java", "", "").id
     main = store.subject(sid, STUDENT).main_conversation_id
-    return store, ChatService(store, lambda: model), sid, main
+    settings = WorkspaceSettings(tmp_path) if workspace else None
+    return store, ChatService(store, lambda: model, settings=settings), sid, main
 
 
 async def settle(service):
@@ -143,7 +154,7 @@ def test_busy_worker_queues_followups_in_order_and_preserves_original_input(tmp_
 def test_workers_survive_observer_disconnect_and_surface_approval_and_stop(tmp_path):
     async def scenario():
         model = Coordinator(approval=True)
-        store, service, sid, main = setup(tmp_path, model)
+        store, service, sid, main = setup(tmp_path, model, workspace=True)
         source = store.add_user_message(main, "把讲解记到文件", "approval-main-01")
         _ = [e async for e in service.events(service.begin(STUDENT, main, source, []))]
         worker = store.threads(sid, STUDENT)[0].id

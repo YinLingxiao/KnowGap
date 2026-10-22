@@ -19,6 +19,7 @@ import type { AIConfigStatus } from "@/lib/api/ai-config";
 import { FocusHeatmap } from "../focus/FocusHeatmap";
 import { ModelAccessCard, type ModelSignal } from "./ModelAccessCard";
 import { ServiceModelsSection } from "./ServiceModelsSection";
+import { useDevMode, writeDevMode } from "@/lib/devMode";
 import styles from "./Settings.module.css";
 
 declare global {
@@ -69,7 +70,7 @@ const GROUPS: Array<{ title: string; items: Array<{ key: Tab; label: string; ico
     title: "本机与环境",
     items: [
       { key: "models", label: "模型接入", icon: Cpu },
-      { key: "workspace", label: "工作区", icon: FolderOpen },
+      { key: "workspace", label: "开发者工具", icon: FolderOpen },
     ],
   },
   {
@@ -1134,6 +1135,7 @@ function WorkspacePane() {
   const [memoryApproval, setMemoryApproval] = useState(false);
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
+  const devMode = useDevMode();
   useEffect(() => {
     void chatApi
       .agentSettings()
@@ -1160,7 +1162,25 @@ function WorkspacePane() {
   }
   return (
     <section>
-      <h2 className={styles.sectionTitle}>工作区</h2>
+      <h2 className={styles.sectionTitle}>开发者工具</h2>
+      <SettingRow
+        title="开发者模式"
+        desc="让 AI 读写你指定文件夹里的文件、执行终端命令，适合做编程项目。学习用不到，默认关闭；关闭时会解除工作区绑定和自动批准。"
+      >
+        <Toggle
+          checked={devMode || Boolean(workspace) || autoApprove}
+          label="开发者模式"
+          onChange={(value) => {
+            writeDevMode(value);
+            if (!value && (workspace || autoApprove)) {
+              setWorkspace("");
+              setAutoApprove(false);
+              void save({ workspace: "", autoApprove: false, memoryWriteApproval: memoryApproval });
+            }
+          }}
+        />
+      </SettingRow>
+      {(devMode || Boolean(workspace) || autoApprove) && (<>
       <SettingRow title="信任的工作区文件夹" desc="Agent 的文件读写工具仅限在此目录内操作。">
         <div className={styles.pathRow}>
           <input
@@ -1195,6 +1215,7 @@ function WorkspacePane() {
           }}
         />
       </SettingRow>
+      </>)}
       {note && <p className={styles.emptyLine}>{note}</p>}
     </section>
   );

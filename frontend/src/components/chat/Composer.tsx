@@ -10,6 +10,7 @@ import {
 import type { StreamPhase } from "@/hooks/useChat";
 import { getAIConfig } from "@/lib/api/ai-config";
 import { uploadImage } from "@/lib/api/vision-client";
+import { useDevMode } from "@/lib/devMode";
 import { PlanBar } from "./PlanBar";
 import { chatApi } from "@/lib/chat/api";
 import type { ChatMessage } from "@/lib/chat/types";
@@ -238,6 +239,7 @@ export function Composer({
   const [workspace, setWorkspace] = useState<string>("");
   const [wsDraft, setWsDraft] = useState<string>("");
   const [autoApprove, setAutoApprove] = useState<boolean>(false);
+  const devMode = useDevMode();
   const [memApproval, setMemApproval] = useState<boolean>(false);
   const [wsNote, setWsNote] = useState<string>("");
   const [attachNote, setAttachNote] = useState("");
@@ -496,6 +498,9 @@ export function Composer({
       document.removeEventListener("keydown", onKey);
     };
   }, [menuOpen, effortOpen, wsOpen]);
+
+  // 读写本地文件、执行命令是开发者能力：默认不在输入框里出现；已经绑定过工作区或开着自动批准的，照常显示以便关掉
+  const devTools = devMode || Boolean(workspace) || autoApprove;
 
   const saveEnv = async (nextWs: string, nextAuto: boolean) => {
     setWsNote("");
@@ -1072,6 +1077,7 @@ export function Composer({
                       <div className={styles.lobeMenuDivider} role="separator" />
                       <p className={styles.lobeMenuSection}>对话设置</p>
 
+                      {devTools && (
                       <button
                         type="button"
                         role="menuitem"
@@ -1098,6 +1104,7 @@ export function Composer({
                           <span className={styles.lobeMenuPill}>{wsShortName}</span>
                         </span>
                       </button>
+                      )}
 
                       <button
                         type="button"
@@ -1115,6 +1122,7 @@ export function Composer({
                         </span>
                       </button>
 
+                      {devTools && (
                       <button
                         type="button"
                         role="menuitemcheckbox"
@@ -1131,6 +1139,7 @@ export function Composer({
                           <i />
                         </span>
                       </button>
+                      )}
                     </>
                   ) : plusPane === "exercises" ? (
                     <>

@@ -117,7 +117,12 @@ def test_cancel_mid_batch_keeps_completed_results_and_closes_pending_calls(tmp_p
 
         monkeypatch.setattr("app.chat.service.run_tool", fake_tool)
         model = FileChat()
-        service = ChatService(store, lambda: model)
+
+        class Settings:
+            def agent_config(self):
+                return {"workspace": str(tmp_path)}
+
+        service = ChatService(store, lambda: model, settings=Settings())
         user = store.add_user_message(conversation, "读取", "req-cancel-tools")
         generation = service.begin(STUDENT, conversation, user, [])
         await asyncio.wait_for(second_started.wait(), 3)

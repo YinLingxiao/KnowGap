@@ -573,6 +573,9 @@ class ChatService:
             )]
             if exercise is None:
                 definitions = [tool for tool in definitions if tool["function"]["name"] != "exercise_reference"]
+            if ctx.workspace is None:
+                # 读写文件与终端命令属于开发者模式：没有绑定工作区时不提供给模型
+                definitions = [tool for tool in definitions if tool["function"]["name"] not in {"read", "write", "edit", "bash"}]
             if role["role"] == "chat" and lesson_first(user_text):
                 # 「先讲概念再出题」由教学流程现场出题；顺手检索真题会触发严格溯源，把随堂小题隐藏掉
                 definitions = [tool for tool in definitions if tool["function"]["name"] != SEARCH_TOOL]
