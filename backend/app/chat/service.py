@@ -875,7 +875,7 @@ class ChatService:
             raw = await asyncio.wait_for(self.model().complete_json([
                 {"role": "system", "content": INFER_PROMPT},
                 {"role": "user", "content": json.dumps({"text": cleaned}, ensure_ascii=False)},
-            ]), 8)
+            ]), 15)
             guessed = parse_inference(raw, cleaned)
         except Exception:
             logger.info("Space inference used the original wording")

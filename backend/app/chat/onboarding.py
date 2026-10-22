@@ -1,4 +1,6 @@
 """Persisted interview state. Model proposes evidence-backed facts; code controls progression."""
+
+import re
 import json
 
 FIELDS = ("background", "explanation", "interaction")
@@ -75,8 +77,11 @@ INFER_PROMPT = '''你只根据用户这一句话推断学习空间。只输出 J
 
 
 def fallback_space(text: str) -> dict:
+    """模型不可用时：第一个分句作空间名（去掉「我在学」这类前缀），整句作目标。"""
     raw = " ".join(text.split()).strip()
-    name = raw[:40] or "新的学习"
+    first = re.split(r"[，,。；;！!？?、]|\s[-·]\s|，", raw, maxsplit=1)[0].strip()
+    first = re.sub(r"^(?:我)?(?:最近|现在|正在)?(?:在)?(?:学|学习|复习|准备)\s*", "", first).strip(" ·-") or first
+    name = (first or raw)[:24] or "新的学习"
     return {"name": name, "goal": raw[:400] or name}
 
 

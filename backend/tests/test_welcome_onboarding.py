@@ -9,9 +9,10 @@ def test_welcome_falls_back_to_the_original_words_when_the_model_is_useless(tmp_
     with TestClient(create_app(isolated_settings(tmp_path), chat_model=FakeChat())) as client:
         assert client.get("/api/onboarding").json()["status"] == "not_started"
         body = client.post("/api/onboarding/welcome", json={"text": "数据结构 · 期末"}).json()
-        assert body["name"] == "数据结构 · 期末"
+        # 模型不可用时：第一个分句作空间名，整句留作目标
+        assert body["name"] == "数据结构"
         assert body["goal"] == "数据结构 · 期末"
-        assert body["opener"] == "我在学数据结构 · 期末，先用一个具体例子带我入门第一个概念"
+        assert body["opener"] == "我在学数据结构，先用一个具体例子带我入门第一个概念"
         assert client.get("/api/onboarding").json()["status"] == "completed"
         subjects = client.get("/api/subjects").json()
         assert subjects[0]["id"] == body["subject_id"]
