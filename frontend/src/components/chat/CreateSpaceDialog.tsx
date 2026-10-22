@@ -162,8 +162,8 @@ export function CreateSpaceDialog({ subject, onClose, onCreate, onUpdate }: Crea
               onDragLeave={() => setOver(false)}
               onDrop={(event) => { event.preventDefault(); setOver(false); addFiles(event.dataTransfer.files); }}
             >
-              <span>拖入文件，或点击手动添加</span>
-              <input ref={fileRef} type="file" accept=".pdf,.txt,.md" multiple hidden onChange={(event) => addFiles(event.target.files)} />
+              <span>拖入 PDF、Word、PPT、Excel 或文本文件，或点击添加</span>
+              <input ref={fileRef} type="file" accept=".pdf,.docx,.pptx,.xlsx,.txt,.md,.csv" multiple hidden onChange={(event) => addFiles(event.target.files)} />
             </div>
             {files.length > 0 && (
               <ul className={styles.fileList}>

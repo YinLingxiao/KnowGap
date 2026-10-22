@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent, type ReactNode } from "react";
+import {
+  useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent, type KeyboardEvent, type ReactNode,
+} from "react";
 import {
   ArrowLeftRight, ArrowUp, AtSign, Bold, Check, ChevronDown, ChevronLeft, ChevronRight, Code, Dumbbell,
   FileText, FolderOpen, Italic, Layers, List, ListChecks, ListOrdered, ListTodo, MessageSquareQuote, Mic,
@@ -10,6 +12,10 @@ import {
 import type { StreamPhase } from "@/hooks/useChat";
 import { getAIConfig } from "@/lib/api/ai-config";
 import { uploadImage } from "@/lib/api/vision-client";
+import { toApiError } from "@/lib/api/errors";
+import {
+  ATTACHMENT_ACCEPT, MAX_FILE_MARKERS, attachmentApi, formatFileMarker, intentsFor, isDocumentFile, parseFileMarkers,
+} from "@/lib/chat/attachments";
 import { useDevMode } from "@/lib/devMode";
 import { PlanBar } from "./PlanBar";
 import { chatApi } from "@/lib/chat/api";
@@ -21,6 +27,7 @@ import { QUOTE_TO_COMPOSER_EVENT, SEND_TO_COMPOSER_EVENT, type ComposerTextDetai
 import { ImageAttach } from "./widgets/ImageAttach";
 import { withImageMarker } from "./widgets/visionData";
 import { WIDGET_SEND_EVENT, type WidgetSendDetail } from "./widgets/widgetEvents";
+import { FileCard, kindFromName, rememberFile, recalledFile, scaleOf, type FileCardState } from "./FileCard";
 import styles from "./Composer.module.css";
 
 export type ThinkingEffort = "off" | "low" | "medium" | "high";
@@ -43,6 +50,20 @@ const MODEL_STORAGE_KEY = "knowgap.ai.model.v1";
 const EFFORT_EVENT = "knowgap:thinking-effort";
 const AGENT_ENV_EVENT = "knowgap:agent-env";
 const FEYNMAN_PROMPT = "我想用费曼学习法自测：请你扮演一位认真但有疑惑的同桌听我讲，并在我讲得含糊或漏掉边界条件的地方追问我。我现在开始讲：";
+
+const IMAGE_RE = /^image\/(png|jpe?g|webp)$/i;
+const NEW_CHAT_FILE_HINT = "先发一句话再上传文件，文件会保存在这段对话的资料库中。";
+
+interface PendingFile {
+  key: string;
+  name: string;
+  state: FileCardState;
+  error?: string;
+}
+
+function hasFiles(event: DragEvent): boolean {
+  return Array.from(event.dataTransfer.types).includes("Files");
+}
 
 interface SlashCommand {
   id: string;
@@ -222,12 +243,31 @@ function deriveInstantSuggestion(messages?: ChatMessage[]): string {
 }
 
 export function Composer({
-  value, onChange, onSend, onStop, phase, busy, problems = [], onStartExercise, autoFocusKey,
+  value: draft, onChange: onChangeRaw, onSend, onStop, phase, busy, problems = [], onStartExercise, autoFocusKey,
   placeholder = "继续提问，或说说你的理解…", hero = false, inputId = COMPOSER_ID,
   conversationId, messages,
 }: ComposerProps) {
+  // 草稿 = 开头的附件标记行 + 正文。输入框和下面所有逻辑只处理正文（value / onChange），标记由这里统一保留
+  const parsedDraft = useMemo(() => parseFileMarkers(draft), [draft]);
+  const value = parsedDraft.files.length ? parsedDraft.body : draft;
+  const draftRef = useRef(draft);
+  const onChangeRawRef = useRef(onChangeRaw);
+  useEffect(() => {
+    draftRef.current = draft;
+    onChangeRawRef.current = onChangeRaw;
+  });
+  const writeDraft = useCallback((files: Array<{ id: string; name: string }>, body: string) => {
+    // 只读契约的解析器将标记文件名限制为 200 字符；卡片仍可用缓存显示完整原名。
+    const lines = files.map((file) => formatFileMarker({ ...file, name: file.name.replace(/[\]\n|]/g, " ").trim().slice(0, 200) }));
+    const next = lines.length ? `${lines.join("\n")}\n${body}` : body;
+    draftRef.current = next;
+    onChangeRawRef.current(next);
+  }, []);
+  const onChange = useCallback((body: string) => {
+    writeDraft(parseFileMarkers(draftRef.current).files, body);
+  }, [writeDraft]);
+
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const attachInputRef = useRef<HTMLInputElement>(null);
   const composing = useRef(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [plusPane, setPlusPane] = useState<"root" | "skills" | "exercises">("root");
@@ -243,6 +283,19 @@ export function Composer({
   const [memApproval, setMemApproval] = useState<boolean>(false);
   const [wsNote, setWsNote] = useState<string>("");
   const [attachNote, setAttachNote] = useState("");
+  const [fileHint, setFileHint] = useState("");
+  const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
+  const pendingRef = useRef<PendingFile[]>([]);
+  const [imageUploads, setImageUploads] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const fileSeq = useRef(0);
+  const dragDepth = useRef(0);
+  const convRef = useRef(conversationId);
+  const uploadEpoch = useRef(0);
+  const updatePending = useCallback((update: (list: PendingFile[]) => PendingFile[]) => {
+    pendingRef.current = update(pendingRef.current);
+    setPendingFiles(pendingRef.current);
+  }, []);
   const [wsPicking, setWsPicking] = useState<boolean>(false);
   const [hasFolderPicker, setHasFolderPicker] = useState<boolean>(false);
   const [llmGhost, setLlmGhost] = useState<string>("");
@@ -257,6 +310,7 @@ export function Composer({
   const wsRef = useRef<HTMLDivElement>(null);
   const generating = phase === "connecting" || phase === "streaming";
   const locked = busy || phase === "connecting";
+  const uploading = imageUploads > 0 || pendingFiles.some((file) => file.state === "uploading");
 
   const lastMessage = messages && messages.length > 0 ? messages[messages.length - 1] : null;
   const lastCompletedAssistantId =
@@ -297,7 +351,7 @@ export function Composer({
     };
   }, [conversationId, lastCompletedAssistantId, hero]);
 
-  const activeGhost = !hero && !generating && !locked && lastCompletedAssistantId
+  const activeGhost = !hero && !generating && !locked && !parsedDraft.files.length && lastCompletedAssistantId
     ? (llmGhost || instantGhost)
     : "";
 
@@ -432,7 +486,7 @@ export function Composer({
     if (pendingSend.current !== null) {
       if (value !== pendingSend.current) return;
       pendingSend.current = null;
-      if (!generating && !locked) onSend();
+      if (!generating && !locked && !uploading) onSend();
       else restoreDraft.current = null;
       return;
     }
@@ -551,7 +605,7 @@ export function Composer({
     }
   };
 
-  const canSend = Boolean(value.trim()) && !generating && !locked;
+  const canSend = Boolean(value.trim() || parsedDraft.files.length) && !generating && !locked && !uploading;
   const activeEffort = EFFORT_OPTIONS.find((item) => item.id === effort) ?? EFFORT_OPTIONS[2];
 
   const acceptGhost = () => {
@@ -565,6 +619,121 @@ export function Composer({
       }
     });
   };
+
+  // 会话切换时重置附件状态和缓存
+  useEffect(() => {
+    if (convRef.current !== conversationId) {
+      convRef.current = conversationId;
+      updatePending(() => []);
+      setImageUploads(0);
+      setFileHint("");
+      setDragging(false);
+      dragDepth.current = 0;
+    }
+    return () => { uploadEpoch.current += 1; };
+  }, [conversationId, updatePending]);
+
+  // 文件上传与管理
+  const addFile = useCallback(async (file: File) => {
+    if (locked || generating) return;
+    const epoch = uploadEpoch.current;
+    if (IMAGE_RE.test(file.type)) {
+      setImageUploads((count) => count + 1);
+      try {
+        const image = await uploadImage(file);
+        if (epoch !== uploadEpoch.current) return;
+        const current = parseFileMarkers(draftRef.current);
+        writeDraft(current.files, withImageMarker(current.body, image.marker));
+        textareaRef.current?.focus();
+      } catch (error) {
+        if (epoch === uploadEpoch.current) setAttachNote(toApiError(error).message);
+      } finally {
+        if (epoch === uploadEpoch.current) setImageUploads((count) => count - 1);
+      }
+      return;
+    }
+    // 旧版 Office 也交给后端返回准确的 415 中文说明，不尝试读取二进制文件。
+    if (!isDocumentFile(file.name) && !/\.(doc|ppt|xls)$/i.test(file.name)) {
+      setFileHint("请选择 PDF、Word（.docx）、PPT（.pptx）、Excel（.xlsx）、TXT、Markdown 或 CSV 文件。");
+      return;
+    }
+    if (!conversationId) {
+      setFileHint(NEW_CHAT_FILE_HINT);
+      return;
+    }
+    if (parseFileMarkers(draftRef.current).files.length + pendingRef.current.length >= MAX_FILE_MARKERS) {
+      setFileHint(`每条消息最多 ${MAX_FILE_MARKERS} 个文件附件`);
+      return;
+    }
+
+    const key = `${Date.now()}-${fileSeq.current++}`;
+    const pending: PendingFile = { key, name: file.name, state: "uploading" };
+    updatePending((current) => [...current, pending]);
+    setFileHint("");
+
+    try {
+      const attachment = await attachmentApi.upload(conversationId, file);
+      if (epoch !== uploadEpoch.current || !pendingRef.current.some((item) => item.key === key)) return;
+      rememberFile(attachment);
+      const current = parseFileMarkers(draftRef.current);
+      writeDraft([...current.files, attachment], current.body);
+      updatePending((list) => list.filter((item) => item.key !== key));
+    } catch (error) {
+      if (epoch !== uploadEpoch.current) return;
+      const message = toApiError(error).message;
+      updatePending((current) =>
+        current.map((item) => (item.key === key ? { ...item, state: "error", error: message } : item)),
+      );
+    }
+  }, [conversationId, generating, locked, updatePending, writeDraft]);
+
+  const removeFile = useCallback((id: string) => {
+    const existingMarkers = parseFileMarkers(draftRef.current).files;
+    writeDraft(
+      existingMarkers.filter((f) => f.id !== id),
+      value,
+    );
+  }, [value, writeDraft]);
+
+  const onDragEnter = useCallback((event: DragEvent<HTMLDivElement>) => {
+    if (!hasFiles(event)) return;
+    event.preventDefault();
+    dragDepth.current += 1;
+    if (dragDepth.current === 1) setDragging(true);
+  }, []);
+
+  const onDragLeave = useCallback(() => {
+    dragDepth.current = Math.max(0, dragDepth.current - 1);
+    if (dragDepth.current === 0) setDragging(false);
+  }, []);
+
+  const onDrop = useCallback(
+    (event: DragEvent<HTMLDivElement>) => {
+      if (!hasFiles(event)) return;
+      event.preventDefault();
+      dragDepth.current = 0;
+      setDragging(false);
+      const files = Array.from(event.dataTransfer.files);
+      if (files.length === 0) return;
+      for (const file of files) void addFile(file);
+    },
+    [addFile],
+  );
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const triggerFilePicker = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  const onFileInputChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      const files = event.target.files;
+      if (!files) return;
+      for (let i = 0; i < files.length; i++) void addFile(files[i]);
+      event.target.value = "";
+    },
+    [addFile],
+  );
 
   const loadMentions = () => {
     if (Date.now() - mentionsFetchedAt.current < MENTION_TTL_MS) return;
@@ -756,38 +925,6 @@ export function Composer({
     });
   };
 
-  const handleAttachFiles = async (event: ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.target.files ?? []);
-    event.target.value = "";
-    if (files.length === 0) return;
-    let nextValue = value;
-    const skipped: string[] = [];
-    for (const file of files) {
-      if (/^image\/(png|jpe?g|webp)$/i.test(file.type)) {
-        try {
-          const uploaded = await uploadImage(file);
-          nextValue = withImageMarker(nextValue, uploaded.marker);
-        } catch {
-          skipped.push(file.name);
-        }
-      } else {
-        try {
-          const text = (await file.text()).slice(0, 6000);
-          const ext = file.name.includes(".") ? file.name.split(".").pop() ?? "" : "";
-          const block = `\n📎 附件：\`${file.name}\`\n\`\`\`${ext}\n${text}\n\`\`\`\n`;
-          // Never cut a block in half: an unclosed fence would swallow the rest of the message.
-          if (nextValue.length + block.length > 12000) skipped.push(file.name);
-          else nextValue += block;
-        } catch {
-          skipped.push(file.name);
-        }
-      }
-    }
-    setAttachNote(skipped.length ? `未能添加：${skipped.join("、")}（上传失败或超出长度）` : "");
-    onChange(nextValue);
-    requestAnimationFrame(() => textareaRef.current?.focus());
-  };
-
   const skillItems = useMemo(() => {
     const customSkills = mentions.filter((m) => m.kind === "skill");
     return {
@@ -815,11 +952,67 @@ export function Composer({
   const popupId = `${inputId}-popup`;
 
   return (
-    <div className={cx(styles.composer, hero && styles.hero)}>
+    <div className={cx(styles.composer, hero && styles.hero, dragging && styles.dragging)}>
       {!hero && <PlanBar conversationId={conversationId} busy={generating || busy} />}
-      <div className={cx(styles.box, locked && styles.locked)}>
+      <div
+        className={cx(styles.box, locked && styles.locked)}
+        onDragEnter={onDragEnter}
+        onDragOver={(event) => {
+          if (hasFiles(event)) { event.preventDefault(); event.dataTransfer.dropEffect = locked || generating ? "none" : "copy"; }
+        }}
+        onDragLeave={onDragLeave}
+        onDrop={onDrop}
+      >
+        {dragging && <div className={styles.dropOverlay} aria-hidden>将文件拖放到这里</div>}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept={ATTACHMENT_ACCEPT}
+          multiple
+          hidden
+          onChange={onFileInputChange}
+          aria-hidden
+        />
         {/* LobeHub 风格：顶部 Markdown 格式工具栏（由 + 菜单中的「格式工具」开关控制） */}
         {attachNote && <p className={styles.wsError} role="status">{attachNote}</p>}
+        {imageUploads > 0 && <p className={styles.fileNote} role="status">正在上传图片…</p>}
+        {!conversationId && <p className={styles.fileNote}>先发一句话再上传文件 · 图片可直接添加</p>}
+        {fileHint && (
+          <p className={styles.wsError} role="alert">
+            {fileHint}
+            {" "}
+            <button type="button" className={styles.dismissFileHint} onClick={() => setFileHint("")}>
+              知道了
+            </button>
+          </p>
+        )}
+        {(pendingFiles.length > 0 || parsedDraft.files.length > 0) && (
+          <div className={styles.pendingFiles} role="list" aria-label="待发送文件">
+            {parsedDraft.files.map((file) => {
+              const attachment = recalledFile(file.id);
+              return <FileCard key={file.id} name={attachment?.name ?? file.name} kind={attachment?.kind}
+                scale={attachment ? scaleOf(attachment) : undefined} onRemove={() => removeFile(file.id)} />;
+            })}
+            {pendingFiles.map((item) => (
+              <FileCard
+                key={item.key}
+                name={item.name}
+                state={item.state}
+                error={item.error}
+                onRemove={() => updatePending((list) => list.filter((file) => file.key !== item.key))}
+              />
+            ))}
+          </div>
+        )}
+        {parsedDraft.files.length > 0 && !value.trim() && (
+          <div className={styles.fileIntents} role="group" aria-label="选择文件学习方式">
+            {intentsFor(recalledFile(parsedDraft.files[0].id)?.kind ?? kindFromName(parsedDraft.files[0].name), parsedDraft.files[0].name)
+              .map((intent) => <button key={intent.id} type="button" disabled={locked || generating} onClick={() => {
+                onChange(intent.prompt);
+                requestAnimationFrame(() => textareaRef.current?.focus());
+              }}>{intent.label}</button>)}
+          </div>
+        )}
         {formatBarOpen && (
           <div className={styles.formatToolbar} role="toolbar" aria-label="Markdown 格式工具栏">
             <button type="button" className={styles.formatBtn} onClick={() => applyFormat("bold")} title="加粗 (**文本**)" aria-label="加粗">
@@ -857,14 +1050,6 @@ export function Composer({
           </div>
         )}
 
-        <input
-          ref={attachInputRef}
-          type="file"
-          multiple
-          hidden
-          accept="image/png,image/jpeg,image/webp,.md,.txt,.py,.c,.cpp,.h,.js,.ts,.tsx,.json,.csv"
-          onChange={(e) => void handleAttachFiles(e)}
-        />
         {popupOpen && trigger && (
           <div className={styles.cmdMenu} role="listbox" id={popupId} aria-label={trigger.kind === "slash" ? "快捷指令" : "引用"}>
             {trigger.kind === "slash" ? (
@@ -963,7 +1148,7 @@ export function Composer({
               onKeyDown={handleKeyDown}
               placeholder={activeGhost ? "" : placeholder}
             />
-            {!value && activeGhost && (
+            {!value && !parsedDraft.files.length && activeGhost && (
               <div className={styles.ghostOverlay} aria-hidden="true">
                 <span className={styles.ghostText}>{activeGhost}</span>
                 <button
@@ -1017,7 +1202,7 @@ export function Composer({
                         className={styles.lobeMenuItem}
                         onClick={() => {
                           setMenuOpen(false);
-                          attachInputRef.current?.click();
+                          triggerFilePicker();
                         }}
                       >
                         <span className={styles.lobeMenuLeft}>
@@ -1254,7 +1439,8 @@ export function Composer({
               <ImageAttach
                 disabled={generating || locked}
                 onUploaded={(img) => {
-                  onChange(withImageMarker(value, img.marker));
+                  const current = parseFileMarkers(draftRef.current);
+                  writeDraft(current.files, withImageMarker(current.body, img.marker));
                   textareaRef.current?.focus();
                 }}
               />

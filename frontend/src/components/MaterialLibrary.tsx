@@ -171,7 +171,7 @@ export function MaterialLibrary({
       return;
     }
     if (!/\.(pdf|txt|md)$/i.test(file.name)) {
-      setError("请上传 PDF、TXT 或 Markdown 文件。");
+      setError("此资料库入口暂仅支持 PDF、TXT 或 Markdown；Word、PPT、Excel、CSV 请在对话中上传。");
       return;
     }
     pending.current = true;
@@ -318,7 +318,7 @@ export function MaterialLibrary({
       <input
         ref={fileInput}
         type="file"
-        accept=".pdf,.txt,.md"
+        accept=".pdf,.docx,.pptx,.xlsx,.txt,.md,.csv"
         className={styles.fileInput}
         aria-label="选择课程资料"
         onChange={(event) => {

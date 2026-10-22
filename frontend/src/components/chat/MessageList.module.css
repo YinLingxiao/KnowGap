@@ -33,6 +33,17 @@
   align-items: flex-end;
 }
 
+.userFiles {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  max-width: 100%;
+  margin-bottom: 8px;
+}
+
+.fileNavigationError { color: var(--red); font-size: var(--text-xs); }
+
 .userBubble {
   max-width: min(85%, 580px);
   padding: 10px 16px;
