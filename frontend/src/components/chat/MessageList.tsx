@@ -9,10 +9,13 @@ import {
 import type { StreamPhase } from "@/hooks/useChat";
 import { toApiError } from "@/lib/api/errors";
 import { chatApi } from "@/lib/chat/api";
+import { parseFileMarkers } from "@/lib/chat/attachments";
+import { createMaterialClient } from "@/lib/api/material-client";
 import type { ChatMessage, LearnerMemory } from "@/lib/chat/types";
 import { cx } from "@/lib/cx";
 import type { Problem } from "@/lib/types";
 import { CopyButton, Markdown } from "./Markdown";
+import { FileCard, kindFromName, openFileLibrary, recalledFile, rememberFile, scaleOf } from "./FileCard";
 import { SELECTABLE_ATTR, SelectionToolbar } from "./SelectionToolbar";
 import { ThreadProposals } from "./ThreadProposals";
 import { VisionMarkedText } from "./widgets/ImageMarker";
@@ -66,6 +69,8 @@ function readPins(conversationId: string): string[] {
 }
 
 function pinPreview(text: string): string {
+  const { files, body } = parseFileMarkers(text);
+  text = [files.map((file) => file.name).join("、"), body].filter(Boolean).join(" · ");
   const flat = text.replace(/```[\s\S]*?```/g, " ").replace(/[#>*_`~]/g, "").replace(/\s+/g, " ").trim();
   return flat.length > 30 ? `${flat.slice(0, 30)}…` : flat || "（无文字内容）";
 }
@@ -91,6 +96,8 @@ interface MessageListProps {
   onDecideTool?: (approvalId: string, allow: boolean) => void;
   onSendText?: (text: string) => void;
   onOpenWeakPoints?: () => void;
+  /** 外层若提供导航回调可无刷新打开资料；未提供时复用既有视图恢复机制。 */
+  onOpenFile?: (documentId: string, subjectId: string | null) => void;
 }
 
 const NEXT_LABEL = { quiz: "考考我", schedule: "排进日程", save_note: "存进笔记", weak_points: "看看我的薄弱点" } as const;
@@ -186,9 +193,32 @@ function planMarksOf(changes: PlanChange[] | undefined) {
 export function MessageList({
   conversationId, messages, problems, memoriesById, conversationSubjectId, subjectNames, phase, followNonce, topSlot,
   onRegenerate, onStartExercise, onOpenMemories, onOpenSummary, onDecideTool, onConfirmProposal, onResumeCheckpoint,
-  onSendText, onOpenWeakPoints,
+  onSendText, onOpenWeakPoints, onOpenFile,
 }: MessageListProps) {
   const summaryCard = useSummaryCard();
+  const [fileNavigationError, setFileNavigationError] = useState("");
+  const [, refreshFileMetadata] = useState(0);
+  const missingFileIds = [...new Set(messages.filter((message) => message.role === "user")
+    .flatMap((message) => parseFileMarkers(message.content).files.map((file) => file.id)))]
+    .filter((id) => !recalledFile(id)).join(",");
+  useEffect(() => {
+    if (!missingFileIds) return;
+    let cancelled = false;
+    void createMaterialClient().list(conversationSubjectId ? { subjectId: conversationSubjectId } : { unassigned: true })
+      .then((materials) => {
+        if (cancelled) return;
+        const wanted = new Set(missingFileIds.split(","));
+        for (const material of materials) {
+          if (!wanted.has(material.id)) continue;
+          const kind = kindFromName(material.title);
+          rememberFile({ id: material.id, name: material.title, kind, units: material.pageCount,
+            unitLabel: kind === "pptx" ? "张幻灯片" : kind === "xlsx" ? "个工作表" : kind === "docx" ? "节" : "页",
+            chars: 0, outline: [], subjectId: material.subjectId ?? null });
+        }
+        refreshFileMetadata((version) => version + 1);
+      }).catch(() => { /* 资料服务暂不可用时仍显示文件名与类型 */ });
+    return () => { cancelled = true; };
+  }, [conversationSubjectId, missingFileIds]);
   const [settledPrompts, setSettledPrompts] = useState<Set<string>>(new Set());
   const [sentActions, setSentActions] = useState<Set<string>>(new Set());
   const decidePreference = (id: string, allow: boolean) => {
@@ -280,6 +310,7 @@ export function MessageList({
       <div ref={scrollRef} className={styles.scroll} onScroll={onScroll}>
         <div className={styles.list} role="log" aria-live="polite" aria-relevant="additions">
           {topSlot}
+          {fileNavigationError && <p className={styles.fileNavigationError} role="alert">{fileNavigationError}</p>}
           {pinnedMessages.length > 0 && (
             <nav className={styles.pinBar} aria-label="置顶消息">
               <Pin size={12} className={styles.pinBarIcon} aria-hidden />
@@ -290,7 +321,7 @@ export function MessageList({
                   type="button"
                   className={styles.pinChip}
                   onClick={() => jumpToMessage(pinned.id)}
-                  title={pinned.content}
+                  title={pinPreview(pinned.content)}
                 >
                   <span className={styles.pinIndex} aria-hidden>{String(pinIdx + 1).padStart(2, "0")}</span>
                   <span className={styles.pinText}>{pinPreview(pinned.content)}</span>
@@ -307,6 +338,7 @@ export function MessageList({
               );
             }
             if (message.role === "user") {
+              const { files, body } = parseFileMarkers(message.content);
               const attempt = message.attempt ? ASSESSMENT[message.attempt.assessment] : null;
               // 统计紧随这条用户消息之后的 Thread 进展更新数（参照 Claude: ↳ 1 reply / 2 replies）
               let replyUpdates = 0;
@@ -314,13 +346,28 @@ export function MessageList({
                 if (messages[j].role === "user") break;
                 if (messages[j].threadUpdate || messages[j].threadSummary) replyUpdates += 1;
               }
-              const userFold = foldState(message);
+              const userFold = foldState({ ...message, content: body });
               const userPinned = pinnedIds.includes(message.id);
               return (
                 <div key={message.id} data-msg-id={message.id} className={cx(styles.row, styles.userRow)}>
-                  <div className={cx(styles.userBubble, userFold.folded && styles.folded)}>
-                    {hasVisionMarker(message.content) ? <VisionMarkedText text={message.content} /> : message.content}
-                  </div>
+                  {files.length > 0 && <div className={styles.userFiles} role="list" aria-label="消息附件">
+                    {files.map((file) => {
+                      const attachment = recalledFile(file.id);
+                      return <FileCard key={file.id} name={attachment?.name ?? file.name} kind={attachment?.kind}
+                        scale={attachment ? scaleOf(attachment) : undefined} onOpen={() => {
+                          if (onOpenFile) { onOpenFile(file.id, conversationSubjectId); return; }
+                          if (phase === "connecting" || phase === "streaming") {
+                            setFileNavigationError("请等待当前回复完成，再打开资料库（将重新载入页面）。");
+                            return;
+                          }
+                          try { openFileLibrary(conversationSubjectId); }
+                          catch (error) { setFileNavigationError(error instanceof Error ? error.message : "请从侧栏打开资料库。"); }
+                        }} />;
+                    })}
+                  </div>}
+                  {body && <div className={cx(styles.userBubble, userFold.folded && styles.folded)}>
+                    {hasVisionMarker(body) ? <VisionMarkedText text={body} /> : body}
+                  </div>}
                   <div className={styles.userMeta}>
                     {userFold.long && (
                       <button className={styles.foldToggle} onClick={() => toggleFold(message, userFold.folded)} aria-expanded={!userFold.folded}>

@@ -1287,7 +1287,7 @@ function Files({ subjectId, onChange }: { subjectId: string; onChange: () => voi
             <Upload size={12} aria-hidden />上传资料
           </button>
         </div>
-        <input ref={input} hidden type="file" accept=".pdf,.txt,.md" onChange={(event) => { const file = event.target.files?.[0]; if (file) void upload(file); }} />
+        <input ref={input} hidden type="file" accept=".pdf,.docx,.pptx,.xlsx,.txt,.md,.csv" onChange={(event) => { const file = event.target.files?.[0]; if (file) void upload(file); }} />
         {error && <p className={styles.error}>{error}</p>}
         <ul>
           {documents.map((document) => (
