@@ -364,6 +364,8 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
     ? view.id
     : chat.activeId ? chat.activeConversation?.subjectId ?? null : chat.draftSubjectId;
   const contextSubjectName = contextSubjectId ? subjectNames[contextSubjectId] ?? null : null;
+  // 首页开始输入后只留问候和输入框
+  const composing = chat.draft.length > 0;
   const title = chat.activeConversation?.title ?? (chat.activeId ? "加载中…" : "新对话");
   const thread = chat.activeThread;
   const spaceMainId = pageSubject?.mainConversationId ?? null;
@@ -688,6 +690,9 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
                 placeholder={contextSubjectName ? `在「${contextSubjectName}」里提问、演练或启动任务` : "提问、创建学习空间或启动自测任务"}
               />
 
+              {/* 开始输入后收起下方内容，问候与输入框随之回到视口中央 */}
+              <div className={cx(styles.homeBelow, composing && styles.homeBelowHidden)} inert={composing} aria-hidden={composing || undefined}>
+              <div className={styles.homeBelowInner}>
               {/* LobeHub 风格：输入框正下方的细长水平快捷条 */}
               <div className={styles.lobeStrip}>
                 <div className={styles.stripLeft}>
@@ -789,6 +794,8 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
                 onOpenSpace={openSpace}
                 onOpenSpaces={() => setView({ type: "spaces" })}
               />
+              </div>
+              </div>
             </div>
           </div>
         )}

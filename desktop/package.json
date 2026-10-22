@@ -25,6 +25,18 @@
     "win": {
       "target": "nsis",
       "icon": "icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "KnowGap",
+      "installerIcon": "icon.ico",
+      "uninstallerIcon": "icon.ico",
+      "installerLanguages": ["zh_CN"],
+      "language": "2052",
+      "runAfterFinish": true
     }
   }
 }
