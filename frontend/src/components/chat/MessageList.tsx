@@ -98,6 +98,8 @@ interface MessageListProps {
   onOpenWeakPoints?: () => void;
   /** 外层若提供导航回调可无刷新打开资料；未提供时复用既有视图恢复机制。 */
   onOpenFile?: (documentId: string, subjectId: string | null) => void;
+  collapseLong?: boolean;
+  scrollTarget?: { messageId: string | null; threadId: string; nonce: number } | null;
 }
 
 const NEXT_LABEL = { quiz: "考考我", schedule: "排进日程", save_note: "存进笔记", weak_points: "看看我的薄弱点" } as const;
@@ -193,7 +195,7 @@ function planMarksOf(changes: PlanChange[] | undefined) {
 export function MessageList({
   conversationId, messages, problems, memoriesById, conversationSubjectId, subjectNames, phase, followNonce, topSlot,
   onRegenerate, onStartExercise, onOpenMemories, onOpenSummary, onDecideTool, onConfirmProposal, onResumeCheckpoint,
-  onSendText, onOpenWeakPoints, onOpenFile,
+  onSendText, onOpenWeakPoints, onOpenFile, collapseLong = true, scrollTarget,
 }: MessageListProps) {
   const summaryCard = useSummaryCard();
   const [fileNavigationError, setFileNavigationError] = useState("");
@@ -265,6 +267,7 @@ export function MessageList({
 
   /** 超长且非流式的消息可折叠；用户长消息默认折叠，AI 回复默认展开 */
   const foldState = (message: ChatMessage) => {
+    if (!collapseLong) return { long: false, folded: false };
     const long = message.status !== "streaming" && message.content !== "" && isLongText(message.content);
     const folded = long && (foldOverride[message.id] ?? message.role === "user");
     return { long, folded };
@@ -292,6 +295,25 @@ export function MessageList({
   useLayoutEffect(() => {
     if (following.current) toBottom();
   }, [messages, toBottom]);
+
+  useEffect(() => {
+    if (!scrollTarget) return;
+    const root = scrollRef.current;
+    if (!root) return;
+    const byId = scrollTarget.messageId
+      ? root.querySelector<HTMLElement>(`[data-msg-id="${CSS.escape(scrollTarget.messageId)}"]`)
+      : null;
+    const target = byId ?? root.querySelector<HTMLElement>(`[data-thread-summary="${CSS.escape(scrollTarget.threadId)}"]`);
+    if (!target) return;
+    following.current = false;
+    setShowJump(true);
+    const reduced = document.documentElement.dataset.motion === "reduced"
+      || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    target.scrollIntoView({ block: "center", behavior: reduced ? "auto" : "smooth" });
+    target.classList.add(styles.flash);
+    const timer = window.setTimeout(() => target.classList.remove(styles.flash), 1600);
+    return () => window.clearTimeout(timer);
+  }, [scrollTarget]);
 
   useLayoutEffect(() => {
     following.current = true;
@@ -443,7 +465,7 @@ export function MessageList({
               const card = message.threadSummary;
               const related = card.memoryIds.map((id) => memoriesById[id]).filter(Boolean);
               return (
-                <div key={message.id} className={styles.row}>
+                <div key={message.id} data-msg-id={message.id} data-thread-summary={card.threadId} className={styles.row}>
                   {showNewDivider && (
                     <div className={styles.newLine} aria-hidden>
                       <span>New</span>

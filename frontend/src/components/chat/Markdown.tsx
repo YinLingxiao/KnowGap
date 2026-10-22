@@ -1,12 +1,34 @@
 "use client";
 
 import { isValidElement, memo, useState, type ReactNode } from "react";
-import ReactMarkdown, { type Components } from "react-markdown";
+import ReactMarkdown, { type Components, type Options } from "react-markdown";
 import remarkGfm from "remark-gfm";
+import rehypeHighlight, { type Options as HighlightOptions } from "rehype-highlight";
+import bash from "highlight.js/lib/languages/bash";
+import c from "highlight.js/lib/languages/c";
+import cpp from "highlight.js/lib/languages/cpp";
+import java from "highlight.js/lib/languages/java";
+import javascript from "highlight.js/lib/languages/javascript";
+import json from "highlight.js/lib/languages/json";
+import python from "highlight.js/lib/languages/python";
+import sql from "highlight.js/lib/languages/sql";
+import typescript from "highlight.js/lib/languages/typescript";
 import { Check, Copy } from "lucide-react";
 import { LearningWidget } from "./LearningWidget";
 import { mathRehypePlugins, mathRemarkPlugins } from "./math";
 import styles from "./Markdown.module.css";
+
+const highlightOptions: HighlightOptions = {
+  languages: { python, javascript, typescript, c, cpp, java, json, bash, sql },
+  aliases: {
+    javascript: ["js", "jsx"],
+    typescript: ["ts", "tsx"],
+    python: ["py"],
+    cpp: ["c++", "cc"],
+    bash: ["sh", "shell", "zsh"],
+  },
+  plainText: ["knowgap-widget", "widget"],
+};
 
 export async function copyText(text: string): Promise<boolean> {
   try {
@@ -77,14 +99,13 @@ const components: Components = {
           </span>
           <CopyButton text={code} label="复制代码" />
         </div>
-        <pre className={styles.pre}>
-          <code>{code}</code>
-        </pre>
+        <pre className={styles.pre}>{children}</pre>
       </div>
     );
   },
   code({ children, className }) {
-    return <code className={className ? undefined : styles.inline}>{children}</code>;
+    if (!className) return <code className={styles.inline}>{children}</code>;
+    return <code className={className}>{children}</code>;
   },
   a({ children, href }) {
     return (
@@ -103,12 +124,13 @@ const components: Components = {
 };
 
 const remarkPlugins = [remarkGfm, ...(mathRemarkPlugins ?? [])];
+const rehypePlugins: Options["rehypePlugins"] = [...(mathRehypePlugins ?? []), [rehypeHighlight, highlightOptions]];
 
 /** 模型回复的 Markdown（GFM + $…$ / $$…$$ 公式）。不渲染原始 HTML。 */
 export const Markdown = memo(function Markdown({ text }: { text: string }) {
   return (
     <div className={styles.markdown}>
-      <ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={mathRehypePlugins} components={components}>
+      <ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins} components={components}>
         {text}
       </ReactMarkdown>
     </div>

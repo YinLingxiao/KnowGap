@@ -1070,8 +1070,10 @@
 @media (prefers-reduced-motion: reduce) {
   .actionGroup,
   .traceChevron,
-  .threadPill {
+  .threadPill,
+  .flash {
     transition: none;
+    animation: none;
   }
 }
 

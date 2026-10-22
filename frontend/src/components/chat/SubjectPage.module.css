@@ -207,6 +207,73 @@
   opacity: 0.4;
 }
 
+.panelActionBtn[aria-busy="true"] {
+  opacity: 1;
+  color: var(--accent-text);
+}
+
+.spin {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.mergeNotice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 auto 8px;
+  padding: 6px 6px 6px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-card);
+  color: var(--text);
+  font-size: var(--text-sm);
+}
+
+.mergeNotice > span {
+  min-width: 0;
+}
+
+.mergeAction,
+.mergeDismiss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+  border-radius: 999px;
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+.mergeAction {
+  padding: 0 8px;
+  color: var(--accent-text);
+}
+
+.mergeAction:hover,
+.mergeDismiss:hover {
+  background: var(--bg-hover);
+}
+
+.mergeAction:focus-visible,
+.mergeDismiss:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.mergeDismiss {
+  width: 24px;
+  color: var(--text-tertiary);
+}
+
 .menu {
   position: absolute;
   z-index: 20;
@@ -1620,7 +1687,10 @@ button.footprintDoneRow:hover {
   .menu,
   .backdrop,
   .resolve,
-  .ring_working {
+  .ring_working,
+  .spin,
+  .mergeAction,
+  .mergeDismiss {
     animation: none;
     transition: none;
   }
