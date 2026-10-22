@@ -37,8 +37,8 @@ export default function AttachmentsPreview() {
   return <main style={{ minHeight: "100dvh", padding: "32px 20px", background: "var(--bg)", color: "var(--text)" }}>
     <div style={{ maxWidth: 900, margin: "0 auto", display: "grid", gap: 24 }}>
       <header style={{ display: "grid", gap: 8 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 600 }}>文件，变成学习的起点。</h1>
-        <p style={{ color: "var(--text-secondary)", fontSize: 13 }}>附件开发预览 · 示例仅用于展示。真实上传仍调用后端，不包含伪造接口。</p>
+        <h1 style={{ fontSize: 22, fontWeight: 600 }}>附件预览（开发用）</h1>
+        <p style={{ color: "var(--text-secondary)", fontSize: 13 }}>附件卡片、快捷意图和消息中文件卡片的各种状态。</p>
       </header>
       <section aria-label="附件状态" style={{ display: "grid", gap: 10 }}>
         <h2 style={{ fontSize: 14, fontWeight: 500 }}>上传与解析状态</h2>
