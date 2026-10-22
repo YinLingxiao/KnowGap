@@ -6,8 +6,8 @@ from fastapi import APIRouter, File, HTTPException, Query, Request, Response, Up
 from starlette.concurrency import run_in_threadpool
 
 from app.auth.deps import current_student
-from app.models.schemas import DEMO_STUDENT, Material, SourceReference
-from app.services.materials import MAX_UPLOAD_BYTES, MaterialStore
+from app.models.schemas import DEMO_STUDENT, SourceReference
+from app.services.materials import MAX_UPLOAD_BYTES, Material, MaterialStore
 
 
 def material_router(library: MaterialStore, subject_exists: Callable[[str], bool] = lambda _: False) -> APIRouter:
@@ -35,7 +35,7 @@ def material_router(library: MaterialStore, subject_exists: Callable[[str], bool
         try:
             data = await file.read(MAX_UPLOAD_BYTES + 1)
             if len(data) > MAX_UPLOAD_BYTES:
-                raise HTTPException(413, '单份资料不能超过 5 MB。')
+                raise HTTPException(413, '单份资料不能超过 20 MB。')
             return await run_in_threadpool(library.add, owner(request, student_id), file.filename or '', data, subject_id)
         finally:
             await file.close()

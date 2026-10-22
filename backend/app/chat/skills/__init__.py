@@ -7,6 +7,7 @@ from app.chat.skills.chat_skills import (
     ONBOARDING_TITLE,
 )
 from app.chat.skills.main_skills import MAIN_ROADMAP_SKILL
+from app.chat.skills.file_skills import file_skill_prompt
 from app.chat.skills.thread_skills import THREAD_SKILLS
 
 _FEYNMAN_RE = re.compile(r"费曼|我来讲|听我讲|挑刺|考官")
@@ -69,8 +70,11 @@ def select_skill_prompt(
     delegated_skill: str | None = None,
     conversation_title: str = "",
     earlier_user_texts: list[str] | None = None,
+    attached_files: list[dict] | None = None,
 ) -> str | None:
     """Return the role-appropriate Skill SOP to inject into `turn_context.active_skill`."""
+    if attached_files:
+        return file_skill_prompt(user_text)
     # A Feynman self-test spans several turns: once the title or an earlier user turn started it,
     # later answers ("栈就是…") keep the challenge instead of falling back to deep_explain.
     # 在函数内导入：problem_drill_skill 依赖 agent_tools、viva_skill 依赖 store，顶层导入会形成循环。
