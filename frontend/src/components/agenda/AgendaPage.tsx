@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CircleAlert, Download, Ellipsis, LoaderCircle, PanelLeftOpen, RotateCcw, Sparkles } from "lucide-react";
+import { CircleAlert, Download, Ellipsis, LoaderCircle, PanelLeftOpen, Plus, RotateCcw, Sparkles } from "lucide-react";
 import { describeError } from "@/lib/api/errors";
 import { agendaApi } from "@/lib/agenda/api";
 import type { AgendaTask, AgendaThread, TaskInput } from "@/lib/agenda/types";
@@ -279,6 +279,12 @@ export function AgendaPage(props: AgendaPageProps) {
         )}
         <h1 className={styles.heading}>{heading}</h1>
         <span className={styles.spacer} />
+        <div className={styles.addAction}>
+          <button type="button" className={styles.addTask} aria-keyshortcuts="Q" onClick={() => dispatchCompose({ subjectId: spaceId })}>
+            <Plus size={15} aria-hidden />添加任务
+          </button>
+          <span className={styles.addHint}><span>快捷键 </span><kbd>Q</kbd></span>
+        </div>
         <button type="button" className={styles.btn} onClick={() => setBreakdownOpen(true)} aria-label="AI 拆解排期" title="AI 拆解排期">
           <Sparkles size={13} aria-hidden />AI 拆解排期
         </button>

@@ -30,5 +30,4 @@ export const FOCUS_PRESETS = [
   { seconds: 15 * 60, label: "15" },
   { seconds: 25 * 60, label: "25" },
   { seconds: 45 * 60, label: "45" },
-  { seconds: 10, label: "⚡ 10 秒" },
 ] as const;
