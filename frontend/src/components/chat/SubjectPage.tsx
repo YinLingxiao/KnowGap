@@ -18,7 +18,7 @@ import { SPACE_PAGES_EVENT, spacePagesKey } from "@/lib/spacePages";
 import { cx } from "@/lib/cx";
 import type { CourseMaterial, Problem } from "@/lib/types";
 import { Button } from "../ui/Button";
-import { CHEATSHEET_OPENED_EVENT, OPEN_SPACE_PANEL_EVENT } from "../onboarding/coach";
+import { CHEATSHEET_OPENED_EVENT, GUIDES_RESET_EVENT, OPEN_SPACE_PANEL_EVENT, coachSeenKey } from "../onboarding/coach";
 import { CheatSheet } from "./CheatSheet";
 import { ConceptGraph, type AttackTarget } from "./ConceptGraph";
 import { SpaceTasks } from "../agenda/SpaceTasks";
@@ -87,7 +87,7 @@ function readPanel(subjectId: string): Panel {
 }
 
 export function SubjectPage({
-  subject, chat, narrow, sidebarOpen, memoriesById, problemsById, subjectNames, onOpenSidebar, onEdit, onDelete,
+  subject, chat, narrow, sidebarOpen, memoriesById, problemsById, subjectNames, userId, onOpenSidebar, onEdit, onDelete,
 }: {
   subject: Subject;
   chat: ChatController;
@@ -96,6 +96,7 @@ export function SubjectPage({
   memoriesById: Record<string, LearnerMemory>;
   problemsById: Record<string, Problem>;
   subjectNames: Record<string, string>;
+  userId: string;
   onOpenSidebar: () => void;
   onEdit: () => void;
   onDelete: () => Promise<boolean>;
@@ -123,12 +124,20 @@ export function SubjectPage({
   const [pagesNotice, setPagesNotice] = useState<string | null>(null);
   const [customAnchor, setCustomAnchor] = useState("");
   const [cheatSheetOpen, setCheatSheetOpen] = useState(false);
+  const [fogReady, setFogReady] = useState(false);
 
   const showPanel = (next: Panel) => {
     setPanel(next);
     setPanelCollapsed(false);
     setOverlay(true);
   };
+
+  useEffect(() => {
+    const sync = () => setFogReady(localStorage.getItem(coachSeenKey(userId, "sheet")) === "1");
+    sync();
+    window.addEventListener(GUIDES_RESET_EVENT, sync);
+    return () => window.removeEventListener(GUIDES_RESET_EVENT, sync);
+  }, [subject.id, userId]);
 
   useEffect(() => {
     const saved = readPanel(subject.id);
@@ -379,6 +388,10 @@ export function SubjectPage({
     () => chat.memories.filter((memory) => memory.subjectId === subject.id),
     [chat.memories, subject.id],
   );
+  const weakReady = spaceMemories.filter((memory) => memory.kind === "misconception").length >= 3;
+  const threadSignal = threads.length > 0 || Boolean(main?.messages.some((message) => (
+    message.threadUpdate || message.threadSummary || (message.threadProposals?.length ?? 0) > 0
+  )));
   const conversationTitles = useMemo(
     () => Object.fromEntries(chat.conversations.map((item) => [item.id, item.title])),
     [chat.conversations],
@@ -417,7 +430,7 @@ export function SubjectPage({
           </div>
 
           <div className={styles.tools} role="group" aria-label="空间操作">
-            <button type="button" className={styles.overviewBtn} onClick={() => { setCheatSheetOpen(true); window.dispatchEvent(new Event(CHEATSHEET_OPENED_EVENT)); }} title="生成考前急救一页纸">
+            <button type="button" className={styles.overviewBtn} data-coachmark={weakReady ? "sheet" : undefined} onClick={() => { setCheatSheetOpen(true); window.dispatchEvent(new Event(CHEATSHEET_OPENED_EVENT)); }} title="生成考前急救一页纸">
               <Zap size={13} aria-hidden />
               <span>考前一页纸</span>
             </button>
@@ -439,6 +452,7 @@ export function SubjectPage({
               <button
                 type="button"
                 className={styles.overviewBtn}
+                data-coachmark={threadSignal ? "thread" : undefined}
                 onClick={() => showPanel({ mode: "list" })}
               >
                 <MessagesSquare size={13} aria-hidden />
@@ -630,6 +644,7 @@ export function SubjectPage({
                 <button
                   type="button"
                   className={styles.crumbRoot}
+                  data-coachmark={threadSignal ? "thread" : undefined}
                   onClick={() => setPanel({ mode: "list" })}
                 >
                   Threads
@@ -651,6 +666,7 @@ export function SubjectPage({
                   role="tab"
                   aria-selected={panel.mode === "list"}
                   className={cx(styles.panelTabPill, panel.mode === "list" && styles.panelTabActive)}
+                  data-coachmark={threadSignal ? "thread" : undefined}
                   onClick={() => setPanel({ mode: "list" })}
                 >
                   <MessagesSquare size={13} aria-hidden />
@@ -673,6 +689,7 @@ export function SubjectPage({
                   role="tab"
                   aria-selected={panel.mode === "graph"}
                   className={cx(styles.panelTabPill, panel.mode === "graph" && styles.panelTabActive)}
+                  data-coachmark={weakReady && fogReady ? "fog" : undefined}
                   onClick={() => setPanel({ mode: "graph" })}
                   title="知识迷雾拓扑图"
                 >

@@ -88,6 +88,10 @@ function isTyping(target: EventTarget | null) {
   return target instanceof HTMLElement && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
 }
 
+function modelNotReady(message?: string | null) {
+  return Boolean(message && message.includes("模型未配置"));
+}
+
 function AuthenticatedChat({ user, onLogout, onRename }: {
   user: AuthUser;
   onLogout: () => void;
@@ -115,6 +119,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
   const [helpOpen, setHelpOpen] = useState(false);
   const [welcomeBusy, setWelcomeBusy] = useState(false);
   const [welcomeError, setWelcomeError] = useState("");
+  const [hiddenModelFail, setHiddenModelFail] = useState<string | null>(null);
 
   useEffect(() => {
     const query = window.matchMedia(NARROW);
@@ -361,22 +366,51 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
   const contextSubjectName = contextSubjectId ? subjectNames[contextSubjectId] ?? null : null;
   const title = chat.activeConversation?.title ?? (chat.activeId ? "加载中…" : "新对话");
   const thread = chat.activeThread;
+  const spaceMainId = pageSubject?.mainConversationId ?? null;
+  const spaceMessages = spaceMainId ? chat.messagesFor(spaceMainId)?.messages ?? [] : [];
   const failure = chat.sendFailure && chat.sendFailure.conversationId === chat.activeId ? chat.sendFailure : null;
   const blankFailure = chat.sendFailure && !chat.activeId ? chat.sendFailure : null;
-  const shownFailure = failure ?? blankFailure;
-  const failureBar = shownFailure && (
+  const spaceFailure = spaceMainId && chat.sendFailure?.conversationId === spaceMainId ? chat.sendFailure : null;
+  const shownFailure = failure ?? blankFailure ?? spaceFailure;
+  const watched = view.type === "subject" ? spaceMessages : messages;
+  const latestAssistant = [...watched].reverse().find((message) => message.role === "assistant");
+  const failedReply = latestAssistant?.status === "failed" && modelNotReady(latestAssistant.error)
+    && hiddenModelFail !== latestAssistant.id ? latestAssistant : null;
+  const replyGap = !shownFailure ? failedReply : null;
+  const failureMessage = shownFailure?.error.message ?? replyGap?.error ?? "";
+  const offerSettings = modelNotReady(failureMessage);
+  const modelBanner = modelConfigured === false ? (
+    <div className={styles.modelBanner} role="status">
+      <span>还没连上 AI 模型，回复会失败</span>
+      <button type="button" onClick={() => openSettings("models")}>去设置</button>
+    </div>
+  ) : null;
+  const failureBar = (shownFailure || replyGap) && (
     <div className={styles.sendFailure} role="alert">
       <CircleAlert size={14} aria-hidden />
       <span className={styles.sendFailureText}>
-        发送失败：{shownFailure.error.message}
-        {shownFailure.error.kind !== "conflict" && "（输入还在）"}
+        发送失败：{failureMessage}
+        {shownFailure && shownFailure.error.kind !== "conflict" && "（输入还在）"}
       </span>
-      {shownFailure.error.kind === "conflict" && chat.activeId ? (
+      {offerSettings && (
+        <button type="button" onClick={() => openSettings("models")}>去设置</button>
+      )}
+      {shownFailure?.error.kind === "conflict" && chat.activeId ? (
         <button onClick={() => { chat.dismissSendFailure(); void chat.loadConversation(chat.activeId!); }}>刷新对话</button>
       ) : (
-        <button onClick={() => void chat.sendMessage()}>重试</button>
+        <button onClick={() => {
+          if (replyGap) void chat.regenerate(replyGap.conversationId);
+          else void chat.sendMessage();
+        }}>重试</button>
       )}
-      <button className={styles.dismiss} onClick={chat.dismissSendFailure} aria-label="关闭提示">
+      <button
+        className={styles.dismiss}
+        onClick={() => {
+          if (replyGap) setHiddenModelFail(replyGap.id);
+          chat.dismissSendFailure();
+        }}
+        aria-label="关闭提示"
+      >
         <X size={13} />
       </button>
     </div>
@@ -436,9 +470,11 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
           <Welcome
             busy={welcomeBusy || gate === "checking"}
             error={welcomeError}
+            configVersion={`${String(modelConfigured)}:${settingsOpen}`}
             onAnswer={(text) => void answerWelcome(text)}
             onDemo={() => void browseDemo()}
             onSkip={() => void skipWelcome()}
+            onConfigure={() => openSettings("models")}
           />
         ) : materialsOpen ? (
           <MaterialLibrary
@@ -478,6 +514,8 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
           />
         ) : view.type === "subject" ? (
           pageSubject ? (
+            <>
+            {(modelBanner || failureBar) && <div className={styles.spaceAlert}>{modelBanner}{failureBar}</div>}
             <SubjectPage
               subject={pageSubject}
               chat={chat}
@@ -486,6 +524,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
               memoriesById={memoriesById}
               problemsById={problemsById}
               subjectNames={subjectNames}
+              userId={user.id}
               onOpenSidebar={() => setSidebarOpen(true)}
               onEdit={() => setSpaceDialog({ editId: pageSubject.id, select: false })}
               onDelete={async () => {
@@ -494,6 +533,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
                 return ok;
               }}
             />
+            </>
           ) : (
             <div className={styles.center}>
               <p className={styles.muted}>{subjectMissing ? "这个学习空间已不存在。" : "正在读取学习空间…"}</p>
@@ -576,6 +616,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
             )}
 
             <div className={styles.dock}>
+              {modelBanner}
               {failureBar}
                   <Composer
                     conversationId={chat.activeId}
@@ -623,6 +664,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
                 </h2>
               </div>
 
+              {modelBanner}
               {failureBar}
               <Composer
                 hero
