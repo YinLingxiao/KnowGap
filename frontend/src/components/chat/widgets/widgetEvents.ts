@@ -32,3 +32,19 @@ export function sendOrAsk(text: string, effort?: "low" | "medium" | "high"): "se
   askInComposer(text);
   return "prefilled";
 }
+
+/** Send a message to the open conversation right away. Composer sets detail.handled when it accepted it (it is idle). */
+export const WIDGET_AUTOSEND_EVENT = "knowgap:widget-autosend";
+
+export interface WidgetAutoSendDetail {
+  text: string;
+  handled: boolean;
+}
+
+export function sendNow(text: string): "sent" | "prefilled" {
+  const detail: WidgetAutoSendDetail = { text, handled: false };
+  window.dispatchEvent(new CustomEvent<WidgetAutoSendDetail>(WIDGET_AUTOSEND_EVENT, { detail }));
+  if (detail.handled) return "sent";
+  askInComposer(text);
+  return "prefilled";
+}

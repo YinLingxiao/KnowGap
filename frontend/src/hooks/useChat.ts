@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError, toApiError } from "@/lib/api/errors";
 import { chatApi } from "@/lib/chat/api";
+import { parseFileMarkers } from "@/lib/chat/attachments";
 import { PLAN_EVENT, type PlanEventDetail } from "@/lib/chat/plan";
 import type {
   ChatMessage, Conversation, ConversationSummary, LearnerMemory, LearnerMemoryStatus, SpaceInput, StreamEvent, Subject,
@@ -94,10 +95,25 @@ export function useChat(notify: Notify, userId: string) {
   const streamsRef = useRef(streams);
   streamsRef.current = streams;
 
+  /** 首页直接上传文件时预建的空对话；发送时转为正式对话，学生移除全部文件或离开首页时删除 */
+  const draftConvRef = useRef<string | null>(null);
+  const draftConvPromise = useRef<Promise<string | null> | null>(null);
+
+  const discardDraftConversation = useCallback(() => {
+    const id = draftConvRef.current;
+    draftConvRef.current = null;
+    draftConvPromise.current = null;
+    if (!id) return;
+    draftConversationKey.current = newId();
+    setConversations((items) => items.filter((item) => item.id !== id));
+    void chatApi.deleteConversation(id).catch(() => undefined);
+  }, []);
+
   const setActiveId = useCallback((id: string | null) => {
+    if (id !== draftConvRef.current) discardDraftConversation();
     setActiveIdState(id);
     storage(() => (id ? localStorage.setItem(activeKey, id) : localStorage.removeItem(activeKey)), undefined);
-  }, [activeKey]);
+  }, [activeKey, discardDraftConversation]);
 
   const upsertSummary = useCallback((summary: ConversationSummary | null) => {
     if (!summary) return;
@@ -150,11 +166,16 @@ export function useChat(notify: Notify, userId: string) {
   }, []);
 
   const newChat = useCallback((subjectId: string | null = null) => {
+    if (draftConvRef.current) {
+      // 预建对话随之删除，草稿里指向它的文件标记也要去掉
+      discardDraftConversation();
+      setDrafts((all) => ({ ...all, [NEW]: parseFileMarkers(all[NEW] ?? "").body }));
+    }
     draftConversationKey.current = newId();
     setDraftSubjectId(subjectId);
     setSendFailure(null);
     setActiveId(null);
-  }, [setActiveId]);
+  }, [discardDraftConversation, setActiveId]);
 
   const loadConversation = useCallback(async (id: string) => {
     setThreads((all) => ({ ...all, [id]: { messages: all[id]?.messages ?? [], loading: true, error: null } }));
@@ -336,11 +357,47 @@ export function useChat(notify: Notify, userId: string) {
     }
   }, [runStream]);
 
+  /** 首页上传文件前调用：返回承接文件的对话 ID（空间的主对话，或新建的空对话），并发调用共用同一次创建 */
+  const ensureUploadConversation = useCallback((): Promise<string | null> => {
+    if (activeId) return Promise.resolve(activeId);
+    const mainId = draftSubjectId ? subjects.find((item) => item.id === draftSubjectId)?.mainConversationId : null;
+    if (mainId) return Promise.resolve(mainId);
+    if (draftConvPromise.current) return draftConvPromise.current;
+    const key = draftConversationKey.current;
+    const promise = chatApi.createConversation({ clientRequestId: key, subjectId: draftSubjectId })
+      .then((conversation) => {
+        if (draftConversationKey.current !== key) {
+          void chatApi.deleteConversation(conversation.id).catch(() => undefined);
+          return null;
+        }
+        draftConvRef.current = conversation.id;
+        return conversation.id;
+      })
+      .catch((error) => {
+        draftConvPromise.current = null;
+        throw error;
+      });
+    draftConvPromise.current = promise;
+    return promise;
+  }, [activeId, draftSubjectId, subjects]);
+
   const sendMessage = useCallback(async (override?: string) => {
     const key = activeId ?? NEW;
     const text = (override ?? drafts[key] ?? "").trim();
     if (!text || creating) return false;
     if (activeId) return sendTo(activeId, text);
+    const draftId = draftConvRef.current;
+    if (draftId) {
+      draftConvRef.current = null;
+      draftConvPromise.current = null;
+      draftConversationKey.current = newId();
+      try {
+        putConversation(await chatApi.getConversation(draftId));
+      } catch { /* 流式结果仍会补上这条消息 */ }
+      setDrafts((all) => ({ ...all, [draftId]: text, [NEW]: "" }));
+      setActiveId(draftId);
+      return sendTo(draftId, text);
+    }
     if (draftSubjectId) {
       const mainId = subjects.find((item) => item.id === draftSubjectId)?.mainConversationId;
       if (mainId) {
@@ -591,7 +648,7 @@ export function useChat(notify: Notify, userId: string) {
     sendFailure, dismissSendFailure: () => setSendFailure(null),
     problems,
     memories, memoriesLoading, memoriesError, loadMemories, updateMemory, deleteMemory, decideTool,
-    newChat, openConversation, loadConversation, sendMessage, sendTo, regenerate, stop, startExercise, startExerciseOn,
+    newChat, ensureUploadConversation, discardDraftConversation, openConversation, loadConversation, sendMessage, sendTo, regenerate, stop, startExercise, startExerciseOn,
     renameConversation, deleteConversation,
   };
 }
