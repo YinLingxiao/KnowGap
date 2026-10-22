@@ -338,12 +338,6 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-desktop.ps1
 
 脚本会做静态前端、PyInstaller 后端和 electron-builder 安装包，输出在 `desktop/dist/`。打包前看 `git status`，避免把别人未提交的改动打进去。逐项清单见 [docs/desktop-release-checklist.md](docs/desktop-release-checklist.md)。
 
-## 团队与致谢
-
-| 角色 | 姓名 | 联系方式 |
-| --- | --- | --- |
-| （待填写） | （待填写） | （待填写） |
-
 仓库：<https://github.com/YinLingxiao/KnowGap>
 
 更早的设计说明和接口约定在 `docs/`。那些文档里有当时的计划和后来改过的行为，和本文冲突时以当前代码为准。
