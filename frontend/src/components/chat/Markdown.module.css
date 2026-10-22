@@ -176,11 +176,18 @@
 }
 
 .pre {
+  --code-text: var(--text);
+  --code-keyword: var(--accent-text);
+  --code-string: var(--green);
+  --code-number: var(--amber);
+  --code-comment: var(--text-tertiary);
+  --code-title: var(--accent);
   margin: 0;
   padding: 12px 14px;
   overflow-x: auto;
   background: color-mix(in srgb, var(--bg) 55%, var(--bg-subtle));
   box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.1);
+  color: var(--code-text);
   font-family: var(--font-mono); /* taste-skill-ignore */
   font-size: var(--text-sm);
   line-height: var(--leading-read);
@@ -188,6 +195,60 @@
   font-variant-ligatures: none;
   scrollbar-color: var(--border-strong) transparent;
   scrollbar-width: thin;
+}
+
+.pre code {
+  color: inherit;
+  font-family: inherit;
+  font-size: inherit;
+  background: transparent;
+  white-space: pre;
+}
+
+.pre :global(.hljs-keyword),
+.pre :global(.hljs-selector-tag),
+.pre :global(.hljs-built_in),
+.pre :global(.hljs-type),
+.pre :global(.hljs-template-tag) {
+  color: var(--code-keyword);
+}
+
+.pre :global(.hljs-string),
+.pre :global(.hljs-regexp),
+.pre :global(.hljs-symbol),
+.pre :global(.hljs-addition),
+.pre :global(.hljs-bullet) {
+  color: var(--code-string);
+}
+
+.pre :global(.hljs-number),
+.pre :global(.hljs-literal),
+.pre :global(.hljs-meta),
+.pre :global(.hljs-meta .hljs-keyword) {
+  color: var(--code-number);
+}
+
+.pre :global(.hljs-comment),
+.pre :global(.hljs-quote),
+.pre :global(.hljs-doctag) {
+  color: var(--code-comment);
+}
+
+.pre :global(.hljs-title),
+.pre :global(.hljs-section),
+.pre :global(.hljs-name),
+.pre :global(.hljs-function),
+.pre :global(.hljs-title.class_),
+.pre :global(.hljs-title.function_) {
+  color: var(--code-title);
+}
+
+.pre :global(.hljs-attr),
+.pre :global(.hljs-attribute),
+.pre :global(.hljs-variable),
+.pre :global(.hljs-params),
+.pre :global(.hljs-property) {
+  color: var(--code-text);
 }
 
 .copy {

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Brain, CalendarDays, CheckCircle2, ChevronDown, ChevronRight, Download, FileText, Folder, GraduationCap, History, Link2, ListTodo,
-  Maximize2, MessagesSquare, Mic, Minimize2, MoreHorizontal, NotebookPen,
+  LoaderCircle, Maximize2, MessagesSquare, Mic, Minimize2, MoreHorizontal, NotebookPen,
   PanelLeftOpen, Plus, RotateCcw, Settings, SlidersHorizontal, Target, Trash2, Upload, Waypoints, X, Zap,
 } from "lucide-react";
 import { WIDGET_ASK_EVENT } from "./LearningWidget";
@@ -119,6 +119,9 @@ export function SubjectPage({
   const [drafting, setDrafting] = useState(false);
   const [draftError, setDraftError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [resolvingId, setResolvingId] = useState<string | null>(null);
+  const [mergeNotice, setMergeNotice] = useState<{ threadId: string; messageId: string | null } | null>(null);
+  const [scrollTarget, setScrollTarget] = useState<{ messageId: string | null; threadId: string; nonce: number } | null>(null);
   const [pages, setPages] = useState<{ id: string; text: string }>({ id: "", text: "" });
   const [pagesView, setPagesView] = useState<"edit" | "split" | "preview">("split");
   const [pagesNotice, setPagesNotice] = useState<string | null>(null);
@@ -329,18 +332,39 @@ export function SubjectPage({
     void chat.sendTo(thread.id, prompt);
   };
 
-  const beginResolve = async (id: string) => {
-    setResolveFor(id);
+  const finishResolve = async (id: string, messageId: string | null) => {
+    setResolveFor(null);
     setDraft(null);
     setDraftError(null);
-    setDrafting(true);
+    setMergeNotice({ threadId: id, messageId });
+    if (mainId) await chat.loadConversation(mainId);
+    void chat.loadConversation(id);
+    void refreshThreads();
+    void chat.loadSubjects();
+    void chat.loadMemories();
+  };
+
+  const beginResolve = async (id: string) => {
+    if (resolvingId) return;
+    setResolvingId(id);
+    setDraftError(null);
+    let drafted: { title: string; summary: string; takeaways: string } | null = null;
     try {
       const result = await chatApi.draftResolution(id);
-      setDraft({ title: result.title, summary: result.summary, takeaways: result.takeaways.join("\n") });
+      drafted = { title: result.title, summary: result.summary, takeaways: result.takeaways.join("\n") };
+      const resolved = await chatApi.resolveThread(id, {
+        title: result.title.trim(),
+        summary: result.summary.trim(),
+        takeaways: result.takeaways.map((item) => item.trim()).filter(Boolean).slice(0, 4),
+      });
+      await finishResolve(id, resolved.messageId);
     } catch (error) {
+      setResolveFor(id);
+      setDraft(drafted);
       setDraftError(toApiError(error).message);
-    } finally {
       setDrafting(false);
+    } finally {
+      setResolvingId(null);
     }
   };
 
@@ -348,17 +372,12 @@ export function SubjectPage({
     if (!resolveFor || !draft || saving) return;
     setSaving(true);
     try {
-      await chatApi.resolveThread(resolveFor, {
+      const resolved = await chatApi.resolveThread(resolveFor, {
         title: draft.title.trim(),
         summary: draft.summary.trim(),
         takeaways: draft.takeaways.split("\n").map((item) => item.trim()).filter(Boolean).slice(0, 4),
       });
-      setResolveFor(null);
-      if (mainId) void chat.loadConversation(mainId);
-      void chat.loadConversation(resolveFor);
-      void refreshThreads();
-      void chat.loadSubjects();
-      void chat.loadMemories();
+      await finishResolve(resolveFor, resolved.messageId);
     } catch (error) {
       setDraftError(toApiError(error).message);
     } finally {
@@ -610,12 +629,42 @@ export function SubjectPage({
             onDecideTool={(approvalId, allow) => void chat.decideTool(approvalId, allow)}
             onSendText={(text) => void chat.sendTo(mainId, text)}
             onOpenWeakPoints={() => showPanel({ mode: "graph" })}
+            scrollTarget={scrollTarget}
           />
         ) : (
           <div className={styles.center}><p>正在读取主对话…</p></div>
         )}
         {mainId && (
           <div className={styles.dock}>
+            {mergeNotice && (
+              <div className={styles.mergeNotice} role="status">
+                <CheckCircle2 size={14} aria-hidden />
+                <span>已合并到主对话</span>
+                <button
+                  type="button"
+                  className={styles.mergeAction}
+                  onClick={() => setScrollTarget({ messageId: mergeNotice.messageId, threadId: mergeNotice.threadId, nonce: Date.now() })}
+                >
+                  查看
+                </button>
+                <button
+                  type="button"
+                  className={styles.mergeAction}
+                  onClick={() => {
+                    const id = mergeNotice.threadId;
+                    void reopen(id).then(() => {
+                      setMergeNotice(null);
+                      openThread(id);
+                    });
+                  }}
+                >
+                  重新打开
+                </button>
+                <button type="button" className={styles.mergeDismiss} aria-label="关闭提示" onClick={() => setMergeNotice(null)}>
+                  <X size={13} />
+                </button>
+              </div>
+            )}
             {failureFor(mainId) && <p className={styles.error}>{failureFor(mainId)?.error.message}</p>}
             <Composer
               conversationId={mainId}
@@ -763,12 +812,13 @@ export function SubjectPage({
                     <button
                       type="button"
                       className={styles.panelActionBtn}
-                      disabled={Boolean(threadPhase)}
+                      disabled={Boolean(threadPhase) || resolvingId === threadId}
+                      aria-busy={resolvingId === threadId || undefined}
                       onClick={() => void beginResolve(threadId)}
                       aria-label="标记为已解决并合并回主对话"
                       title="已解决（合并小结回主对话）"
                     >
-                      <CheckCircle2 size={15} />
+                      {resolvingId === threadId ? <LoaderCircle className={styles.spin} size={15} /> : <CheckCircle2 size={15} />}
                     </button>
                   )}
                   <UsageStats usage={usage?.conversations[threadId]} label="用量" align="right" />
@@ -791,8 +841,8 @@ export function SubjectPage({
                 type="button"
                 className={styles.panelActionBtn}
                 onClick={() => {
-                  if (narrow) setOverlay(false);
-                  else setPanelCollapsed(true);
+                  setOverlay(false);
+                  setPanelCollapsed(true);
                 }}
                 aria-label="关闭右侧面板"
                 title="关闭面板"
@@ -810,6 +860,7 @@ export function SubjectPage({
               usage={usage?.conversations ?? {}}
               onOpen={openThread}
               onResolve={(id) => void beginResolve(id)}
+              resolvingId={resolvingId}
               onReopen={(id) => void reopen(id)}
             />
           )}
@@ -880,6 +931,7 @@ export function SubjectPage({
                   memoriesById={memoriesById}
                   conversationSubjectId={subject.id}
                   subjectNames={subjectNames}
+                  collapseLong={false}
                   phase={threadPhase}
                   followNonce={chat.followNonceFor(threadId)}
                   topSlot={(
@@ -1138,7 +1190,7 @@ function shortTime(iso: string, now = Date.now()): string {
 }
 
 function ThreadList({
-  subjectName, openThreads, doneThreads, usage, onOpen, onResolve, onReopen,
+  subjectName, openThreads, doneThreads, usage, onOpen, onResolve, resolvingId, onReopen,
 }: {
   subjectName: string;
   openThreads: ConversationSummary[];
@@ -1146,6 +1198,7 @@ function ThreadList({
   usage: Record<string, TokenUsage>;
   onOpen: (id: string) => void;
   onResolve: (id: string) => void;
+  resolvingId: string | null;
   onReopen: (id: string) => void;
 }) {
   const workingCount = openThreads.filter((item) => item.executionStatus === "working").length;
@@ -1202,11 +1255,12 @@ function ThreadList({
                       <button
                         type="button"
                         className={styles.rowAction}
-                        disabled={running}
+                        disabled={running || resolvingId === item.id}
+                        aria-busy={resolvingId === item.id || undefined}
                         onClick={() => onResolve(item.id)}
                         title={running ? "执行中，完成后可归档" : "已解决（合并小结回主对话）"}
                       >
-                        归档总结
+                        {resolvingId === item.id ? "合并中…" : "归档总结"}
                       </button>
                     </div>
                     {usage[item.id] && <div className={styles.threadUsage}><UsageStats usage={usage[item.id]} align="right" /></div>}
