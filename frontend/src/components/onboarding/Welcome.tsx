@@ -77,7 +77,7 @@ export function ModelGate({ busy, error, configured, onConfigure, onRetry, onLog
         <p className={styles.lead}>填写 OpenAI 兼容服务的地址、Key 和模型名，保存并测试通过后继续。</p>
         {busy && <p className={styles.lead} role="status">正在确认模型和学习进度…</p>}
         {error && <p className={styles.error} role="alert">{error}</p>}
-        {configured === false && <button className={styles.primary} type="button" onClick={onConfigure}>去填写</button>}
+        {(configured === false || (configured === true && Boolean(error))) && <button className={styles.primary} type="button" onClick={onConfigure}>去填写</button>}
         {error && <button className={styles.primary} type="button" disabled={busy} onClick={onRetry}>重试</button>}
         <button className={styles.logout} type="button" onClick={onLogout}>退出登录</button>
       </section>

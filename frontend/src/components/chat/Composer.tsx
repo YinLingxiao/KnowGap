@@ -1008,7 +1008,6 @@ export function Composer({
         {/* LobeHub 风格：顶部 Markdown 格式工具栏（由 + 菜单中的「格式工具」开关控制） */}
         {attachNote && <p className={styles.wsError} role="status">{attachNote}</p>}
         {imageUploads > 0 && <p className={styles.fileNote} role="status">正在上传图片…</p>}
-        
         {fileHint && (
           <p className={styles.wsError} role="alert">
             {fileHint}
