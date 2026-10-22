@@ -26,7 +26,7 @@ import { WIDGET_ASK_EVENT } from "./LearningWidget";
 import { QUOTE_TO_COMPOSER_EVENT, SEND_TO_COMPOSER_EVENT, type ComposerTextDetail } from "./SelectionToolbar";
 import { ImageAttach } from "./widgets/ImageAttach";
 import { withImageMarker } from "./widgets/visionData";
-import { WIDGET_SEND_EVENT, type WidgetSendDetail } from "./widgets/widgetEvents";
+import { WIDGET_AUTOSEND_EVENT, WIDGET_SEND_EVENT, type WidgetAutoSendDetail, type WidgetSendDetail } from "./widgets/widgetEvents";
 import { FileCard, kindFromName, rememberFile, recalledFile, scaleOf, type FileCardState } from "./FileCard";
 import styles from "./Composer.module.css";
 
@@ -52,7 +52,6 @@ const AGENT_ENV_EVENT = "knowgap:agent-env";
 const FEYNMAN_PROMPT = "我想用费曼学习法自测：请你扮演一位认真但有疑惑的同桌听我讲，并在我讲得含糊或漏掉边界条件的地方追问我。我现在开始讲：";
 
 const IMAGE_RE = /^image\/(png|jpe?g|webp)$/i;
-const NEW_CHAT_FILE_HINT = "先发一句话再上传文件，文件会保存在这段对话的资料库中。";
 
 interface PendingFile {
   key: string;
@@ -186,6 +185,10 @@ interface ComposerProps {
   /** 当前会话 ID 与消息列表（用于生成 AI 回复后的智能灰字追问预测） */
   conversationId?: string | null;
   messages?: ChatMessage[];
+  /** 首页（还没有对话）上传文件前调用，返回承接文件的对话 ID */
+  ensureConversation?: () => Promise<string | null>;
+  /** 首页的文件全部被移除、没有可发送的附件时调用 */
+  onFilesCleared?: () => void;
 }
 
 export const COMPOSER_ID = "chat-input";
@@ -245,7 +248,7 @@ function deriveInstantSuggestion(messages?: ChatMessage[]): string {
 export function Composer({
   value: draft, onChange: onChangeRaw, onSend, onStop, phase, busy, problems = [], onStartExercise, autoFocusKey,
   placeholder = "继续提问，或说说你的理解…", hero = false, inputId = COMPOSER_ID,
-  conversationId, messages,
+  conversationId, messages, ensureConversation, onFilesCleared,
 }: ComposerProps) {
   // 草稿 = 开头的附件标记行 + 正文。输入框和下面所有逻辑只处理正文（value / onChange），标记由这里统一保留
   const parsedDraft = useMemo(() => parseFileMarkers(draft), [draft]);
@@ -442,6 +445,8 @@ export function Composer({
   const pendingSend = useRef<string | null>(null);
   const restoreDraft = useRef<string | null>(null);
   const [sendNonce, setSendNonce] = useState(0);
+  const canSendNow = useRef(false);
+  canSendNow.current = !generating && !locked && !uploading;
   useEffect(() => {
     if (!conversationId) return;
     const textFor = (event: Event) => {
@@ -471,9 +476,22 @@ export function Composer({
       change(text);
       setSendNonce((n) => n + 1);
     };
+    // 微件（如代码实验台）要求立即发送：空闲时直接发，忙时交还微件改为预填
+    const onWidgetAutoSend = (event: Event) => {
+      const detail = (event as CustomEvent<WidgetAutoSendDetail>).detail;
+      if (!detail?.text || !canSendNow.current || detail.handled) return;
+      const { value: current, onChange: change } = latest.current;
+      restoreDraft.current = current.trim() && current !== detail.text ? current : null;
+      pendingSend.current = detail.text;
+      change(detail.text);
+      setSendNonce((n) => n + 1);
+      detail.handled = true;
+    };
     window.addEventListener(QUOTE_TO_COMPOSER_EVENT, onQuote);
     window.addEventListener(SEND_TO_COMPOSER_EVENT, onSendText);
+    window.addEventListener(WIDGET_AUTOSEND_EVENT, onWidgetAutoSend);
     return () => {
+      window.removeEventListener(WIDGET_AUTOSEND_EVENT, onWidgetAutoSend);
       window.removeEventListener(QUOTE_TO_COMPOSER_EVENT, onQuote);
       window.removeEventListener(SEND_TO_COMPOSER_EVENT, onSendText);
       pendingSend.current = null;
@@ -657,8 +675,8 @@ export function Composer({
       setFileHint("请选择 PDF、Word（.docx）、PPT（.pptx）、Excel（.xlsx）、TXT、Markdown 或 CSV 文件。");
       return;
     }
-    if (!conversationId) {
-      setFileHint(NEW_CHAT_FILE_HINT);
+    if (!conversationId && !ensureConversation) {
+      setFileHint("请先发一句话，再上传文件。");
       return;
     }
     if (parseFileMarkers(draftRef.current).files.length + pendingRef.current.length >= MAX_FILE_MARKERS) {
@@ -672,7 +690,12 @@ export function Composer({
     setFileHint("");
 
     try {
-      const attachment = await attachmentApi.upload(conversationId, file);
+      const targetId = conversationId ?? (await ensureConversation?.()) ?? null;
+      if (!targetId) {
+        updatePending((list) => list.filter((item) => item.key !== key));
+        return;
+      }
+      const attachment = await attachmentApi.upload(targetId, file);
       if (epoch !== uploadEpoch.current || !pendingRef.current.some((item) => item.key === key)) return;
       rememberFile(attachment);
       const current = parseFileMarkers(draftRef.current);
@@ -685,7 +708,16 @@ export function Composer({
         current.map((item) => (item.key === key ? { ...item, state: "error", error: message } : item)),
       );
     }
-  }, [conversationId, generating, locked, updatePending, writeDraft]);
+  }, [conversationId, ensureConversation, generating, locked, updatePending, writeDraft]);
+
+  // 首页预建的对话只为承接文件：文件全被移除后通知上层删掉它，避免侧栏出现空对话
+  const hadFiles = useRef(false);
+  const fileTotal = parsedDraft.files.length + pendingFiles.length;
+  useEffect(() => {
+    if (conversationId) { hadFiles.current = false; return; }
+    if (fileTotal > 0) hadFiles.current = true;
+    else if (hadFiles.current) { hadFiles.current = false; onFilesCleared?.(); }
+  }, [conversationId, fileTotal, onFilesCleared]);
 
   const removeFile = useCallback((id: string) => {
     const existingMarkers = parseFileMarkers(draftRef.current).files;
@@ -976,7 +1008,7 @@ export function Composer({
         {/* LobeHub 风格：顶部 Markdown 格式工具栏（由 + 菜单中的「格式工具」开关控制） */}
         {attachNote && <p className={styles.wsError} role="status">{attachNote}</p>}
         {imageUploads > 0 && <p className={styles.fileNote} role="status">正在上传图片…</p>}
-        {!conversationId && <p className={styles.fileNote}>先发一句话再上传文件 · 图片可直接添加</p>}
+        
         {fileHint && (
           <p className={styles.wsError} role="alert">
             {fileHint}

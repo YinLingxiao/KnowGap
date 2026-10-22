@@ -681,6 +681,8 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
                 phase={null}
                 busy={chat.creating}
                 problems={chat.problems}
+                ensureConversation={chat.ensureUploadConversation}
+                onFilesCleared={chat.discardDraftConversation}
                 onStartExercise={async (problemId) => {
                   const spaceId = chat.draftSubjectId;
                   const ok = await chat.startExercise(problemId);

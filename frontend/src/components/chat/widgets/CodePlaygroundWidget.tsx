@@ -35,6 +35,7 @@ import {
 } from "@/lib/api/sandbox-client";
 import { cx } from "@/lib/cx";
 import base from "../LearningWidget.module.css";
+import { sendNow } from "./widgetEvents";
 import styles from "./CodePlaygroundWidget.module.css";
 import {
   LANGUAGE_LABELS, buildDiagnosisPrompt, countTodos, parseCodePlaygroundSpec,
@@ -47,6 +48,22 @@ const WIDGET_ASK_EVENT = "knowgap:widget-ask";
 
 function emitWidgetQuestion(prompt: string) {
   window.dispatchEvent(new CustomEvent<string>(WIDGET_ASK_EVENT, { detail: prompt }));
+}
+
+/** 后端 ToolchainMissing 的中文说明形如「找不到 node，无法运行 …」；取出缺的工具名 */
+function missingTool(message: string): string | null {
+  return /^找不到\s*(.+?)[，,]\s*无法/.exec(message)?.[1] ?? null;
+}
+
+function buildStaticCheckPrompt(spec: PlaygroundSpec, code: string, tool: string): string {
+  const fence = "`".repeat(Math.max(3, ...(code.match(/`+/g) ?? []).map((run) => run.length + 1)));
+  const lines = [
+    `我在做代码实验台「${spec.title.slice(0, 80)}」（${LANGUAGE_LABELS[spec.language]}），但本机没有 ${tool}，没法运行。` +
+    "请你直接读下面的代码做静态检查，不需要运行：指出语法或逻辑错误（带行号）、预测它会输出什么、说明怎么修。",
+  ];
+  if (spec.instructions?.trim()) lines.push("", `题目要求：${spec.instructions.trim().slice(0, 300)}`);
+  lines.push("", "我的代码：", `${fence}${spec.language}\n${code.slice(0, 6_000)}\n${fence}`);
+  return lines.join("\n");
 }
 
 // ----------------------------------------------------------------- 编辑器扩展
@@ -299,6 +316,8 @@ function PlaygroundPanel({ spec, onAsk }: { spec: PlaygroundSpec; onAsk?: (promp
   const [last, setLast] = useState<LastRun | null>(null);
   const [stdin, setStdin] = useState("");
   const [asked, setAsked] = useState(false);
+  const [missing, setMissing] = useState<{ tool: string; code: string } | null>(null);
+  const autoCheckedRef = useRef<string | null>(null);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -354,6 +373,7 @@ function PlaygroundPanel({ spec, onAsk }: { spec: PlaygroundSpec; onAsk?: (promp
     setRunning(true);
     setError("");
     setAsked(false);
+    setMissing(null);
     try {
       const result = await runSandbox({
         language: spec.language, code, stdin,
@@ -372,7 +392,18 @@ function PlaygroundPanel({ spec, onAsk }: { spec: PlaygroundSpec; onAsk?: (promp
     } catch (caught) {
       if (!mountedRef.current || seq !== seqRef.current) return;
       // ApiError.message 已经是后端给的中文说明（沙盒正忙、缺编译器、仅限本机访问等）。
-      setError(toApiError(caught).message);
+      const message = toApiError(caught).message;
+      const tool = missingTool(message);
+      if (tool) {
+        // 本机缺解释器/编译器：同一份代码只自动请 AI 检查一次，之后由按钮触发
+        setMissing({ tool, code });
+        if (autoCheckedRef.current !== code) {
+          autoCheckedRef.current = code;
+          sendNow(buildStaticCheckPrompt(spec, code, tool));
+        }
+      } else {
+        setError(message);
+      }
       setLast(null);
       viewRef.current?.dispatch({ effects: setErrorLines.of([]) });
     } finally {
@@ -415,6 +446,15 @@ function PlaygroundPanel({ spec, onAsk }: { spec: PlaygroundSpec; onAsk?: (promp
     });
     (onAsk ?? emitWidgetQuestion)(prompt);
     setAsked(true);
+  };
+
+  const recheck = () => {
+    const view = viewRef.current;
+    if (!missing || !view) return;
+    const code = view.state.doc.toString();
+    autoCheckedRef.current = code;
+    setMissing({ tool: missing.tool, code });
+    sendNow(buildStaticCheckPrompt(spec, code, missing.tool));
   };
 
   const scaffold = spec.mode === "scaffold";
@@ -484,6 +524,20 @@ function PlaygroundPanel({ spec, onAsk }: { spec: PlaygroundSpec; onAsk?: (promp
         <p className={styles.askedNote} role="status">
           已把代码和报错放进聊天输入框，检查后按回车发送给 AI。
         </p>
+      )}
+
+      {missing && (
+        <div className={cx(styles.banner, styles.bannerBad)} role="status">
+          <CircleAlert size={15} aria-hidden />
+          <div className={styles.bannerText}>
+            <strong>本机没有 {missing.tool}，没法运行</strong>
+            <p>已请 AI 先读一遍代码，检查结果在下方对话里。</p>
+            <button type="button" className={base.askAiBtn} onClick={recheck}>
+              <Bot size={13} aria-hidden />
+              <span>再让 AI 检查一次</span>
+            </button>
+          </div>
+        </div>
       )}
 
       {error && (
