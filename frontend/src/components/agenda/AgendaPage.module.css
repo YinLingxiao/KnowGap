@@ -42,6 +42,36 @@
   flex: 1;
 }
 
+.addAction {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  padding-block: 6px;
+}
+
+.addTask {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-solid);
+  color: var(--on-accent);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.addTask:hover { background: var(--accent-solid-hover); }
+.addTask:focus-visible { outline: var(--focus-ring); outline-offset: 2px; }
+.addHint { color: var(--text-tertiary); font-size: var(--text-xs); white-space: nowrap; }
+.addHint kbd { font: inherit; font-family: var(--font-mono); }
+
+@media (pointer: coarse) { .addTask { min-height: 40px; } }
+
 .iconBtn {
   display: grid;
   flex-shrink: 0;
@@ -246,6 +276,7 @@
 
 /* 窄窗口：按钮只留图标，筛选框收窄，标题行不再被挤成竖排 */
 @container agendatop (max-width: 640px) {
+  .addHint > span { display: none; }
   .badge {
     display: none;
   }

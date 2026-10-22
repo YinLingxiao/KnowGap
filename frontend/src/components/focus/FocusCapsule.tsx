@@ -43,6 +43,13 @@ export function FocusCapsule({
 
   useEffect(() => { hydrateFocus(); }, []);
 
+  // 旧版本保存的已移除档位在空闲时回到 25 分钟，不打断正在进行的专注。
+  useEffect(() => {
+    if (state.phase === "idle" && !FOCUS_PRESETS.some(preset => preset.seconds === state.presetSeconds)) {
+      selectPreset(25 * 60);
+    }
+  }, [state.phase, state.presetSeconds]);
+
   useEffect(() => {
     if (state.phase === "idle" && zen) onZenChange(false);
   }, [state.phase, zen, onZenChange]);

@@ -14,8 +14,31 @@
   font-size: var(--text-sm);
   scrollbar-width: thin;
   scrollbar-color: var(--border-strong) var(--bg-elevated);
+  opacity: 0;
+  transform: translateY(8px) scale(.98);
+  transition:
+    opacity 180ms var(--ease-out),
+    transform 180ms var(--ease-out),
+    display 180ms allow-discrete,
+    overlay 180ms allow-discrete;
 }
-.dialog::backdrop { background: color-mix(in srgb, var(--text) 25%, transparent); }
+.dialog[open] { opacity: 1; transform: translateY(0) scale(1); }
+.dialog::backdrop {
+  background: color-mix(in srgb, var(--text) 25%, transparent);
+  opacity: 0;
+  transition: opacity 180ms var(--ease-out), display 180ms allow-discrete, overlay 180ms allow-discrete;
+}
+.dialog[open]::backdrop { opacity: 1; }
+@starting-style {
+  .dialog[open] { opacity: 0; transform: translateY(8px) scale(.98); }
+  .dialog[open]::backdrop { opacity: 0; }
+}
+/* close() remains synchronous; CSS retains the top layer only for the exit transition. */
+:root[data-motion="reduced"] .dialog,
+:root[data-motion="reduced"] .dialog::backdrop { transition: none; }
+@media (prefers-reduced-motion: reduce) {
+  .dialog, .dialog::backdrop { transition: none; }
+}
 .dialog button { cursor: pointer; }
 .dialog button:disabled { opacity: .5; cursor: not-allowed; }
 .dialog :is(button, input, textarea):focus-visible { outline: var(--focus-ring); outline-offset: 2px; }
