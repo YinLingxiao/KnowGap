@@ -42,6 +42,7 @@ interface SidebarProps {
   onOpenMaterials: () => void;
   onOpenSettings: () => void;
   onOpenHelp: () => void;
+  helpOpen: boolean;
   onCollapse: () => void;
   displayName?: string;
   avatarText?: string;
@@ -387,7 +388,7 @@ export function ConversationSidebar(props: SidebarProps) {
           {props.displayName || "演示学习者"}
           <small className={styles.userPlan}> · 本地版</small>
         </span>
-        <button className={styles.iconButton} onClick={props.onOpenHelp} aria-label="帮助" title="帮助">
+        <button id="help-trigger" className={styles.iconButton} onClick={props.onOpenHelp} aria-label="帮助" title="帮助" aria-expanded={props.helpOpen} aria-controls={props.helpOpen ? "help-panel" : undefined} aria-haspopup="dialog">
           <CircleHelp size={15} />
         </button>
         <button className={styles.iconButton} onClick={props.onOpenSettings} aria-label="设置" title="设置">

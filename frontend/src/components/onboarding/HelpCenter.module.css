@@ -1,26 +1,46 @@
-.backdrop {
+.panel {
   position: fixed;
   z-index: 50;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  padding: 24px;
-  background: rgb(15 23 42 / 28%);
-}
-
-.panel {
   display: flex;
   flex-direction: column;
-  width: min(640px, 100%);
-  max-height: min(720px, 100%);
+  width: min(480px, calc(100vw - 24px));
+  overflow: hidden;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--bg-elevated);
   color: var(--text);
+  box-shadow: var(--shadow-popover);
+  animation: help-enter 180ms var(--ease-out);
 }
+
+@keyframes help-enter {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 540px) {
+  .panel {
+    left: 0 !important;
+    bottom: 0 !important;
+    width: 100%;
+    max-height: min(75dvh, 680px) !important;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel { animation: none; }
+}
+
+:global(:root[data-motion="reduced"]) .panel { animation: none; }
+
+.panel:focus-visible,
+.panel button:focus-visible { outline: var(--focus-ring); outline-offset: -2px; }
+.panel button:hover { background: var(--bg-hover); }
 
 .panel header,
 .panel footer {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -50,7 +70,9 @@
 }
 
 .body {
+  min-height: 0;
   overflow: auto;
+  overscroll-behavior: contain;
   padding: 8px 16px 16px;
 }
 

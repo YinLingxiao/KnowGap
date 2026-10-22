@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { useChat } from "@/hooks/useChat";
 import type { HealthState } from "@/hooks/useWorkbench";
-import { getAIConfig, type AIConfigStatus } from "@/lib/api/ai-config";
+import { getAIConfig, testAIConfig, type AIConfigStatus } from "@/lib/api/ai-config";
 import { API_BASE_URL, DATA_SOURCE } from "@/lib/config";
 import { cx } from "@/lib/cx";
 import type { Problem } from "@/lib/types";
@@ -33,7 +33,7 @@ import { CreateSpaceDialog } from "./CreateSpaceDialog";
 import { CoachmarkHost } from "../onboarding/Coachmark";
 import { GettingStarted } from "../onboarding/GettingStarted";
 import { HelpCenter, type HelpAction } from "../onboarding/HelpCenter";
-import { Welcome } from "../onboarding/Welcome";
+import { ModelGate, Welcome } from "../onboarding/Welcome";
 import { CHEATSHEET_OPENED_EVENT, OPEN_SPACE_PANEL_EVENT, cheatsheetSeenKey } from "../onboarding/coach";
 import { FOCUS_START_EVENT } from "@/lib/agenda/types";
 import { SpacesPage } from "./SpacesPage";
@@ -115,6 +115,9 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
   const [viewRestored, setViewRestored] = useState(false);
   const [health, setHealth] = useState<HealthState>("checking");
   const [modelConfigured, setModelConfigured] = useState<boolean | null>(null);
+  const [modelError, setModelError] = useState("");
+  const [modelChecking, setModelChecking] = useState(true);
+  const needsModelTest = useRef(false);
   const [gate, setGate] = useState<"checking" | "welcome" | "app">("checking");
   const [helpOpen, setHelpOpen] = useState(false);
   const [welcomeBusy, setWelcomeBusy] = useState(false);
@@ -146,14 +149,29 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
     }
   }, []);
 
+  const checkModel = useCallback(async () => {
+    setModelChecking(true);
+    setModelError("");
+    try {
+      const config = await getAIConfig();
+      if (!config.configured) needsModelTest.current = true;
+      if (config.configured && needsModelTest.current) {
+        await testAIConfig({ baseUrl: config.baseUrl, model: config.model, apiKey: "" });
+        needsModelTest.current = false;
+        setSettingsOpen(false);
+      }
+      setModelConfigured(config.configured);
+    } catch {
+      setModelError("无法确认模型连接，请检查后端是否启动、模型配置是否可用，然后重试。");
+    } finally {
+      setModelChecking(false);
+    }
+  }, []);
+
   useEffect(() => {
     void checkHealth();
-    getAIConfig()
-      .then((config) => {
-        setModelConfigured(config.configured);
-      })
-      .catch(() => setModelConfigured(null));
-  }, [checkHealth]);
+    void checkModel();
+  }, [checkHealth, checkModel]);
 
   const closeOverlays = useCallback(() => {
     if (narrow) setSidebarOpen(false);
@@ -183,19 +201,19 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
     return () => window.removeEventListener(CHEATSHEET_OPENED_EVENT, mark);
   }, [user.id]);
 
-  useEffect(() => {
-    if (DATA_SOURCE !== "api") return;
-    let cancelled = false;
-    chatApi.onboardingStatus()
-      .then((status) => {
-        if (cancelled) return;
-        setGate(status.status === "not_started" ? "welcome" : "app");
-      })
-      .catch(() => {
-        if (!cancelled) setWelcomeError("读不到进度，请刷新重试。");
-      });
-    return () => { cancelled = true; };
+  const checkOnboarding = useCallback(async () => {
+    setWelcomeError("");
+    try {
+      const status = await chatApi.onboardingStatus();
+      setGate(status.status === "not_started" ? "welcome" : "app");
+    } catch {
+      setWelcomeError("无法读取学习进度，请检查后端是否启动，然后重试。");
+    }
   }, [user.id]);
+
+  useEffect(() => {
+    if (DATA_SOURCE === "api") void checkOnboarding();
+  }, [checkOnboarding]);
 
   const enterSpace = useCallback(async (subjectId: string, conversationId: string, opener?: string) => {
     await chat.loadSubjects();
@@ -265,7 +283,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
         if (narrow) setSidebarOpen(false);
         return;
       }
-      if (settingsOpen || event.metaKey || event.ctrlKey || event.altKey || isTyping(event.target)) return;
+      if (modelConfigured !== true || gate !== "app" || settingsOpen || event.metaKey || event.ctrlKey || event.altKey || isTyping(event.target)) return;
       if (event.key === "/") {
         event.preventDefault();
         document.getElementById(COMPOSER_ID)?.focus();
@@ -273,7 +291,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [narrow, settingsOpen]);
+  }, [narrow, settingsOpen, modelConfigured, gate]);
 
   const problemsById = useMemo(
     () => Object.fromEntries(chat.problems.map((problem) => [problem.id, problem])) as Record<string, Problem>,
@@ -319,9 +337,14 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
     ? { state: "unavailable", at: signalAt, detail: lastAssistant.error ?? undefined }
     : lastAssistant?.status === "complete" ? { state: "ok", at: signalAt } : { state: "unknown" };
 
-  const handleConfigChange = useCallback((config: AIConfigStatus) => {
-    setModelConfigured(config.configured);
-  }, []);
+  const handleConfigChange = useCallback((config: AIConfigStatus, saved: boolean) => {
+    if (!config.configured) {
+      needsModelTest.current = true;
+      setModelConfigured(false);
+    } else if (saved) {
+      void checkModel();
+    }
+  }, [checkModel]);
 
   const openMemories = (ids: string[] = []) => {
     setMemoryFocus(ids);
@@ -418,9 +441,12 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
     </div>
   );
 
+  const modelBlocked = modelConfigured !== true || modelChecking || Boolean(modelError);
+  const appBlocked = modelBlocked || gate !== "app";
+
   return (
-    <div className={cx(styles.app, (gate !== "app" || !sidebarOpen || zen) && styles.sidebarClosed, narrow && styles.narrow, zen && styles.zen)} data-coachmark="spotlight">
-      <CoachmarkHost userId={user.id} enabled={gate === "app"} />
+    <div className={cx(styles.app, (appBlocked || !sidebarOpen || zen) && styles.sidebarClosed, narrow && styles.narrow, zen && styles.zen)} data-coachmark="spotlight">
+      <CoachmarkHost userId={user.id} enabled={!appBlocked} />
       <ReminderScheduler userId={user.id} subjects={chat.subjects} />
       <DesktopBridge />
       {narrow && (
@@ -431,7 +457,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
           onClick={() => setSidebarOpen(false)}
         />
       )}
-      <aside className={styles.sidebar} aria-hidden={!sidebarOpen || undefined} inert={!sidebarOpen || undefined}>
+      <aside className={styles.sidebar} aria-hidden={appBlocked || !sidebarOpen || undefined} inert={appBlocked || !sidebarOpen || undefined}>
         <div className={styles.sidebarInner}>
           <ConversationSidebar
             conversations={chat.conversations}
@@ -459,7 +485,8 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
             onOpenMemory={() => { openMemories(); closeOverlays(); }}
             onOpenMaterials={() => { setView({ type: "materials" }); closeOverlays(); }}
             onOpenSettings={() => { openSettings(modelConfigured === false ? "models" : "general"); closeOverlays(); }}
-            onOpenHelp={() => { setHelpOpen(true); closeOverlays(); }}
+            onOpenHelp={() => setHelpOpen((open) => !open)}
+            helpOpen={helpOpen}
             onCollapse={() => setSidebarOpen(false)}
             displayName={user.displayName}
             avatarText={user.avatarText}
@@ -468,15 +495,22 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
       </aside>
 
       <main className={styles.main}>
-        {gate !== "app" ? (
+        {modelBlocked || gate === "checking" ? (
+          <ModelGate
+            busy={modelChecking || (gate === "checking" && !welcomeError)}
+            error={modelError || (gate === "checking" ? welcomeError : "")}
+            configured={modelConfigured}
+            onConfigure={() => openSettings("models")}
+            onRetry={() => { void checkModel(); void checkOnboarding(); }}
+            onLogout={onLogout}
+          />
+        ) : gate !== "app" ? (
           <Welcome
-            busy={welcomeBusy || gate === "checking"}
+            busy={welcomeBusy}
             error={welcomeError}
-            configVersion={`${String(modelConfigured)}:${settingsOpen}`}
             onAnswer={(text) => void answerWelcome(text)}
             onDemo={() => void browseDemo()}
             onSkip={() => void skipWelcome()}
-            onConfigure={() => openSettings("models")}
           />
         ) : materialsOpen ? (
           <MaterialLibrary
@@ -721,17 +755,13 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
                     onChange={(subjectId) => chat.newChat(subjectId)}
                     onCreate={() => setSpaceDialog({ select: true })}
                   />
-                  {modelConfigured === false && (
-                    <button className={cx(styles.cockpitHeadBtn, styles.modelMissing)} onClick={() => openSettings("models")}>
-                      <CircleAlert size={12} aria-hidden />
-                      <span>未配置模型</span>
-                    </button>
-                  )}
                 </div>
               </div>
 
               <GettingStarted
                 userId={user.id}
+                hasSpace={chat.subjects.length > 0}
+                onCreateSpace={() => setSpaceDialog({ select: false })}
                 onExplain={() => {
                   const space = recentSpaces[0];
                   if (space?.mainConversationId) {
@@ -762,7 +792,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
                 onSheet={() => {
                   const space = recentSpaces[0];
                   if (!space) {
-                    setView({ type: "spaces" });
+                    setSpaceDialog({ select: false });
                     return;
                   }
                   setView({ type: "subject", id: space.id });
@@ -921,7 +951,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
         />
       )}
       <Toaster toasts={toasts} onDismiss={dismiss} />
-      <TaskComposer subjects={chat.subjects} />
+      {!appBlocked && <TaskComposer subjects={chat.subjects} />}
     </div>
   );
 }
