@@ -312,11 +312,8 @@ html.theme-switching *::after {
   transition: none !important;
 }
 
-/* 深浅色切换：
-   无论 expand（深->浅，由按钮向外扩散）还是 contract（浅->深，由四周向按钮收缩），
-   永远保持底层 ::view-transition-old(root) 100% 无裁剪静止衬底 (z-index: 1)，
-   仅对顶层 ::view-transition-new(root) (z-index: 9999) 应用 var(--vt-clip-from) -> var(--vt-clip-to)。
-   contract 使用 path(evenodd, 外矩形 + 收缩内圆洞) 裁剪新视图，彻底根除 Chromium 裁剪旧快照引发的合成闪烁。 */
+/* 桌面端使用短淡化，避免页面圆形裁剪与原生窗口按钮分裂；浏览器保留
+   expand / contract 圆形揭幕。旧快照始终铺满，只有新快照参与动画。 */
 html[data-vt-dir],
 html[data-vt-dir] *,
 html[data-vt-dir] *::before,
@@ -336,8 +333,16 @@ html[data-vt-dir]::view-transition-old(root) {
 
 html[data-vt-dir]::view-transition-new(root) {
   z-index: 9999;
+}
+
+html[data-vt-dir="expand"]::view-transition-new(root),
+html[data-vt-dir="contract"]::view-transition-new(root) {
   /* 第 0 帧静态保护：在 transition.ready 挂载 Web Animation 前，新视图严格保持起始裁剪态（0% 可见），绝不抢跑闪屏 */
   clip-path: var(--vt-clip-from);
+}
+
+html[data-vt-dir="fade"]::view-transition-new(root) {
+  opacity: 0;
 }
 
 button,

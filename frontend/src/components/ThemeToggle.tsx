@@ -9,6 +9,7 @@ export type ThemeChoice = "system" | "light" | "dark";
 type ViewTransitionLike = {
   ready: Promise<void>;
   finished: Promise<void>;
+  skipTransition: () => void;
 };
 
 type DocumentWithVT = Document & {
@@ -39,15 +40,15 @@ function isEffectiveDark(choice?: ThemeChoice): boolean {
 
 function syncDesktopTheme(choice: ThemeChoice) {
   if (typeof window !== "undefined") {
-    void window.knowgap?.setTheme?.(choice);
+    void Promise.resolve(window.knowgap?.setTheme?.(choice)).catch(() => undefined);
   }
 }
 
-function commitThemeDom(choice: ThemeChoice, syncDesktop = true) {
+function commitThemeDom(choice: ThemeChoice) {
   const root = document.documentElement;
   if (choice === "system") delete root.dataset.theme;
   else root.dataset.theme = choice;
-  if (syncDesktop) syncDesktopTheme(choice);
+  syncDesktopTheme(choice);
   try {
     if (choice === "system") localStorage.removeItem(STORAGE_KEY);
     else localStorage.setItem(STORAGE_KEY, choice);
@@ -78,21 +79,45 @@ function resolveOriginPoint(origin?: { x: number; y: number }): { x: number; y: 
 }
 
 let transitionToken = 0;
+let activeTransition: ViewTransitionLike | null = null;
+let activeAnimation: Animation | null = null;
+let switchTimer: number | undefined;
+
+function clearTransitionState(root: HTMLElement) {
+  activeAnimation?.cancel();
+  activeAnimation = null;
+  activeTransition = null;
+  delete root.dataset.vtDir;
+  root.style.removeProperty("--vt-clip-from");
+}
 
 function applyChoice(choice: ThemeChoice, origin?: { x: number; y: number }) {
   if (typeof document === "undefined") return;
   const root = document.documentElement;
+  // Invalidate both the old snapshot callback and its cleanup on a rapid switch.
+  // An earlier transition must never restore an outdated native theme.
+  const token = ++transitionToken;
+  activeTransition?.skipTransition();
+  clearTransitionState(root);
+  window.clearTimeout(switchTimer);
+  root.classList.remove("theme-switching");
   const wasDark = isEffectiveDark();
   const nextDark = isEffectiveDark(choice);
   const reducedMotion =
     root.dataset.motion === "reduced" || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const doc = document as DocumentWithVT;
+  const desktop = Boolean(window.knowgap?.windowChrome);
+  const applyInstant = () => {
+    root.classList.add("theme-switching");
+    commitThemeDom(choice);
+    switchTimer = window.setTimeout(() => {
+      if (token === transitionToken) root.classList.remove("theme-switching");
+    }, 180);
+  };
 
   // 若视觉明暗未发生变化、或开启了减弱动态效果、或浏览器不支持 View Transitions，直接切换
   if (wasDark === nextDark || reducedMotion || typeof doc.startViewTransition !== "function") {
-    root.classList.add("theme-switching");
-    commitThemeDom(choice);
-    window.setTimeout(() => root.classList.remove("theme-switching"), 260);
+    applyInstant();
     return;
   }
 
@@ -121,39 +146,46 @@ function applyChoice(choice: ThemeChoice, origin?: { x: number; y: number }) {
     ? `path(evenodd, "${rectPath} ${holeEnd}")`
     : `circle(${r}px at ${x}px ${y}px)`;
 
-  root.style.setProperty("--vt-clip-from", clipFrom);
-  root.dataset.vtDir = isContract ? "contract" : "expand";
+  // Native caption buttons cannot participate in the page's circular mask.
+  // Desktop uses a brief full-surface fade; browsers retain the radial reveal.
+  if (!desktop) root.style.setProperty("--vt-clip-from", clipFrom);
+  root.dataset.vtDir = desktop ? "fade" : isContract ? "contract" : "expand";
 
-  const token = ++transitionToken;
-  const transition = doc.startViewTransition(() => {
-    commitThemeDom(choice, false);
-  });
+  let transition: ViewTransitionLike;
+  try {
+    transition = doc.startViewTransition(() => {
+      if (token === transitionToken) commitThemeDom(choice);
+    });
+    activeTransition = transition;
+  } catch {
+    clearTransitionState(root);
+    applyInstant();
+    return;
+  }
 
   transition.ready
     .then(() => {
       if (token !== transitionToken) return;
-      root.animate(
+      activeAnimation = root.animate(
+        desktop ? { opacity: [0, 1] } : { clipPath: [clipFrom, clipTo] },
         {
-          clipPath: [clipFrom, clipTo],
-        },
-        {
-          duration: 400,
+          duration: desktop ? 160 : 400,
           // 扩散用轻快 ease-out；收缩用对称 ease-in-out，避免最后 50px 减速拖尾显得卡顿
-          easing: isContract ? "cubic-bezier(0.4, 0, 0.2, 1)" : "cubic-bezier(0.25, 1, 0.5, 1)",
+          easing: desktop ? "ease-out" : isContract ? "cubic-bezier(0.4, 0, 0.2, 1)" : "cubic-bezier(0.25, 1, 0.5, 1)",
           fill: "both",
           pseudoElement: "::view-transition-new(root)",
         },
       );
     })
-    .catch(() => {});
+    .catch(() => {
+      if (token === transitionToken) transition.skipTransition();
+    });
 
   transition.finished
     .catch(() => {})
     .finally(() => {
-      syncDesktopTheme(choice);
       if (token !== transitionToken) return;
-      delete root.dataset.vtDir;
-      root.style.removeProperty("--vt-clip-from");
+      clearTransitionState(root);
     });
 }
 
