@@ -74,17 +74,21 @@ $required = @(
     "desktop\dist\win-unpacked\KnowGap.exe",
     "desktop\dist\win-unpacked\resources\frontend\index.html",
     "desktop\dist\win-unpacked\resources\frontend\quick.html",
-    "desktop\dist\win-unpacked\resources\backend\knowgap.exe"
+    "desktop\dist\win-unpacked\resources\backend\knowgap.exe",
+    "desktop\dist\latest.yml"
 )
 $missing = $required | Where-Object { -not (Test-Path (Join-Path $root $_)) }
 if ($missing) {
     throw "安装包缺少必要文件：`n$($missing -join "`n")`n请检查构建日志。"
 }
 
-$installer = Get-ChildItem (Join-Path $root "desktop\dist") -Filter "KnowGap Setup *.exe" |
+$installer = Get-ChildItem (Join-Path $root "desktop\dist") -Filter "KnowGap-Setup-*.exe" |
     Sort-Object LastWriteTime -Descending | Select-Object -First 1
-if (-not $installer) { throw "没有找到 NSIS 安装包（desktop\dist\KnowGap Setup *.exe）。" }
+if (-not $installer) { throw "没有找到 NSIS 安装包（desktop\dist\KnowGap-Setup-*.exe）。" }
 if ($installer.Length -lt 50MB) { throw "安装包体积异常（$([math]::Round($installer.Length / 1MB, 1)) MB），可能缺少后端或前端资源。" }
+$version = (Get-Content -Raw (Join-Path $root "desktop\package.json") | ConvertFrom-Json).version
+& node (Join-Path $PSScriptRoot "verify-update-artifacts.cjs") (Join-Path $root "desktop\package.json") (Join-Path $root "desktop\dist") "v$version"
+Assert-Exit "自动更新产物校验（latest.yml / 安装包 / blockmap / SHA512）"
 
 Write-Host ""
 Write-Host "打包完成" -ForegroundColor Green

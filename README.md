@@ -199,9 +199,10 @@ flowchart LR
 
 ## 桌面端
 
-Windows 安装包用 Electron 拉起本机后端和静态前端。数据在 `%APPDATA%\knowgap-desktop`：`knowgap.sqlite3`、含 API Key 的 `ai-settings.json`、端口和日志。手动卸载时会问是否同时删除这个目录（默认不删）；升级安装不会问、也不会删。
+Windows 安装包用 Electron 拉起本机后端和静态前端。数据在 `%APPDATA%\knowgap-desktop`：`knowgap.sqlite3`、含 API Key 的 `model-library.json`（以及迁移前留下的 `ai-settings.json`）、端口和日志。手动卸载时会问是否同时删除这个目录（默认不删）；升级安装不会问、也不会删。
 
 - 默认点窗口关闭是缩到托盘，后端还在。托盘可以打开主窗口、快问、看今日待办数量。第一次缩到托盘会提示还在后台。
+- 从首个带更新功能的 v0.5.6 安装包起，可在「设置 → 通用 → 软件更新」检查、下载和重启安装后续正式版本；默认后台下载但不在退出时安装，支持自定义 HTTPS 更新源，发布与回退见[自动更新清单](docs/desktop-release-checklist.md#自动更新v056-起)。v0.5.6 本身仍需手动安装，安装级验收待负责人协调打包后完成。
 - 全局快问默认 `Alt+Space`。注册失败（例如被其他软件占用）时改用 `Ctrl+Shift+K`。浮窗里问完可以在主窗口打开同一条对话。
 - 只允许一个实例。再次启动会把已有窗口叫到前面。
 - 后端优先用端口 `38617`。被占用就换端口，并记在 `port.json` 里，下次尽量用同一个，避免登录状态因为地址变化丢掉。
@@ -296,7 +297,9 @@ backend\.venv\Scripts\python.exe -m pip install -r backend/requirements-dev.txt
 if (-not (Test-Path backend/.env)) { Copy-Item .env.example backend/.env }
 ```
 
-`backend/.env` 里可以写模型，也可以等界面里的「设置」保存。界面保存的配置在本机数据目录的 `ai-settings.json`，含密钥，不进 Git。密钥不要写成 `NEXT_PUBLIC_*`。
+`backend/.env` 里可以写一个起步模型，也可以等界面里的「设置 → 模型接入」添加服务商。服务商保存地址、认证方式和密钥；模型挂在服务商下面，各自有启用开关和能力标签。新对话用默认模型，输入框里更换只影响当前这条对话，支线在自己没选模型时沿用主线。逻辑、视觉、后台与记忆从模型库里选，不再各自填写地址和密钥。
+
+配置写在数据目录的 `model-library.json`，含密钥，不进 Git，接口也不回传密钥。第一次启动若还没有这个文件、但已有 `ai-settings.json` 或环境变量里的有效配置，会自动生成一个服务商和一个默认模型；旧的 `ai-settings.json` 不删不改。`/api/ai/config` 仍可用，读写作用在默认模型所属的服务商上。契约见 [docs/contracts/model-library.md](docs/contracts/model-library.md)。密钥不要写成 `NEXT_PUBLIC_*`。
 
 ```dotenv
 LLM_BASE_URL=https://your-provider.example/v1

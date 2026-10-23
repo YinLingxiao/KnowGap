@@ -40,7 +40,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-desktop.ps1
 
 | 产物 | 路径 |
 | --- | --- |
-| NSIS 安装包 | `desktop/dist/KnowGap Setup 0.2.0.exe` |
+| NSIS 安装包 | `desktop/dist/KnowGap-Setup-<version>.exe`（v0.5.6 起无空格） |
+| 自动更新清单 / 差分映射 | `desktop/dist/latest.yml` / `KnowGap-Setup-<version>.exe.blockmap` |
 | 免安装目录 | `desktop/dist/win-unpacked/KnowGap.exe` |
 | 前端静态导出 | `frontend/out/`（必须包含 `index.html`、`quick.html`、`404.html`） |
 | 后端单文件目录 | `backend/dist/knowgap/knowgap.exe` + `_internal/` |
@@ -52,6 +53,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-desktop.ps1
 - [ ] `desktop/dist/win-unpacked/resources/frontend/index.html` 与 `quick.html` 存在
 - [ ] `desktop/dist/win-unpacked/resources/backend/knowgap.exe` 存在
 - [ ] 安装包 > 50 MB 且已生成 `.blockmap`
+- [ ] `latest.yml` 的 `version`、`path`、`files[].url` 与版本和无空格文件名完全相同，文件大小及 SHA512 一致（构建脚本自动校验）
 
 > 注意：`.env.local` 里的 `NEXT_PUBLIC_API_BASE_URL` 不会进入安装包——脚本用进程环境变量覆盖为 `"/"`（同源相对路径），保证页面始终请求当前后端端口。构建日志会显示 `Environments: .env.local`，属正常。
 
@@ -59,7 +61,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-desktop.ps1
 
 ## 2. 安装包验证
 
-1. 双击 `desktop/dist/KnowGap Setup 0.5.5.exe`。0.5.0 起是中文安装向导（`nsis.oneClick: false`），不再一键静默安装：先选「为所有用户 / 仅为我」，再选安装位置。「仅为我」无需管理员。
+1. 双击 `desktop/dist/KnowGap-Setup-<version>.exe`。0.5.0 起是中文安装向导（`nsis.oneClick: false`），不再一键静默安装：先选「为所有用户 / 仅为我」，再选安装位置。「仅为我」无需管理员。
 2. 预期：完成页默认勾选「运行 KnowGap」；开始菜单/桌面出现 **KnowGap** 快捷方式。
 3. 安装目录以向导里选的为准。0.2.0 和 0.3.0 是一键安装，装在 `%LOCALAPPDATA%\Programs\knowgap-desktop\`。
 4. 卸载：设置 → 应用 → KnowGap → 卸载；或安装目录下 `Uninstall KnowGap.exe /S`。
@@ -230,3 +232,63 @@ Get-ChildItem "desktop\dist\win-unpacked\resources\backend"
 - [ ] 全新安装、未配置模型时首次打开：欢迎页先显示「先连上 AI 模型（约 1 分钟）」，「去填写」打开设置的模型页；保存并测试通过后自动切回「你最近在学什么？」。
 - [ ] 在打包版中上传 .docx / .pptx / .xlsx 各一份：附件卡片显示规模（节 / 张幻灯片 / 个工作表），发送「精读重点」后 AI 按页引用回答（确认 python-docx / python-pptx / openpyxl 已被 PyInstaller 打进后端）。
 - [ ] 开发者模式默认关闭：输入框「+」菜单中没有「目标与工作区」「帮我批准」。
+
+## 自动更新（v0.5.7 起）
+
+### 安全策略与边界
+
+- **v0.5.7 是首个带更新功能的版本，必须先手动安装。** v0.5.5 没有更新器，不会自己升级。真实 GitHub 升级链路必须等下一个更高正式版本发布后验证。
+- 只在已打包的 Windows 应用中启用。默认启动约 20 秒后检查，之后每 4 小时检查；自动检查、自动下载默认开；**退出时自动安装默认关**。下载完成只显示侧栏小圆点和设置中的说明，不弹窗、不自动重启。
+- 关闭自动下载后，发现版本会显示「下载更新」；关闭自动检查不妨碍手动检查。已在进行的下载不会因为关开关而中断。
+- 手动安装总是先原生确认（含「会中断正在生成的回复」），然后 `quitting=true` → 等待 `stopBackend()` 结束进程树 → 销毁快问、托盘 → `quitAndInstall`。从托盘恢复也走同一路径。
+- 「退出时自动安装」由本应用的 `before-quit` 拦截执行同样的清理顺序，不开启 electron-updater 自带的退出安装钩子，避免与后端退出竞争；显式勾选后真正退出才安装，安装后不重新打开。关窗口留托盘不算退出。
+- 后台网络错误、限流和没有新版本静默；手动检查给中文反馈。只接受正式版本，不降级；保留 SHA512 完整性校验。差分不可用时 electron-updater 回退到全量下载，同样校验。
+- 未签名安装包可能显示 SmartScreen「未知发布者」；为所有用户安装可能需要 UAC。**不要为消除提示禁用哈希或其他校验**。UAC 的真实交互仍须人工验收，取消提升权限时可能需要手动重启当前版本。
+
+### 更新源与路演开关
+
+「设置 → 通用 → 软件更新」的更新地址留空表示 GitHub Releases；自定义应指向同时存放 `latest.yml`、安装包、`.blockmap` 的 HTTPS **目录**，不能填某个 exe 或 latest.yml 文件。拒绝用户名密码、查询参数、片段及非本机 HTTP；仅允许 `http://127.0.0.1:<port>/` 用于本机测试。更换更新源应在空闲且尚未下载时操作；已下载需先退出重开。服务器目录应保留旧版 blockmap，支持 Range 请求以便差分下载；不支持时可回退全量。
+
+- 桌面设置写入 `%APPDATA%\knowgap-desktop\desktop-settings.json`：`autoCheckUpdates`、`autoDownloadUpdates`、`autoInstallOnQuit`、`updateUrl`。不改变已有托盘、主题、开机自启设置。
+- `KNOWGAP_UPDATE_URL` 优先于设置；无效值直接阻止检查，不偷偷回退 GitHub。变量由启动进程继承，修改后要彻底退出（不是关到托盘）再启动。界面显示环境变量覆盖，不显示可能敏感的原值。
+- 路演机需要完全冻结更新时：从带有 `$env:KNOWGAP_DISABLE_UPDATE = "1"` 的 PowerShell 启动安装版 KnowGap。该变量关闭检查、下载、安装，界面明确显示已关闭；不持久改写系统环境。若原实例还在托盘，先真正退出，否则单实例机制仍会唤醒旧实例。
+- 自定义源拥有执行安装包的能力，只使用负责人管理的可信 HTTPS 服务器；不要把密钥或鉴权凭据写进更新地址、日志或发布说明。
+
+### 发布：只由负责人执行
+
+1. 协调独占构建，备份数据，确认其他 Agent 改动已经验收。更新 `desktop/package.json` 和 lock 的正式版本；构建命令固定 `--publish never`，即使有 GitHub 凭据也不会自动上传。
+2. 执行 `scripts/build-desktop.ps1`。脚本校验 `latest.yml`、安装包和有效 gzip `.blockmap`，以及清单版本、文件名、字节数和 SHA512。不得重命名文件：GitHub 会把空格改成点，新文件名 `KnowGap-Setup-0.5.6.exe` 无空格，不受此影响。
+3. 负责人按自己的提交/标签流程准备并推送对应标签（如 `v0.5.6`）。发布脚本**不构建、不推送、不创建标签**，`--verify-tag` 要求远端标签已存在。说明文件由负责人准备，不能含密钥。
+4. 先只校验，再确认上传（相对说明文件路径以当前工作目录为准）：
+   ```powershell
+   powershell -NoProfile -ExecutionPolicy Bypass -File scripts/publish-release.ps1 -Tag v0.5.6 -NotesFile .\release-notes.md -CheckOnly
+   powershell -NoProfile -ExecutionPolicy Bypass -File scripts/publish-release.ps1 -Tag v0.5.6 -NotesFile .\release-notes.md
+   ```
+   脚本要求输入完整标签确认，再次校验后才 `gh release create`，上传且仅上传清单、exe、blockmap。**标准 latest.yml 提供 SHA512，不提供 SHA256**：脚本按其 SHA512 校验，同时计算并打印 SHA256；可用 `-ExpectedSha256 <人工记录的值>` 再核对，清单若额外有 sha256 也必须一致。不要拿 SHA256 与 SHA512 比较或手填替换标准校验值。
+5. 在 GitHub 上检查三个资源：`latest.yml`、`KnowGap-Setup-<version>.exe`、同名 `.exe.blockmap`。清单的 `path` 和 `files[].url` 必须与 exe 资源名逐字一致，版本必须正式、非 prerelease。上传中断时检查并撤回不完整 Release，不得留下只含清单或缺安装包的可用发布。镜像服务器先上传 exe/blockmap，最后原子替换 latest.yml。
+
+### 必做：本机 generic 安装级验收（本轮尚未执行）
+
+> 2026-10-23：负责人要求「先实现，暂不打包」。以下是待执行清单，**不是通过记录**。不要用虚构版本的清单搭配真实旧版安装包冒充成功；要构建实际具有更高版本号的临时测试安装包。
+
+1. 独占构建后，在临时构建目录制作两个真实 NSIS 包（基线 0.5.6、临时更高正式版本）。只改临时副本的版本，不提交、不 tag、不上传 GitHub。使用隔离 Windows 测试账户/沙盒，使 `%APPDATA%`、安装记录、自启项、快捷方式全部与路演机数据隔离；**只改变 userData 路径不足以隔离安装器、快捷方式和注册表**。
+2. 先安装基线，选择非默认安装目录，记录目录、桌面快捷方式目标和自启项。用合成数据创建对话、学习空间、模型配置，核对保存内容（含密钥的文件只在本机比较哈希，不打印、不上传），开启开机自启。记录数据文件哈希/记录数和端口。
+3. 临时更高版本目录放原样的 `latest.yml` / exe / blockmap；本机服务只绑定回环：
+   ```powershell
+   python -m http.server 8123 --bind 127.0.0.1 --directory <临时更新产物目录>
+   # 新终端，关闭原实例后启动基线安装版
+   $env:KNOWGAP_UPDATE_URL = "http://127.0.0.1:8123/"
+   & "<隔离测试安装目录>\KnowGap.exe"
+   ```
+4. 设置手动检查 → available/downloading（速度、大小、百分比）→ downloaded。核对侧栏小圆点悬停提示；下载完成不弹窗。等候/关到托盘/真正退出（默认自动安装关）均不安装；重开仍可发现缓存更新。
+5. 后台/手动各测：断网、服务 404、故意破坏 exe（SHA512 必须阻止下载完成/安装）；完成后恢复原产物。自动检查关仍可手查；自动下载关显示「下载更新」。`KNOWGAP_DISABLE_UPDATE=1` 应完全阻止更新。
+6. 在主窗口/快问生成回复时点安装，必须出现中断确认，取消不结束后端；确认后观察后端进程树退出，托盘与快问消失，再运行安装器。安装后新版本自动启动，`/health` 200、能打开原对话/空间并继续回复。
+7. 验证升级沿用原安装目录、快捷方式、学习数据（含模型配置和密钥）、开机自启、固定端口及登录状态；升级不出现「是否删除学习数据」。再分别验收仅为当前用户 / 为所有用户（管理员测试账户 + UAC 允许和取消）。显式开启退出时安装后单独验证退出安装不重新打开应用。
+8. 终止本机服务，退出临时测试安装版；恢复测试环境变量/自启项；仅卸载隔离账户中的临时安装，删除本轮创建的假版本、测试清单、缓存和临时构建/服务器目录。不得删除路演数据或他人的 dist。最终正式包重新构建并校验版本，禁止把临时更高版本作为 Release。
+
+### 回退与止损
+
+- 未发布：停止上传；保留当前安装版。构建/校验失败不得用旧 dist 冒充新包。
+- 已发布但未安装：负责人将有问题的 Release 撤为草稿/预发布，或撤下 generic 的最新清单并恢复已验证清单；同时通知已下载的用户先不要点安装，彻底退出再用 `KNOWGAP_DISABLE_UPDATE=1` 重启。撤回远端清单不会自动清掉运行中进程里已下载的更新。
+- 已安装：**不允许自动降级**。首选把修复/已验证的旧代码以更高版本号重新构建、完整验收后发布；紧急手动回装旧安装包前先备份整个数据目录，确认数据库向后兼容，不能通过关闭 SHA512 或开启 allowDowngrade 止损。卸载选择保留学习数据。
+- 如 UAC 取消或安装器失败后没自动恢复：重新启动原安装目录里的 KnowGap.exe，确认 `/health`；不要连续点击安装，也不要用任务管理器强杀正在写数据的安装过程。

@@ -1,13 +1,17 @@
 {
   "name": "knowgap-desktop",
-  "version": "0.5.5",
+  "version": "0.5.7",
   "description": "KnowGap（知隙）桌面端：本地学习助手",
   "author": "KnowGap",
   "private": true,
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "dist": "electron-builder --win nsis"
+    "dist": "electron-builder --win nsis --publish never",
+    "test": "node --test tests/*.test.cjs"
+  },
+  "dependencies": {
+    "electron-updater": "6.6.2"
   },
   "devDependencies": {
     "electron": "33.2.1",
@@ -17,7 +21,8 @@
     "appId": "app.knowgap.desktop",
     "productName": "KnowGap",
     "directories": { "output": "dist" },
-    "files": ["main.js", "preload.js", "window-chrome.js", "startup.js", "startup.html", "icon.ico", "icon.png"],
+    "files": ["main.js", "preload.js", "updater.js", "window-chrome.js", "startup.js", "startup.html", "icon.ico", "icon.png"],
+    "publish": [{ "provider": "github", "owner": "YinLingxiao", "repo": "KnowGap" }],
     "extraResources": [
       { "from": "../frontend/out", "to": "frontend" },
       { "from": "../backend/dist/knowgap", "to": "backend" }
@@ -27,6 +32,7 @@
       "icon": "icon.ico"
     },
     "nsis": {
+      "artifactName": "KnowGap-Setup-${version}.exe",
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,

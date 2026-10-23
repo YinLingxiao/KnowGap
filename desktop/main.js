@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, Notification, Tray, dialog, globalShortcut, ipcMain, nativeImage, nativeTheme, screen } = require("electron");
+const { app, BrowserWindow, Menu, Notification, Tray, dialog, globalShortcut, ipcMain, nativeImage, nativeTheme, screen, shell } = require("electron");
 const { spawn } = require("child_process");
 const http = require("http");
 const fs = require("fs");
@@ -6,6 +6,7 @@ const net = require("net");
 const path = require("path");
 const { windowChromeOptions, applyWindowTheme } = require("./window-chrome");
 const { createStartup } = require("./startup");
+const { createUpdater, UPDATE_DEFAULTS, normalizeUpdateSettings, validateUpdatePatch } = require("./updater");
 
 // 页面 origin 随端口变化，换端口会丢掉 localStorage（登录、演示模式、草稿等），所以优先复用固定端口
 const PREFERRED_PORT = 38617;
@@ -20,8 +21,10 @@ let quickFallbackTried = false;
 let appOrigin = "";
 let tray = null;
 let quitting = false;
+let updater = null;
+let backendStopTask = null;
 let revealOnReady = false;
-let settings = { closeToTray: true, openAtLogin: false, backgroundNotified: false, theme: "system" };
+let settings = { closeToTray: true, openAtLogin: false, backgroundNotified: false, theme: "system", ...UPDATE_DEFAULTS };
 let trayStatus = { todayCount: 0 };
 
 const QUICK_SHORTCUTS = ["Alt+Space", "CommandOrControl+Shift+K"];
@@ -101,9 +104,10 @@ function loadSettings() {
       openAtLogin: data.openAtLogin === true,
       backgroundNotified: data.backgroundNotified === true,
       theme: data.theme === "light" || data.theme === "dark" ? data.theme : "system",
+      ...normalizeUpdateSettings(data),
     };
   } catch {
-    settings = { closeToTray: true, openAtLogin: false, backgroundNotified: false, theme: "system" };
+    settings = { closeToTray: true, openAtLogin: false, backgroundNotified: false, theme: "system", ...UPDATE_DEFAULTS };
   }
   nativeTheme.themeSource = settings.theme;
 }
@@ -116,6 +120,7 @@ function saveSettings() {
       openAtLogin: settings.openAtLogin,
       backgroundNotified: settings.backgroundNotified,
       theme: settings.theme,
+      ...normalizeUpdateSettings(settings),
     }));
   } catch {
     // 写失败时本次会话仍用内存里的开关
@@ -123,7 +128,7 @@ function saveSettings() {
 }
 
 function publicSettings() {
-  return { closeToTray: settings.closeToTray, openAtLogin: settings.openAtLogin };
+  return { closeToTray: settings.closeToTray, openAtLogin: settings.openAtLogin, ...normalizeUpdateSettings(settings) };
 }
 
 function applyLoginItem() {
@@ -134,14 +139,19 @@ function applyLoginItem() {
 }
 
 function applySettingsPatch(patch) {
-  if (!patch || typeof patch !== "object") return publicSettings();
+  patch = validateUpdatePatch(patch);
+  updater?.validateSettingsChange(patch);
   if (typeof patch.closeToTray === "boolean") settings.closeToTray = patch.closeToTray;
   if (typeof patch.openAtLogin === "boolean") {
     const changed = patch.openAtLogin !== settings.openAtLogin;
     settings.openAtLogin = patch.openAtLogin;
     if (changed) applyLoginItem();
   }
+  for (const key of Object.keys(UPDATE_DEFAULTS)) {
+    if (key in patch) settings[key] = patch[key];
+  }
   saveSettings();
+  updater?.configure();
   refreshTrayMenu();
   return publicSettings();
 }
@@ -173,13 +183,78 @@ function waitHealth(port) {
 
 function stopBackend() {
   stopping = true;
-  if (!backend || backend.killed) return;
-  if (process.platform === "win32") {
-    spawn("taskkill", ["/pid", String(backend.pid), "/t", "/f"], { windowsHide: true });
-  } else {
-    backend.kill();
-  }
-  backend = null;
+  if (backendStopTask) return backendStopTask;
+  if (!backend || backend.killed || backend.exitCode !== null) return Promise.resolve(true);
+  const child = backend;
+  // Updating must await the whole PyInstaller process tree, not just spawn taskkill.
+  backendStopTask = new Promise((resolve) => {
+    let settled = false;
+    let timeout;
+    const done = (ok) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      if (ok && backend === child) backend = null;
+      resolve(ok);
+    };
+    timeout = setTimeout(() => done(false), 8000);
+    if (process.platform === "win32") {
+      const killer = spawn("taskkill", ["/pid", String(child.pid), "/t", "/f"], { windowsHide: true });
+      killer.once("error", () => done(false));
+      killer.once("exit", (code) => done(code === 0 || child.exitCode !== null));
+    } else {
+      child.once("exit", () => done(true));
+      child.kill();
+    }
+  }).finally(() => { backendStopTask = null; });
+  return backendStopTask;
+}
+
+function trustedDesktopSender(event) {
+  const windows = [mainWindow, quickWindow].filter((win) => win && !win.isDestroyed());
+  if (!windows.some((win) => win.webContents === event.sender) || event.senderFrame !== event.sender.mainFrame) return false;
+  try { return Boolean(appOrigin && new URL(event.senderFrame.url).origin === appOrigin); } catch { return false; }
+}
+
+function setupUpdater() {
+  updater = createUpdater({
+    app, ipcMain,
+    getWindows: () => [mainWindow, quickWindow].filter(Boolean),
+    isTrustedSender: trustedDesktopSender,
+    getSettings: () => settings,
+    confirmInstall: async (version) => {
+      // Always confirm: covers replies in both the main window and a hidden quick panel.
+      const parent = mainWindow && !mainWindow.isDestroyed() ? mainWindow : null;
+      if (parent) showMain();
+      const options = {
+        type: "question", title: "重启并安装", buttons: ["取消", "重启并安装"], defaultId: 0, cancelId: 0,
+        message: `现在重启并安装 KnowGap ${version}？`,
+        detail: "安装会关闭主窗口、快问和后台服务，正在生成的回复会被中断。已保存的学习数据会保留。为所有用户安装时可能出现 Windows 管理员权限（UAC）提示，请确认后继续。",
+      };
+      const result = parent ? await dialog.showMessageBox(parent, options) : await dialog.showMessageBox(options);
+      return result.response === 1;
+    },
+    prepareInstall: async () => {
+      quitting = true;
+      if (!(await stopBackend())) throw new Error("后端尚未退出");
+      startup?.dispose();
+      startup = null;
+      if (quickWindow && !quickWindow.isDestroyed()) quickWindow.destroy();
+      if (tray) { tray.destroy(); tray = null; }
+    },
+    cancelInstall: () => {
+      if (!backend) {
+        // The installer may fail after teardown (e.g. cancelled elevation).
+        // Restart the current version rather than leave a live window with a dead backend.
+        app.relaunch();
+        app.quit();
+      } else {
+        quitting = false;
+        stopping = false;
+        createTray();
+      }
+    },
+  });
 }
 
 function quitApp() {
@@ -447,9 +522,26 @@ ipcMain.handle("set-tray-status", (_event, patch) => {
   setTrayStatus(patch);
 });
 
-ipcMain.handle("get-desktop-settings", () => publicSettings());
+ipcMain.handle("get-desktop-settings", (event, ...args) => {
+  if (!trustedDesktopSender(event) || args.length) throw new Error("桌面设置请求无效。");
+  return publicSettings();
+});
 
-ipcMain.handle("set-desktop-settings", (_event, patch) => applySettingsPatch(patch));
+ipcMain.handle("set-desktop-settings", (event, patch, ...extra) => {
+  if (!trustedDesktopSender(event) || extra.length) throw new Error("桌面设置请求无效。");
+  return applySettingsPatch(patch);
+});
+
+// 外部网页（ChatGPT 授权页、文档链接等）一律交给系统默认浏览器：用户的登录状态都在那里，
+// 应用内新开的 Electron 窗口是一个没有任何登录信息的空白环境。
+function openInDefaultBrowser(url) {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol === "https:" || parsed.protocol === "http:") void shell.openExternal(parsed.toString());
+  } catch {
+    // 非法或 about:blank 之类的地址不处理
+  }
+}
 
 function createMainWindow() {
   mainWindow = new BrowserWindow({
@@ -470,6 +562,17 @@ function createMainWindow() {
       nodeIntegration: false,
       backgroundThrottling: false,
     },
+  });
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    openInDefaultBrowser(url);
+    return { action: "deny" };
+  });
+  mainWindow.webContents.on("will-navigate", (event, url) => {
+    let origin = "";
+    try { origin = new URL(url).origin; } catch { /* 无法解析的地址一律拦下 */ }
+    if (origin && origin === appOrigin) return;
+    event.preventDefault();
+    openInDefaultBrowser(url);
   });
   mainWindow.on("close", (event) => {
     if (quitting || !settings.closeToTray) return;
@@ -560,6 +663,7 @@ if (!app.requestSingleInstanceLock()) {
     loadSettings();
     applyLoginItem();
     createTray();
+    setupUpdater();
     return open();
   }).catch((error) => {
     dialog.showErrorBox("KnowGap", error.message);
@@ -569,7 +673,8 @@ if (!app.requestSingleInstanceLock()) {
   });
 }
 
-app.on("before-quit", () => {
+app.on("before-quit", (event) => {
+  if (updater?.handleBeforeQuit(event)) return;
   quitting = true;
   startup?.dispose();
   startup = null;
@@ -581,6 +686,7 @@ app.on("before-quit", () => {
   stopBackend();
 });
 app.on("will-quit", () => {
+  updater?.dispose();
   globalShortcut.unregisterAll();
 });
 app.on("window-all-closed", () => {

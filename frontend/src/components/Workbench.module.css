@@ -2,7 +2,7 @@
 .app {
   display: grid;
   grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
-  height: 100vh;
+  height: calc(100vh - var(--desktop-titlebar-height));
   overflow: hidden;
   background: var(--bg-sidebar);
 }
@@ -20,7 +20,7 @@
 .backdrop {
   position: fixed;
   z-index: 30;
-  inset: 0;
+  inset: var(--desktop-titlebar-height) 0 0;
   border: 0;
   background: rgb(0 0 0 / 28%);
 }
@@ -40,7 +40,7 @@
 .panel {
   position: fixed;
   z-index: 40;
-  top: 8px;
+  top: calc(var(--desktop-titlebar-height) + 8px);
   right: 8px;
   bottom: 8px;
   width: min(380px, calc(100vw - 16px));
@@ -218,7 +218,7 @@
 @media (max-width: 900px) {
   .app {
     display: block;
-    height: 100vh;
+    height: calc(100vh - var(--desktop-titlebar-height));
     overflow: hidden;
   }
 
@@ -230,7 +230,7 @@
     display: block;
     position: fixed;
     z-index: 40;
-    top: 0;
+    top: var(--desktop-titlebar-height);
     bottom: 0;
     left: 0;
     width: min(300px, 88vw);

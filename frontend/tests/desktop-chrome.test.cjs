@@ -85,3 +85,37 @@ test('desktop space is reserved before first paint, without changing browser or 
   assert.doesNotMatch(main, /\b(?:margin|border|border-radius|box-shadow):/);
   assert.doesNotMatch(app, /\.sidebarClosed \.main\s*\{/);
 });
+
+test('external pages open in the default browser, never in an in-app window', () => {
+  const main = read('../desktop/main.js');
+  assert.match(main, /screen, shell \} = require\("electron"\)/);
+  assert.match(main, /mainWindow\.webContents\.setWindowOpenHandler\(\(\{ url \}\) => \{\s*openInDefaultBrowser\(url\);\s*return \{ action: "deny" \};/);
+  assert.match(main, /will-navigate[\s\S]*origin === appOrigin\) return;[\s\S]*event\.preventDefault\(\);\s*openInDefaultBrowser\(url\)/);
+  const helper = main.match(/function openInDefaultBrowser\(url\) \{([\s\S]*?)\n\}/)[1];
+  assert.match(helper, /parsed\.protocol === "https:" \|\| parsed\.protocol === "http:"/);
+  assert.match(helper, /shell\.openExternal\(parsed\.toString\(\)\)/);
+  // 只放行 http / https：about:blank、file:、自定义协议都不会交给系统
+  const run = (url) => {
+    const opened = [];
+    const fn = new Function('URL', 'shell', `${main.match(/function openInDefaultBrowser[\s\S]*?\n\}/)[0]}; return openInDefaultBrowser;`)(URL, { openExternal: (u) => opened.push(u) });
+    fn(url);
+    return opened;
+  };
+  assert.deepEqual(run('https://auth.openai.com/api/accounts/authorize?x=1'), ['https://auth.openai.com/api/accounts/authorize?x=1']);
+  for (const bad of ['about:blank', 'file:///C:/Windows/system32', 'javascript:alert(1)', 'ms-settings:', 'not a url']) assert.deepEqual(run(bad), [], bad);
+});
+
+test('the fixed memory drawer clears native caption buttons without shifting browser or quick-panel content', () => {
+  const app = read('src/components/chat/ChatApp.module.css');
+  const drawer = app.match(/\.drawer \{([^}]+)\}/)[1];
+  assert.match(drawer, /position: fixed/);
+  assert.match(drawer, /top: var\(--desktop-titlebar-height\)/);
+  assert.match(drawer, /bottom: 0/);
+  assert.doesNotMatch(drawer, /(?:^|\n)\s*(?:top:\s*0|height:\s*100(?:d?vh|%))/);
+  const globals = read('src/app/globals.css');
+  assert.match(globals.match(/:root \{([^}]+)\}/)[1], /--desktop-titlebar-height: 0px/);
+  assert.match(globals.match(/:root\[data-desktop-platform\] \{([^}]+)\}/)[1], new RegExp(`--desktop-titlebar-height: ${TITLE_BAR_HEIGHT}px`));
+  const memory = read('src/components/chat/MemoryDrawer.tsx');
+  assert.match(memory, /aria-label="刷新"/);
+  assert.match(memory, /aria-label="关闭学习记忆"/);
+});

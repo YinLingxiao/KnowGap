@@ -1034,7 +1034,9 @@
 .drawer {
   position: fixed;
   z-index: 40;
-  top: 0;
+  /* Fixed drawers bypass the body's title-bar padding. Keep their header below
+     Electron's native caption buttons; browsers/quick ask retain a zero inset. */
+  top: var(--desktop-titlebar-height);
   right: 0;
   bottom: 0;
   width: min(400px, 100vw);

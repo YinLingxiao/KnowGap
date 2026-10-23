@@ -19,6 +19,19 @@ ipcRenderer.on("quick-shown", () => {
 
 const TRAY_COMMANDS = new Set(["open-agenda", "quick-ask"]);
 
+// Fixed channels only: no renderer-supplied IPC name, feed URL or installer path.
+const updater = {
+  getState: () => ipcRenderer.invoke("updater:get-state"),
+  check: (options) => ipcRenderer.invoke("updater:check", options),
+  install: () => ipcRenderer.invoke("updater:install"),
+  onState: (listener) => {
+    if (typeof listener !== "function") throw new TypeError("更新监听器必须是函数");
+    const handler = (_event, state) => listener(state);
+    ipcRenderer.on("updater:state", handler);
+    return () => ipcRenderer.removeListener("updater:state", handler);
+  },
+};
+
 function dispatchOnPage(type, detail) {
   const init = detail === undefined ? "" : `, { detail: ${JSON.stringify(detail)} }`;
   void webFrame.executeJavaScript(
@@ -60,4 +73,5 @@ contextBridge.exposeInMainWorld("knowgap", {
   },
   getDesktopSettings: () => ipcRenderer.invoke("get-desktop-settings"),
   setDesktopSettings: (patch) => ipcRenderer.invoke("set-desktop-settings", patch),
+  updater,
 });
