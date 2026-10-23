@@ -59,11 +59,11 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-desktop.ps1
 
 ## 2. 安装包验证
 
-1. 双击 `desktop/dist/KnowGap Setup 0.5.1.exe`。0.5.0 起是中文安装向导（`nsis.oneClick: false`），不再一键静默安装：先选「为所有用户 / 仅为我」，再选安装位置。「仅为我」无需管理员。
+1. 双击 `desktop/dist/KnowGap Setup 0.5.2.exe`。0.5.0 起是中文安装向导（`nsis.oneClick: false`），不再一键静默安装：先选「为所有用户 / 仅为我」，再选安装位置。「仅为我」无需管理员。
 2. 预期：完成页默认勾选「运行 KnowGap」；开始菜单/桌面出现 **KnowGap** 快捷方式。
 3. 安装目录以向导里选的为准。0.2.0 和 0.3.0 是一键安装，装在 `%LOCALAPPDATA%\Programs\knowgap-desktop\`。
 4. 卸载：设置 → 应用 → KnowGap → 卸载；或安装目录下 `Uninstall KnowGap.exe /S`。
-   - 预期：卸载不删除 `%APPDATA%\knowgap-desktop`（学习数据保留）。
+   - 预期：卸载时弹出「是否同时删除学习数据？」（默认「否」）。选「否」保留 `%APPDATA%\knowgap-desktop`；选「是」删除整个目录。升级安装（直接运行新安装包）不会弹窗，数据保留。
 
 - [ ] 安装、启动、卸载均成功，无 SmartScreen「未知发布者」以外的报错
 - [ ] 卸载后无 `KnowGap.exe` 残留进程

@@ -1,6 +1,6 @@
 {
   "name": "knowgap-desktop",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "KnowGap（知隙）桌面端：本地学习助手",
   "author": "KnowGap",
   "private": true,
@@ -36,6 +36,7 @@
       "uninstallerIcon": "icon.ico",
       "installerLanguages": ["zh_CN"],
       "language": "2052",
+      "include": "installer.nsh",
       "runAfterFinish": true
     }
   }
