@@ -22,7 +22,7 @@ MAX_REGIONS = 80
 MAX_ERRORS = 10
 MIN_SPAN = 2  # on the 0-1000 grid; anything thinner cannot be circled visibly
 # Bump whenever the extraction contract or prompt changes, so saved uploads are re-extracted.
-GROUNDING_CACHE_VERSION = "2"
+GROUNDING_CACHE_VERSION = "3"  # 3：转写为数组 / 为空时的解析修复，旧缓存里的「空白转写」要作废
 NOT_CONFIGURED = ("多模态识图模型未配置，请在「设置 → 服务模型」填写，"
                   "或在后端 .env 填写 VISION_BASE_URL、VISION_MODEL 和 VISION_API_KEY。")
 
@@ -182,6 +182,21 @@ def json_object(content: str) -> dict:
     return data
 
 
+def _transcript_text(value) -> str:
+    """转写通常是字符串，但模型经常按行给出数组（或带位置的对象数组）；都按行拼成文字。"""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, (list, tuple)):
+        lines = []
+        for item in value:
+            if isinstance(item, dict):
+                item = item.get("text") or item.get("content") or ""
+            if isinstance(item, (str, int, float)) and not isinstance(item, bool) and str(item).strip():
+                lines.append(str(item))
+        return "\n".join(lines)
+    return ""
+
+
 def parse_extraction(content: str, bbox_format: str, width: int | None = None, height: int | None = None) -> Extraction:
     data = json_object(content)
     kind = data.get("kind") if data.get("kind") in KINDS else "other"
@@ -203,8 +218,11 @@ def parse_extraction(content: str, bbox_format: str, width: int | None = None, h
         regions.append(Region(id=region_id, bbox=box, text=text.strip()[:300]))
     steps = data.get("steps")
     steps = int(steps) if isinstance(steps, (int, float)) and not isinstance(steps, bool) and math.isfinite(steps) else 0
-    transcript = data.get("transcript") if isinstance(data.get("transcript"), str) else ""
-    netlist = data.get("netlist") if kind == "circuit" and isinstance(data.get("netlist"), dict) else None
+    transcript = _transcript_text(data.get("transcript"))
+    if not transcript.strip():
+        # 模型有时只给了区域文字、没给整段转写：按阅读顺序拼起来，不能当成「图里没有字」
+        transcript = "\n".join(region.text for region in regions if region.text)
+    netlist =data.get("netlist") if kind == "circuit" and isinstance(data.get("netlist"), dict) else None
     category = data.get("category") if data.get("category") in CATEGORIES else None
     errors = [item for item in data.get("errors") or [] if isinstance(item, dict)][:MAX_ERRORS * 2] \
         if isinstance(data.get("errors"), list) else []

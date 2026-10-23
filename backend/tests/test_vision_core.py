@@ -361,3 +361,21 @@ def test_netlist_versions_and_confirmation(tmp_path):
     assert store.confirm_netlist("alice", netlist_id, 2, None)["version"] == 2  # double click is idempotent
     with pytest.raises(LookupError):
         store.confirm_netlist("bob", netlist_id, 2, None)
+
+
+def test_transcript_given_as_array_of_lines_is_kept():
+    raw = json.dumps({"kind": "other", "transcript": ["第一行", "p->next = q", {"text": "第三行"}, "  "],
+                      "regions": [], "steps": 0})
+    assert parse_extraction(raw, "xyxy_1000").transcript == "第一行\np->next = q\n第三行"
+
+
+def test_missing_transcript_falls_back_to_region_text_in_reading_order():
+    raw = json.dumps({"kind": "other", "transcript": "", "steps": 0, "regions": [
+        {"id": "r1", "bbox": [10, 10, 200, 50], "text": "顺序表 长度 8"},
+        {"id": "r2", "bbox": [10, 60, 200, 100], "text": "在第 3 个位置插入"},
+        {"id": "r3", "bbox": [10, 110, 200, 150], "text": ""}]})
+    assert parse_extraction(raw, "xyxy_1000").transcript == "顺序表 长度 8\n在第 3 个位置插入"
+
+
+def test_transcript_of_unusable_type_with_no_regions_stays_empty():
+    assert parse_extraction(json.dumps({"kind": "other", "transcript": 42, "regions": []}), "xyxy_1000").transcript == ""
