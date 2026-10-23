@@ -4,16 +4,19 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CircleAlert, Download, Ellipsis, LoaderCircle, PanelLeftOpen, Plus, RotateCcw, Sparkles } from "lucide-react";
 import { describeError } from "@/lib/api/errors";
 import { agendaApi } from "@/lib/agenda/api";
-import type { AgendaTask, AgendaThread, TaskInput } from "@/lib/agenda/types";
+import type { AgendaTask, AgendaThread, TaskInput, TaskPatch, TaskPriority } from "@/lib/agenda/types";
 import type { Subject } from "@/lib/chat/types";
 import { cx } from "@/lib/cx";
+import { AgendaEmpty } from "./AgendaEmpty";
 import AiBreakdownDialog from "./AiBreakdownDialog";
-import { AgendaList, useListState, type AgendaListProps, type SubjectInfo } from "./AgendaList";
+import { AgendaList, useListState, type AgendaListProps, type SubjectInfo, type TaskActions } from "./AgendaList";
 import {
-  VIEW_LABELS, buildInboxGroups, buildTodayGroups, buildUpcomingGroups, compareSiblings, countViews,
-  dispatchCompose, mondayOf, parseViewKey, spaceIdOf, taskKey, threadKey,
-  type AgendaGroup, type AgendaViewKey,
+  DEFAULT_VIEW_OPTIONS, VIEW_LABELS, applyViewOptions, buildInboxGroups, buildTodayGroups, buildTodaySuggestions,
+  buildUpcomingGroups, compareSiblings, completedOn, countViews, dayGroupKey, dispatchCompose, mondayOf,
+  parseViewKey, schedulePatch, spaceIdOf, taskKey, threadKey,
+  type AgendaGroup, type AgendaViewKey, type AgendaViewOptions,
 } from "./agendaModel";
+import { loadViewOptions, saveViewOptions, ViewOptions } from "./ViewOptions";
 import { AgendaRail } from "./AgendaRail";
 import { QuickAdd } from "./QuickAdd";
 import { SpaceTaskList } from "./SpaceTasks";
@@ -40,7 +43,12 @@ interface AgendaPageProps {
   /** 打开某个支线（对话 id 与所属空间） */
   onOpenThread: (threadId: string, subjectId: string | null) => void;
   onOpenSpace: (subjectId: string) => void;
-  onNotify: (toast: { tone: "success" | "error" | "info"; title: string; description?: string }) => void;
+  onNotify: (toast: {
+    tone: "success" | "error" | "info";
+    title: string;
+    description?: string;
+    action?: { label: string; onClick: () => void };
+  }) => void;
 }
 
 function download(blob: Blob, filename: string) {
@@ -82,9 +90,30 @@ export function AgendaPage(props: AgendaPageProps) {
     };
   }, [moreOpen]);
   const [weekStart, setWeekStart] = useState<string | null>(null);
+  const [leavingIds, setLeavingIds] = useState<ReadonlySet<string>>(new Set());
+  const [composer, setComposer] = useState<{ groupKey: string; defaults: NonNullable<AgendaGroup["compose"]>; seed?: string } | null>(null);
+  const [options, setOptions] = useState<AgendaViewOptions>(DEFAULT_VIEW_OPTIONS);
+  const [breakdownSubject, setBreakdownSubject] = useState<string | null>(null);
   const quickRef = useRef<HTMLInputElement>(null);
+  const pendingDone = useRef<Map<string, number>>(new Map());
 
   useEffect(() => { setViewState(readView()); }, []);
+  useEffect(() => {
+    setOptions(loadViewOptions(view));
+    setComposer(null);
+  }, [view]);
+  const updateRef = useRef(update);
+  updateRef.current = update;
+  useEffect(() => {
+    const pending = pendingDone.current;
+    return () => {
+      for (const [id, timer] of pending) {
+        window.clearTimeout(timer);
+        void updateRef.current(id, { status: "done" });
+      }
+      pending.clear();
+    };
+  }, []);
   const setView = useCallback((next: AgendaViewKey) => {
     setViewState(next);
     setSelectedKey(null);
@@ -106,11 +135,19 @@ export function AgendaPage(props: AgendaPageProps) {
 
   const counts = useMemo(() => countViews(tasks, threads, today), [tasks, threads, today]);
   const groups = useMemo<AgendaGroup[]>(() => {
-    if (view === "today") return buildTodayGroups(tasks, threads, today);
-    if (view === "inbox") return buildInboxGroups(tasks);
-    if (view === "upcoming") return buildUpcomingGroups(tasks, threads, today);
-    return [];
-  }, [view, tasks, threads, today]);
+    const build = { includeDone: options.showCompleted };
+    let built: AgendaGroup[] = [];
+    if (view === "today") built = buildTodayGroups(tasks, threads, today, build);
+    else if (view === "inbox") built = buildInboxGroups(tasks, build);
+    else if (view === "upcoming") built = buildUpcomingGroups(tasks, threads, today, build);
+    const effective = view === "upcoming" && options.groupBy === "date" ? { ...options, groupBy: "none" as const } : options;
+    return applyViewOptions(built, effective, subjectMap, today);
+  }, [view, tasks, threads, today, options, subjectMap]);
+  const suggestions = useMemo(
+    () => buildTodaySuggestions(tasks, props.subjects.map((subject) => ({ id: subject.id, name: subject.name, deadline: subject.deadline })), today),
+    [tasks, props.subjects, today],
+  );
+  const doneToday = useMemo(() => completedOn(tasks, today), [tasks, today]);
 
   const inspected = inspectedId ? tasks.find((task) => task.id === inspectedId) ?? null : null;
   useEffect(() => {
@@ -121,9 +158,79 @@ export function AgendaPage(props: AgendaPageProps) {
     setSelectedKey(taskKey(task.id));
     setInspectedId(task.id);
   }, [setSelectedKey]);
+  const markLeaving = useCallback((id: string, on: boolean) => {
+    setLeavingIds((current) => {
+      const next = new Set(current);
+      if (on) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }, []);
+  const cancelComplete = useCallback((id: string) => {
+    const timer = pendingDone.current.get(id);
+    if (!timer) return false;
+    window.clearTimeout(timer);
+    pendingDone.current.delete(id);
+    markLeaving(id, false);
+    return true;
+  }, [markLeaving]);
+  const completeTask = useCallback((task: AgendaTask) => {
+    if (task.status === "done" || pendingDone.current.has(task.id)) return;
+    markLeaving(task.id, true);
+    const timer = window.setTimeout(() => {
+      pendingDone.current.delete(task.id);
+      void update(task.id, { status: "done" });
+      markLeaving(task.id, false);
+    }, 300);
+    pendingDone.current.set(task.id, timer);
+    onNotify({
+      tone: "success",
+      title: "1 个任务已完成",
+      action: { label: "撤销", onClick: () => { if (!cancelComplete(task.id)) void update(task.id, { status: "open" }); } },
+    });
+  }, [cancelComplete, markLeaving, onNotify, update]);
   const toggleDone = useCallback((task: AgendaTask) => {
-    void update(task.id, { status: task.status === "done" ? "open" : "done" });
-  }, [update]);
+    if (task.status === "done") void update(task.id, { status: "open" });
+    else completeTask(task);
+  }, [completeTask, update]);
+  const updateTask = useCallback(async (id: string, patch: TaskPatch) => {
+    const current = tasks.find((task) => task.id === id);
+    if (patch.status === "done" && current && current.status !== "done") {
+      completeTask(current);
+      return current;
+    }
+    if (patch.status === "open" && cancelComplete(id)) return current ?? null;
+    return update(id, patch);
+  }, [tasks, completeTask, cancelComplete, update]);
+  const insertBeside = useCallback(async (task: AgendaTask, where: "above" | "below") => {
+    const created = await create({
+      title: "新任务", parentId: task.parentId, subjectId: task.subjectId, scheduledDate: task.scheduledDate,
+      scheduledStartAt: task.scheduledStartAt, priority: task.priority, source: "manual",
+    });
+    if (!created) return;
+    const siblings = tasks.filter((item) => item.parentId === task.parentId && item.id !== created.id);
+    if (where === "above") {
+      await update(created.id, { sortOrder: task.sortOrder });
+      for (const sibling of siblings) {
+        if (sibling.sortOrder >= task.sortOrder) await update(sibling.id, { sortOrder: sibling.sortOrder + 1 });
+      }
+    } else {
+      await update(created.id, { sortOrder: task.sortOrder + 1 });
+      for (const sibling of siblings) {
+        if (sibling.sortOrder > task.sortOrder) await update(sibling.id, { sortOrder: sibling.sortOrder + 1 });
+      }
+    }
+    openTask(created);
+  }, [create, tasks, update, openTask]);
+  const duplicateTask = useCallback(async (task: AgendaTask) => {
+    const created = await create({
+      title: task.title, notes: task.notes, parentId: task.parentId, priority: task.priority, labels: [...task.labels],
+      subjectId: task.subjectId, scheduledDate: task.scheduledDate, scheduledStartAt: task.scheduledStartAt,
+      durationMinutes: task.durationMinutes, deadlineDate: task.deadlineDate, reminderMinutes: task.reminderMinutes,
+      source: "manual",
+    });
+    if (created) openTask(created);
+  }, [create, openTask]);
   const openThread = useCallback((thread: AgendaThread) => {
     setSelectedKey(threadKey(thread.threadId));
     props.onOpenThread(thread.threadId, thread.subjectId);
@@ -177,6 +284,54 @@ export function AgendaPage(props: AgendaPageProps) {
   const showInspector = Boolean(inspected);
   const currentWeek = weekStart ?? mondayOf(today);
   const heading = space ? space.name : (VIEW_LABELS as Record<string, string>)[view] ?? "日程";
+  const groupKeyFor = (defaults: NonNullable<AgendaGroup["compose"]>) => {
+    if (view === "inbox") return "inbox";
+    if (view === "today" && (!defaults.scheduledDate || defaults.scheduledDate === today)) return "today";
+    if (defaults.scheduledDate) return dayGroupKey(defaults.scheduledDate);
+    return defaults.subjectId ? "tasks" : "inbox";
+  };
+  const startCompose = (defaults: NonNullable<AgendaGroup["compose"]>, seed?: string, groupKey?: string) => {
+    setComposer({ groupKey: groupKey ?? groupKeyFor(defaults), defaults, seed });
+  };
+  const composerNode = composer ? (
+    <QuickAdd
+      key={`${composer.groupKey}:${composer.seed ?? ""}`}
+      ref={quickRef}
+      subjects={subjectInfos}
+      defaultSubjectId={composer.defaults.subjectId ?? spaceId}
+      initialText={composer.seed}
+      autoFocus
+      onCancel={() => setComposer(null)}
+      onCreate={async (input) => {
+        const merged: TaskInput = {
+          ...input,
+          scheduledDate: input.scheduledDate ?? composer.defaults.scheduledDate ?? (view === "today" ? today : null),
+          subjectId: input.subjectId ?? composer.defaults.subjectId ?? null,
+        };
+        return createTask(merged).then((ok) => { if (ok) setComposer(null); return ok; });
+      }}
+    />
+  ) : null;
+  const taskActions: TaskActions = {
+    onSchedule: (task, date) => { void update(task.id, schedulePatch(task, date)); },
+    onPriority: (task, priority: TaskPriority) => { void update(task.id, { priority }); },
+    onMove: (task, subjectId) => { void update(task.id, { subjectId }); },
+    onInsert: (task, where) => { void insertBeside(task, where); },
+    onDuplicate: (task) => { void duplicateTask(task); },
+    onDelete: (task) => { void deleteTask(task.id); },
+  };
+  const rescheduleOverdue = () => {
+    for (const task of tasks) {
+      if (task.status !== "open") continue;
+      const day = task.scheduledDate ?? task.deadlineDate;
+      if (!day || day >= today) continue;
+      void update(task.id, schedulePatch(task, today));
+    }
+  };
+  const openBreakdown = (subjectId: string | null) => {
+    setBreakdownSubject(subjectId);
+    setBreakdownOpen(true);
+  };
   const listProps: Omit<AgendaListProps, "groups" | "today"> = {
     subjects: subjectMap,
     selectedKey,
@@ -188,7 +343,12 @@ export function AgendaPage(props: AgendaPageProps) {
     onToggleDone: toggleDone,
     onToggleGroup: toggleGroup,
     onToggleParent: toggleParent,
-    onCompose: (defaults) => dispatchCompose(defaults),
+    onCompose: (defaults, groupKey) => startCompose(defaults, undefined, groupKey),
+    leavingIds,
+    onRescheduleOverdue: rescheduleOverdue,
+    composingKey: composer?.groupKey ?? null,
+    composer: composerNode,
+    taskActions,
   };
 
   let main: React.ReactNode;
@@ -224,6 +384,7 @@ export function AgendaPage(props: AgendaPageProps) {
           title: "新任务", scheduledDate: slot.scheduledDate, scheduledStartAt: slot.scheduledStartAt,
           durationMinutes: slot.scheduledStartAt ? 30 : null, source: "manual",
         }).then((task) => { if (task) openTask(task); })}
+        showCompleted={options.showCompleted}
       />
     );
   } else if (space) {
@@ -237,27 +398,43 @@ export function AgendaPage(props: AgendaPageProps) {
         onOpenThread={openThread}
         onToggleDone={toggleDone}
         onOpenSpace={() => props.onOpenSpace(space.id)}
+        viewOptions={options}
+        leavingIds={leavingIds}
+        taskActions={taskActions}
+        onRescheduleOverdue={rescheduleOverdue}
+        composingKey={composer?.groupKey ?? null}
+        composer={composerNode}
+        onCompose={(defaults, groupKey) => startCompose(defaults, undefined, groupKey)}
       />
     );
   } else if (view === "upcoming") {
-    main = <UpcomingView groups={groups} today={today} listProps={listProps} />;
+    main = <UpcomingView groups={groups} today={today} listProps={listProps} onBreakdown={() => openBreakdown(spaceId)} />;
   } else {
+    const empty = groups.every((group) => group.nodes.length === 0);
+    const todayDone = view === "today" && doneToday > 0;
     main = (
-      <>
-        <div className={styles.quick}>
-          <QuickAdd ref={quickRef} subjects={subjectInfos} defaultSubjectId={null} onCreate={createTask} />
-        </div>
-        <div className={styles.scroll}>
-          {groups.every((group) => group.nodes.length === 0) ? (
-            <div className={styles.emptyLine}>
-              <p>完成的任务和复习会出现在这里。</p>
-              <button type="button" className={styles.btn} onClick={() => dispatchCompose({})}>记一个任务</button>
-            </div>
-          ) : (
-            <AgendaList groups={groups} today={today} {...listProps} />
-          )}
-        </div>
-      </>
+      <div className={styles.scroll}>
+        {empty ? (
+          <>
+            {composerNode}
+            <AgendaEmpty
+              variant={view === "today" ? (todayDone ? "today-done" : "today-empty") : "inbox"}
+              completedCount={doneToday}
+              suggestions={suggestions}
+              hideAction={Boolean(composer)}
+              onAdd={() => startCompose(view === "today" ? { scheduledDate: today } : {})}
+              onExample={(text) => startCompose({}, text)}
+              onSchedule={(id) => {
+                const task = tasks.find((item) => item.id === id);
+                if (task) void update(id, schedulePatch(task, today));
+              }}
+              onBreakdown={openBreakdown}
+            />
+          </>
+        ) : (
+          <AgendaList groups={groups} today={today} {...listProps} />
+        )}
+      </div>
     );
   }
 
@@ -269,14 +446,18 @@ export function AgendaPage(props: AgendaPageProps) {
             <PanelLeftOpen size={16} />
           </button>
         )}
-        <h1 className={styles.heading}>{heading}</h1>
         <span className={styles.spacer} />
         <div className={styles.addAction}>
-          <button type="button" className={styles.addTask} aria-keyshortcuts="Q" onClick={() => dispatchCompose({ subjectId: spaceId })}>
+          <button type="button" className={styles.addTask} onClick={() => dispatchCompose({ subjectId: spaceId })}>
             <Plus size={15} aria-hidden />添加任务
           </button>
         </div>
-        <button type="button" className={styles.btn} onClick={() => setBreakdownOpen(true)} aria-label="AI 拆解排期" title="AI 拆解排期">
+        <ViewOptions
+          value={options}
+          week={view === "week"}
+          onChange={(next) => { setOptions(next); saveViewOptions(view, next); }}
+        />
+        <button type="button" className={styles.btn} onClick={() => openBreakdown(spaceId)} aria-label="AI 拆解排期" title="AI 拆解排期">
           <Sparkles size={13} aria-hidden />AI 拆解排期
         </button>
         {/* 低频操作收进「…」菜单 */}
@@ -312,7 +493,10 @@ export function AgendaPage(props: AgendaPageProps) {
       <div className={styles.body}>
         <AgendaRail view={view} counts={counts} subjects={subjectInfos} onChange={setView} onAdd={() => dispatchCompose({ subjectId: spaceId })} />
         <div className={cx(styles.content, showInspector && styles.withInspector)}>
-          <div className={styles.mainCol}>{main}</div>
+          <div className={cx(styles.mainCol, view !== "week" && styles.sheet)}>
+            {view !== "week" && !space && agenda.status === "ready" && <h1 className={styles.pageTitle}>{heading}</h1>}
+            {main}
+          </div>
           {showInspector && inspected && (
             <div className={styles.inspector}>
               <TaskInspector
@@ -322,7 +506,8 @@ export function AgendaPage(props: AgendaPageProps) {
                 subtasks={subtasks}
                 subjects={subjectInfos}
                 onClose={() => setInspectedId(null)}
-                onUpdate={update}
+                onUpdate={updateTask}
+                today={today}
                 onDelete={deleteTask}
                 onAddSubtask={addSubtask}
                 onSelectTask={(id) => { setInspectedId(id); setSelectedKey(taskKey(id)); }}
@@ -337,7 +522,7 @@ export function AgendaPage(props: AgendaPageProps) {
         subjects={props.subjects.map((subject) => ({
           id: subject.id, name: subject.name, color: subject.color, deadline: subject.deadline,
         }))}
-        defaultSubjectId={spaceId}
+        defaultSubjectId={breakdownSubject ?? spaceId}
         onClose={() => setBreakdownOpen(false)}
         onCreated={(created) => {
           setBreakdownOpen(false);

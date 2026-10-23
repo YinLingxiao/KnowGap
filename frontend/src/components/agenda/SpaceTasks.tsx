@@ -1,15 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ArrowUpRight, CalendarClock, CircleAlert, RotateCcw } from "lucide-react";
 import { describeError } from "@/lib/api/errors";
 import { agendaApi } from "@/lib/agenda/api";
 import { AGENDA_CHANGED_EVENT, type AgendaTask, type AgendaThread } from "@/lib/agenda/types";
 import { cx } from "@/lib/cx";
-import { AgendaList, useListState, type SubjectInfo } from "./AgendaList";
+import { AgendaList, useListState, type SubjectInfo, type TaskActions } from "./AgendaList";
 import {
-  buildSpaceGroups, compareSiblings, deadlineInfo, dispatchCompose, monthDay, taskKey,
-  type AgendaGroup,
+  applyViewOptions, buildSpaceGroups, compareSiblings, deadlineInfo, dispatchCompose, monthDay, taskKey,
+  type AgendaGroup, type AgendaViewOptions,
 } from "./agendaModel";
 import { TaskInspector } from "./TaskInspector";
 import { useAgenda } from "./useAgenda";
@@ -62,6 +62,13 @@ interface SpaceTaskListProps {
   onToggleDone: (task: AgendaTask) => void;
   /** 日程页里显示「打开学习空间」；学习空间页内不传 */
   onOpenSpace?: () => void;
+  viewOptions?: AgendaViewOptions;
+  leavingIds?: ReadonlySet<string>;
+  taskActions?: TaskActions;
+  onRescheduleOverdue?: () => void;
+  composingKey?: string | null;
+  composer?: ReactNode;
+  onCompose?: (defaults: NonNullable<AgendaGroup["compose"]>, groupKey: string) => void;
 }
 
 /** 某个学习空间的未完成任务：进行中支线 / 闪回复习 / 任务（日程页与学习空间页共用） */
@@ -69,7 +76,11 @@ export function SpaceTaskList(props: SpaceTaskListProps) {
   const { subject, tasks, threads, today } = props;
   const list = useListState();
   const progress = useSpaceProgress(subject.id);
-  const groups = useMemo(() => buildSpaceGroups(tasks, threads, subject.id), [tasks, threads, subject.id]);
+  const groups = useMemo(() => {
+    const built = buildSpaceGroups(tasks, threads, subject.id, { includeDone: props.viewOptions?.showCompleted });
+    if (!props.viewOptions) return built;
+    return applyViewOptions(built, props.viewOptions, new Map([[subject.id, subject]]), today);
+  }, [tasks, threads, subject, today, props.viewOptions]);
   const deadline = deadlineInfo(subject.deadline, today);
 
   return (
@@ -114,8 +125,13 @@ export function SpaceTaskList(props: SpaceTaskListProps) {
           onToggleDone={props.onToggleDone}
           onToggleGroup={list.toggleGroup}
           onToggleParent={list.toggleParent}
-          onCompose={(defaults) => dispatchCompose(defaults)}
+          onCompose={props.onCompose ?? ((defaults) => dispatchCompose(defaults))}
           emptyHint={emptyHint}
+          leavingIds={props.leavingIds}
+          taskActions={props.taskActions}
+          onRescheduleOverdue={props.onRescheduleOverdue}
+          composingKey={props.composingKey}
+          composer={props.composer}
           ariaLabel={`「${subject.name}」的任务`}
         />
       </div>
@@ -173,6 +189,7 @@ export function SpaceTasks({ subject, subjects, onOpenThread }: SpaceTasksProps)
           }}
           onAddSubtask={(parent, title) => create({ title, parentId: parent.id, subjectId: parent.subjectId, source: "manual" })}
           onSelectTask={setInspectedId}
+          today={today}
         />
       </div>
     );

@@ -5,14 +5,13 @@ const path = require('node:path');
 
 const source = file => fs.readFileSync(path.join(__dirname, '../src', file), 'utf8');
 
-test('the shared agenda header opens the existing composer with the current space', () => {
+test('adding a task stays on the rail shortcut and the inline composer', () => {
   const page = source('components/agenda/AgendaPage.tsx');
-  const header = page.slice(page.indexOf('<header'), page.indexOf('</header>'));
-  assert.match(header, /className=\{styles.addTask\}/);
-  assert.match(header, /aria-keyshortcuts="Q"/);
-  assert.match(header, /dispatchCompose\(\{ subjectId: spaceId \}\)/);
-  assert.match(header, /<Plus[^>]*aria-hidden[^>]*\/>添加任务/);
+  const rail = source('components/agenda/AgendaRail.tsx');
+  assert.match(rail, /aria-keyshortcuts="Q"/);
+  assert.match(page, /dispatchCompose\(\{ subjectId: spaceId \}\)/);
   assert.match(page, /<QuickAdd/);
+  assert.match(page, /onCancel=\{\(\) => setComposer\(null\)\}/);
 });
 
 test('composer transitions retain the native close lifecycle and reduced motion paths', () => {

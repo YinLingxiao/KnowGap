@@ -1,0 +1,161 @@
+.menu {
+  position: fixed;
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  width: 248px;
+  max-height: min(520px, calc(100vh - 16px));
+  padding: 6px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-popover);
+  animation: pop 140ms var(--ease-out);
+}
+
+@keyframes pop {
+  from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .menu { animation: none; }
+}
+
+.item,
+.back {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.item:hover,
+.item:focus-visible,
+.back:hover,
+.back:focus-visible {
+  background: var(--bg-hover);
+  outline: none;
+}
+
+.itemIcon {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 18px;
+  color: var(--text-secondary);
+}
+
+.itemLabel {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.check { color: var(--accent-text); flex-shrink: 0; }
+
+.danger,
+.danger .itemIcon { color: var(--red); }
+
+.danger:hover { background: var(--red-soft); }
+
+.back {
+  gap: 6px;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.sep {
+  flex-shrink: 0;
+  height: 1px;
+  margin: 5px -6px;
+  background: var(--border-subtle);
+}
+
+.label {
+  margin: 4px 8px 4px;
+  color: var(--text);
+  font-size: var(--text-xs);
+  font-weight: 650;
+}
+
+.iconRow {
+  display: flex;
+  gap: 2px;
+  padding: 0 4px 6px;
+}
+
+.iconBtn {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 32px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  cursor: pointer;
+}
+
+.iconBtn:hover,
+.iconBtn:focus-visible {
+  background: var(--bg-hover);
+  outline: none;
+}
+
+.iconOn,
+.iconOn:hover {
+  border-color: var(--border-strong);
+  background: var(--bg-subtle);
+}
+
+.green { color: var(--green); }
+.amber { color: var(--amber); }
+.blue { color: var(--accent); }
+.purple { color: #a855f7; }
+.muted { color: var(--text-tertiary); }
+
+.p1 { color: var(--red); }
+.p2 { color: var(--orange); }
+.p3 { color: var(--accent); }
+.p4 { color: var(--text-tertiary); }
+
+.dayIcon {
+  display: grid;
+  place-items: center;
+  width: 17px;
+  height: 17px;
+  border: 1.6px solid currentColor;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.dotSlot {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.dotNone {
+  border: 1.5px solid var(--text-tertiary);
+  background: transparent;
+}

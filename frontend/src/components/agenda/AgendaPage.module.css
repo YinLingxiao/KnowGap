@@ -18,11 +18,19 @@
   border-bottom: 1px solid var(--border-subtle);
 }
 
-.heading {
-  flex-shrink: 0;
-  white-space: nowrap;
-  font-size: var(--text-md);
-  font-weight: 600;
+.pageTitle {
+  margin: 0;
+  padding: 16px 8px 8px;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.sheet {
+  width: min(760px, 100%);
+  margin-inline: auto;
+  justify-self: center;
 }
 
 .badge {
@@ -279,7 +287,8 @@
     display: none;
   }
 
-  .top .btn {
+  .top .btn,
+  .top button[aria-label="布局"] {
     padding: 0 8px;
     font-size: 0;
     gap: 0;

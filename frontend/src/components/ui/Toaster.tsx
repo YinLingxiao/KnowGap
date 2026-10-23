@@ -5,11 +5,17 @@ import { CircleCheck, Info, TriangleAlert, X } from "lucide-react";
 import { cx } from "@/lib/cx";
 import styles from "./Toaster.module.css";
 
+export interface ToastAction {
+  label: string;
+  onClick: () => void;
+}
+
 export interface Toast {
   id: number;
   tone: "success" | "error" | "info";
   title: string;
   description?: string;
+  action?: ToastAction;
 }
 
 const ICONS = { success: CircleCheck, error: TriangleAlert, info: Info } as const;
@@ -25,7 +31,7 @@ export function useToasts() {
     (toast: Omit<Toast, "id">) => {
       const id = Date.now() + Math.random();
       setToasts((items) => [...items.slice(-2), { ...toast, id }]);
-      window.setTimeout(() => dismiss(id), toast.tone === "error" ? 6000 : 3600);
+      window.setTimeout(() => dismiss(id), toast.tone === "error" || toast.action ? 6000 : 3600);
     },
     [dismiss],
   );
@@ -45,6 +51,15 @@ export function Toaster({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id
               <div className={styles.title}>{toast.title}</div>
               {toast.description && <p className={styles.description}>{toast.description}</p>}
             </div>
+            {toast.action && (
+              <button
+                type="button"
+                className={styles.action}
+                onClick={() => { toast.action?.onClick(); onDismiss(toast.id); }}
+              >
+                {toast.action.label}
+              </button>
+            )}
             <button className={styles.close} onClick={() => onDismiss(toast.id)} aria-label="关闭通知">
               <X size={14} />
             </button>

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cx } from "@/lib/cx";
+import { AgendaEmpty } from "./AgendaEmpty";
 import { AgendaList, type AgendaListProps } from "./AgendaList";
 import { addDays, dayGroupKey, mondayOf, UPCOMING_DAYS, weekdayOf, type AgendaGroup } from "./agendaModel";
 import styles from "./UpcomingView.module.css";
@@ -11,13 +12,14 @@ interface UpcomingViewProps {
   groups: AgendaGroup[];
   today: string;
   listProps: Omit<AgendaListProps, "groups" | "today">;
+  onBreakdown?: () => void;
 }
 
 const prefersReducedMotion = () =>
   typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
 /** 「预览」视图：顶部一周日期导航 + 按天分节的列表（逾期在最上方） */
-export function UpcomingView({ groups, today, listProps }: UpcomingViewProps) {
+export function UpcomingView({ groups, today, listProps, onBreakdown }: UpcomingViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const thisWeek = mondayOf(today);
   const lastDay = addDays(today, UPCOMING_DAYS - 1);
@@ -105,6 +107,9 @@ export function UpcomingView({ groups, today, listProps }: UpcomingViewProps) {
       </div>
 
       <div ref={scrollRef} className={styles.scroll}>
+        {groups.every((group) => group.nodes.length === 0) && (
+          <AgendaEmpty variant="upcoming" onBreakdown={onBreakdown} />
+        )}
         <AgendaList {...listProps} groups={groups} today={today} ariaLabel="预览" />
       </div>
     </div>

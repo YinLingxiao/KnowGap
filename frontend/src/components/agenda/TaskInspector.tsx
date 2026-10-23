@@ -4,8 +4,10 @@ import { useEffect, useRef, useState } from "react";
 import { Bell, Check, Plus, Repeat, Trash2, X } from "lucide-react";
 import type { AgendaTask, TaskPatch, TaskPriority } from "@/lib/agenda/types";
 import { cx } from "@/lib/cx";
+import { formatYmd } from "@/lib/agenda/quickAdd";
 import { Markdown } from "../chat/Markdown";
 import type { SubjectInfo } from "./AgendaList";
+import { DatePicker, SelectMenu } from "./DatePicker";
 import styles from "./TaskInspector.module.css";
 
 interface TaskInspectorProps {
@@ -18,6 +20,7 @@ interface TaskInspectorProps {
   onDelete: (id: string) => Promise<boolean>;
   onAddSubtask: (parent: AgendaTask, title: string) => Promise<unknown>;
   onSelectTask: (id: string) => void;
+  today?: string;
 }
 
 const PRIORITIES: { value: TaskPriority; label: string; name: string }[] = [
@@ -63,6 +66,7 @@ export function TaskInspector(props: TaskInspectorProps) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [props]);
 
+  const today = props.today ?? formatYmd(new Date());
   const patch = (value: TaskPatch) => void props.onUpdate(task.id, value);
   const isReview = task.source === "review";
   const done = task.status === "done";
@@ -77,7 +81,7 @@ export function TaskInspector(props: TaskInspectorProps) {
     if (notes !== task.notes) patch({ notes });
   };
 
-  const setScheduledDate = (value: string) => {
+  const setScheduledDate = (value: string | null) => {
     if (!value) {
       patch({ scheduledDate: null, scheduledStartAt: null });
       return;
@@ -189,25 +193,24 @@ export function TaskInspector(props: TaskInspectorProps) {
         </Field>
 
         <Field label="所属空间">
-          <select
-            className={styles.control}
+          <div className={styles.row}>
+          <SelectMenu
+            label="所属空间"
             value={task.subjectId ?? ""}
-            aria-label="所属空间"
-            onChange={(event) => patch({ subjectId: event.target.value || null })}
-          >
-            <option value="">未归入空间</option>
-            {props.subjects.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-          </select>
+            placeholder="未归入空间"
+            options={props.subjects.map((item) => ({ value: item.id, label: item.name, color: item.color }))}
+            onChange={(next) => patch({ subjectId: next || null })}
+          />
+          </div>
         </Field>
 
         <Field label="计划">
           <div className={styles.row}>
-            <input
-              type="date"
-              className={styles.control}
-              value={task.scheduledDate ?? ""}
-              aria-label="计划日期"
-              onChange={(event) => setScheduledDate(event.target.value)}
+            <DatePicker
+              value={task.scheduledDate}
+              today={today}
+              ariaLabel="计划日期"
+              onChange={setScheduledDate}
             />
             <input
               type="time"
@@ -257,16 +260,12 @@ export function TaskInspector(props: TaskInspectorProps) {
 
         <Field label="截止日">
           <div className={styles.row}>
-            <input
-              type="date"
-              className={styles.control}
-              value={task.deadlineDate ?? ""}
-              aria-label="截止日"
-              onChange={(event) => patch({ deadlineDate: event.target.value || null })}
+            <DatePicker
+              value={task.deadlineDate}
+              today={today}
+              ariaLabel="截止日"
+              onChange={(next) => patch({ deadlineDate: next })}
             />
-            {task.deadlineDate && (
-              <button type="button" className={styles.textBtn} onClick={() => patch({ deadlineDate: null })}>清除</button>
-            )}
           </div>
         </Field>
 

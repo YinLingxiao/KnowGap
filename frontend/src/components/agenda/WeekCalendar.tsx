@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { ChevronLeft, ChevronRight, Flag, RotateCcw } from "lucide-react";
 import type { AgendaTask, AgendaThread } from "@/lib/agenda/types";
+import { AgendaEmpty } from "./AgendaEmpty";
 import styles from "./WeekCalendar.module.css";
 
 export interface WeekCalendarProps {
@@ -15,6 +16,7 @@ export interface WeekCalendarProps {
   onSelectThread?: (threadId: string) => void;
   onReschedule: (taskId: string, patch: { scheduledDate: string; scheduledStartAt: string | null; durationMinutes: number | null }) => void;
   onCreateAt?: (slot: { scheduledDate: string; scheduledStartAt: string | null }) => void;
+  showCompleted?: boolean;
 }
 
 const START = 360;
@@ -67,7 +69,7 @@ function layout(tasks: AgendaTask[]) {
 type Patch = Parameters<WeekCalendarProps["onReschedule"]>[1];
 type Drag = { task: AgendaTask; mode: "move" | "resize"; x: number; y: number; offset: number; moved: boolean; patch: Patch };
 
-export default function WeekCalendar({ weekStart, tasks, threads, today, onWeekChange, onSelectTask, onSelectThread, onReschedule, onCreateAt }: WeekCalendarProps) {
+export default function WeekCalendar({ weekStart, tasks, threads, today, onWeekChange, onSelectTask, onSelectThread, onReschedule, onCreateAt, showCompleted = false }: WeekCalendarProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
@@ -168,7 +170,12 @@ export default function WeekCalendar({ weekStart, tasks, threads, today, onWeekC
     onReschedule(task.id, { scheduledDate, scheduledStartAt: start === null ? null : `${scheduledDate}T${clock(clamp(start + (event.shiftKey ? 0 : timeDelta), START, END - duration))}`,
       durationMinutes: event.shiftKey && start !== null ? clamp(duration + timeDelta, 15, Math.min(720, END - start)) : task.durationMinutes });
   }
-  const visibleTasks = tasks.filter(task => task.status !== "cancelled").map(task => preview?.id === task.id ? { ...task, ...preview.patch } : task);
+  const shown = tasks.filter(task => task.status !== "cancelled" && (showCompleted || task.status !== "done"));
+  const visibleTasks = shown.map(task => preview?.id === task.id ? { ...task, ...preview.patch } : task);
+  const weekBusy = shown.some(task => {
+    const day = task.scheduledDate ?? task.scheduledStartAt?.slice(0, 10) ?? null;
+    return Boolean(day && day >= days[0] && day <= days[6]);
+  });
   const nowMinutes = now ? now.getHours() * 60 + now.getMinutes() : -1;
 
   return <section ref={rootRef} className={styles.calendar} aria-label="周历" onPointerMove={move} onPointerUp={event => finish(event)} onPointerCancel={event => finish(event, true)}>
@@ -188,7 +195,7 @@ export default function WeekCalendar({ weekStart, tasks, threads, today, onWeekC
           {days.map((day, i) => <div className={styles.dayHeader} key={day} data-today={day === today}>
             <span>{weekdays[i]}</span><strong>{Number(day.slice(8))}</strong>
             <div className={styles.markers}>
-              {tasks.filter(task => task.status !== "cancelled" && task.deadlineDate === day).map(task => <button type="button" key={task.id} className={styles.deadline} title={`截止：${task.title}`} onClick={() => onSelectTask(task.id)}><Flag size={11} />{task.title}</button>)}
+              {shown.filter(task => task.deadlineDate === day).map(task => <button type="button" key={task.id} className={styles.deadline} title={`截止：${task.title}`} onClick={() => onSelectTask(task.id)}><Flag size={11} />{task.title}</button>)}
               {threads.filter(thread => thread.deadlineDate === day).map(thread => <button type="button" key={thread.threadId} className={styles.thread} disabled={!onSelectThread} title={`${thread.subjectName} · ${thread.title}`} onClick={() => onSelectThread?.(thread.threadId)}>{thread.title}</button>)}
             </div>
           </div>)}
@@ -207,6 +214,7 @@ export default function WeekCalendar({ weekStart, tasks, threads, today, onWeekC
         <div className={styles.timeScroll} ref={scrollRef}>
           <div className={styles.timeBody} style={{ height: HEIGHT }}>
             <div className={styles.timeLabels}>{Array.from({ length: 19 }, (_, i) => <span key={i} style={{ top: i * 60 * SCALE }}>{clock(START + i * 60)}</span>)}</div>
+            {!weekBusy && <div className={styles.empty}><AgendaEmpty variant="week" /></div>}
             <div className={styles.timeGrid} ref={gridRef}>
               {days.map(day => <div key={day} className={styles.timeColumn}>
                 {Array.from({ length: 36 }, (_, slot) => <button type="button" key={slot} className={styles.slot} aria-label={`${day} ${clock(START + slot * 30)} 创建任务`}

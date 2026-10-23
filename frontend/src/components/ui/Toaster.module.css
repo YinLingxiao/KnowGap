@@ -58,6 +58,19 @@
   line-height: var(--leading-ui);
 }
 
+.action {
+  flex-shrink: 0;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-hover);
+  color: var(--text);
+  font-size: var(--text-xs);
+  font-weight: 650;
+}
+
+.action:hover { background: var(--bg-active); }
+
 .close {
   display: grid;
   place-items: center;

@@ -20,6 +20,9 @@
   position: sticky;
   top: 0;
   z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin: 0;
   padding-top: 8px;
   background: var(--bg);
@@ -27,11 +30,28 @@
   font-weight: 600;
 }
 
+.groupEmpty .groupHead { padding-top: 2px; }
+.groupEmpty .addRow { height: 26px; }
+
+.reschedule {
+  flex-shrink: 0;
+  height: 22px;
+  margin-right: 4px;
+  padding: 0 8px;
+  border-radius: var(--radius-sm);
+  color: var(--red);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+}
+
+.reschedule:hover { background: var(--red-soft); }
+
 .groupToggle {
   display: flex;
+  flex: 1;
   align-items: center;
   gap: 6px;
-  width: 100%;
+  min-width: 0;
   height: 26px;
   padding: 0 6px;
   border-bottom: 1px solid var(--border-subtle);
@@ -149,6 +169,11 @@
 .selected:hover {
   background: var(--accent-soft);
   box-shadow: inset 0 0 0 1px var(--accent-soft-strong);
+}
+
+.withActions .row,
+.withActions .child {
+  grid-template-columns: 18px 18px minmax(8em, 1fr) minmax(0, auto) 22px;
 }
 
 .child {
@@ -345,9 +370,49 @@
   background: var(--green);
 }
 
+.menuBtn {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+  opacity: 0;
+}
+
+.row:hover .menuBtn,
+.menuOn,
+.menuBtn:focus-visible {
+  opacity: 1;
+  background: var(--bg-active);
+  color: var(--text);
+}
+
+.leaving {
+  animation: leave 300ms var(--ease-out) forwards;
+}
+
+@keyframes leave {
+  to { opacity: 0; }
+}
+
+@media (hover: none) {
+  .menuBtn { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .leaving { animation: none; opacity: 0.45; }
+}
+
 @media (max-width: 760px) {
-  .row {
+  .row,
+  .child {
     grid-template-columns: 18px 18px minmax(0, 1fr);
+  }
+
+  .withActions .row,
+  .withActions .child {
+    grid-template-columns: 18px 18px minmax(0, 1fr) 22px;
   }
 
   .meta {

@@ -29,6 +29,7 @@
 .allDayTask span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .timeScroll { overflow-y: auto; min-height: 160px; flex: 1; scrollbar-width: thin; scrollbar-color: var(--border-strong) var(--bg); scrollbar-gutter: stable; }
 .timeBody { display: flex; position: relative; }
+.empty { position: absolute; z-index: 1; top: 18%; left: 58px; right: 12px; display: flex; justify-content: center; pointer-events: none; }
 .timeLabels { width: 58px; flex-shrink: 0; position: relative; color: var(--text-secondary); font-size: var(--text-xs); }
 .timeLabels span { position: absolute; right: 9px; transform: translateY(-50%); }
 .timeLabels span:first-child { transform: none; }

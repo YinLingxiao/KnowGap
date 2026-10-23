@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, useMemo, useState } from "react";
+import { forwardRef, useEffect, useMemo, useState } from "react";
 import { Plus } from "lucide-react";
 import { parseQuickAdd, quickAddToInput, type QuickAddToken } from "@/lib/agenda/quickAdd";
 import type { TaskInput } from "@/lib/agenda/types";
@@ -11,6 +11,9 @@ interface QuickAddProps {
   subjects: { id: string; name: string; color: string }[];
   /** 当前按空间筛选时，新任务默认归到该空间 */
   defaultSubjectId: string | null;
+  initialText?: string;
+  autoFocus?: boolean;
+  onCancel?: () => void;
   onCreate: (input: TaskInput) => Promise<boolean>;
 }
 
@@ -29,11 +32,17 @@ const KIND_NAME: Record<QuickAddToken["kind"], string> = {
 };
 
 export const QuickAdd = forwardRef<HTMLInputElement, QuickAddProps>(function QuickAdd(
-  { subjects, defaultSubjectId, onCreate }, ref,
+  { subjects, defaultSubjectId, initialText = "", autoFocus = false, onCancel, onCreate }, ref,
 ) {
-  const [text, setText] = useState("");
+  const [text, setText] = useState(initialText);
   const [ignored, setIgnored] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!autoFocus) return;
+    const node = typeof ref === "function" ? null : ref?.current;
+    node?.focus();
+  }, [autoFocus, ref]);
 
   // now 每次输入时重新取，跨午夜也不会算错
   const parsed = useMemo(
@@ -76,7 +85,11 @@ export const QuickAdd = forwardRef<HTMLInputElement, QuickAddProps>(function Qui
               event.preventDefault();
               void submit();
             }
-            if (event.key === "Escape") event.currentTarget.blur();
+            if (event.key === "Escape") {
+              event.preventDefault();
+              if (onCancel) onCancel();
+              else event.currentTarget.blur();
+            }
           }}
         />
         {text && <kbd className={styles.enterHint}>回车</kbd>}

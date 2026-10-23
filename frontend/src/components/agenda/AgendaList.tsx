@@ -1,13 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { Check, ChevronRight, MessagesSquare, Plus, Repeat } from "lucide-react";
-import type { AgendaTask, AgendaThread } from "@/lib/agenda/types";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { Check, ChevronRight, Ellipsis, MessagesSquare, Plus, Repeat } from "lucide-react";
+import type { AgendaTask, AgendaThread, TaskPriority } from "@/lib/agenda/types";
 import { cx } from "@/lib/cx";
 import {
   deadlineInfo, flattenRows, scheduleLabel, subtaskProgress, taskKey, threadKey,
   type AgendaGroup, type AgendaNode, type FlatRow, type GroupKey, type TaskNode,
 } from "./agendaModel";
+import { TaskMenu } from "./TaskMenu";
 import styles from "./AgendaList.module.css";
 
 export interface SubjectInfo {
@@ -30,10 +31,24 @@ export interface AgendaListProps {
   onToggleGroup: (key: GroupKey) => void;
   onToggleParent: (taskId: string) => void;
   /** 节末「+ 添加任务」 */
-  onCompose?: (defaults: NonNullable<AgendaGroup["compose"]>) => void;
+  onCompose?: (defaults: NonNullable<AgendaGroup["compose"]>, groupKey: GroupKey) => void;
   /** 某节为空时的提示文字 */
   emptyHint?: (group: AgendaGroup) => string | null;
   ariaLabel?: string;
+  leavingIds?: ReadonlySet<string>;
+  onRescheduleOverdue?: () => void;
+  composingKey?: string | null;
+  composer?: ReactNode;
+  taskActions?: TaskActions;
+}
+
+export interface TaskActions {
+  onSchedule: (task: AgendaTask, date: string | null) => void;
+  onPriority: (task: AgendaTask, priority: TaskPriority) => void;
+  onMove: (task: AgendaTask, subjectId: string | null) => void;
+  onInsert: (task: AgendaTask, where: "above" | "below") => void;
+  onDuplicate: (task: AgendaTask) => void;
+  onDelete: (task: AgendaTask) => void;
 }
 
 const PRIORITY_CLASS = [styles.p1, styles.p1, styles.p2, styles.p3, styles.p4];
@@ -115,7 +130,7 @@ export function AgendaList(props: AgendaListProps) {
   return (
     <div
       ref={listRef}
-      className={styles.list}
+      className={cx(styles.list, props.taskActions && styles.withActions)}
       role="listbox"
       tabIndex={0}
       aria-label={`${props.ariaLabel ?? "日程列表"}，上下键选择，空格完成，回车打开详情`}
@@ -127,36 +142,52 @@ export function AgendaList(props: AgendaListProps) {
         const collapsed = collapsedGroups.has(group.key);
         const hint = !group.nodes.length ? props.emptyHint?.(group) ?? null : null;
         const heading = group.sublabel ? `${group.label} · ${group.sublabel}` : group.label;
+        const visible = groups.filter((item) => item.nodes.length || item.keepEmpty);
+        const hideHead = visible.length === 1 && visible[0].key !== "overdue" && visible[0].tone !== "overdue";
+        const showReschedule = Boolean(props.onRescheduleOverdue && (group.key === "overdue" || (group.tone === "overdue" && group.key === visible.find((item) => item.tone === "overdue" || item.key === "overdue")?.key)));
+        const composing = props.composingKey === group.key;
         return (
-          <section key={group.key} className={styles.group} aria-label={heading} data-group-key={group.key}>
-            <h2 className={styles.groupHead}>
-              <button
-                type="button"
-                className={cx(
-                  styles.groupToggle,
-                  group.tone === "overdue" && styles.groupOverdue,
-                  group.tone === "today" && styles.groupToday,
+          <section
+            key={group.key}
+            className={cx(styles.group, !group.nodes.length && styles.groupEmpty)}
+            aria-label={heading}
+            data-group-key={group.key}
+          >
+            {!hideHead && (
+              <h2 className={styles.groupHead}>
+                <button
+                  type="button"
+                  className={cx(
+                    styles.groupToggle,
+                    group.tone === "overdue" && styles.groupOverdue,
+                    group.tone === "today" && styles.groupToday,
+                  )}
+                  aria-expanded={!collapsed}
+                  onClick={() => props.onToggleGroup(group.key)}
+                >
+                  <ChevronRight size={12} className={cx(styles.chev, !collapsed && styles.chevOpen)} aria-hidden />
+                  <span>{group.label}</span>
+                  {group.sublabel && <span className={styles.groupSub}>{group.sublabel}</span>}
+                  {group.nodes.length > 0 && <span className={styles.groupCount}>{group.nodes.length}</span>}
+                </button>
+                {showReschedule && (
+                  <button type="button" className={styles.reschedule} onClick={props.onRescheduleOverdue}>
+                    重新安排
+                  </button>
                 )}
-                aria-expanded={!collapsed}
-                onClick={() => props.onToggleGroup(group.key)}
-              >
-                <ChevronRight size={12} className={cx(styles.chev, !collapsed && styles.chevOpen)} aria-hidden />
-                <span>{group.label}</span>
-                {group.sublabel && <span className={styles.groupSub}>{group.sublabel}</span>}
-                {group.nodes.length > 0 && <span className={styles.groupCount}>{group.nodes.length}</span>}
-              </button>
-            </h2>
+              </h2>
+            )}
             {!collapsed && (
               <>
                 {group.nodes.map((node) => (
                   <NodeRows key={node.key} node={node} {...props} collapsedParent={node.kind !== "thread" && collapsedParents.has(node.task.id)} />
                 ))}
                 {hint && <p className={styles.emptyHint}>{hint}</p>}
-                {group.compose && props.onCompose && (
+                {composing ? props.composer : group.compose && props.onCompose && (
                   <button
                     type="button"
                     className={styles.addRow}
-                    onClick={() => props.onCompose?.(group.compose!)}
+                    onClick={() => props.onCompose?.(group.compose!, group.key)}
                     aria-label={`添加任务到「${heading}」`}
                   >
                     <Plus size={13} aria-hidden />
@@ -216,11 +247,13 @@ function TaskRow(props: AgendaListProps & { node: TaskNode; task: AgendaTask; ch
   const { task, node, child, today } = props;
   const key = taskKey(task.id);
   const done = task.status === "done";
+  const leaving = props.leavingIds?.has(task.id) ?? false;
   const review = node.kind === "review" && !child;
   const progress = !child && node.children.length ? subtaskProgress(node.children) : null;
   const schedule = scheduleLabel(task, today);
   const overdueSchedule = Boolean(task.scheduledDate && task.scheduledDate < today && !done);
   const selected = props.selectedKey === key;
+  const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null);
 
   return (
     <div
@@ -228,9 +261,14 @@ function TaskRow(props: AgendaListProps & { node: TaskNode; task: AgendaTask; ch
       data-row-key={key}
       role="option"
       aria-selected={selected}
-      className={cx(styles.row, PRIORITY_CLASS[task.priority], child && styles.child, selected && styles.selected, done && styles.done)}
+      className={cx(styles.row, PRIORITY_CLASS[task.priority], child && styles.child, selected && styles.selected, (done || leaving) && styles.done, leaving && styles.leaving)}
       onClick={() => props.onSelect(key)}
       onDoubleClick={() => props.onOpenTask(task)}
+      onContextMenu={(event) => {
+        if (!props.taskActions) return;
+        event.preventDefault();
+        setMenuAt({ x: event.clientX, y: event.clientY });
+      }}
     >
       <span className={styles.expand}>
         {progress && (
@@ -249,12 +287,12 @@ function TaskRow(props: AgendaListProps & { node: TaskNode; task: AgendaTask; ch
       <button
         type="button"
         role="checkbox"
-        aria-checked={done}
+        aria-checked={done || leaving}
         aria-label={done ? `标记「${task.title}」为未完成` : `完成「${task.title}」`}
-        className={cx(styles.check, done && styles.checked)}
+        className={cx(styles.check, (done || leaving) && styles.checked)}
         onClick={(event) => { event.stopPropagation(); props.onToggleDone(task); }}
       >
-        {done && <Check size={11} strokeWidth={3} aria-hidden />}
+        {(done || leaving) && <Check size={11} strokeWidth={3} aria-hidden />}
       </button>
 
       <button type="button" className={styles.main} tabIndex={-1} onClick={() => { props.onSelect(key); props.onOpenTask(task); }}>
@@ -285,6 +323,39 @@ function TaskRow(props: AgendaListProps & { node: TaskNode; task: AgendaTask; ch
         )}
         {!done && <DeadlineTag deadline={task.deadlineDate} today={today} />}
       </span>
+      {props.taskActions && (
+        <button
+          type="button"
+          className={cx(styles.menuBtn, menuAt && styles.menuOn)}
+          aria-label={`「${task.title}」的更多操作`}
+          aria-haspopup="menu"
+          aria-expanded={Boolean(menuAt)}
+          onClick={(event) => {
+            event.stopPropagation();
+            const rect = event.currentTarget.getBoundingClientRect();
+            setMenuAt(menuAt ? null : { x: rect.right - 220, y: rect.bottom + 4 });
+          }}
+        >
+          <Ellipsis size={14} aria-hidden />
+        </button>
+      )}
+      {menuAt && props.taskActions && (
+        <TaskMenu
+          task={task}
+          today={today}
+          subjects={[...props.subjects.values()]}
+          x={menuAt.x}
+          y={menuAt.y}
+          onClose={() => setMenuAt(null)}
+          onEdit={() => props.onOpenTask(task)}
+          onSchedule={(date) => props.taskActions?.onSchedule(task, date)}
+          onPriority={(priority) => props.taskActions?.onPriority(task, priority)}
+          onMove={(subjectId) => props.taskActions?.onMove(task, subjectId)}
+          onInsert={(where) => props.taskActions?.onInsert(task, where)}
+          onDuplicate={() => props.taskActions?.onDuplicate(task)}
+          onDelete={() => props.taskActions?.onDelete(task)}
+        />
+      )}
     </div>
   );
 }
