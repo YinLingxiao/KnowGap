@@ -307,8 +307,10 @@
 .provider {
   display: flex;
   flex-direction: column;
+  justify-content: center;
   gap: 1px;
   min-width: 0;
+  min-height: 36px;
   padding: 7px 9px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -333,16 +335,11 @@
 }
 
 .providerName {
-  font-size: var(--text-sm);
-  font-weight: 500;
-}
-
-.providerHost {
   overflow: hidden;
-  color: var(--text-tertiary);
-  font-size: var(--text-xs);
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: var(--text-sm);
+  font-weight: 500;
 }
 
 .fields {
@@ -1408,4 +1405,37 @@
     flex-direction: column;
     gap: 10px;
   }
+}
+
+/* 服务商卡片下面的一行当前配置：只显示选了谁、用哪个模型，细节在点开的卡片里 */
+.providerSummary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-subtle);
+  font-size: var(--text-sm);
+}
+
+.providerSummaryText {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.providerSummaryText strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.providerSummaryText em {
+  margin-left: 6px;
+  color: var(--amber);
+  font-size: var(--text-xs);
+  font-style: normal;
 }

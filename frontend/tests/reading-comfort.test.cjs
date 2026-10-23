@@ -140,3 +140,29 @@ test('generated files stream into the message and download with the login token'
   assert.match(list, /<GeneratedFiles files=\{message\.files\} \/>/);
   assert.match(list, /create_document: "生成文件"/);
 });
+
+test('model settings keep provider cards on the page and credentials inside the editor', () => {
+  const access = read('components/settings/ModelAccessCard.tsx');
+  const editor = read('components/settings/ProviderEditor.tsx');
+  const list = read('components/settings/ModelList.tsx');
+  const service = read('components/settings/ServiceModelsSection.tsx');
+  const css = read('components/settings/ModelLibrary.module.css');
+  assert.match(access, /添加你的第一个模型/);
+  assert.match(access, /默认模型/);
+  assert.match(access, /<EditorDialog/);
+  assert.match(editor, /接口地址/);
+  assert.match(editor, /认证方式/);
+  assert.match(editor, /获取模型列表/);
+  assert.match(editor, /手动添加模型/);
+  assert.match(editor, /检查/);
+  assert.match(editor, /keyLabel \?\? "API Key"/);
+  assert.match(editor, /已保存，留空则保持不变/);
+  assert.match(editor, /更换了接口地址，需要重新填写密钥。/);
+  assert.match(list, /aria-label="搜索模型"/);
+  assert.doesNotMatch(service, /接口地址/);
+  assert.doesNotMatch(service, /API Key/);
+  assert.match(service, /沿用默认模型/);
+  assert.match(service, /服务商坐标格式/);
+  assert.match(css, /max-width:\s*640px/);
+  assert.match(css, /minmax\(min\(100%/);
+});

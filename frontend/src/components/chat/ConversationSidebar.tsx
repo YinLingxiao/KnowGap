@@ -11,6 +11,7 @@ import { COMPOSE_TASK_EVENT } from "@/lib/agenda/types";
 import type { ConversationSummary, Subject } from "@/lib/chat/types";
 import { cx } from "@/lib/cx";
 import { ThemeToggle } from "../ThemeToggle";
+import { UpdateIndicator } from "../desktop/UpdateIndicator";
 import styles from "./ConversationSidebar.module.css";
 
 interface SidebarProps {
@@ -374,6 +375,7 @@ export function ConversationSidebar(props: SidebarProps) {
         <button id="help-trigger" className={styles.iconButton} onClick={props.onOpenHelp} aria-label="帮助" title="帮助" aria-expanded={props.helpOpen} aria-controls={props.helpOpen ? "help-panel" : undefined} aria-haspopup="dialog">
           <CircleHelp size={15} />
         </button>
+        <UpdateIndicator onOpenSettings={props.onOpenSettings} />
         <button className={styles.iconButton} onClick={props.onOpenSettings} aria-label="设置" title="设置">
           <Settings size={15} />
           {props.modelIssue && <span className={styles.alertDot} />}

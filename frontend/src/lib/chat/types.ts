@@ -190,6 +190,7 @@ export interface ConversationSummary {
   legacySessionId: string | null;
   messageCount: number;
   preview: string;
+  modelKey: string | null;
   generating: boolean;
   createdAt: string;
   updatedAt: string;
@@ -205,7 +206,8 @@ export type ExecutionStatus = "queued" | "working" | "waiting" | "idle" | "faile
 export type StreamEvent =
   | { type: "thread_dispatched"; threadId: string }
   | { type: "start"; conversation: ConversationSummary | null; userMessage: ChatMessage | null;
-      assistantMessage: ChatMessage | null; discardedIds: string[]; replayed: boolean }
+      assistantMessage: ChatMessage | null; discardedIds: string[]; replayed: boolean; modelNotice: string | null }
+  | { type: "model_notice"; detail: string }
   | { type: "delta"; text: string }
   | { type: "reasoning"; text: string }
   | { type: "file"; file: GeneratedFile }

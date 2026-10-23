@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, SecretStr, ValidationError
 
 from app.config import Settings
 from app.agents.vertex_config import adc_base_url
+from app.services.model_library import ModelLibrary
 
 RAW_READ_ATTEMPTS = 4
 
@@ -43,8 +44,34 @@ class AISettings:
                     ) if key in raw})
             except (OSError, ValueError, HTTPException, KeyError, TypeError):
                 raise RuntimeError("无法读取本地 AI 配置，请检查 ai-settings.json。") from None
+        self.library = ModelLibrary(settings)
+        self.library.on_change = self._sync_current
+        self._sync_current()
+
+    def _sync_current(self) -> None:
+        from app.agents.llm import ProviderError
+        library = getattr(self, "library", None)
+        if library is None or not library.path.exists():
+            return
+        try:
+            resolved = library.resolve(None)
+        except ProviderError:
+            resolved = None
+        if resolved is None:
+            self.current = self.current.model_copy(update={
+                "llm_base_url": "", "llm_model": "", "llm_api_key": SecretStr(""),
+                "llm_auth_mode": "api_key", "llm_project_id": "", "llm_location": "global",
+            })
+            return
+        self.current = self.current.model_copy(update={
+            "llm_base_url": resolved.llm_base_url, "llm_model": resolved.llm_model,
+            "llm_api_key": resolved.llm_api_key, "llm_auth_mode": resolved.llm_auth_mode,
+            "llm_project_id": resolved.llm_project_id, "llm_location": resolved.llm_location,
+        })
 
     def candidate(self, body: dict) -> Settings:
+        if getattr(self, "library", None) is not None:
+            self._sync_current()
         try:
             data = ConfigurationInput.model_validate(body)
             base = data.base_url.strip().rstrip("/")
@@ -155,6 +182,7 @@ class AISettings:
 
     def status(self) -> dict:
         with self.lock:
+            self._sync_current()
             settings = self.current
             has_key = settings.llm_auth_mode == "api_key" and bool(settings.llm_api_key.get_secret_value())
             chatgpt = self.chatgpt.status() if self.chatgpt is not None else {
@@ -179,5 +207,6 @@ class AISettings:
                             "auth_mode": candidate.llm_auth_mode, "project_id": candidate.llm_project_id,
                             "location": candidate.llm_location})
             self._write(payload)
+            self.library.apply_legacy(candidate)
             self.current = candidate
             return self.status()

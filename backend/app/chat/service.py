@@ -21,7 +21,7 @@ from app.agent_tools import (
     DEFINITIONS, NEEDS_APPROVAL, parse_arguments, preflight_blacklist, run as run_tool, workspace_of,
 )
 from app.agent_tools.guard import ToolError
-from app.agents.llm import ChatModel, ProviderError
+from app.agents.llm import ChatCompletionsChat, ChatModel, ProviderError
 from app.chat.agent import (
     HISTORY_CHARS, HISTORY_MESSAGES, active_exercise, analysis_messages, chat_messages,
     compress_history_messages, deterministic_compress_fallback, dialogue, resolution_messages,
@@ -104,6 +104,8 @@ class Generation:
         self.student_id = ""
         self.parent_id: str | None = None
         self.checkpoint: dict | None = None
+        self.model_notice: str | None = None
+        self.notice_resolved = False
 
 
 class ToolContext:
@@ -120,11 +122,14 @@ class ToolContext:
 
 
 class ChatService:
-    def __init__(self, store: ChatStore, model: Callable[[], ChatModel], library: MaterialStore | None = None, settings=None):
+    def __init__(self, store: ChatStore, model: Callable[[], ChatModel], library: MaterialStore | None = None, settings=None, *, model_library=None, chatgpt_auth=None, model_factory: Callable | None = None):
         self.store = store
         self.model = model
         self.library = library
         self.settings = settings
+        self.model_library = model_library
+        self.chatgpt_auth = chatgpt_auth
+        self.model_factory = model_factory
         # (VisionStore, ServiceModels)，由 main.py 在视觉服务创建后挂上；没有时图片按「读取失败」处理
         self.vision = None
         # FileStore，由 main.py 挂上；没有时不提供文件生成工具
@@ -179,8 +184,42 @@ class ChatService:
             return False
         return bool(self.settings.agent_config().get(key))
 
+    def _build_chat(self, settings) -> ChatModel:
+        if self.model_factory is not None:
+            return self.model_factory(settings)
+        return ChatCompletionsChat(settings, chatgpt_auth=self.chatgpt_auth)
+
+    def _open_conversation_model(self, conversation_id: str) -> ChatModel:
+        library = self.model_library
+        if library is None:
+            return self.model()
+        requested = self.store.conversation_model_key(conversation_id)
+        if library.effective_key(requested) is None:
+            return self.model()
+        return self._build_chat(library.resolve(requested))
+
+    def _fallback_notice(self, conversation_id: str) -> str | None:
+        library = self.model_library
+        if library is None:
+            return None
+        requested = self.store.conversation_model_key(conversation_id)
+        effective = library.effective_key(requested)
+        if not requested or effective == requested:
+            self.store.clear_model_notice(conversation_id)
+            return None
+        if effective and self.store.claim_model_notice(conversation_id, requested):
+            return "原模型不可用，已改用默认模型"
+        return None
+
     def _background_model(self, model):
-        """Analysis, review and compression use the separate memory model when one is configured."""
+        """Analysis, review, compression, suggestions and naming use the memory model."""
+        if self.model_library is not None:
+            try:
+                return self._build_chat(self.model_library.service_settings("memory"))
+            except ProviderError:
+                pass
+        if model is None:
+            model = self.model()
         if self.settings is None or not hasattr(model, "settings"):
             return model
         try:
@@ -384,14 +423,19 @@ class ChatService:
         generation.student_id = student_id
         generation.parent_id = self._thread_parent_id(student_id, conversation_id)
         generation.detached = detached
+        generation.model_notice = self._fallback_notice(conversation_id)
+        generation.notice_resolved = True
         self.active[conversation_id] = generation
         self._report(generation, "working", "正在处理这项任务，详细过程可在支线中查看。")
-        generation.queue.put_nowait(("start", {
+        start = {
             "conversation": self._conversation(student_id, conversation_id),
             "user_message": self._message(student_id, user_message_id),
             "assistant_message": self._message(student_id, assistant_id),
             "discarded_ids": discard,
-        }))
+        }
+        if generation.model_notice:
+            start["model_notice"] = generation.model_notice
+        generation.queue.put_nowait(("start", start))
         generation.task = asyncio.create_task(self._run(student_id, generation))
         self.tasks.add(generation.task)
         generation.task.add_done_callback(self.tasks.discard)
@@ -565,6 +609,12 @@ class ChatService:
         last_flush = 0.0
         try:
             await asyncio.sleep(0)  # let the queued "start" event reach the client before any blocking work
+            if not generation.notice_resolved:
+                generation.model_notice = self._fallback_notice(generation.conversation_id)
+                generation.notice_resolved = True
+            if generation.model_notice:
+                queue.put_nowait(("model_notice", {"detail": generation.model_notice}))
+            model = self._open_conversation_model(generation.conversation_id)
             history = [row for row in self.store.history(generation.conversation_id) if row["id"] != assistant_id]
             user_row = next(row for row in history if row["id"] == generation.user_message_id)
             # Queued inputs can be inserted before an earlier turn's reply. Keep those
@@ -583,7 +633,6 @@ class ChatService:
                 from app.chat.onboarding import EXTRACTION_PROMPT, QUESTIONS, apply_answer
                 if interview["status"] != "in_progress":
                     raise ProviderError(409, "这段访谈已结束或暂停，请从学习记忆继续完善画像。")
-                model = self.model()
                 result = await self._complete_json(model, [
                     {"role": "system", "content": EXTRACTION_PROMPT},
                     {"role": "user", "content": json.dumps({"stage": interview["stage"],
@@ -613,7 +662,6 @@ class ChatService:
                                               document_ids=[item['id'] for item in attached_files])
             else:
                 sources = self.library.search_scoped(student_id, user_text[:600], 5, subject_id) if self.library else []
-            model = self.model()
             finish = "stop"
             role = self.store.role_context(generation.conversation_id)
             user_meta = self.store.message_meta(generation.user_message_id)
@@ -1090,7 +1138,7 @@ class ChatService:
         summary_text = ""
         try:
             raw = await asyncio.wait_for(
-                self._complete_json(model or self._background_model(self.model()),
+                self._complete_json(model if model is not None else self._background_model(None),
                                     compress_history_messages(turns, prev_summary), conversation_id, None, "compress"),
                 20,
             )
@@ -1113,7 +1161,8 @@ class ChatService:
         subject = self.store.conversation_subject(conversation_id)
         role = self.store.role_context(conversation_id)
         raw = await self._complete_json(
-            self.model(), resolution_messages(subject, role.get("anchor"), dialogue(self.store.history(conversation_id))),
+            self._open_conversation_model(conversation_id),
+            resolution_messages(subject, role.get("anchor"), dialogue(self.store.history(conversation_id))),
             conversation_id, None, "resolution",
         )
         return validate_resolution(raw)

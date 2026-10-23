@@ -11,6 +11,7 @@ from app.chat.schemas import (
     ConfirmProposal, Conversation, ConversationSummary, CreateConversation, LearnerMemory, Resolution, ResolveThread, SendMessage,
     StartExercise, UpdateConversation, UpdateMemory,
 )
+from app.models.model_library_schemas import ConversationModelUpdate
 from app.chat.service import ChatService
 from app.chat.store import UNSET, ChatStore
 from app.auth.deps import current_student
@@ -136,49 +137,55 @@ def chat_router(store: ChatStore, service: ChatService) -> APIRouter:
         if cache_key in _suggest_cache:
             _suggest_cache.move_to_end(cache_key)
             return {"suggestion": _suggest_cache[cache_key], "message_id": last_msg["id"]}
+        snippet_turns = []
+        for row in history[-4:]:
+            role = "user" if row["role"] == "user" else "assistant"
+            snippet_turns.append(f"[{role}]: {row['content'][:800]}")
+        prompt = (
+            "你是智能输入框的『下一步追问补全器』。请根据下方对话的最后一轮 assistant 回复，"
+            "站在【用户（学习者）】第一人称视角，预测用户最可能顺着 AI 的话往下接的一句自然、具体、可直接发送的回复或推进指令（20~65个字）。\n"
+            "要求：\n"
+            "1. 必须用第一人称口吻（如『那就按你说的…』『好，我们先从…开始，结合具体例子讲讲…』『我理解核心是…，那如果遇到…情况呢？』）。\n"
+            "2. 紧扣 assistant 最后一段提出的问题、分支建议或下一步行动，不要空泛客套。\n"
+            "3. 只输出这一句预测文本本身，不要加引号、不要加任何前缀或解释。\n\n"
+            + "\n\n".join(snippet_turns)
+        )
         try:
-            import httpx
-            from app.agents.llm import provider_endpoint, shared_ssl_context
-            # service.settings is the AISettings holder; the real Settings lives on .current.
-            cfg = service.settings.current if hasattr(service.settings, "current") else service.settings
-            base_url, api_key = provider_endpoint(cfg)
-            model_name = cfg.llm_model.strip()
-            snippet_turns = []
-            for row in history[-4:]:
-                role = "user" if row["role"] == "user" else "assistant"
-                snippet_turns.append(f"[{role}]: {row['content'][:800]}")
-            prompt = (
-                "你是智能输入框的『下一步追问补全器』。请根据下方对话的最后一轮 assistant 回复，"
-                "站在【用户（学习者）】第一人称视角，预测用户最可能顺着 AI 的话往下接的一句自然、具体、可直接发送的回复或推进指令（20~65个字）。\n"
-                "要求：\n"
-                "1. 必须用第一人称口吻（如『那就按你说的…』『好，我们先从…开始，结合具体例子讲讲…』『我理解核心是…，那如果遇到…情况呢？』）。\n"
-                "2. 紧扣 assistant 最后一段提出的问题、分支建议或下一步行动，不要空泛客套。\n"
-                "3. 只输出这一句预测文本本身，不要加引号、不要加任何前缀或解释。\n\n"
-                + "\n\n".join(snippet_turns)
-            )
-            payload = {
-                "model": model_name,
-                "messages": [{"role": "user", "content": prompt}],
-                "max_tokens": 512,
-                "temperature": 0.3,
-            }
-            async with httpx.AsyncClient(timeout=12.0, verify=shared_ssl_context()) as client:
-                resp = await client.post(
-                    f"{base_url}/chat/completions",
-                    json=payload,
-                    headers={"Authorization": f"Bearer {api_key}"},
-                )
-            if resp.is_success:
-                data = resp.json()
-                text = (data.get("choices") or [{}])[0].get("message", {}).get("content") or ""
-                cleaned = text.strip().strip("\"'“”‘’`").replace("\n", " ").strip()
-                if len(cleaned) > SUGGEST_MAX_CHARS:
-                    cleaned = cleaned[:SUGGEST_MAX_CHARS].rstrip()
-                if len(cleaned) >= SUGGEST_MIN_CHARS:
-                    _suggest_cache[cache_key] = cleaned
-                    while len(_suggest_cache) > SUGGEST_CACHE_LIMIT:
-                        _suggest_cache.popitem(last=False)
-                    return {"suggestion": cleaned, "message_id": last_msg["id"]}
+            text = ""
+            if service.model_library is not None:
+                chat = service._build_chat(service.model_library.service_settings("memory"))
+                async for kind, value in chat.stream([{"role": "user", "content": prompt}]):
+                    if kind == "text" and isinstance(value, str):
+                        text += value
+            else:
+                import httpx
+                from app.agents.llm import provider_endpoint, shared_ssl_context
+                # service.settings is the AISettings holder; the real Settings lives on .current.
+                cfg = service.settings.current if hasattr(service.settings, "current") else service.settings
+                base_url, api_key = provider_endpoint(cfg)
+                payload = {
+                    "model": cfg.llm_model.strip(),
+                    "messages": [{"role": "user", "content": prompt}],
+                    "max_tokens": 512,
+                    "temperature": 0.3,
+                }
+                async with httpx.AsyncClient(timeout=12.0, verify=shared_ssl_context()) as client:
+                    resp = await client.post(
+                        f"{base_url}/chat/completions",
+                        json=payload,
+                        headers={"Authorization": f"Bearer {api_key}"},
+                    )
+                if not resp.is_success:
+                    return {"suggestion": "", "message_id": last_msg["id"]}
+                text = (resp.json().get("choices") or [{}])[0].get("message", {}).get("content") or ""
+            cleaned = text.strip().strip("\"'“”‘’`").replace("\n", " ").strip()
+            if len(cleaned) > SUGGEST_MAX_CHARS:
+                cleaned = cleaned[:SUGGEST_MAX_CHARS].rstrip()
+            if len(cleaned) >= SUGGEST_MIN_CHARS:
+                _suggest_cache[cache_key] = cleaned
+                while len(_suggest_cache) > SUGGEST_CACHE_LIMIT:
+                    _suggest_cache.popitem(last=False)
+                return {"suggestion": cleaned, "message_id": last_msg["id"]}
         except Exception:
             pass
         return {"suggestion": "", "message_id": last_msg["id"]}
@@ -206,6 +213,18 @@ def chat_router(store: ChatStore, service: ChatService) -> APIRouter:
         if not updated:
             raise HTTPException(404, "会话不存在或已删除。")
         return require(conversation_id)
+
+    @router.put("/conversations/{conversation_id}/model")
+    def set_conversation_model(conversation_id: str, body: ConversationModelUpdate):
+        require(conversation_id)
+        if service.is_generating(conversation_id):
+            raise HTTPException(409, "正在生成回复，请待本条完成后再切换模型。")
+        if body.model_key is not None and service.model_library is not None:
+            if service.model_library.effective_key(body.model_key) != body.model_key:
+                raise HTTPException(404, "这个模型不存在或未启用。")
+        if not store.set_conversation_model(conversation_id, current_student(), body.model_key):
+            raise HTTPException(404, "会话不存在或已删除。")
+        return {"model_key": store.conversation_model_key(conversation_id)}
 
     @router.delete("/conversations/{conversation_id}", status_code=204)
     async def delete_conversation(conversation_id: str):

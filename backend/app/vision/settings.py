@@ -16,6 +16,7 @@ from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.agents.llm import ProviderError
 from app.config import BACKEND_ROOT, REPO_ROOT, Settings
 from app.vision._fs import atomic_write_json
 from app.vision.schemas import BBOX_FORMATS, ServiceModelsConfig
@@ -114,9 +115,30 @@ def _check_endpoint(section: dict) -> dict:
 
 
 class ServiceModels:
-    def __init__(self, ai_settings, env: VisionConfig | None = None):
+    def __init__(self, ai_settings, env: VisionConfig | None = None, library=None):
         self.ai = ai_settings  # app.services.ai_settings.AISettings
         self.env = env if env is not None else config_from_env()
+        self.library = library
+
+    def _library_settings(self, role: str) -> Settings | None:
+        library = self.library
+        if library is None:
+            return None
+        selection = getattr(library, "service_models", None)
+        if selection is None and hasattr(library, "get_service"):
+            try:
+                selection = library.get_service()
+            except ProviderError:
+                selection = None
+        key = getattr(selection, role, None) if selection is not None else None
+        if not key:
+            return None
+        try:
+            if library.effective_key(key) != key:
+                return None
+            return library.service_settings(role)
+        except ProviderError:
+            return None
 
     @property
     def path(self) -> Path:
@@ -195,6 +217,9 @@ class ServiceModels:
     # ---- resolution ----
     def logic_settings(self, cfg: ServiceModelsConfig | None = None) -> tuple[Settings, str]:
         cfg = cfg or self.config()
+        picked = self._library_settings("logic")
+        if picked is not None:
+            return picked, "service_models"
         base: Settings = self.ai.current
         logic = cfg.logic_model
         if not logic.model:
@@ -208,6 +233,14 @@ class ServiceModels:
     def vision_config(self, cfg: ServiceModelsConfig | None = None) -> VisionConfig:
         cfg = cfg or self.config()
         vision = cfg.vision_model
+        picked = self._library_settings("vision")
+        if picked is not None:
+            return VisionConfig(
+                base_url=picked.llm_base_url.strip().rstrip("/"), model=picked.llm_model.strip(),
+                api_key=picked.llm_api_key, auth_mode=picked.llm_auth_mode, project_id=picked.llm_project_id,
+                location=picked.llm_location, bbox_format=vision.bbox_format, source="service_models",
+                timeout_seconds=self.env.timeout_seconds, disable_thinking=self.env.disable_thinking,
+            )
         common = {"timeout_seconds": self.env.timeout_seconds, "disable_thinking": self.env.disable_thinking}
         if vision.enabled and vision.model:
             if vision.base_url:
@@ -230,7 +263,11 @@ class ServiceModels:
         cfg = self.config()
         logic, logic_source = self.logic_settings(cfg)
         vision = self.vision_config(cfg)
-        memory_model = cfg.memory_model.model if cfg.memory_model.enabled and cfg.memory_model.model else logic.llm_model
+        picked_memory = self._library_settings("memory")
+        if picked_memory is not None:
+            memory_model = picked_memory.llm_model
+        else:
+            memory_model = cfg.memory_model.model if cfg.memory_model.enabled and cfg.memory_model.model else logic.llm_model
         logic_ready = bool(self.ai.chatgpt and self.ai.status()["configured"]) if logic.llm_auth_mode == "chatgpt" else logic.llm_configured
         return {
             "logic_model": {
@@ -247,8 +284,7 @@ class ServiceModels:
             },
             "memory_model": {
                 "model": cfg.memory_model.model, "enabled": cfg.memory_model.enabled,
-                "effective": {"model": memory_model,
-                              "source": "service_models" if memory_model != logic.llm_model else "logic"},
+                "effective": {"model": memory_model, "source": "service_models" if picked_memory is not None or memory_model != logic.llm_model else "logic"},
             },
             **{flag: getattr(cfg, flag) for flag in FLAGS},
         }

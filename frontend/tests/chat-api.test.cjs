@@ -86,6 +86,51 @@ test('profile confirmation sends revision and user-edited entries', async () => 
   assert.deepEqual(await chatApi.completeOnboarding(4, { explanation: '先举例' }), { onboarded: true });
 });
 
+test('conversation summaries keep model_key and model updates send it back', async () => {
+  global.fetch = async () => json({
+    id: 'c1', title: '基础', title_source: 'auto', model_key: 'prov-a11d5e01/google/gemini-3.5-flash', messages: [],
+  });
+  assert.equal((await chatApi.getConversation('c1')).modelKey, 'prov-a11d5e01/google/gemini-3.5-flash');
+  global.fetch = async () => json({ id: 'c2', title: '未设置', title_source: 'auto', messages: [] });
+  assert.equal((await chatApi.getConversation('c2')).modelKey, null);
+  global.fetch = async (url, options) => {
+    assert.equal(url.endsWith('/api/conversations/c%2F1/model'), true);
+    assert.equal(options.method, 'PUT');
+    assert.deepEqual(JSON.parse(options.body), { model_key: null });
+    return json({ model_key: null });
+  };
+  assert.deepEqual(await chatApi.setConversationModel('c/1', null), { modelKey: null });
+});
+
+test('a deleted model announces the fallback before the reply', async () => {
+  const previousWindow = global.window;
+  global.window = { setTimeout, clearTimeout };
+  const events = [];
+  const body = [
+    'event: start',
+    'data: {"model_notice":"原模型不可用，已改用默认模型","discarded_ids":[]}',
+    '',
+    'event: model_notice',
+    'data: {"detail":"原模型不可用，已改用默认模型"}',
+    '',
+    'event: done',
+    'data: {"message":null}',
+    '',
+  ].join('\n');
+  const encoded = new TextEncoder().encode(body);
+  global.fetch = async () => new Response(encoded, { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+  try {
+    await chatApi.sendMessage('c1', '继续', 'req-00000009', (event) => events.push(event), new AbortController().signal);
+    assert.equal(events[0].type, 'start');
+    assert.equal(events[0].modelNotice, '原模型不可用，已改用默认模型');
+    assert.deepEqual(events.find((event) => event.type === 'model_notice'), {
+      type: 'model_notice', detail: '原模型不可用，已改用默认模型',
+    });
+  } finally {
+    global.window = previousWindow;
+  }
+});
+
 test('skip is separate from completion and confirmation failures propagate', async () => {
   global.fetch = async (url) => {
     assert.ok(url.endsWith('/api/onboarding/skip'));

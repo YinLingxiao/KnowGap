@@ -88,6 +88,7 @@ function mapSummary(data: Wire): ConversationSummary {
     anchor: data.anchor ? { messageId: data.anchor.message_id, role: data.anchor.role, excerpt: data.anchor.excerpt } : null,
     activeProblemId: data.active_problem_id,
     legacySessionId: data.legacy_session_id, messageCount: data.message_count, preview: data.preview,
+    modelKey: typeof data.model_key === "string" && data.model_key ? data.model_key : null,
     generating: Boolean(data.generating), createdAt: data.created_at, updatedAt: data.updated_at,
   };
 }
@@ -136,7 +137,10 @@ function mapEvent(type: string, data: Wire): StreamEvent | null {
     case "start":
       return { type, conversation: maybe(data.conversation, mapSummary), userMessage: maybe(data.user_message, mapMessage),
         assistantMessage: maybe(data.assistant_message, mapMessage), discardedIds: data.discarded_ids ?? [],
-        replayed: Boolean(data.replayed) };
+        replayed: Boolean(data.replayed),
+        modelNotice: typeof data.model_notice === "string" && data.model_notice ? data.model_notice : null };
+    case "model_notice":
+      return { type: "model_notice", detail: String(data.detail ?? "") };
     case "delta":
       return { type, text: String(data.text ?? "") };
     case "file":
@@ -234,6 +238,13 @@ export const chatApi = {
   },
   async deleteConversation(id: string): Promise<void> {
     await request(root, path(id), { method: "DELETE" });
+  },
+  async setConversationModel(id: string, modelKey: string | null): Promise<{ modelKey: string | null }> {
+    const data = await request<{ model_key: string | null }>(root, `${path(id)}/model`, {
+      method: "PUT",
+      body: JSON.stringify({ model_key: modelKey }),
+    });
+    return { modelKey: data.model_key ?? null };
   },
   async startExercise(id: string, problemId: string): Promise<Conversation> {
     return mapConversation(await request(root, `${path(id)}/exercises`, {

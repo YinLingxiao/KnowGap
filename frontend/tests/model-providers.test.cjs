@@ -69,14 +69,15 @@ test('existing presets retain exact matching and URL validation', () => {
   assert.match(checkBaseUrl('ftp://example.com'), /http/);
 });
 
-test('the settings card uses provider auth hints and restores the saved project URL without retaining typed secrets', () => {
-  const card = fs.readFileSync(path.join(root, 'components/settings/ModelAccessCard.tsx'), 'utf8');
-  assert.match(card, /provider\.keyLabel \?\? "API Key"/);
-  assert.match(card, /provider\.urlHint/);
-  assert.match(card, /provider\.keyHint/);
-  assert.match(card, /back \? config!\.baseUrl : item\.baseUrl/);
-  assert.match(card, /model: back \? config!\.model : "",\s*apiKey: ""/);
-  assert.match(card, /const ready = Boolean\([^;]*!urlProblem/);
+test('the provider editor uses preset hints and requires a new key after the address changes', () => {
+  const editor = fs.readFileSync(path.join(root, 'components/settings/ProviderEditor.tsx'), 'utf8');
+  assert.match(editor, /keyLabel \?\? "API Key"/);
+  assert.match(editor, /\.urlHint/);
+  assert.match(editor, /\.keyHint/);
+  assert.match(editor, /已保存，留空则保持不变/);
+  assert.match(editor, /更换了接口地址，需要重新填写密钥。/);
+  assert.match(editor, /checkBaseUrl/);
+  assert.match(editor, /checkVertexAdc/);
 });
 
 test('ADC generates global and regional native roots without losing the Express preset', () => {

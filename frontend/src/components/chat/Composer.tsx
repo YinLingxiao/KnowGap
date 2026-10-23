@@ -11,13 +11,14 @@ import {
   Type, Workflow,
 } from "lucide-react";
 import type { StreamPhase } from "@/hooks/useChat";
-import { getAIConfig } from "@/lib/api/ai-config";
+import { modelLibraryApi, type CatalogModel, type ModelLibraryClient } from "@/lib/api/model-library";
 import { uploadImage } from "@/lib/api/vision-client";
 import { toApiError } from "@/lib/api/errors";
 import {
   ATTACHMENT_ACCEPT, MAX_FILE_MARKERS, attachmentApi, formatFileMarker, intentsFor, isDocumentFile, parseFileMarkers, pickAttachmentFiles,
 } from "@/lib/chat/attachments";
 import { useDevMode } from "@/lib/devMode";
+import { ModelPicker, supportsReasoning } from "./ModelPicker";
 import { PlanBar } from "./PlanBar";
 import { chatApi } from "@/lib/chat/api";
 import type { ChatMessage } from "@/lib/chat/types";
@@ -48,7 +49,6 @@ const EFFORT_OPTIONS: Array<{
 ];
 
 const EFFORT_STORAGE_KEY = "knowgap.thinking.effort.v1";
-const MODEL_STORAGE_KEY = "knowgap.ai.model.v1";
 const EFFORT_EVENT = "knowgap:thinking-effort";
 const AGENT_ENV_EVENT = "knowgap:agent-env";
 const FEYNMAN_PROMPT = "我想用费曼学习法自测：请你扮演一位认真但有疑惑的同桌听我讲，并在我讲得含糊或漏掉边界条件的地方追问我。我现在开始讲：";
@@ -191,6 +191,10 @@ interface ComposerProps {
   ensureConversation?: () => Promise<string | null>;
   /** 首页的文件全部被移除、没有可发送的附件时调用 */
   onFilesCleared?: () => void;
+  /** 当前对话的模型键；null 表示用默认模型 */
+  modelKey?: string | null;
+  onModelKeyChange?: (modelKey: string | null) => Promise<boolean> | boolean;
+  modelClient?: ModelLibraryClient;
 }
 
 export const COMPOSER_ID = "chat-input";
@@ -251,6 +255,7 @@ export function Composer({
   value: draft, onChange: onChangeRaw, onSend, onStop, phase, busy, problems = [], onStartExercise, autoFocusKey,
   placeholder = "继续提问，或说说你的理解…", hero = false, inputId = COMPOSER_ID,
   conversationId, messages, ensureConversation, onFilesCleared,
+  modelKey = null, onModelKeyChange, modelClient,
 }: ComposerProps) {
   // 草稿 = 开头的附件标记行 + 图片标记行 + 正文。输入框和下面所有逻辑只处理正文（value / onChange），标记由这里统一保留
   const parsedDraft = useMemo(() => parseFileMarkers(draft), [draft]);
@@ -299,7 +304,9 @@ export function Composer({
   const [effortOpen, setEffortOpen] = useState(false);
   const [wsOpen, setWsOpen] = useState(false);
   const [effort, setEffort] = useState<ThinkingEffort>("medium");
-  const [modelName, setModelName] = useState<string>("");
+  const [activeModel, setActiveModel] = useState<CatalogModel | null>(null);
+  const [localModelKey, setLocalModelKey] = useState<string | null>(null);
+  const [modelError, setModelError] = useState("");
   const [workspace, setWorkspace] = useState<string>("");
   const [wsDraft, setWsDraft] = useState<string>("");
   const [autoApprove, setAutoApprove] = useState<boolean>(false);
@@ -389,8 +396,6 @@ export function Composer({
       if (savedEffort === "off" || savedEffort === "low" || savedEffort === "medium" || savedEffort === "high") {
         setEffort(savedEffort);
       }
-      const savedModel = localStorage.getItem(MODEL_STORAGE_KEY);
-      if (savedModel) setModelName(savedModel);
     } catch { /* ignore */ }
 
     chatApi.agentSettings()
@@ -401,15 +406,6 @@ export function Composer({
         setAutoApprove(res.autoApprove);
         setMemApproval(res.memoryWriteApproval);
         try { localStorage.setItem(EFFORT_STORAGE_KEY, res.reasoningEffort); } catch { /* ignore */ }
-      })
-      .catch(() => {});
-
-    getAIConfig()
-      .then((cfg) => {
-        if (cfg.model) {
-          setModelName(cfg.model);
-          try { localStorage.setItem(MODEL_STORAGE_KEY, cfg.model); } catch { /* ignore */ }
-        }
       })
       .catch(() => {});
 
@@ -536,6 +532,38 @@ export function Composer({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 只在草稿变化或收到发送请求时检查
   }, [value, sendNonce]);
+
+  const shownModelKey = onModelKeyChange ? modelKey : localModelKey;
+  const selectModel = useCallback(async (key: string | null) => {
+    if (onModelKeyChange) {
+      const ok = await onModelKeyChange(key);
+      if (ok) setModelError("");
+      return ok;
+    }
+    if (!conversationId) {
+      setLocalModelKey(key);
+      setModelError("");
+      return true;
+    }
+    try {
+      await modelLibraryApi.setConversationModel(conversationId, key);
+      setLocalModelKey(key);
+      setModelError("");
+      return true;
+    } catch (error) {
+      setModelError(toApiError(error).message);
+      return false;
+    }
+  }, [conversationId, onModelKeyChange]);
+
+  useEffect(() => {
+    setLocalModelKey(null);
+    setModelError("");
+  }, [conversationId]);
+
+  useEffect(() => {
+    if (!supportsReasoning(activeModel)) setEffortOpen(false);
+  }, [activeModel]);
 
   const selectEffort = (next: ThinkingEffort) => {
     setEffort(next);
@@ -1585,7 +1613,19 @@ export function Composer({
           </div>
 
           <div className={styles.rightTools}>
-            <div className={styles.effortAnchor} ref={effortRef}>
+            <ModelPicker
+              conversationId={conversationId}
+              modelKey={shownModelKey}
+              client={modelClient}
+              disabled={generating}
+              disabledReason="正在生成，请等这条回复完成后再切换模型"
+              suspended={effortOpen}
+              error={modelError}
+              onOpenChange={(open) => { if (open) setEffortOpen(false); }}
+              onResolved={setActiveModel}
+              onSelect={selectModel}
+            />
+            {supportsReasoning(activeModel) && <div className={styles.effortAnchor} ref={effortRef}>
               <button
                 type="button"
                 className={styles.effortBtn}
@@ -1594,7 +1634,6 @@ export function Composer({
                 aria-haspopup="menu"
                 title={`模型思考深度：${activeEffort.label}`}
               >
-                {modelName && <span className={styles.effortModel}>{modelName}</span>}
                 <span className={styles.effortLevel}>{activeEffort.shortLabel}</span>
                 <ChevronDown size={12} aria-hidden />
               </button>
@@ -1621,7 +1660,7 @@ export function Composer({
                   ))}
                 </div>
               )}
-            </div>
+            </div>}
 
             {generating ? (
               <button className={cx(styles.send, styles.stop)} onClick={onStop} aria-label="停止生成" title="停止生成">

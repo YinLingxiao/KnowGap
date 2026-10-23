@@ -701,6 +701,8 @@ export function SubjectPage({
               onStartExercise={(problemId) => void chat.sendTo(mainId, `请安排练习「${problemsById[problemId]?.title ?? problemId}」，在支线中带我完成。`)}
               autoFocusKey={mainId}
               placeholder="描述学习需求、补充条件，或直接提问…"
+              modelKey={chat.modelKeyFor(mainId)}
+              onModelKeyChange={(key) => chat.setConversationModel(mainId, key)}
             />
           </div>
         )}
@@ -937,6 +939,8 @@ export function SubjectPage({
                   onStartExercise={(problemId) => void chat.startExerciseOn(threadId, problemId)}
                   autoFocusKey={threadId}
                   placeholder="引导或追问这个支线…"
+                  modelKey={chat.modelKeyFor(threadId, threadSummary?.modelKey ?? null)}
+                  onModelKeyChange={(key) => chat.setConversationModel(threadId, key)}
                 />
               </div>
             </div>

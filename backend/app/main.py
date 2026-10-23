@@ -63,12 +63,17 @@ def create_app(
     ai_settings = AISettings(settings)
     chatgpt_auth = ChatGPTAuth(settings)
     ai_settings.chatgpt = chatgpt_auth
+    ai_settings.library.chatgpt = chatgpt_auth
     model = tutor if tutor is not None else ChatCompletionsTutor(ai_settings.current, chatgpt_auth=chatgpt_auth)
     search = search_service if search_service is not None else AnySearchClient(settings)
     chat = chat_model if chat_model is not None else ChatCompletionsChat(
         ai_settings.current, chatgpt_auth=chatgpt_auth)
+    model_library = None if chat_model is not None else ai_settings.library
     chat_store = ChatStore(store)
-    chat_service = ChatService(chat_store, lambda: chat, library, ai_settings)
+    chat_service = ChatService(
+        chat_store, lambda: chat, library, ai_settings,
+        model_library=model_library, chatgpt_auth=chatgpt_auth,
+    )
     chat_service.files = file_store
     auth_store = AuthStore(store)
 
@@ -95,7 +100,7 @@ def create_app(
     app.state.chat_service = chat_service
     app.state.auth = auth_store
     vision_store = VisionStore.for_app(settings)
-    service_models = ServiceModels(ai_settings)
+    service_models = ServiceModels(ai_settings, library=ai_settings.library)
     app.state.vision_store = vision_store
     app.state.service_models = service_models
     # 对话里发图片时，先走视觉模型转写 / 判错，再交给对话模型
@@ -141,6 +146,8 @@ def create_app(
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(request: Request, exc: RequestValidationError):
+        if request.url.path.startswith("/api/models"):
+            return JSONResponse(status_code=422, content={"detail": "模型库请求格式无效。"})
         if request.url.path in {"/api/ai/config", "/api/ai/test"}:
             # FastAPI's default validation details include the rejected input, possibly a key.
             return JSONResponse(status_code=422, content={"detail": "AI 配置请求格式无效，请提交 JSON 对象。"})
@@ -168,7 +175,10 @@ def create_app(
             raise HTTPException(403, "此页面无权访问 AI 配置。")
 
     from app.api.chatgpt import chatgpt_router
+    from app.api.models import models_router
+    app.state.model_library = ai_settings.library
     app.include_router(chatgpt_router(chatgpt_auth, ai_settings, require_local_configuration))
+    app.include_router(models_router(ai_settings.library, require_local_configuration, chatgpt_auth))
 
     @app.get("/api/ai/config")
     def get_ai_config(request: Request, response: Response):

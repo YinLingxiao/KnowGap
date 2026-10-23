@@ -20,6 +20,7 @@ import { ModelAccessCard, type ModelSignal } from "./ModelAccessCard";
 import { ServiceModelsSection } from "./ServiceModelsSection";
 import { useDevMode, writeDevMode } from "@/lib/devMode";
 import styles from "./Settings.module.css";
+import { UpdateRows } from "./UpdateRows";
 
 declare global {
   interface Window {
@@ -419,6 +420,7 @@ function GeneralPane({ userId }: { userId: string }) {
         />
       </SettingRow>
       <DesktopRows />
+      <UpdateRows />
     </section>
   );
 }

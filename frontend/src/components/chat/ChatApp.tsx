@@ -26,6 +26,7 @@ import { DesktopBridge } from "../desktop/DesktopBridge";
 import { SettingsDialog, type SettingsTab } from "../settings/SettingsDialog";
 import { Toaster, useToasts } from "../ui/Toaster";
 import { COMPOSER_ID, Composer } from "./Composer";
+import { OPEN_SETTINGS_EVENT } from "./ModelPicker";
 import { ConversationSidebar } from "./ConversationSidebar";
 import { MemoryDrawer } from "./MemoryDrawer";
 import { MessageList } from "./MessageList";
@@ -107,6 +108,14 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
     setSettingsTab(tab);
     setSettingsOpen(true);
   }, []);
+  useEffect(() => {
+    const onOpen = (event: Event) => {
+      const tab = (event as CustomEvent<{ tab?: SettingsTab }>).detail?.tab;
+      openSettings(tab ?? "models");
+    };
+    window.addEventListener(OPEN_SETTINGS_EVENT, onOpen);
+    return () => window.removeEventListener(OPEN_SETTINGS_EVENT, onOpen);
+  }, [openSettings]);
   const [view, setViewState] = useState<View>({ type: "chat" });
   const [spaceDialog, setSpaceDialog] = useState<null | { editId?: string; select: boolean }>(null);
   const [viewRestored, setViewRestored] = useState(false);
@@ -661,6 +670,8 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
                     problems={chat.problems}
                     onStartExercise={(problemId) => void chat.startExercise(problemId)}
                     autoFocusKey={chat.activeId}
+                    modelKey={chat.modelKeyFor(chat.activeId)}
+                    onModelKeyChange={(key) => chat.setConversationModel(chat.activeId, key)}
                   />
                   <p className={styles.disclaimer}>回答由模型生成，可能出错，重要内容请自行核实。</p>
             </div>
@@ -701,6 +712,8 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
                 hero
                 value={chat.draft}
                 onChange={chat.setDraft}
+                modelKey={chat.pendingModelKey}
+                onModelKeyChange={(key) => chat.setConversationModel(null, key)}
                 onSend={async () => {
                   const spaceId = chat.draftSubjectId;
                   const ok = await chat.sendMessage();

@@ -1,5 +1,9 @@
 # AI 接口卡片后端契约
 
+多服务商、多模型的现行契约是 [model-library.md](contracts/model-library.md)。本文保留 `/api/ai/config` 与 `/api/ai/test` 的兼容说明。
+
+`GET/PUT /api/ai/config` 和 `POST /api/ai/test` 现在作用在**默认模型所属的服务商**上，不再单独代表一份全局配置。响应仍然不含密钥。数据目录里还没有 `model-library.json` 时，若 `ai-settings.json` 或环境变量里已有有效配置，启动会自动迁成一个服务商加一个默认模型；旧文件不删不改。换地址仍必须重新提交密钥。
+
 已在 `frontend` 分支现有 FastAPI 教学后端上增加配置接口。
 当前远程代码尚无 Claude 的 AI 配置卡片，因此本次仅交付后端和契约，未声称已完成卡片联调。
 

@@ -1,6 +1,8 @@
 .root {
   display: grid;
   gap: 18px;
+  min-width: 0;
+  max-width: 100%;
   margin-top: 18px;
   padding-top: 18px;
   border-top: 1px solid var(--border-subtle);
@@ -74,7 +76,7 @@
 
 .modelGrid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -126,13 +128,25 @@
   gap: 9px;
 }
 
+.sectionHead > div,
+.groupTitle > div,
 .cardHead > div {
   min-width: 0;
+}
+
+.cardHead > div {
   flex: 1;
 }
 
 .cardHead h5 {
   font-size: var(--text-sm);
+}
+
+.toggleRow small,
+.cardHead p,
+.sectionHead p,
+.groupTitle p {
+  text-wrap: pretty;
 }
 
 .cardHead p {
@@ -409,7 +423,7 @@
   }
 }
 
-@media (max-width: 560px) {
+@media (max-width: 640px) {
   .sectionHead {
     align-items: flex-start;
     flex-direction: column;
@@ -422,4 +436,19 @@
   .fieldFull {
     grid-column: auto;
   }
+}
+
+/* 点开的编辑卡片底部：关闭 / 保存 */
+.dialogActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.dialogActions p {
+  flex: 1 1 100%;
+  margin: 0;
 }

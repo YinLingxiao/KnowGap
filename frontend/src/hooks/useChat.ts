@@ -8,6 +8,7 @@ import { PLAN_EVENT, type PlanEventDetail } from "@/lib/chat/plan";
 import type {
   ChatMessage, Conversation, ConversationSummary, LearnerMemory, LearnerMemoryStatus, SpaceInput, StreamEvent, Subject,
 } from "@/lib/chat/types";
+import { MODELS_CHANGED_EVENT } from "@/lib/api/model-library";
 import { API_BASE_URL } from "@/lib/config";
 import type { Problem } from "@/lib/types";
 
@@ -89,11 +90,18 @@ export function useChat(notify: Notify, userId: string) {
   const [threadDispatch, setThreadDispatch] = useState<{ mainId: string; threadId: string; nonce: number } | null>(null);
   /** 空白新对话发出第一条消息时归入的 Subject（在 Subject 页里开始的对话） */
   const [draftSubjectId, setDraftSubjectId] = useState<string | null>(null);
+  const [pendingModelKey, setPendingModelKey] = useState<string | null>(null);
+  const [assignedModels, setAssignedModels] = useState<Record<string, string | null>>({});
 
   const draftConversationKey = useRef(newId());
+  const pendingModelRef = useRef<string | null>(null);
   const pending = useRef<Record<string, { text: string; requestId: string }>>({});
   const streamsRef = useRef(streams);
   streamsRef.current = streams;
+  const conversationsRef = useRef(conversations);
+  conversationsRef.current = conversations;
+  const assignedRef = useRef(assignedModels);
+  assignedRef.current = assignedModels;
 
   /** 首页直接上传文件时预建的空对话；发送时转为正式对话，学生移除全部文件或离开首页时删除 */
   const draftConvRef = useRef<string | null>(null);
@@ -111,6 +119,10 @@ export function useChat(notify: Notify, userId: string) {
 
   const setActiveId = useCallback((id: string | null) => {
     if (id !== draftConvRef.current) discardDraftConversation();
+    if (id) {
+      pendingModelRef.current = null;
+      setPendingModelKey(null);
+    }
     setActiveIdState(id);
     storage(() => (id ? localStorage.setItem(activeKey, id) : localStorage.removeItem(activeKey)), undefined);
   }, [activeKey, discardDraftConversation]);
@@ -132,6 +144,47 @@ export function useChat(notify: Notify, userId: string) {
     upsertSummary(summary);
     setThreads((all) => ({ ...all, [conversation.id]: { messages, loading: false, error: null } }));
   }, [upsertSummary]);
+
+  const modelKeyFor = useCallback((id: string | null, fallback: string | null = null) => {
+    if (!id) return pendingModelKey;
+    if (Object.prototype.hasOwnProperty.call(assignedModels, id)) return assignedModels[id];
+    const found = conversations.find((item) => item.id === id);
+    if (found) return found.modelKey;
+    return fallback;
+  }, [assignedModels, conversations, pendingModelKey]);
+
+  const setConversationModel = useCallback(async (id: string | null, modelKey: string | null) => {
+    if (!id) {
+      pendingModelRef.current = modelKey;
+      setPendingModelKey(modelKey);
+      return true;
+    }
+    const found = conversationsRef.current.find((item) => item.id === id);
+    const known = Boolean(found) || Object.prototype.hasOwnProperty.call(assignedRef.current, id);
+    const current = found
+      ? found.modelKey
+      : Object.prototype.hasOwnProperty.call(assignedRef.current, id) ? assignedRef.current[id] : null;
+    if (known && current === modelKey) return true;
+    try {
+      const saved = await chatApi.setConversationModel(id, modelKey);
+      setAssignedModels((all) => ({ ...all, [id]: saved.modelKey }));
+      setConversations((items) => items.map((item) => (item.id === id ? { ...item, modelKey: saved.modelKey } : item)));
+      return true;
+    } catch (error) {
+      notify({ tone: "error", title: "未能切换模型", description: toApiError(error).message });
+      return false;
+    }
+  }, [notify]);
+
+  const applyPendingModel = useCallback(async (id: string) => {
+    const key = pendingModelRef.current;
+    if (!key) return;
+    const ok = await setConversationModel(id, key);
+    if (!ok) {
+      pendingModelRef.current = null;
+      setPendingModelKey(null);
+    }
+  }, [setConversationModel]);
 
   const loadSubjects = useCallback(async () => {
     try {
@@ -172,6 +225,8 @@ export function useChat(notify: Notify, userId: string) {
       setDrafts((all) => ({ ...all, [NEW]: parseFileMarkers(all[NEW] ?? "").body }));
     }
     draftConversationKey.current = newId();
+    pendingModelRef.current = null;
+    setPendingModelKey(null);
     setDraftSubjectId(subjectId);
     setSendFailure(null);
     setActiveId(null);
@@ -263,6 +318,13 @@ export function useChat(notify: Notify, userId: string) {
     setStreams((all) => ({ ...all, [id]: { controller, phase: "connecting" } }));
     let assistantId: string | null = null;
     let acked = false;
+    let noticed = false;
+    const showModelNotice = (detail: string) => {
+      if (!detail || noticed) return;
+      noticed = true;
+      notify({ tone: "info", title: detail });
+      window.dispatchEvent(new Event(MODELS_CHANGED_EVENT));
+    };
     const onEvent = (event: StreamEvent) => {
       switch (event.type) {
         case "thread_dispatched":
@@ -281,6 +343,10 @@ export function useChat(notify: Notify, userId: string) {
           ));
           setPhase(id, controller, "streaming");
           setFollows((all) => ({ ...all, [id]: (all[id] ?? 0) + 1 }));
+          if (event.modelNotice) showModelNotice(event.modelNotice);
+          break;
+        case "model_notice":
+          showModelNotice(event.detail);
           break;
         case "delta":
           patchMessages(id, (messages) => messages.map((m) => (m.id === assistantId ? { ...m, content: m.content + event.text } : m)));
@@ -401,6 +467,7 @@ export function useChat(notify: Notify, userId: string) {
       try {
         putConversation(await chatApi.getConversation(draftId));
       } catch { /* 流式结果仍会补上这条消息 */ }
+      await applyPendingModel(draftId);
       setDrafts((all) => ({ ...all, [draftId]: text, [NEW]: "" }));
       setActiveId(draftId);
       return sendTo(draftId, text);
@@ -412,6 +479,7 @@ export function useChat(notify: Notify, userId: string) {
         try {
           putConversation(await chatApi.getConversation(mainId));
         } catch { /* 流式结果仍会补上这条消息 */ }
+        await applyPendingModel(mainId);
         return sendTo(mainId, text);
       }
     }
@@ -425,6 +493,7 @@ export function useChat(notify: Notify, userId: string) {
       const conversation = await chatApi.createConversation({ clientRequestId: draftConversationKey.current });
       id = conversation.id;
       putConversation(conversation);
+      await applyPendingModel(id);
       setDrafts((all) => ({ ...all, [conversation.id]: text, [NEW]: "" }));
       pending.current[id] = { text, requestId };
       delete pending.current[NEW];
@@ -437,7 +506,7 @@ export function useChat(notify: Notify, userId: string) {
     } finally {
       setCreating(false);
     }
-  }, [activeId, creating, draftSubjectId, drafts, putConversation, sendTo, setActiveId, subjects]);
+  }, [activeId, applyPendingModel, creating, draftSubjectId, drafts, putConversation, sendTo, setActiveId, subjects]);
 
   const regenerate = useCallback(async (id: string) => {
     try {
@@ -485,6 +554,7 @@ export function useChat(notify: Notify, userId: string) {
           ? await chatApi.startExercise(mainId, problemId)
           : await chatApi.createConversation({ problemId, clientRequestId: draftConversationKey.current });
       putConversation(conversation);
+      if (!id) await applyPendingModel(conversation.id);
       if (!id) setActiveId(conversation.id);
       setFollows((all) => ({ ...all, [conversation.id]: (all[conversation.id] ?? 0) + 1 }));
       return true;
@@ -492,7 +562,7 @@ export function useChat(notify: Notify, userId: string) {
       notify({ tone: "error", title: "无法开始练习", description: toApiError(error).message });
       return false;
     }
-  }, [draftSubjectId, notify, putConversation, setActiveId, subjects]);
+  }, [applyPendingModel, draftSubjectId, notify, putConversation, setActiveId, subjects]);
 
   const startExercise = useCallback(
     (problemId: string) => startExerciseOn(activeId, problemId), [activeId, startExerciseOn],
@@ -655,6 +725,7 @@ export function useChat(notify: Notify, userId: string) {
     sendFailure, dismissSendFailure: () => setSendFailure(null),
     problems,
     memories, memoriesLoading, memoriesError, loadMemories, updateMemory, deleteMemory, decideTool,
+    pendingModelKey, modelKeyFor, setConversationModel,
     newChat, ensureUploadConversation, discardDraftConversation, openConversation, loadConversation, sendMessage, sendTo, regenerate, stop, startExercise, startExerciseOn,
     renameConversation, deleteConversation,
   };

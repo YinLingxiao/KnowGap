@@ -112,6 +112,28 @@ export function normalizeBaseUrl(url: string): string {
   return url.trim().replace(/\/+$/, "");
 }
 
+export function presetAuthModes(id: ModelProviderId): Array<"api_key" | "adc" | "chatgpt"> {
+  if (id === "chatgpt") return ["chatgpt"];
+  if (id === "vertex") return ["api_key", "adc"];
+  return ["api_key"];
+}
+
+export function suggestModelTags(modelId: string): {
+  reasoning: "none" | "low" | "medium" | "high";
+  vision: boolean;
+  tools: boolean;
+  label: "新" | "Pro" | null;
+} {
+  const name = modelId.trim().toLowerCase();
+  let reasoning: "none" | "low" | "medium" | "high" = "none";
+  if (/(?:^|[^a-z0-9])(?:r1|o1|o3)(?:[^a-z0-9]|$)|reasoner|thinking/.test(name)) reasoning = "high";
+  else if (/reason/.test(name)) reasoning = "medium";
+  const vision = /(?:^|[^a-z])(?:vision|omni)(?:[^a-z]|$)|(?:^|[-_/])vl(?:[-_/]|$)/.test(name);
+  const tools = /(?:^|[^a-z])tools?(?:[^a-z]|$)/.test(name);
+  const label = /(?:^|[^a-z])pro(?:[^a-z]|$)/.test(name) ? "Pro" as const : null;
+  return { reasoning, vision, tools, label };
+}
+
 /** 按接口地址找回预设；匹配不到时归为「自定义」 */
 export function matchProvider(baseUrl: string): ModelProvider {
   const value = normalizeBaseUrl(baseUrl);

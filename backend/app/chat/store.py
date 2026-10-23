@@ -117,6 +117,7 @@ class ChatStore:
                     created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
                     kind TEXT NOT NULL DEFAULT 'chat',
                     parent_id TEXT, anchor_message_id TEXT, thread_status TEXT, resolved_at TEXT,
+                    model_key TEXT, model_notice_key TEXT,
                     UNIQUE(student_id, client_request_id)
                 );
                 CREATE TABLE IF NOT EXISTS conversation_messages (
@@ -196,6 +197,8 @@ class ChatStore:
             ensure_column(db, "conversations", "notes_snapshot", "TEXT")
             ensure_column(db, "conversations", "context_summary", "TEXT NOT NULL DEFAULT ''")
             ensure_column(db, "conversations", "compressed_up_to_seq", "INTEGER NOT NULL DEFAULT 0")
+            ensure_column(db, "conversations", "model_key", "TEXT")
+            ensure_column(db, "conversations", "model_notice_key", "TEXT")
             self._migrate_spaces(db)
             ensure_notes(db)
             from app.chat.onboarding import ensure as ensure_onboarding
@@ -350,6 +353,7 @@ class ChatStore:
             "id": row["id"], "title": row["title"], "title_source": row["title_source"],
             "subject_id": row["subject_id"],
             "kind": row["kind"] or "chat", "parent_id": row["parent_id"],
+            "model_key": self._model_key(db, row),
             "thread_status": row["thread_status"], "anchor": self._anchor(db, row["anchor_message_id"]),
             "execution_status": execution,
             "active_problem_id": json.loads(stats["exercise"])["problem_id"] if stats["exercise"] else None,
@@ -366,6 +370,52 @@ class ChatStore:
         if row is None:
             return MessageAnchor(message_id=message_id, role="assistant", excerpt="")
         return MessageAnchor(message_id=row["id"], role=row["role"], excerpt=clip(row["content"], 80))
+
+    def _model_key(self, db: sqlite3.Connection, row: sqlite3.Row) -> str | None:
+        names = set(row.keys())
+        own = row["model_key"] if "model_key" in names else None
+        if own:
+            return own
+        if (row["kind"] or "") == "thread" and row["parent_id"]:
+            parent = db.execute("SELECT model_key FROM conversations WHERE id = ?", (row["parent_id"],)).fetchone()
+            if parent and parent["model_key"]:
+                return parent["model_key"]
+        return None
+
+    def conversation_model_key(self, conversation_id: str) -> str | None:
+        with self.connection() as db:
+            row = db.execute(
+                "SELECT model_key, kind, parent_id FROM conversations WHERE id = ?", (conversation_id,),
+            ).fetchone()
+            return self._model_key(db, row) if row else None
+
+    def set_conversation_model(self, conversation_id: str, student_id: str, model_key: str | None) -> bool:
+        with self.connection() as db:
+            cur = db.execute(
+                "UPDATE conversations SET model_key = ?, model_notice_key = NULL, updated_at = ? "
+                "WHERE id = ? AND student_id = ?",
+                (model_key, now(), conversation_id, student_id),
+            )
+            return cur.rowcount > 0
+
+    def claim_model_notice(self, conversation_id: str, requested: str) -> bool:
+        with self.connection() as db:
+            row = db.execute(
+                "SELECT model_notice_key FROM conversations WHERE id = ?", (conversation_id,),
+            ).fetchone()
+            if row is None or row["model_notice_key"] == requested:
+                return False
+            db.execute(
+                "UPDATE conversations SET model_notice_key = ? WHERE id = ?", (requested, conversation_id),
+            )
+            return True
+
+    def clear_model_notice(self, conversation_id: str) -> None:
+        with self.connection() as db:
+            db.execute(
+                "UPDATE conversations SET model_notice_key = NULL WHERE id = ? AND model_notice_key IS NOT NULL",
+                (conversation_id,),
+            )
 
     def list_conversations(self, student_id: str, subject_id: str | None = None) -> list[ConversationSummary]:
         self.import_legacy()

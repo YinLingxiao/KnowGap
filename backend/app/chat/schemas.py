@@ -277,6 +277,7 @@ class ConversationSummary(BaseModel):
     subject_id: str | None = None
     kind: ConversationKind = "chat"
     parent_id: str | None = None
+    model_key: str | None = None
     thread_status: ThreadStatus | None = None
     execution_status: ExecutionStatus | None = None
     anchor: MessageAnchor | None = None
