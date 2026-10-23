@@ -8,7 +8,7 @@
 - **计划里「等你回答」的一步，讲完不算完成。** 学生要在进入等待之后再发一条消息，而且原话对得上，这一步才会被勾掉。
 - **复习有固定间隔，不靠学生自己记得。** 一条未解决的误区会生成闪回任务：先是记下来的次日，完成后再隔 3 天、再隔 7 天。
 
-安装包：[v0.5.0 Release](https://github.com/YinLingxiao/KnowGap/releases/tag/v0.5.0)（Windows，`KnowGap Setup *.exe`）。下面的截图于 2026-10-22 拍摄，深色主题，1280×800，用「本机演示身份」和 `seed_demo.py` 的演示数据。需要模型的画面用的是本机已经配好的模型，没有改模型配置。
+安装包：[v0.5.1 Release](https://github.com/YinLingxiao/KnowGap/releases/tag/v0.5.1)（Windows，`KnowGap Setup *.exe`）。下面的截图于 2026-10-22 拍摄，深色主题，1280×800，用「本机演示身份」和 `seed_demo.py` 的演示数据。需要模型的画面用的是本机已经配好的模型，没有改模型配置。
 
 首页「今天」：当天待办、到期的误区闪回，以及上手清单。
 
@@ -193,13 +193,13 @@ Windows 安装包用 Electron 拉起本机后端和静态前端。数据在 `%AP
 - 后端优先用端口 `38617`。被占用就换端口，并记在 `port.json` 里，下次尽量用同一个，避免登录状态因为地址变化丢掉。
 - 学习记录、对话、日程都在本机 SQLite。调用模型时，对话内容和检索到的资料会发到你填写的模型服务。密钥不出前端包，安装包里的页面用相对路径访问本机后端。
 
-本轮没有重新安装 v0.5.0。托盘、快捷键和端口行为来自 `desktop/main.js`；2026-10-21 的[发布清单](docs/desktop-release-checklist.md)记录过一轮 Windows 验证。
+本轮没有重新安装 v0.5.1。托盘、快捷键和端口行为来自 `desktop/main.js`；2026-10-21 的[发布清单](docs/desktop-release-checklist.md)记录过一轮 Windows 验证。
 
 ## 上手
 
 评委大约 5 分钟可以走完这条路。
 
-1. 安装 [v0.5.0](https://github.com/YinLingxiao/KnowGap/releases/tag/v0.5.0)，或按下一节用源码启动。
+1. 安装 [v0.5.1](https://github.com/YinLingxiao/KnowGap/releases/tag/v0.5.1)，或按下一节用源码启动。
 2. 登录后只要没配模型，整个界面会被「先连上 AI 模型」挡住，只能「去填写」，不能跳过。需要一个 OpenAI 兼容的 Chat Completions，能返回 JSON，记忆和工具还要 function calling。地址不要带 `/chat/completions`。保存并测试通过后自动放行。
 3. 登录页选「使用本机演示身份直接进入」。不要注册：注册要邮箱验证码，后端若配了 SMTP 会真的发信。
 4. 源码运行时，在仓库根目录执行 `backend\.venv\Scripts\python.exe backend\scripts\seed_demo.py`。会有「数据结构（演示）」和「电路原理（演示）」，带原话的误区、已解决和未解决的 Thread、日程和 12 周专注记录。`--reset` 只删这些带演示标记的数据。
