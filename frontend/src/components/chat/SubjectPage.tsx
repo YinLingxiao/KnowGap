@@ -821,7 +821,9 @@ export function SubjectPage({
                       {resolvingId === threadId ? <LoaderCircle className={styles.spin} size={15} /> : <CheckCircle2 size={15} />}
                     </button>
                   )}
-                  <UsageStats usage={usage?.conversations[threadId]} label="用量" align="right" />
+                  <span className={styles.usageSlot}>
+                    <UsageStats usage={usage?.conversations[threadId]} label="用量" align="right" />
+                  </span>
                 </>
               ) : (
                 <span className={styles.usageSlot}><UsageStats usage={usage?.total} label="用量" align="right" /></span>

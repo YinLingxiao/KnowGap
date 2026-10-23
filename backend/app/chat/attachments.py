@@ -12,6 +12,9 @@ from app.services.materials import MAX_UPLOAD_BYTES, MaterialStore
 
 FILE_MARKER = re.compile(r'\[\[file:([^|\]\r\n]+)\|([^\]\r\n]*)\]\]')
 ATTACHMENT_LINE = re.compile(r'^（附件：.*）\s*$', re.M)
+# 附件第一次出现时给模型的摘录：本轮所有附件合计约 2.4 万字，单份至少 6000 字
+EXCERPT_BUDGET = 24_000
+EXCERPT_MIN = 6_000
 
 
 def attachment_router(store: ChatStore, library: MaterialStore) -> APIRouter:
@@ -51,10 +54,19 @@ def prepare_attachment_history(history, library: MaterialStore | None, student_i
     """
     seen, cache, result, attached = set(), {}, [], []
     latest_user = next((i for i in range(len(history) - 1, -1, -1) if history[i]['role'] == 'user'), -1)
+    # 本轮附件共用一份摘录预算：一份课件尽量整份给模型，多份时平分，每份至少保留一段像样的开头
+    leading = 0
+    for line in (history[latest_user]['content'].splitlines() if latest_user >= 0 else []):
+        if FILE_MARKER.fullmatch(line.strip()):
+            leading += 1
+        elif line.strip():
+            break
+    excerpt_limit = max(EXCERPT_MIN, EXCERPT_BUDGET // max(1, min(leading, 5)))
 
     def lookup(document_id):
         if document_id not in cache:
-            cache[document_id] = library.attachment(document_id, student_id, excerpt=True) if library else None
+            cache[document_id] = (library.attachment(document_id, student_id, excerpt=True, excerpt_limit=excerpt_limit)
+                                  if library else None)
         return cache[document_id]
 
     for index, original in enumerate(history):
@@ -71,8 +83,10 @@ def prepare_attachment_history(history, library: MaterialStore | None, student_i
                     if info['id'] not in this_turn:
                         if index == latest_user:
                             item = {key: info[key] for key in ('id', 'name', 'kind', 'units', 'unit_label', 'outline')}
+                            item['chars'] = info.get('chars')
                             if info['id'] not in seen:
                                 item['excerpt'] = info['excerpt']
+                                item['excerpt_complete'] = info.get('excerpt_complete', False)
                             attached.append(item)
                         this_turn.add(info['id'])
                 continue

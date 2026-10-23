@@ -12,6 +12,7 @@ from docx.text.paragraph import Paragraph
 from fastapi import HTTPException
 from openpyxl import load_workbook
 from pptx import Presentation
+from pptx.enum.shapes import MSO_SHAPE_TYPE
 from pypdf import PdfReader
 
 from app.memory.store import Store, ensure_column, new_id, now
@@ -35,12 +36,29 @@ def outline_for(pages: list[tuple[int | None, str]]) -> list[str]:
                 for m in re.finditer(r'^#{1,6}\s+(.+)$', text, re.M)]
     if not headings:
         headings = [text.strip().splitlines()[0] for _, text in pages if text.strip()]
-    return list(dict.fromkeys(h[:200] for h in headings))[:20]
+    # 课件常有几十张幻灯片：大纲要能列到每一张的标题，模型才知道后面讲了什么
+    return list(dict.fromkeys(h[:200] for h in headings))[:80]
 
 
 def _markdown_row(values) -> str:
     return '| ' + ' | '.join(str(v if v is not None else '').replace('|', '\\|').replace('\n', '<br>')
                              for v in values) + ' |'
+
+
+def _slide_texts(shapes, skip_id=None) -> list[str]:
+    """幻灯片里的文字，包括组合图形里的文本框和表格（课件里很常见，只看顶层会漏掉大段内容）。"""
+    parts = []
+    for shape in shapes:
+        if skip_id is not None and shape.shape_id == skip_id:
+            continue
+        if getattr(shape, 'shape_type', None) == MSO_SHAPE_TYPE.GROUP:
+            parts.extend(_slide_texts(shape.shapes))
+            continue
+        if shape.has_text_frame and shape.text.strip():
+            parts.append(shape.text)
+        if getattr(shape, 'has_table', False) and shape.has_table:
+            parts.extend(_markdown_row(cell.text for cell in row.cells) for row in shape.table.rows)
+    return parts
 
 
 def _office_pages(kind: str, data: bytes) -> list[tuple[int, str]]:
@@ -86,13 +104,7 @@ def _office_pages(kind: str, data: bytes) -> list[tuple[int, str]]:
         for number, slide in enumerate(presentation.slides, 1):
             title = slide.shapes.title
             parts = ['# ' + title.text] if title is not None and title.text.strip() else []
-            for shape in slide.shapes:
-                if title is not None and shape.shape_id == title.shape_id:
-                    continue
-                if shape.has_text_frame:
-                    parts.append(shape.text)
-                if shape.has_table:
-                    parts.extend(_markdown_row(cell.text for cell in row.cells) for row in shape.table.rows)
+            parts.extend(_slide_texts(slide.shapes, title.shape_id if title is not None else None))
             if slide.has_notes_slide:
                 notes = slide.notes_slide.notes_text_frame
                 if notes is not None and notes.text.strip():
@@ -259,7 +271,8 @@ class MaterialStore:
                            [(record[0], ' '.join(terms(record[2]))) for record in records])
         return material
 
-    def attachment(self, document_id: str, student_id: str, *, excerpt: bool = False) -> dict | None:
+    def attachment(self, document_id: str, student_id: str, *, excerpt: bool = False,
+                   excerpt_limit: int = 3000) -> dict | None:
         """Owner-scoped attachment metadata, including a bounded first-turn preview."""
         with self.store.connection() as db:
             row = db.execute('SELECT * FROM course_materials WHERE id = ? AND student_id = ?',
@@ -276,9 +289,11 @@ class MaterialStore:
                 for chunk in db.execute('SELECT content FROM course_chunks WHERE document_id = ? ORDER BY rowid',
                                         (document_id,)):
                     preview += ('\n' if preview else '') + chunk['content']
-                    if len(preview) >= 3000:
+                    if len(preview) >= excerpt_limit:
                         break
-                result['excerpt'] = preview[:3000]
+                result['excerpt'] = preview[:excerpt_limit]
+                # 让模型知道这是不是全文：不是全文时只能据可见部分作答，并提示学生按页追问
+                result['excerpt_complete'] = len(preview) <= excerpt_limit and len(preview) >= (row['chars'] or 0) * 0.9
             return result
 
     def list_materials(self, student_id: str, subject_id: str | None = None, unassigned: bool = False) -> list[Material]:

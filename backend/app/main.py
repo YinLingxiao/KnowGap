@@ -89,6 +89,8 @@ def create_app(
     service_models = ServiceModels(ai_settings)
     app.state.vision_store = vision_store
     app.state.service_models = service_models
+    # 对话里发图片时，先走视觉模型转写 / 判错，再交给对话模型
+    chat_service.vision = (vision_store, service_models)
     app.include_router(material_router(library, lambda subject_id: chat_store.subject(subject_id, current_student()) is not None))
     app.include_router(chat_router(chat_store, chat_service))
     from app.chat.attachments import attachment_router; app.include_router(attachment_router(chat_store, library))

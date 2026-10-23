@@ -70,6 +70,46 @@
   overflow-y: auto;
 }
 
+/* 待发送图片：缩略图 + 右上角移除 */
+.pendingImage {
+  position: relative;
+}
+
+.pendingImage > button:first-child {
+  max-width: 120px;
+  margin: 0;
+}
+
+.pendingImage img {
+  max-height: 96px;
+}
+
+.pendingImageRemove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1;
+}
+
+.pendingImageRemove:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+
+.pendingImageRemove:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
 .fileNote {
   padding: 8px 14px 0;
   font-size: 11px;

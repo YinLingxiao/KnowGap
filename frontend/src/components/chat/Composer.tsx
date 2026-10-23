@@ -1,7 +1,8 @@
 "use client";
 
 import {
-  useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent, type KeyboardEvent, type ReactNode,
+  useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type ClipboardEvent, type DragEvent, type KeyboardEvent,
+  type ReactNode,
 } from "react";
 import {
   ArrowLeftRight, ArrowUp, AtSign, Bold, Check, ChevronDown, ChevronLeft, ChevronRight, Code, Dumbbell,
@@ -25,7 +26,8 @@ import type { Problem } from "@/lib/types";
 import { WIDGET_ASK_EVENT } from "./LearningWidget";
 import { QUOTE_TO_COMPOSER_EVENT, SEND_TO_COMPOSER_EVENT, type ComposerTextDetail } from "./SelectionToolbar";
 import { ImageAttach } from "./widgets/ImageAttach";
-import { withImageMarker } from "./widgets/visionData";
+import { ImageThumb } from "./widgets/ImageMarker";
+import { joinDraftImages, splitDraftImages, withLeadingImage } from "./widgets/visionData";
 import { WIDGET_AUTOSEND_EVENT, WIDGET_SEND_EVENT, type WidgetAutoSendDetail, type WidgetSendDetail } from "./widgets/widgetEvents";
 import { FileCard, kindFromName, rememberFile, recalledFile, scaleOf, type FileCardState } from "./FileCard";
 import styles from "./Composer.module.css";
@@ -250,9 +252,13 @@ export function Composer({
   placeholder = "继续提问，或说说你的理解…", hero = false, inputId = COMPOSER_ID,
   conversationId, messages, ensureConversation, onFilesCleared,
 }: ComposerProps) {
-  // 草稿 = 开头的附件标记行 + 正文。输入框和下面所有逻辑只处理正文（value / onChange），标记由这里统一保留
+  // 草稿 = 开头的附件标记行 + 图片标记行 + 正文。输入框和下面所有逻辑只处理正文（value / onChange），标记由这里统一保留
   const parsedDraft = useMemo(() => parseFileMarkers(draft), [draft]);
-  const value = parsedDraft.files.length ? parsedDraft.body : draft;
+  const draftImages = useMemo(
+    () => splitDraftImages(parsedDraft.files.length ? parsedDraft.body : draft),
+    [draft, parsedDraft],
+  );
+  const value = draftImages.text;
   const draftRef = useRef(draft);
   const onChangeRawRef = useRef(onChangeRaw);
   useEffect(() => {
@@ -266,9 +272,24 @@ export function Composer({
     draftRef.current = next;
     onChangeRawRef.current(next);
   }, []);
-  const onChange = useCallback((body: string) => {
-    writeDraft(parseFileMarkers(draftRef.current).files, body);
-  }, [writeDraft]);
+  /** 草稿里除文件标记以外的部分：图片标记行 + 正文 */
+  const bodyOf = useCallback((full: string) => {
+    const parsed = parseFileMarkers(full);
+    return { files: parsed.files, body: parsed.files.length ? parsed.body : full };
+  }, []);
+  const onChange = useCallback((text: string) => {
+    const current = bodyOf(draftRef.current);
+    writeDraft(current.files, joinDraftImages(splitDraftImages(current.body).images, text));
+  }, [bodyOf, writeDraft]);
+  const addImageMarker = useCallback((marker: string) => {
+    const current = bodyOf(draftRef.current);
+    writeDraft(current.files, withLeadingImage(current.body, marker));
+  }, [bodyOf, writeDraft]);
+  const removeImage = useCallback((marker: string) => {
+    const current = bodyOf(draftRef.current);
+    const { images, text } = splitDraftImages(current.body);
+    writeDraft(current.files, joinDraftImages(images.filter((item) => item !== marker), text));
+  }, [bodyOf, writeDraft]);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const composing = useRef(false);
@@ -623,7 +644,8 @@ export function Composer({
     }
   };
 
-  const canSend = Boolean(value.trim() || parsedDraft.files.length) && !generating && !locked && !uploading;
+  const canSend = Boolean(value.trim() || parsedDraft.files.length || draftImages.images.length)
+    && !generating && !locked && !uploading;
   const activeEffort = EFFORT_OPTIONS.find((item) => item.id === effort) ?? EFFORT_OPTIONS[2];
 
   const acceptGhost = () => {
@@ -660,8 +682,7 @@ export function Composer({
       try {
         const image = await uploadImage(file);
         if (epoch !== uploadEpoch.current) return;
-        const current = parseFileMarkers(draftRef.current);
-        writeDraft(current.files, withImageMarker(current.body, image.marker));
+        addImageMarker(image.marker);
         textareaRef.current?.focus();
       } catch (error) {
         if (epoch === uploadEpoch.current) setAttachNote(toApiError(error).message);
@@ -708,7 +729,15 @@ export function Composer({
         current.map((item) => (item.key === key ? { ...item, state: "error", error: message } : item)),
       );
     }
-  }, [conversationId, ensureConversation, generating, locked, updatePending, writeDraft]);
+  }, [addImageMarker, conversationId, ensureConversation, generating, locked, updatePending, writeDraft]);
+
+  // Ctrl+V：剪贴板里的图片和文件直接当附件上传；纯文字照常粘贴
+  const onPaste = useCallback((event: ClipboardEvent<HTMLTextAreaElement>) => {
+    const files = Array.from(event.clipboardData.files);
+    if (files.length === 0) return;
+    event.preventDefault();
+    for (const file of files) void addFile(file);
+  }, [addFile]);
 
   // 首页预建的对话只为承接文件：文件全被移除后通知上层删掉它，避免侧栏出现空对话
   const hadFiles = useRef(false);
@@ -720,12 +749,9 @@ export function Composer({
   }, [conversationId, fileTotal, onFilesCleared]);
 
   const removeFile = useCallback((id: string) => {
-    const existingMarkers = parseFileMarkers(draftRef.current).files;
-    writeDraft(
-      existingMarkers.filter((f) => f.id !== id),
-      value,
-    );
-  }, [value, writeDraft]);
+    const current = bodyOf(draftRef.current);
+    writeDraft(current.files.filter((f) => f.id !== id), current.body);
+  }, [bodyOf, writeDraft]);
 
   const onDragEnter = useCallback((event: DragEvent<HTMLDivElement>) => {
     if (!hasFiles(event)) return;
@@ -1017,8 +1043,15 @@ export function Composer({
             </button>
           </p>
         )}
-        {(pendingFiles.length > 0 || parsedDraft.files.length > 0) && (
+        {(pendingFiles.length > 0 || parsedDraft.files.length > 0 || draftImages.images.length > 0) && (
           <div className={styles.pendingFiles} role="list" aria-label="待发送文件">
+            {draftImages.images.map((marker) => (
+              <div key={marker} className={styles.pendingImage} role="listitem">
+                <ImageThumb imageId={marker.slice("[[kg-image:".length, -2)} />
+                <button type="button" className={styles.pendingImageRemove} aria-label="移除这张图片"
+                  disabled={generating || locked} onClick={() => removeImage(marker)}>×</button>
+              </div>
+            ))}
             {parsedDraft.files.map((file) => {
               const attachment = recalledFile(file.id);
               return <FileCard key={file.id} name={attachment?.name ?? file.name} kind={attachment?.kind}
@@ -1177,6 +1210,7 @@ export function Composer({
                 syncTrigger(event.currentTarget.value, event.currentTarget.selectionStart);
               }}
               onKeyDown={handleKeyDown}
+              onPaste={onPaste}
               placeholder={activeGhost ? "" : placeholder}
             />
             {!value && !parsedDraft.files.length && activeGhost && (
@@ -1470,8 +1504,7 @@ export function Composer({
               <ImageAttach
                 disabled={generating || locked}
                 onUploaded={(img) => {
-                  const current = parseFileMarkers(draftRef.current);
-                  writeDraft(current.files, withImageMarker(current.body, img.marker));
+                  addImageMarker(img.marker);
                   textareaRef.current?.focus();
                 }}
               />

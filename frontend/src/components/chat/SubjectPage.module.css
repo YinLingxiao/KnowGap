@@ -587,6 +587,8 @@
   gap: 6px;
   min-width: 0;
   padding-left: 2px;
+  /* 窄面板里放不下时裁掉，不能盖到右侧的「已解决」按钮上 */
+  overflow: hidden;
 }
 
 .crumbRoot {
@@ -606,6 +608,8 @@
 }
 
 .crumbCurrent {
+  flex: 0 1 auto;
+  min-width: 2.5em;
   overflow: hidden;
   color: var(--text);
   font-size: var(--text-xs);
@@ -1707,6 +1711,14 @@ button.footprintDoneRow:hover {
   }
 
   .usageSlot {
+    display: none;
+  }
+}
+
+/* 更窄时连「Threads ›」也收起，只留标题、状态和按钮 */
+@container panelbar (max-width: 300px) {
+  .crumbRoot,
+  .crumbSep {
     display: none;
   }
 }

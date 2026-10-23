@@ -37,7 +37,14 @@ from app.chat.skills.problem_drill_skill import SEARCH_TOOL, drill_plan, guard_r
 from app.chat.coordination import cancel_deliveries, dispatch, next_delivery, report
 from app.memory.store import new_id
 from app.services.materials import MaterialStore
+from app.vision.pipeline import analyze_image_for_relay
+from app.vision.schemas import VisionAnalyzeRequest
 from app.vision.settings import ServiceModels
+
+IMAGE_MARKER = re.compile(r"\[\[kg-image:(img_[A-Za-z0-9_-]{16,40})\]\]")
+MAX_TURN_IMAGES = 3
+IMAGE_FAILED = ("【图片读取失败】学生发了一张图片，但识图没有成功：{reason}。请如实告诉学生图片没能读取，并说明可以怎么做："
+                "用文字把题目描述一遍，或在「设置 → 模型接入」里开启支持图片的视觉模型。不要假装看到了图片内容。")
 
 logger = logging.getLogger(__name__)
 _PROFILE_LABEL_RE = re.compile(r"^\s*\[(?:Identity|Preference|Context|Activity|Experience)\]\s*")
@@ -95,6 +102,8 @@ class ChatService:
         self.model = model
         self.library = library
         self.settings = settings
+        # (VisionStore, ServiceModels)，由 main.py 在视觉服务创建后挂上；没有时图片按「读取失败」处理
+        self.vision = None
         self.active: dict[str, Generation] = {}
         self.approvals: dict[str, asyncio.Future] = {}
         self.reviews: set[asyncio.Task] = set()
@@ -473,6 +482,49 @@ class ChatService:
             "assistant_message": self._message(student_id, assistant_id),
         })
 
+    async def _read_images(self, student_id: str, history: list[dict], user_message_id: str) -> tuple[list[dict], str]:
+        """把 [[kg-image:...]] 换成对话模型能读的文字；返回新的历史和要放在回复开头的识图卡片。
+
+        只识别本轮学生消息里的图片（最多 3 张）；更早的图片只留一句占位，不重复调视觉模型。
+        """
+        cards: list[str] = []
+        result: list[dict] = []
+        for original in history:
+            if original["role"] != "user" or not IMAGE_MARKER.search(original["content"]):
+                result.append(original)
+                continue
+            row = dict(original)
+            question = IMAGE_MARKER.sub("", row["content"]).strip()
+            if row["id"] != user_message_id:
+                row["content"] = f"（学生发了一张图片）\n{question}".strip()
+                result.append(row)
+                continue
+            blocks: list[str] = []
+            for image_id in list(dict.fromkeys(IMAGE_MARKER.findall(row["content"])))[:MAX_TURN_IMAGES]:
+                try:
+                    if self.vision is None:
+                        raise RuntimeError("视觉服务没有启动")
+                    vision_store, service_models = self.vision
+                    analysis = await analyze_image_for_relay(
+                        VisionAnalyzeRequest(image_id=image_id, prompt=question[:2000], mode="auto"),
+                        service_models, store=vision_store, student_id=student_id,
+                    )
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:  # 识图失败也要让学生知道原因，而不是让模型凭空作答
+                    reason = str(getattr(exc, "detail", "") or exc or type(exc).__name__)
+                    logger.warning("vision analysis failed for %s: %s", image_id, reason)
+                    blocks.append(IMAGE_FAILED.format(reason=reason[:200]))
+                    if question:
+                        blocks.append(f"【学生的提问】\n{question}")
+                    continue
+                blocks.append(analysis["relay_prompt"])
+                if analysis.get("widget_markdown"):
+                    cards.append(analysis["widget_markdown"])
+            row["content"] = "\n\n".join(blocks)
+            result.append(row)
+        return result, "\n\n".join(cards)
+
     def _release(self, generation: Generation) -> None:
         generation.streaming = False
         if self.active.get(generation.conversation_id) is generation:
@@ -495,6 +547,10 @@ class ChatService:
             history = [row for row in history if user_seqs.get(row["reply_to"], row["seq"]) <= user_row["seq"]]
             history.sort(key=lambda row: (user_seqs.get(row["reply_to"], row["seq"]), row["seq"]))
             history, attached_files = prepare_attachment_history(history, self.library, student_id)
+            image_card = ""
+            if not generation.checkpoint:
+                # 续跑时上下文已在检查点里，不再重复调视觉模型
+                history, image_card = await self._read_images(student_id, history, generation.user_message_id)
             user_text = next(row['content'] for row in history if row['id'] == generation.user_message_id)
             interview = self.store.onboarding_status(student_id)
             if interview["conversation_id"] == generation.conversation_id:
@@ -527,10 +583,10 @@ class ChatService:
                 student_id, user_text, None, subject_id,
             )
             if self.library and attached_files:
-                sources = self.library.search(student_id, attachment_query(user_text)[:600], 5,
+                sources = self.library.search(student_id, attachment_query(user_text)[:600], 8,
                                               document_ids=[item['id'] for item in attached_files])
             else:
-                sources = self.library.search_scoped(student_id, user_text[:600], 3, subject_id) if self.library else []
+                sources = self.library.search_scoped(student_id, user_text[:600], 5, subject_id) if self.library else []
             model = self.model()
             finish = "stop"
             role = self.store.role_context(generation.conversation_id)
@@ -616,6 +672,11 @@ class ChatService:
                     state.update(phase="tools", pending=[call], next_call=0, in_flight=False)
                     self._save_checkpoint(generation, state)
                     await self._execute_tools(generation, state, definitions, ctx)
+            if image_card:
+                # 识图卡片（原图圈画 / 电路网表）由服务端放在回复开头，模型只看文字结果
+                parts.append(image_card + "\n\n")
+                if not generation.detached:
+                    queue.put_nowait(("delta", {"text": image_card + "\n\n"}))
             for round_index in range(state["rounds"], MAX_TOOL_ROUNDS):
                 state.update(phase="model", rounds=round_index)
                 self._save_checkpoint(generation, state)

@@ -124,15 +124,15 @@ def test_workbook_read_only_cached_values_preview_size_and_sheet_locations(libra
 
 def test_outline_is_bounded_and_metadata_survives_restart(library):
     document = Document()
-    for number in range(25):
+    for number in range(90):
         document.add_heading(f'标题{number}', level=1)
         document.add_paragraph('内容')
     material = library.add(DEMO_STUDENT, '目录.docx', saved(document))
     restarted = MaterialStore(library.store)
     restarted.initialize()
     info = restarted.attachment(material.id, DEMO_STUDENT, excerpt=True)
-    assert len(info['outline']) == 20 and info['outline'][0] == '标题0'
-    assert info['chars'] > 0 and '标题24' in info['excerpt']
+    assert len(info['outline']) == 80 and info['outline'][0] == '标题0'
+    assert info['chars'] > 0 and '标题89' in info['excerpt']
     assert restarted.attachment(material.id, 'another-student') is None
 
 
@@ -323,7 +323,9 @@ def test_excerpt_retry_and_compressed_history_are_deterministic(tmp_path):
         marker = f"[[file:{info['id']}|正文.txt]]"
         send(client, cid, marker + '\n精读材料', 'file-retry-01')
         send(client, cid, marker + '\n精读材料', 'file-retry-01')
-        assert len(learning_context(model.calls[0])['attached_files'][0]['excerpt']) == 3000
+        first = learning_context(model.calls[0])['attached_files'][0]
+        # 6000 字的材料整份给模型，并标明是全文
+        assert first['excerpt'].replace('\n', '') == '连续材料。' * 1200 and first['excerpt_complete'] is True
         assert (learning_context(model.calls[0])['attached_files'] ==
                 learning_context(model.calls[1])['attached_files'])
         store = client.app.state.chat_service.store
@@ -368,3 +370,18 @@ def test_attachment_search_filters_owner_and_document_ids(library):
     results = library.search(DEMO_STUDENT, 'FCFS', document_ids=[own.id, foreign.id])
     assert [s.document_id for s in results] == [own.id]
     assert library.search(DEMO_STUDENT, 'FCFS', document_ids=[]) == []
+
+
+def test_excerpt_budget_is_shared_and_marks_partial_files(library):
+    long_text = '长材料第一段。' * 5000  # 35000 字，超过单份预算
+    long_doc = library.add(DEMO_STUDENT, '长.txt', long_text.encode())
+    history, attached = prepare_attachment_history(
+        [{'role': 'user', 'content': f'[[file:{long_doc.id}|长.txt]]\n精读', 'status': 'complete'}], library, DEMO_STUDENT)
+    assert len(attached[0]['excerpt']) == 24_000 and attached[0]['excerpt_complete'] is False
+    assert attached[0]['chars'] == len(long_text)
+    docs = [library.add(DEMO_STUDENT, f'{n}.txt', long_text.encode()) for n in range(5)]
+    text = '\n'.join(f'[[file:{d.id}|{n}.txt]]' for n, d in enumerate(docs)) + '\n对比这些材料'
+    _, attached = prepare_attachment_history([{'role': 'user', 'content': text, 'status': 'complete'}],
+                                             library, DEMO_STUDENT)
+    # 五份平分 2.4 万字，但每份不少于 6000 字
+    assert [len(item['excerpt']) for item in attached] == [6000] * 5

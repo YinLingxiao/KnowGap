@@ -427,6 +427,30 @@ export function withImageMarker(draft: string, marker: string): string {
   return body ? `${body}\n${marker}\n` : `${marker}\n`;
 }
 
+const IMAGE_LINE_RE = /^\[\[kg-image:img_[A-Za-z0-9_-]{16,40}\]\]$/;
+
+/** Composer draft: images sit on their own lines before the typed text, so the textarea only shows the text. */
+export function splitDraftImages(body: string): { images: string[]; text: string } {
+  const lines = body.split("\n");
+  const images: string[] = [];
+  let index = 0;
+  while (index < lines.length && IMAGE_LINE_RE.test(lines[index].trim())) {
+    images.push(lines[index].trim());
+    index += 1;
+  }
+  return images.length ? { images, text: lines.slice(index).join("\n") } : { images, text: body };
+}
+
+export function joinDraftImages(images: string[], text: string): string {
+  return images.length ? `${images.join("\n")}\n${text}` : text;
+}
+
+/** Adds an uploaded image to the draft's leading image lines; the same image is not added twice. */
+export function withLeadingImage(body: string, marker: string): string {
+  const { images, text } = splitDraftImages(body);
+  return joinDraftImages(images.includes(marker) ? images : [...images, marker], text);
+}
+
 export function hasVisionMarker(text: string): boolean {
   return MARKER_TEST_RE.test(text);
 }
