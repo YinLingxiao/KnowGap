@@ -19,8 +19,8 @@
 | 空间信息 | `subjects` 表（`store.subject()`，已做学生隔离） |
 | 记忆 | `learner_memories.subject_id = 空间 id`，`kind != 'preference'`（偏好恒为全局记忆，不属于任何空间） |
 | 记忆证据 | `learner_memory_evidence`（`quote` 是学生原话快照，来源对话删除后仍保留） |
-| Thread | `conversations.kind = 'thread'` 且 `subject_id = 空间 id` |
-| Thread 总结/takeaways | `resolve_thread()` 发到空间**主对话**里的总结卡片（`conversation_messages.meta_json.thread_summary`，按 `thread_id` 对应） |
+| 支线 | `conversations.kind = 'thread'` 且 `subject_id = 空间 id` |
+| 支线总结/takeaways | `resolve_thread()` 发到空间**主线**里的总结卡片（`conversation_messages.meta_json.thread_summary`，按 `thread_id` 对应） |
 | 资料 | `course_materials.subject_id = 空间 id` |
 
 ## 字段
@@ -34,7 +34,7 @@
 | `stats` | object | 统计数字，见下 |
 | `misconceptions` | Memory[] | **未解决**的误区（status ∈ suspected / needs_review / improving），按复习优先级排序：needs_review → suspected → improving，同级按 `updated_at` 升序（越久没碰的越靠前） |
 | `mastered` | Memory[] | 已掌握：`kind = mastery` 的记忆 + `status = resolved` 的误区，按 `updated_at` 降序。与 `Subject.progress.mastered` 口径一致 |
-| `threads` | Thread[] | 本空间全部 Thread，open 在前，然后按 `updated_at` 降序 |
+| `threads` | 支线[] | 本空间全部支线，open 在前，然后按 `updated_at` 降序 |
 | `materials` | Material[] | 本空间课程资料（不含正文），按上传时间升序 |
 
 ### `subject`
@@ -60,16 +60,16 @@
 
 Evidence：`quote`（学生原话）、`reason`、`signal`（`supports` 支持该记忆 / `contradicts` 反证）、`conversation_id`、`message_id`、`source_available`（来源对话是否还在）、`created_at`。
 
-### Thread
+### 支线
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
 | `id` / `title` | string | |
 | `status` | `open \| resolved` | |
-| `summary` | string | 已解决 Thread 的总结；open 或没有总结卡片时为 `""` |
+| `summary` | string | 已解决支线的总结；open 或没有总结卡片时为 `""` |
 | `takeaways` | string[] | 同上，没有时为 `[]` |
-| `memory_ids` | string[] | 合并时该 Thread 中产生证据的记忆 id（Thread ↔ 记忆的边） |
-| `anchor_message_id` | string \| null | 从主对话哪条消息分出来的 |
+| `memory_ids` | string[] | 合并时该支线中产生证据的记忆 id（支线 ↔ 记忆的边） |
+| `anchor_message_id` | string \| null | 从主线哪条消息分出来的 |
 | `created_at` / `updated_at` / `resolved_at` | ISO 时间 / null | |
 
 ### Material
@@ -92,7 +92,7 @@ Evidence：`quote`（学生原话）、`reason`、`signal`（`supports` 支持�
 
 ## 空数据时的形状
 
-新建空间、没有任何记忆/Thread/资料时，所有列表都是 `[]`，计数为 `0`，不会缺字段：
+新建空间、没有任何记忆/支线/资料时，所有列表都是 `[]`，计数为 `0`，不会缺字段：
 
 ```json
 {
@@ -147,12 +147,12 @@ Evidence：`quote`（学生原话）、`reason`、`signal`（`supports` 支持�
 | 区块 | 字段 | 来源 |
 | --- | --- | --- |
 | ① 个人易错红榜 | `sections.pitfalls[]`：`memory_id, topic, summary, status, quotes[]` | 直接取 `misconceptions` 前 8 条，`quotes` 是 `signal = supports` 的原话（最多 2 条）。**模型不参与，不会编造证据** |
-| ② Thread 核心结论 | `sections.conclusions[]`：`thread_id, title, summary, takeaways[]` | 已解决且有总结的 Thread，最多 8 条。模型不参与 |
-| ③ 核心公式与适用边界 | `sections.formulas[]`：`name, formula, conditions, pitfall` | 模型从讲义片段、主对话近况、Thread 结论、笔记中提炼；`formula` 用 `$…$` KaTeX |
+| ② 支线核心结论 | `sections.conclusions[]`：`thread_id, title, summary, takeaways[]` | 已解决且有总结的支线，最多 8 条。模型不参与 |
+| ③ 核心公式与适用边界 | `sections.formulas[]`：`name, formula, conditions, pitfall` | 模型从讲义片段、主线近况、支线结论、笔记中提炼；`formula` 用 `$…$` KaTeX |
 | ④ 易混对比 + 押题自测 | `sections.contrasts[]`：`a, b, difference, tip`；`sections.quiz[]`：`question, answer` | 模型生成 |
 
 其它字段：`subject_id`、`subject`（id/name/goal/level/deadline）、`stats`（同 insights）、`generated_at`、`cached`（本次是否命中缓存）、`degraded`、`notice`、`model`、`markdown`（整页 Markdown，前端「导出 Markdown」直接下载它）。
 
 降级：模型未配置、报错或超过 60 秒 → 仍返回 200，`degraded: true`，③④ 为 `[]`，`notice` 说明原因，①② 照常。模型返回内容不可用（非 JSON/全空）→ `degraded: false`，③④ 为空，带 `notice`。
 
-缓存：成功结果存 `subject_cheatsheets` 表（由 cheatsheet.py 自建，键 `(student_id, subject_id)`，不改 store.py 的表结构），按「聚合数据（不含 stats）+ notes」的指纹判断是否过期：新增误区/证据、Thread 合并、上传资料、改空间信息或笔记都会让下次打开重新生成；只是多聊几句不会。降级结果不缓存。跨学生访问同样 404。
+缓存：成功结果存 `subject_cheatsheets` 表（由 cheatsheet.py 自建，键 `(student_id, subject_id)`，不改 store.py 的表结构），按「聚合数据（不含 stats）+ notes」的指纹判断是否过期：新增误区/证据、支线合并、上传资料、改空间信息或笔记都会让下次打开重新生成；只是多聊几句不会。降级结果不缓存。跨学生访问同样 404。

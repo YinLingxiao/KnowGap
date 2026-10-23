@@ -25,5 +25,5 @@ export function reminderDelay(task: ReminderTask, now: number, delivered: Readon
 export function reminderBody(task: Pick<AgendaTask, "scheduledStartAt" | "durationMinutes">, subjectName?: string): string {
   return [task.scheduledStartAt?.slice(11, 16) + " 开始",
     task.durationMinutes == null ? null : `${task.durationMinutes} 分钟`, subjectName || "未归入空间"]
-    .filter(Boolean).join(" · ") + "\n点击开始专注";
+    .filter(Boolean).join(" · ");
 }

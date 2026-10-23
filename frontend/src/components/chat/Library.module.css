@@ -1,0 +1,387 @@
+/* 资料库：文件管理器式的列表。颜色只用 globals.css 变量，窄面板下收起「规模」列。 */
+.library {
+  container: library / inline-size;
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  padding: 10px 10px 0;
+}
+
+.dragging::after {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  border: 1.5px dashed var(--accent);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  pointer-events: none;
+}
+
+.toolbar {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.filter {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  margin-right: auto;
+  color: var(--text-secondary);
+}
+
+.filter select {
+  height: 28px;
+  padding: 0 24px 0 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  appearance: none;
+}
+
+.filter select:hover {
+  background: var(--bg-hover);
+}
+
+.filter select:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.filter svg {
+  position: absolute;
+  right: 7px;
+  pointer-events: none;
+}
+
+.views {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
+}
+
+.views button {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 22px;
+  border-radius: 4px;
+  color: var(--text-tertiary);
+  transition: background-color var(--t-hover) var(--ease-out), color var(--t-hover) var(--ease-out);
+}
+
+.views button:hover {
+  color: var(--text);
+}
+
+.views .viewOn {
+  background: var(--bg-elevated);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 18%), var(--edge-hi);
+  color: var(--text);
+}
+
+.add {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 10px 0 8px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-solid);
+  color: var(--on-accent);
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+.add:hover {
+  background: var(--accent-solid-hover);
+}
+
+.views button:focus-visible,
+.add:focus-visible,
+.headCell:focus-visible,
+.name:focus-visible,
+.actions button:focus-visible,
+.card:focus-visible,
+.empty:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: -1px;
+}
+
+.error {
+  flex-shrink: 0;
+  margin: 0 0 8px;
+  color: var(--red);
+  font-size: var(--text-xs);
+}
+
+.table {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.row {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 76px 64px 56px;
+  align-items: center;
+  column-gap: 8px;
+  min-height: 32px;
+  padding: 0 6px;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+}
+
+.row:not(.head):hover {
+  background: var(--bg-hover);
+}
+
+.head {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  min-height: 28px;
+  margin-bottom: 2px;
+  background: var(--bg-subtle);
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.headCell {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 22px;
+  color: inherit;
+  font: inherit;
+  white-space: nowrap;
+}
+
+.headCell:hover {
+  color: var(--text);
+}
+
+.name {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  height: 100%;
+  min-height: 32px;
+  color: var(--text);
+  text-align: left;
+}
+
+.name > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.name svg {
+  flex-shrink: 0;
+  color: var(--text-secondary);
+}
+
+.name .folder {
+  color: var(--accent);
+}
+
+.chevronSpace {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 12px;
+}
+
+.cell {
+  overflow: hidden;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nestedRow .name {
+  padding-left: 14px;
+}
+
+.deepRow .name {
+  padding-left: 30px;
+}
+
+.nested {
+  margin: 0;
+  padding: 6px 6px 6px 34px;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+/* 悬停时才出现的行内操作，盖在「类型」列上 */
+.actions {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  display: none;
+  align-items: center;
+  gap: 2px;
+  padding-left: 16px;
+  transform: translateY(-50%);
+  background: linear-gradient(90deg, transparent, var(--bg-hover) 16px);
+}
+
+.row:hover .actions,
+.row:focus-within .actions,
+.card:hover .actions,
+.card:focus-within .actions {
+  display: inline-flex;
+}
+
+.actions button {
+  display: inline-grid;
+  place-items: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 5px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+}
+
+.actions button:hover {
+  color: var(--text);
+}
+
+.actions .danger,
+.actions .danger:hover {
+  background: var(--red);
+  color: #fff;
+  font-weight: 500;
+}
+
+.grid {
+  display: grid;
+  flex: 1;
+  min-height: 0;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  align-content: start;
+  gap: 8px;
+  overflow-y: auto;
+}
+
+.card {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+  text-align: left;
+  transition: border-color var(--t-hover) var(--ease-out), background-color var(--t-hover) var(--ease-out);
+}
+
+.card:hover {
+  border-color: var(--border-strong);
+  background: var(--bg-hover);
+}
+
+.card strong {
+  display: -webkit-box;
+  width: 100%;
+  margin-top: 6px;
+  overflow: hidden;
+  color: var(--text);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.card span {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.card .actions {
+  top: 8px;
+  right: 8px;
+  transform: none;
+  padding-left: 0;
+  background: none;
+}
+
+.empty {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-bottom: 10px;
+  padding: 24px;
+  border: 1.5px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+  color: var(--text-tertiary);
+  text-align: center;
+  transition: border-color var(--t-hover) var(--ease-out), background-color var(--t-hover) var(--ease-out);
+}
+
+.empty:hover {
+  border-color: var(--accent);
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+}
+
+.empty strong {
+  color: var(--text);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.empty span {
+  max-width: 28ch;
+  font-size: var(--text-xs);
+  line-height: 1.6;
+}
+
+.footer {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 6px 10px;
+  border-top: 1px solid var(--border-subtle);
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+@container library (max-width: 400px) {
+  .row {
+    grid-template-columns: minmax(0, 1fr) 76px 56px;
+  }
+
+  .row > :nth-child(3) {
+    display: none;
+  }
+}

@@ -87,7 +87,7 @@ export function SpacesPage(props: SpacesPageProps) {
           <div className={styles.titleGroup}>
             <h1>学习空间</h1>
             <span className={styles.summaryBadge}>
-              {props.subjects.length} 空间 · {totalOpenThreads} 进行中 Thread · {totalReview} 待巩固
+              {props.subjects.length} 空间 · {totalOpenThreads} 进行中支线 · {totalReview} 待巩固
             </span>
           </div>
 
@@ -239,7 +239,7 @@ export function SpacesPage(props: SpacesPageProps) {
                   </div>
                   <span className={styles.meta}>
                     {studiedLabel(subject.progress.lastStudiedAt)}
-                    {subject.progress.openThreads > 0 && ` · ${subject.progress.openThreads} 个 Thread 进行中`}
+                    {subject.progress.openThreads > 0 && ` · ${subject.progress.openThreads} 个支线进行中`}
                     {subject.progress.toReview > 0 && ` · ${subject.progress.toReview} 个待巩固`}
                   </span>
                 </button>
@@ -258,7 +258,7 @@ export function SpacesPage(props: SpacesPageProps) {
                 )}
                 {confirmId === subject.id && (
                   <div className={cx(styles.menu, styles.confirm)}>
-                    <span>删除后，主对话和 Thread 会变成普通对话。</span>
+                    <span>删除后，主线和支线会变成普通对话。</span>
                     <div className={styles.confirmBtns}>
                       <button onClick={() => { setConfirmId(null); setMenuId(null); }}>取消</button>
                       <button

@@ -22,11 +22,13 @@ from app.models.schemas import (
 from app.services.problems import PROBLEMS
 from app.services.teaching import teach
 from app.services.ai_settings import AISettings
+from app.services.chatgpt_auth import ChatGPTAuth
 from app.services.anysearch import AnySearchClient, SearchService
 from app.models.schemas import WebSearchResponse
 from app.services.materials import MaterialStore
 from app.api.materials import material_router
 from app.auth.deps import current_student, reset_student, set_student
+from app.services.file_store import FileStore
 from app.auth.router import auth_router
 from app.auth.store import AuthStore
 from app.chat.router import chat_router
@@ -36,7 +38,6 @@ from app.chat.store import ChatStore
 from app.agenda.router import agenda_router
 from app.code_sandbox.router import sandbox_router
 from app.demo.router import demo_router
-from app.focus.router import focus_router
 from app.vision.router import vision_router
 from app.vision.settings import ServiceModels
 from app.vision.store import VisionStore
@@ -57,12 +58,18 @@ def create_app(
     settings = settings or Settings()
     store = Store(settings.resolved_database_path())
     library = MaterialStore(store)
+    file_store = FileStore(store)
+    library.originals = file_store
     ai_settings = AISettings(settings)
-    model = tutor if tutor is not None else ChatCompletionsTutor(ai_settings.current)
+    chatgpt_auth = ChatGPTAuth(settings)
+    ai_settings.chatgpt = chatgpt_auth
+    model = tutor if tutor is not None else ChatCompletionsTutor(ai_settings.current, chatgpt_auth=chatgpt_auth)
     search = search_service if search_service is not None else AnySearchClient(settings)
-    chat = chat_model if chat_model is not None else ChatCompletionsChat(ai_settings.current)
+    chat = chat_model if chat_model is not None else ChatCompletionsChat(
+        ai_settings.current, chatgpt_auth=chatgpt_auth)
     chat_store = ChatStore(store)
     chat_service = ChatService(chat_store, lambda: chat, library, ai_settings)
+    chat_service.files = file_store
     auth_store = AuthStore(store)
 
     @asynccontextmanager
@@ -70,6 +77,7 @@ def create_app(
         store.initialize()
         auth_store.ensure()
         library.initialize()
+        file_store.initialize()
         chat_store.initialize()
         await run_in_threadpool(shared_ssl_context)
         chat_service.recover()
@@ -77,6 +85,7 @@ def create_app(
             yield
         finally:
             await chat_service.close()
+            chatgpt_auth.close()
 
     app = FastAPI(title="KnowGap API", version="0.2.0", lifespan=lifespan)
     app.state.store = store
@@ -91,16 +100,21 @@ def create_app(
     app.state.service_models = service_models
     # 对话里发图片时，先走视觉模型转写 / 判错，再交给对话模型
     chat_service.vision = (vision_store, service_models)
+
+    async def read_scanned_pdf(data: bytes):
+        from app.services.pdf_ocr import ocr_pdf
+        return await ocr_pdf(data, service_models)
+    library.ocr = read_scanned_pdf
     app.include_router(material_router(library, lambda subject_id: chat_store.subject(subject_id, current_student()) is not None))
     app.include_router(chat_router(chat_store, chat_service))
     from app.chat.attachments import attachment_router; app.include_router(attachment_router(chat_store, library))
+    from app.chat.files_router import files_router; app.include_router(files_router(file_store))
     from app.chat.plan_router import plan_router; app.include_router(plan_router(chat_store))
     app.include_router(agenda_router(chat_store, chat))
     app.include_router(subject_router(chat_store, chat_service))
     app.include_router(auth_router(auth_store, chat_store, settings))
     app.include_router(sandbox_router(allowed_origins=settings.cors_origins))
     app.include_router(vision_router(vision_store, service_models, cors_origins=settings.cors_origins))
-    app.include_router(focus_router(store))
     app.include_router(demo_router(chat_store))
 
     @app.middleware("http")
@@ -153,6 +167,9 @@ def create_app(
         if origin and not _local_page(origin) and origin not in settings.cors_origins:
             raise HTTPException(403, "此页面无权访问 AI 配置。")
 
+    from app.api.chatgpt import chatgpt_router
+    app.include_router(chatgpt_router(chatgpt_auth, ai_settings, require_local_configuration))
+
     @app.get("/api/ai/config")
     def get_ai_config(request: Request, response: Response):
         require_local_configuration(request)
@@ -184,7 +201,7 @@ def create_app(
         require_local_configuration(request)
         candidate = ai_settings.candidate(body) if body is not None else ai_settings.current
         # Exercise the actual structured tutor output, without saving a session or memory.
-        await ChatCompletionsTutor(candidate).generate({
+        await ChatCompletionsTutor(candidate, chatgpt_auth=chatgpt_auth).generate({
             "phase": "initial", "current_answer": "栈遵循后进先出。",
             "problem": {"prompt": "说明栈的出入顺序。"},
             "reference": {"explanation": "栈遵循后进先出。"},

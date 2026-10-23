@@ -50,7 +50,7 @@ def test_main_short_acceptance_keeps_the_offer_and_existing_thread_context(tmp_p
         store = client.app.state.chat_service.store
         source = store.add_user_message(cid, "我想练链表", "routing-offer-source")
         reply = store.start_reply(cid, source, [])
-        offer = "要不要在当前链表 Thread 练一下头插法？"
+        offer = "要不要在当前链表支线练一下头插法？"
         store.finish_reply(reply, content=offer, status="complete")
         thread = store.create_thread("demo-student-001", space["id"], title="链表练习",
                                      anchor_message_id=source, client_request_id="routing-existing-thread")

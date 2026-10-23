@@ -4,6 +4,8 @@ const http = require("http");
 const fs = require("fs");
 const net = require("net");
 const path = require("path");
+const { windowChromeOptions, applyWindowTheme } = require("./window-chrome");
+const { createStartup } = require("./startup");
 
 // 页面 origin 随端口变化，换端口会丢掉 localStorage（登录、演示模式、草稿等），所以优先复用固定端口
 const PREFERRED_PORT = 38617;
@@ -11,6 +13,7 @@ const PREFERRED_PORT = 38617;
 let backend = null;
 let stopping = false;
 let mainWindow = null;
+let startup = null;
 let quickWindow = null;
 let quickShortcut = null;
 let quickFallbackTried = false;
@@ -18,8 +21,8 @@ let appOrigin = "";
 let tray = null;
 let quitting = false;
 let revealOnReady = false;
-let settings = { closeToTray: true, openAtLogin: false, backgroundNotified: false };
-let trayStatus = { focus: null, todayCount: 0 };
+let settings = { closeToTray: true, openAtLogin: false, backgroundNotified: false, theme: "system" };
+let trayStatus = { todayCount: 0 };
 
 const QUICK_SHORTCUTS = ["Alt+Space", "CommandOrControl+Shift+K"];
 const QUICK_WIDTH = 640;
@@ -97,10 +100,12 @@ function loadSettings() {
       closeToTray: data.closeToTray !== false,
       openAtLogin: data.openAtLogin === true,
       backgroundNotified: data.backgroundNotified === true,
+      theme: data.theme === "light" || data.theme === "dark" ? data.theme : "system",
     };
   } catch {
-    settings = { closeToTray: true, openAtLogin: false, backgroundNotified: false };
+    settings = { closeToTray: true, openAtLogin: false, backgroundNotified: false, theme: "system" };
   }
+  nativeTheme.themeSource = settings.theme;
 }
 
 function saveSettings() {
@@ -110,6 +115,7 @@ function saveSettings() {
       closeToTray: settings.closeToTray,
       openAtLogin: settings.openAtLogin,
       backgroundNotified: settings.backgroundNotified,
+      theme: settings.theme,
     }));
   } catch {
     // 写失败时本次会话仍用内存里的开关
@@ -192,13 +198,22 @@ ipcMain.handle("select-folder", async (_event, defaultPath) => {
 ipcMain.handle("set-theme", (_event, theme) => {
   const next = theme === "light" || theme === "dark" ? theme : "system";
   nativeTheme.themeSource = next;
-  const bg = nativeTheme.shouldUseDarkColors ? "#111215" : "#ffffff";
-  for (const win of BrowserWindow.getAllWindows()) {
-    // 快问浮窗是透明窗口，设置底色会让面板外的区域变成实色
-    if (!win.isDestroyed() && win !== quickWindow) win.setBackgroundColor(bg);
+  if (settings.theme !== next) {
+    settings.theme = next;
+    saveSettings();
   }
+  syncMainWindowTheme();
   return nativeTheme.shouldUseDarkColors ? "dark" : "light";
 });
+
+function syncMainWindowTheme() {
+  // 不触碰透明快问窗口；系统主题改变时也同步原生标题栏按钮。
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  applyWindowTheme(mainWindow, process.platform, nativeTheme.shouldUseDarkColors);
+  startup?.setTheme(nativeTheme.shouldUseDarkColors);
+}
+
+nativeTheme.on("updated", syncMainWindowTheme);
 
 function placeQuickWindow() {
   const cursor = screen.getCursorScreenPoint();
@@ -332,16 +347,9 @@ function toggleMain() {
   else showMain();
 }
 
-function cleanFocus(value) {
-  if (typeof value !== "string") return null;
-  const text = value.trim();
-  return text ? text.slice(0, 120) : null;
-}
-
 function setTrayStatus(patch) {
   if (!patch || typeof patch !== "object") return;
   let menuDirty = false;
-  if ("focus" in patch) trayStatus.focus = cleanFocus(patch.focus);
   if ("todayCount" in patch && typeof patch.todayCount === "number" && Number.isFinite(patch.todayCount)) {
     const next = Math.max(0, Math.round(patch.todayCount));
     if (next !== trayStatus.todayCount) {
@@ -349,7 +357,6 @@ function setTrayStatus(patch) {
       menuDirty = true;
     }
   }
-  if (tray) tray.setToolTip(trayStatus.focus || "KnowGap");
   if (menuDirty) refreshTrayMenu();
 }
 
@@ -365,7 +372,6 @@ function buildTrayMenu() {
   return Menu.buildFromTemplate([
     { label: "打开 KnowGap", click: () => showMain() },
     { label: key ? `快问（${key}）` : "快问", click: () => showQuickWindow() },
-    { label: "开始专注 25 分钟", click: () => sendTrayCommand("start-focus") },
     { label: `今日待办 ${trayStatus.todayCount} 项`, click: () => sendTrayCommand("open-agenda") },
     { type: "separator" },
     {
@@ -394,7 +400,7 @@ function buildTrayMenu() {
 function refreshTrayMenu() {
   if (!tray) return;
   tray.setContextMenu(buildTrayMenu());
-  tray.setToolTip(trayStatus.focus || "KnowGap");
+  tray.setToolTip("KnowGap");
 }
 
 function trayImage() {
@@ -445,8 +451,41 @@ ipcMain.handle("get-desktop-settings", () => publicSettings());
 
 ipcMain.handle("set-desktop-settings", (_event, patch) => applySettingsPatch(patch));
 
+function createMainWindow() {
+  mainWindow = new BrowserWindow({
+    width: 1280,
+    height: 820,
+    minWidth: 900,
+    minHeight: 600,
+    show: false,
+    title: "KnowGap",
+    icon: path.join(__dirname, "icon.ico"),
+    backgroundColor: nativeTheme.shouldUseDarkColors ? "#08080a" : "#ffffff",
+    ...windowChromeOptions(process.platform, nativeTheme.shouldUseDarkColors),
+    autoHideMenuBar: true,
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+      additionalArguments: ["--knowgap-main-window"],
+      contextIsolation: true,
+      nodeIntegration: false,
+      backgroundThrottling: false,
+    },
+  });
+  mainWindow.on("close", (event) => {
+    if (quitting || !settings.closeToTray) return;
+    event.preventDefault();
+    hideMainToTray();
+  });
+  mainWindow.on("closed", () => {
+    startup?.dispose();
+    startup = null;
+    mainWindow = null;
+    // 隐藏的浮窗也算打开的窗口，主窗口关掉时一并销毁，否则 window-all-closed 不会触发
+    if (quickWindow && !quickWindow.isDestroyed()) quickWindow.destroy();
+  });
+}
+
 async function open() {
-  const port = await pickPort();
   const exe = backendPath();
   const folder = staticPath();
   if (!fs.existsSync(exe)) {
@@ -455,6 +494,25 @@ async function open() {
   if (!fs.existsSync(path.join(folder, "index.html"))) {
     throw new Error(`找不到前端静态资源：${folder}\n请重新安装 KnowGap。`);
   }
+  createMainWindow();
+  try {
+    startup = createStartup(mainWindow, {
+      logoPath: path.join(folder, "brand", "knowgap-logo.svg"),
+      dark: nativeTheme.shouldUseDarkColors,
+      platform: process.platform,
+    });
+    await startup.ready;
+  } catch (error) {
+    // Optional animation must never prevent the application from starting.
+    console.warn("[KnowGap] 启动动效加载失败，直接打开应用", error);
+    startup?.dispose();
+    startup = null;
+  }
+  if (stopping || !mainWindow || mainWindow.isDestroyed()) return;
+  if (revealOnReady || !process.argv.includes("--hidden")) showMain();
+
+  const port = await pickPort();
+  if (stopping || !mainWindow || mainWindow.isDestroyed()) return;
   console.log(`[KnowGap] 数据目录：${app.getPath("userData")}`);
   backend = spawn(exe, ["--port", String(port), "--static", folder], {
     env: { ...process.env, KNOWGAP_DATA_DIR: app.getPath("userData") },
@@ -468,43 +526,23 @@ async function open() {
     if (stopping) return;
     const reason = code === null ? `信号 ${signal}` : `退出码 ${code}`;
     console.error(`[KnowGap] 后端意外退出（${reason}）`);
-    // 后端退出后窗口只剩报错页，直接提示用户重启，避免以为应用还在正常工作。
     dialog.showErrorBox("KnowGap", `后端已退出（${reason}），请重启应用。`);
   });
   await waitHealth(port);
+  if (stopping || !mainWindow || mainWindow.isDestroyed()) return;
   rememberPort(port);
+  startup?.setStatus("正在打开学习空间");
   appOrigin = `http://127.0.0.1:${port}`;
-  mainWindow = new BrowserWindow({
-    width: 1280,
-    height: 820,
-    minWidth: 900,
-    minHeight: 600,
-    show: false,
-    title: "KnowGap",
-    icon: path.join(__dirname, "icon.ico"),
-    backgroundColor: nativeTheme.shouldUseDarkColors ? "#111215" : "#ffffff",
-    autoHideMenuBar: true,
-    webPreferences: {
-      preload: path.join(__dirname, "preload.js"),
-      contextIsolation: true,
-      nodeIntegration: false,
-      backgroundThrottling: false,
-    },
-  });
-  mainWindow.on("close", (event) => {
-    if (quitting || !settings.closeToTray) return;
-    event.preventDefault();
-    hideMainToTray();
-  });
-  mainWindow.on("closed", () => {
-    mainWindow = null;
-    // 隐藏的浮窗也算打开的窗口，主窗口关掉时一并销毁，否则 window-all-closed 不会触发
-    if (quickWindow && !quickWindow.isDestroyed()) quickWindow.destroy();
-  });
   await mainWindow.loadURL(`${appOrigin}/`);
+  try {
+    await startup?.finish();
+  } catch (error) {
+    console.warn("[KnowGap] 启动过渡已跳过", error);
+  }
+  startup = null;
+  if (stopping || !mainWindow || mainWindow.isDestroyed()) return;
   registerQuickShortcut();
   refreshTrayMenu();
-  if (revealOnReady || !process.argv.includes("--hidden")) showMain();
 }
 
 if (!app.requestSingleInstanceLock()) {
@@ -533,6 +571,8 @@ if (!app.requestSingleInstanceLock()) {
 
 app.on("before-quit", () => {
   quitting = true;
+  startup?.dispose();
+  startup = null;
   if (quickWindow && !quickWindow.isDestroyed()) quickWindow.destroy();
   if (tray) {
     tray.destroy();

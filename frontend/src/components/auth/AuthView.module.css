@@ -1,5 +1,5 @@
 .canvas {
-  min-height: 100dvh;
+  min-height: calc(100dvh - var(--desktop-titlebar-height));
   display: grid;
   place-items: center;
   padding: 24px;

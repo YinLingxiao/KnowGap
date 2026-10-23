@@ -115,7 +115,8 @@ def test_workbook_read_only_cached_values_preview_size_and_sheet_locations(libra
     assert first.startswith('# 成绩1\n总行数：205；总列数：3')
     assert '| 姓名 | 分数 | 公式 |' in first and '| --- | --- | --- |' in first
     assert '学生200' in first and '学生201' not in first
-    assert '=1+2' not in first  # data_only: no cached value is not a zero or a formula string
+    # openpyxl 写出的公式没有缓存结果：不当成 0，显示公式本身（并在 notes 里说明）
+    assert '| 学生2 | 2 | =1+2 |' in first and '| 学生2 | 2 | 0 |' not in first
     material = library.add(DEMO_STUDENT, '成绩.xlsx', workbook_bytes())
     metadata = library.attachment(material.id, DEMO_STUDENT)
     assert metadata['outline'] == ['成绩1', '成绩2'] and metadata['unit_label'] == '个工作表'
@@ -137,10 +138,10 @@ def test_outline_is_bounded_and_metadata_survives_restart(library):
 
 
 @pytest.mark.parametrize('name', ['a.doc', 'a.ppt', 'a.xls'])
-def test_legacy_binary_formats_have_actionable_415(name):
+def test_corrupt_legacy_binary_formats_have_actionable_422(name):
     with pytest.raises(HTTPException) as error:
         extract(name, b'old binary')
-    assert error.value.status_code == 415 and '请另存为 .docx/.pptx/.xlsx' in error.value.detail
+    assert error.value.status_code == 422 and '另存为' in error.value.detail
 
 
 @pytest.mark.parametrize('name,data,code,detail', [
@@ -213,7 +214,7 @@ def test_both_upload_routes_accept_new_formats(tmp_path, name, factory, kind, la
         response = client.post(f'/api/conversations/{cid}/attachments', files={'file': (name, data)})
         assert response.status_code == 201, response.text
         info = response.json()
-        assert set(info) == {'id', 'name', 'kind', 'units', 'unit_label', 'chars', 'outline', 'subject_id'}
+        assert set(info) == {'id', 'name', 'kind', 'units', 'unit_label', 'chars', 'outline', 'subject_id', 'notes'}
         assert info['name'] == name and info['kind'] == kind and info['unit_label'] == label
         assert info['units'] > 0 and info['chars'] > 0 and len(info['outline']) <= 20
         assert info['subject_id'] is None
@@ -247,7 +248,7 @@ def test_attachment_upload_owner_and_space_scope(tmp_path):
 
 
 @pytest.mark.parametrize('name,data,status', [
-    ('old.doc', b'x', 415), ('scan.pdf', blank_pdf(), 422),
+    ('old.doc', b'x', 422), ('scan.pdf', blank_pdf(), 422),
     ('large.md', b'x' * (MAX_UPLOAD_BYTES + 1), 413),
 ], ids=['legacy', 'scan', 'byte-limit'])
 def test_attachment_errors_do_not_index(tmp_path, name, data, status):

@@ -37,7 +37,7 @@ test('persisted task + time keys deduplicate reloads but allow rescheduling', ()
   assert.equal(reminderDelay({ ...task, reminderMinutes: 5 }, at, restored), 300_000);
 });
 
-test('notification copy names time, duration, space and click action', () => {
-  assert.equal(reminderBody({ ...task, durationMinutes: 45 }, '电路原理'), '10:00 开始 · 45 分钟 · 电路原理\n点击开始专注');
-  assert.equal(reminderBody({ ...task, durationMinutes: null }), '10:00 开始 · 未归入空间\n点击开始专注');
+test('notification copy names time, duration and space', () => {
+  assert.equal(reminderBody({ ...task, durationMinutes: 45 }, '电路原理'), '10:00 开始 · 45 分钟 · 电路原理');
+  assert.equal(reminderBody({ ...task, durationMinutes: null }), '10:00 开始 · 未归入空间');
 });

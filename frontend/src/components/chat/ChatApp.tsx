@@ -35,7 +35,6 @@ import { GettingStarted } from "../onboarding/GettingStarted";
 import { HelpCenter, type HelpAction } from "../onboarding/HelpCenter";
 import { ModelGate, Welcome } from "../onboarding/Welcome";
 import { CHEATSHEET_OPENED_EVENT, OPEN_SPACE_PANEL_EVENT, cheatsheetSeenKey } from "../onboarding/coach";
-import { FOCUS_START_EVENT } from "@/lib/agenda/types";
 import { SpacesPage } from "./SpacesPage";
 import { AgendaPage } from "../agenda/AgendaPage";
 import { ReminderScheduler } from "../agenda/ReminderScheduler";
@@ -43,7 +42,6 @@ import { TaskComposer } from "../agenda/TaskComposer";
 import { OPEN_AGENDA_EVENT } from "./AgendaToolCard";
 import { SubjectPage } from "./SubjectPage";
 import { SubjectPicker } from "./SubjectPicker";
-import { FocusCapsule } from "../focus/FocusCapsule";
 import { TodayPanel } from "../home/TodayPanel";
 import todayStyles from "../home/TodayPanel.module.css";
 import styles from "./ChatApp.module.css";
@@ -101,7 +99,6 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
   const chat = useChat(push, user.id);
   const [narrow, setNarrow] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [zen, setZen] = useState(false);
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [memoryFocus, setMemoryFocus] = useState<string[]>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -445,7 +442,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
   const appBlocked = modelBlocked || gate !== "app";
 
   return (
-    <div className={cx(styles.app, (appBlocked || !sidebarOpen || zen) && styles.sidebarClosed, narrow && styles.narrow, zen && styles.zen)} data-coachmark="spotlight">
+    <div className={cx(styles.app, (appBlocked || !sidebarOpen) && styles.sidebarClosed, narrow && styles.narrow)} data-coachmark="spotlight">
       <CoachmarkHost userId={user.id} enabled={!appBlocked} />
       <ReminderScheduler userId={user.id} subjects={chat.subjects} />
       <DesktopBridge />
@@ -467,7 +464,6 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
             activeId={view.type === "chat" ? chat.activeId : null}
             activeSubjectId={view.type === "subject" ? view.id : null}
             generatingIds={generatingIds}
-            memoryCount={chat.memories.length}
             modelIssue={modelConfigured === false}
             materialsActive={materialsOpen}
             onNewChat={() => { setView({ type: "chat" }); chat.newChat(); closeOverlays(); }}
@@ -478,7 +474,6 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
             spacesActive={view.type === "spaces"}
             onOpenAgenda={() => { setView({ type: "agenda" }); closeOverlays(); }}
             agendaActive={view.type === "agenda"}
-            focusSlot={<FocusCapsule zen={zen} onZenChange={setZen} contextSubjectId={contextSubjectId} />}
             onRename={chat.renameConversation}
             onDelete={chat.deleteConversation}
             onRetry={() => void chat.refreshList()}
@@ -528,7 +523,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
             onOpenSidebar={() => setSidebarOpen(true)}
             onOpenThread={(threadId, subjectId) => {
               if (!subjectId) return showConversation(threadId);
-              // 学习空间页挂载时会恢复上次打开的面板，预先写入即可直接打开这个 Thread
+              // 学习空间页挂载时会恢复上次打开的面板，预先写入即可直接打开这个支线
               try {
                 localStorage.setItem(`knowgap.space.panel.v1:${API_BASE_URL}:${subjectId}`,
                   JSON.stringify({ mode: "thread", id: threadId }));
@@ -786,11 +781,6 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
                   document.getElementById(COMPOSER_ID)?.focus();
                 }}
                 onSchedule={() => setView({ type: "agenda" })}
-                onFocus={() => {
-                  window.dispatchEvent(new CustomEvent(FOCUS_START_EVENT, {
-                    detail: { taskId: null, title: "专注学习", subjectId: contextSubjectId },
-                  }));
-                }}
                 onSheet={() => {
                   const space = recentSpaces[0];
                   if (!space) {
@@ -893,11 +883,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
             else if (action === "viva") openMain("/viva ");
             else if (action === "plan") openMain("先列一个学习计划，再讲第一个概念");
             else if (action === "review" || action === "agenda" || action === "schedule") setView({ type: "agenda" });
-            else if (action === "focus") {
-              window.dispatchEvent(new CustomEvent(FOCUS_START_EVENT, {
-                detail: { taskId: null, title: "专注学习", subjectId: contextSubjectId },
-              }));
-            } else if (action === "graph" || action === "sheet") {
+            else if (action === "graph" || action === "sheet") {
               if (!space) { setView({ type: "spaces" }); return; }
               setView({ type: "subject", id: space.id });
               window.setTimeout(() => {

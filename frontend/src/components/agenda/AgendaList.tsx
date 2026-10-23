@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { Check, ChevronRight, MessagesSquare, Play, Plus, Repeat } from "lucide-react";
+import { Check, ChevronRight, MessagesSquare, Plus, Repeat } from "lucide-react";
 import type { AgendaTask, AgendaThread } from "@/lib/agenda/types";
 import { cx } from "@/lib/cx";
 import {
@@ -27,8 +27,6 @@ export interface AgendaListProps {
   onOpenTask: (task: AgendaTask) => void;
   onOpenThread: (thread: AgendaThread) => void;
   onToggleDone: (task: AgendaTask) => void;
-  onFocusTask: (task: AgendaTask) => void;
-  onFocusThread: (thread: AgendaThread) => void;
   onToggleGroup: (key: GroupKey) => void;
   onToggleParent: (taskId: string) => void;
   /** 节末「+ 添加任务」 */
@@ -287,18 +285,6 @@ function TaskRow(props: AgendaListProps & { node: TaskNode; task: AgendaTask; ch
         )}
         {!done && <DeadlineTag deadline={task.deadlineDate} today={today} />}
       </span>
-
-      {!done ? (
-        <button
-          type="button"
-          className={styles.focusBtn}
-          aria-label={`专注：${task.title}`}
-          onClick={(event) => { event.stopPropagation(); props.onFocusTask(task); }}
-        >
-          <Play size={10} fill="currentColor" aria-hidden />
-          专注
-        </button>
-      ) : <span className={styles.focusSlot} />}
     </div>
   );
 }
@@ -321,8 +307,8 @@ function ThreadRow(props: AgendaListProps & { node: Extract<AgendaNode, { kind: 
       <span className={styles.expand} />
       <span className={styles.threadIcon} aria-hidden><MessagesSquare size={13} /></span>
       <button type="button" className={styles.main} tabIndex={-1} onClick={() => { props.onSelect(key); props.onOpenThread(thread); }}>
-        <span className={cx(styles.badge, styles.badgeThread)} title="空间里进行中的 Thread，点击打开">
-          进行中 Thread
+        <span className={cx(styles.badge, styles.badgeThread)} title="空间里进行中的支线，点击打开">
+          进行中支线
         </span>
         <span className={styles.title}>{thread.title}</span>
       </button>
@@ -333,15 +319,6 @@ function ThreadRow(props: AgendaListProps & { node: Extract<AgendaNode, { kind: 
         </span>
         <DeadlineTag deadline={thread.deadlineDate} today={props.today} />
       </span>
-      <button
-        type="button"
-        className={styles.focusBtn}
-        aria-label={`专注：${thread.title}`}
-        onClick={(event) => { event.stopPropagation(); props.onFocusThread(thread); }}
-      >
-        <Play size={10} fill="currentColor" aria-hidden />
-        专注
-      </button>
     </div>
   );
 }

@@ -16,7 +16,6 @@ import type { DataSource } from "@/lib/config";
 import { cx } from "@/lib/cx";
 import { THEME_LABEL, useThemeChoice, type ThemeChoice } from "../ThemeToggle";
 import type { AIConfigStatus } from "@/lib/api/ai-config";
-import { FocusHeatmap } from "../focus/FocusHeatmap";
 import { ModelAccessCard, type ModelSignal } from "./ModelAccessCard";
 import { ServiceModelsSection } from "./ServiceModelsSection";
 import { useDevMode, writeDevMode } from "@/lib/devMode";
@@ -25,6 +24,7 @@ import styles from "./Settings.module.css";
 declare global {
   interface Window {
     knowgap?: {
+      windowChrome?: { platform: "win32" | "darwin" | "linux" };
       selectFolder: (defaultPath?: string) => Promise<string | null>;
       setTheme?: (theme: "system" | "light" | "dark") => Promise<string>;
       /** 主窗口：快问浮窗请求打开某个对话；未订阅时桌面壳会刷新主窗口 */
@@ -38,7 +38,7 @@ declare global {
         onShown: (listener: () => void) => () => void;
       };
       showMain?: () => void;
-      setTrayStatus?: (status: { focus?: string | null; todayCount?: number }) => void;
+      setTrayStatus?: (status: { todayCount?: number }) => void;
       getDesktopSettings?: () => Promise<{ closeToTray: boolean; openAtLogin: boolean }>;
       setDesktopSettings?: (
         patch: Partial<{ closeToTray: boolean; openAtLogin: boolean }>,
@@ -93,6 +93,7 @@ const WIDTHS: Array<{ id: ChatWidth; label: string }> = [
   { id: "narrow", label: "紧凑" },
   { id: "medium", label: "标准" },
   { id: "wide", label: "宽屏" },
+  { id: "full", label: "全宽" },
 ];
 const MOTIONS: Array<{ id: MotionChoice; label: string }> = [
   { id: "system", label: "跟随系统" },
@@ -120,26 +121,26 @@ const SKILLS = [
   {
     key: "deep_explain",
     name: "深度原理精讲",
-    role: "Thread 优先注入",
+    role: "支线优先注入",
     desc: "一句话交代主线 → 列三步计划 → 构造贯穿全文的最小例子 → 根据用户偏好调整推导顺序",
   },
   {
     key: "socratic_practice",
     name: "启发式带练与诊断",
-    role: "Thread 优先注入",
+    role: "支线优先注入",
     desc: "结合校验过的练习判据与用户互动偏好，先确认正确部分，再用最小步进提示引导思考",
   },
   {
     key: "study_note_builder",
     name: "结构化图解讲义构建",
-    role: "Thread 优先注入",
+    role: "支线优先注入",
     desc: "梳理概念框架、编写贯穿示例与对比表，支持在工作区生成结构化文档或代码演练",
   },
   {
     key: "roadmap_planner",
     name: "学习路线规划",
-    role: "项目主对话专属",
-    desc: "对齐空间目标、基础与截止日，跳过已掌握知识点，针对薄弱点拆解候选 Thread",
+    role: "项目主线专属",
+    desc: "对齐空间目标、基础与截止日，跳过已掌握知识点，针对薄弱点拆解候选支线",
   },
 ];
 
@@ -401,7 +402,7 @@ function GeneralPane({ userId }: { userId: string }) {
           onChange={(textSize) => patch({ ...look, textSize })}
         />
       </SettingRow>
-      <SettingRow title="对话列宽" desc="调整对话流与底部输入框的最大阅读宽度。">
+      <SettingRow title="对话列宽" desc="调整对话流与底部输入框的宽度：紧凑适合专注阅读，全宽会铺满整个对话区。">
         <Pills
           label="对话列宽"
           value={look.width}
@@ -470,7 +471,7 @@ function PreferencesPane() {
         ))}
         <button className={styles.rowBtnPrimary} type="submit" disabled={busy}>记住这些偏好</button>
       </form>
-      <SettingRow title="演示数据" desc="删掉本账号里导入的演示空间、日程和专注记录。">
+      <SettingRow title="演示数据" desc="删掉本账号里导入的演示空间和日程。">
         <button
           className={styles.rowBtn}
           type="button"
@@ -1013,8 +1014,6 @@ function ReflectPane() {
   return (
     <section>
       <h2 className={styles.sectionTitle}>复盘 (Reflect)</h2>
-      <p className={styles.sectionLabel}>近 12 周专注</p>
-      <FocusHeatmap />
       <div className={styles.reflectStats}>
         <div className={styles.reflectStatCard}>
           <span className={styles.reflectStatValue}>{toReview.length}</span>
@@ -1222,15 +1221,15 @@ function WorkspacePane() {
 }
 
 const SKILL_ROLES: Array<{ id: "thread" | "chat" | "main"; label: string }> = [
-  { id: "thread", label: "Thread 执行" },
+  { id: "thread", label: "支线执行" },
   { id: "chat", label: "平行对话" },
-  { id: "main", label: "空间主对话" },
+  { id: "main", label: "空间主线" },
 ];
 
 const ROLE_LABEL: Record<"thread" | "chat" | "main", string> = {
-  thread: "Thread 注入",
+  thread: "支线注入",
   chat: "平行对话注入",
-  main: "主对话注入",
+  main: "主线注入",
 };
 
 /** 解析上传的 SKILL.md / .md / .txt 文件（支持可选 YAML frontmatter） */
@@ -1334,7 +1333,7 @@ function SkillsPane() {
         <div>
           <h2 className={styles.sectionTitle}>技能 (Skills)</h2>
           <p className={styles.settingRowDesc}>
-            支持上传 <code>.md</code> / <code>SKILL.md</code> / <code>.txt</code> 技能文件，按角色（Thread / 平行对话 / 主对话）自动注入系统提示。
+            支持上传 <code>.md</code> / <code>SKILL.md</code> / <code>.txt</code> 技能文件，按角色（支线 / 平行对话 / 主线）自动注入系统提示。
           </p>
         </div>
         <div className={styles.skillHeadActions}>

@@ -16,7 +16,6 @@ interface GettingStartedProps {
   onExplain: () => void;
   onQuiz: () => void;
   onSchedule: () => void;
-  onFocus: () => void;
   onSheet: () => void;
 }
 
@@ -25,13 +24,12 @@ const ITEMS = [
   ["explained", "讲懂一个概念", "onExplain"],
   ["answered", "答对一道小题", "onQuiz"],
   ["scheduled", "让 AI 排一次复习", "onSchedule"],
-  ["focused", "完成一次专注", "onFocus"],
   ["sheet", "打开考前一页纸", "onSheet"],
 ] as const;
 
 export function GettingStarted(props: GettingStartedProps) {
   const { userId } = props;
-  const [flags, setFlags] = useState({ explained: false, answered: false, scheduled: false, focused: false });
+  const [flags, setFlags] = useState({ explained: false, answered: false, scheduled: false });
   const [sheet, setSheet] = useState(false);
   const [hidden, setHidden] = useState(false);
   const [celebrating, setCelebrating] = useState(false);
@@ -69,7 +67,6 @@ export function GettingStarted(props: GettingStartedProps) {
     explained: flags.explained,
     answered: flags.answered,
     scheduled: flags.scheduled,
-    focused: flags.focused,
     sheet,
   };
   const allDone = ITEMS.every(([key]) => done[key]);
@@ -83,7 +80,7 @@ export function GettingStarted(props: GettingStartedProps) {
   if (celebrating) {
     return (
       <section className={styles.done} role="status">
-        <p>六件事都做完了</p>
+        <p>五件事都做完了</p>
         <button
           type="button"
           onClick={() => {
@@ -102,7 +99,6 @@ export function GettingStarted(props: GettingStartedProps) {
     onExplain: props.onExplain,
     onQuiz: props.onQuiz,
     onSchedule: props.onSchedule,
-    onFocus: props.onFocus,
     onSheet: props.onSheet,
   };
 

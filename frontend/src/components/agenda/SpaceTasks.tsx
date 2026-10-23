@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowUpRight, CalendarClock, CircleAlert, RotateCcw } from "lucide-react";
 import { describeError } from "@/lib/api/errors";
 import { agendaApi } from "@/lib/agenda/api";
@@ -8,7 +8,7 @@ import { AGENDA_CHANGED_EVENT, type AgendaTask, type AgendaThread } from "@/lib/
 import { cx } from "@/lib/cx";
 import { AgendaList, useListState, type SubjectInfo } from "./AgendaList";
 import {
-  buildSpaceGroups, compareSiblings, deadlineInfo, dispatchCompose, dispatchFocusStart, monthDay, taskKey,
+  buildSpaceGroups, compareSiblings, deadlineInfo, dispatchCompose, monthDay, taskKey,
   type AgendaGroup,
 } from "./agendaModel";
 import { TaskInspector } from "./TaskInspector";
@@ -64,20 +64,13 @@ interface SpaceTaskListProps {
   onOpenSpace?: () => void;
 }
 
-/** 某个学习空间的未完成任务：进行中 Thread / 闪回复习 / 任务（日程页与学习空间页共用） */
+/** 某个学习空间的未完成任务：进行中支线 / 闪回复习 / 任务（日程页与学习空间页共用） */
 export function SpaceTaskList(props: SpaceTaskListProps) {
   const { subject, tasks, threads, today } = props;
   const list = useListState();
   const progress = useSpaceProgress(subject.id);
   const groups = useMemo(() => buildSpaceGroups(tasks, threads, subject.id), [tasks, threads, subject.id]);
   const deadline = deadlineInfo(subject.deadline, today);
-
-  const focusTask = useCallback((task: AgendaTask) => {
-    dispatchFocusStart({ taskId: task.id, title: task.title, subjectId: task.subjectId });
-  }, []);
-  const focusThread = useCallback((thread: AgendaThread) => {
-    dispatchFocusStart({ taskId: null, title: thread.title, subjectId: thread.subjectId });
-  }, []);
 
   return (
     <div className={styles.view}>
@@ -119,8 +112,6 @@ export function SpaceTaskList(props: SpaceTaskListProps) {
           onOpenTask={props.onOpenTask}
           onOpenThread={props.onOpenThread}
           onToggleDone={props.onToggleDone}
-          onFocusTask={focusTask}
-          onFocusThread={focusThread}
           onToggleGroup={list.toggleGroup}
           onToggleParent={list.toggleParent}
           onCompose={(defaults) => dispatchCompose(defaults)}

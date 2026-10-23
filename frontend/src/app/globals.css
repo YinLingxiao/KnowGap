@@ -5,7 +5,7 @@
     "Microsoft YaHei UI", "Microsoft YaHei", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", "Cascadia Code", "SF Mono", Consolas, monospace;
 
-  /* 浅色模式 Linear Alabaster & Ink：浅雾灰底壳衬托纯白悬浮主画布 */
+  /* 浅色模式：浅雾灰侧栏与贴边白色主画布 */
   --bg-app-shell: #f1f3f6;
   --bg: #ffffff;
   --bg-sidebar: #f1f3f6;
@@ -104,13 +104,16 @@
   --sidebar-w: 244px;
   --panel-w: 360px;
   --topbar-h: 52px;
-  --chat-w: 680px;
+  --chat-w: 740px;
+  --chat-bubble-w: 620px;
+  --desktop-titlebar-height: 0px;
 }
 
 :root[data-text-size="small"] { --text-read: 14px; }
 :root[data-text-size="large"] { --text-read: 16.5px; }
-:root[data-chat-width="narrow"] { --chat-w: 620px; }
-:root[data-chat-width="wide"] { --chat-w: 800px; }
+:root[data-chat-width="narrow"] { --chat-w: 620px; --chat-bubble-w: 580px; }
+:root[data-chat-width="wide"] { --chat-w: 960px; --chat-bubble-w: 760px; }
+:root[data-chat-width="full"] { --chat-w: 100%; --chat-bubble-w: 960px; }
 :root[data-motion="reduced"],
 :root[data-motion="reduced"] *,
 :root[data-motion="reduced"] *::before,
@@ -249,6 +252,45 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+}
+
+/* Electron paints the caption buttons; the page supplies a matching, draggable
+   surface. A normal browser and the transparent quick panel reserve no space. */
+:root[data-desktop-platform] {
+  --desktop-titlebar-height: 36px;
+}
+
+:root[data-desktop-platform] body {
+  padding-top: var(--desktop-titlebar-height);
+}
+
+.desktop-titlebar {
+  display: none;
+}
+
+:root[data-desktop-platform] .desktop-titlebar {
+  position: fixed;
+  z-index: 30;
+  top: 0;
+  left: env(titlebar-area-x, 0px);
+  display: flex;
+  align-items: center;
+  width: env(titlebar-area-width, calc(100% - 138px));
+  height: var(--desktop-titlebar-height);
+  padding: 0 16px;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+  user-select: none;
+  -webkit-app-region: drag;
+}
+
+:root[data-desktop-platform="darwin"] .desktop-titlebar {
+  left: 0;
+  width: 100%;
+  padding-left: 80px;
 }
 
 h1,

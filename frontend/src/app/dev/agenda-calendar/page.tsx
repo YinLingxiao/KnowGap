@@ -77,7 +77,7 @@ export default function AgendaCalendarPreview() {
     <p role="status" style={{ color: "var(--text-secondary)", fontSize: 12 }}>{message}</p>
     <div style={{ flex: 1, minHeight: 0 }}>
       <WeekCalendar weekStart={week} today={today} tasks={tasks} threads={threads} onWeekChange={setWeek}
-        onSelectTask={id => setMessage(`选中任务：${tasks.find(value => value.id === id)?.title}`)} onSelectThread={() => setMessage("选中 Thread：节点法的适用边界")}
+        onSelectTask={id => setMessage(`选中任务：${tasks.find(value => value.id === id)?.title}`)} onSelectThread={() => setMessage("选中支线：节点法的适用边界")}
         onReschedule={(id, patch) => { setTasks(current => current.map(value => value.id === id ? { ...value, ...patch } : value)); setMessage(`已排期 ${id}：${JSON.stringify(patch)}`); }}
         onCreateAt={slot => { setTasks(current => [...current, task(crypto.randomUUID(), { title: "新学习任务", ...slot, durationMinutes: slot.scheduledStartAt ? 30 : null })]); setMessage(`已本地创建：${slot.scheduledStartAt ?? `${slot.scheduledDate} 全天`}`); }} />
     </div>

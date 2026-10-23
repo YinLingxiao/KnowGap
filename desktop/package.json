@@ -1,6 +1,6 @@
 {
   "name": "knowgap-desktop",
-  "version": "0.5.2",
+  "version": "0.5.5",
   "description": "KnowGap（知隙）桌面端：本地学习助手",
   "author": "KnowGap",
   "private": true,
@@ -17,7 +17,7 @@
     "appId": "app.knowgap.desktop",
     "productName": "KnowGap",
     "directories": { "output": "dist" },
-    "files": ["main.js", "preload.js", "icon.ico", "icon.png"],
+    "files": ["main.js", "preload.js", "window-chrome.js", "startup.js", "startup.html", "icon.ico", "icon.png"],
     "extraResources": [
       { "from": "../frontend/out", "to": "frontend" },
       { "from": "../backend/dist/knowgap", "to": "backend" }

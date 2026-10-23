@@ -8,7 +8,8 @@ import { formatFileMarker, type FileAttachment } from "@/lib/chat/attachments";
 import type { ChatMessage } from "@/lib/chat/types";
 
 const slides: FileAttachment = { id: "doc-preview-slides", name: "第3章 进程调度.pptx", kind: "pptx",
-  units: 24, unitLabel: "张幻灯片", chars: 18342, outline: [], subjectId: null };
+  units: 24, unitLabel: "张幻灯片", chars: 18342, outline: [], subjectId: null,
+  notes: ["第 4 张幻灯片含图片（共 1 张），图片里的文字没有读取。"] };
 const table: FileAttachment = { ...slides, id: "doc-preview-table", name: "实验数据.xlsx", kind: "xlsx", units: 3, unitLabel: "个工作表" };
 
 function userMessage(content: string): ChatMessage {

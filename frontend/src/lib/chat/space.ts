@@ -38,8 +38,8 @@ export function progressLine(progress: SpaceProgress): string {
   if (progress.toReview) parts.push(`${progress.toReview} 个待巩固`);
   if (progress.mastered) parts.push(`${progress.mastered} 个已掌握`);
   if (progress.improving) parts.push(`${progress.improving} 个改善中`);
-  if (progress.openThreads) parts.push(`${progress.openThreads} 个 Thread 未解决`);
-  else if (progress.resolvedThreads) parts.push(`${progress.resolvedThreads} 个 Thread 已解决`);
+  if (progress.openThreads) parts.push(`${progress.openThreads} 个支线未解决`);
+  else if (progress.resolvedThreads) parts.push(`${progress.resolvedThreads} 个支线已解决`);
   if (parts.length === 0) parts.push("还没有进度");
   parts.push(studiedLabel(progress.lastStudiedAt));
   return parts.join(" · ");

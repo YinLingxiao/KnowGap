@@ -253,34 +253,6 @@
   color: var(--text-tertiary);
 }
 
-.ghostTabBadge {
-  position: relative;
-  z-index: 2;
-  display: inline-flex;
-  align-items: center;
-  height: 18px;
-  margin-left: 6px;
-  padding: 0 5px;
-  border: 1px solid var(--border-strong);
-  border-bottom-width: 2px;
-  border-radius: 4px;
-  background: var(--bg-subtle);
-  color: var(--text-tertiary);
-  font-family: var(--font-mono);
-  font-size: var(--text-2xs);
-  font-weight: 500;
-  line-height: 1;
-  vertical-align: middle;
-  pointer-events: auto;
-  cursor: pointer;
-}
-
-.ghostTabBadge:hover {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-  color: var(--accent-text);
-}
-
 /* 底栏 */
 .toolbar {
   container: composer-toolbar / inline-size;
@@ -884,7 +856,7 @@
   color: var(--on-ink);
 }
 
-/* 窄输入框（学习空间窄列、Thread 面板）按自身宽度收起模型名，避免底栏挤成多行 */
+/* 窄输入框（学习空间窄列、支线面板）按自身宽度收起模型名，避免底栏挤成多行 */
 @container composer-toolbar (max-width: 380px) {
   .effortModel,
   .effortModel + .effortLevel {

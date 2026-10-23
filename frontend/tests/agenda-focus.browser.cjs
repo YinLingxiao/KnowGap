@@ -55,19 +55,6 @@ const path = require('node:path');
         await closed();
         console.log(`PASS ${theme} ${view}: header button, open/close${view === 'space' ? ', prefilled space' : ''}`);
       }
-      // Verify the three preset cells on the actual rendered focus popover.
-      await page.getByRole('button', { name: '专注', exact: true }).click();
-      const group = page.getByRole('group', { name: '专注时长' });
-      const cells = group.getByRole('button');
-      assert.deepEqual(await cells.allTextContents(), ['15', '25', '45']);
-      const boxes = await cells.evaluateAll(nodes => nodes.map(node => {
-        const r = node.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, right: r.right };
-      }));
-      assert.ok(boxes.every(box => box.y === boxes[0].y && Math.abs(box.width - boxes[0].width) < 1));
-      assert.ok(await group.evaluate(el => el.scrollWidth <= el.clientWidth));
-      await screenshot(`${theme}-focus`);
-      await page.keyboard.press('Escape');
-      console.log(`PASS ${theme} focus: three equal cells, no overflow`);
     }
 
     await agenda.locator('h1').click();
@@ -140,16 +127,6 @@ const path = require('node:path');
       }
       console.log(`PASS reduced motion (${mode}): three open / close cycles`);
     }
-
-    // Old persisted selection must not leave the three-cell picker unselected.
-    await page.evaluate(() => localStorage.setItem('knowgap.focus.v1', JSON.stringify({ phase: 'idle', presetSeconds: 10 })));
-    await page.reload();
-    await add.waitFor();
-    await page.getByRole('button', { name: '专注', exact: true }).click();
-    assert.equal(await page.getByRole('group', { name: '专注时长' }).getByRole('button', { name: '25', exact: true }).getAttribute('aria-pressed'), 'true');
-    assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('knowgap.focus.v1')).presetSeconds), 1500);
-    await page.keyboard.press('Escape');
-    console.log('PASS legacy persisted selection migrates to 25 minutes');
 
     for (const width of [1024, 768, 390]) {
       await page.setViewportSize({ width, height: 850 });

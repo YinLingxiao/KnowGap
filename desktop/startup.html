@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="__THEME__" data-platform="__PLATFORM__">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+  <title>KnowGap</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #ffffff;
+      --text: #111318;
+      --muted: #525866;
+      --accent: #3b82f6;
+      --ease: cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    :root[data-theme="dark"] {
+      color-scheme: dark;
+      --bg: #08080a;
+      --text: #f2f3f5;
+      --muted: #989ea8;
+      --accent: #4f80f5;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: transparent; }
+    body {
+      color: var(--text);
+      font-family: "Segoe UI", "Microsoft YaHei UI", system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      user-select: none;
+    }
+    .surface { position: fixed; inset: 0; background: var(--bg); }
+    .drag {
+      position: absolute;
+      top: 0;
+      left: env(titlebar-area-x, 0px);
+      width: env(titlebar-area-width, calc(100% - 138px));
+      height: 36px;
+      -webkit-app-region: drag;
+    }
+    :root[data-platform="darwin"] .drag { left: 80px; width: calc(100% - 80px); }
+    .identity {
+      position: absolute;
+      inset: 36px 24px 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      padding-bottom: 40px;
+      text-align: center;
+    }
+    .mark { width: 88px; height: 88px; margin-bottom: 20px; }
+    .mark svg { display: block; width: 100%; height: 100%; overflow: visible; }
+    .piece { transform-box: fill-box; transform-origin: center; }
+    .piece-0 { animation: foundation-in 640ms var(--ease) both; }
+    .piece-1 { animation: upper-in 640ms 55ms var(--ease) both; }
+    .piece-2 { animation: lower-in 640ms 105ms var(--ease) both; }
+    .piece-3 { animation: connection-in 420ms 180ms var(--ease) both; }
+    .piece-4 { animation: spark-in 360ms 270ms var(--ease) both; }
+    h1 {
+      font-size: 28px;
+      line-height: 1.25;
+      font-weight: 600;
+      letter-spacing: -0.035em;
+      animation: name-in 500ms 140ms var(--ease) both;
+    }
+    .name {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+      animation: name-in 500ms 200ms var(--ease) both;
+    }
+    .status {
+      position: absolute;
+      top: calc(50% + 120px);
+      left: 24px;
+      right: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 20px;
+      animation: status-in 360ms 260ms var(--ease) both;
+    }
+    .activity { display: inline-flex; align-items: center; gap: 3px; }
+    .activity i {
+      width: 3px;
+      height: 3px;
+      border-radius: 50%;
+      background: var(--accent);
+      animation: working 1400ms 700ms ease-in-out infinite;
+    }
+    .activity i:nth-child(2) { animation-delay: 850ms; }
+    .activity i:nth-child(3) { animation-delay: 1000ms; }
+    :root[data-paused] *, :root[data-finishing] * { animation-play-state: paused !important; }
+    @keyframes foundation-in { from { opacity: 0; transform: translateX(-140px); } }
+    @keyframes upper-in { from { opacity: 0; transform: translate(125px, -125px); } }
+    @keyframes lower-in { from { opacity: 0; transform: translate(125px, 125px); } }
+    @keyframes connection-in { from { opacity: 0; transform: scale(0.72); } }
+    @keyframes spark-in { from { opacity: 0; transform: scale(0.55); } }
+    @keyframes name-in { from { opacity: 0; filter: blur(3px); transform: translateY(5px); } }
+    @keyframes status-in { from { opacity: 0; } }
+    @keyframes working { 0%, 70%, 100% { opacity: 0.3; } 35% { opacity: 1; } }
+    @media (prefers-reduced-motion: reduce) {
+      *, .activity i { animation: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <main class="surface" aria-label="KnowGap 正在启动" aria-busy="true">
+    <div class="drag" aria-hidden="true"></div>
+    <div class="identity">
+      <div class="mark" aria-hidden="true">__STARTUP_LOGO__</div>
+      <h1>KnowGap</h1>
+      <p class="name">知隙</p>
+    </div>
+    <div class="status" role="status" aria-live="polite">
+      <span class="activity" aria-hidden="true"><i></i><i></i><i></i></span>
+      <span id="status-text">正在启动本地服务</span>
+    </div>
+  </main>
+  <script>
+    window.knowgapStartup = {
+      setTheme(dark) { document.documentElement.dataset.theme = dark ? 'dark' : 'light'; },
+      setPaused(paused) { document.documentElement.toggleAttribute('data-paused', paused); },
+      setStatus(text) { document.getElementById('status-text').textContent = text; },
+      finish() {
+        const surface = document.querySelector('.surface');
+        surface.setAttribute('aria-busy', 'false');
+        document.documentElement.setAttribute('data-finishing', '');
+        const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+        return surface.animate([{ opacity: 1 }, { opacity: 0 }], {
+          duration: reduced ? 80 : 220, easing: 'ease-out', fill: 'forwards',
+        }).finished.then(() => undefined).catch(() => undefined);
+      },
+    };
+    document.addEventListener('visibilitychange', () => window.knowgapStartup.setPaused(document.hidden));
+  </script>
+</body>
+</html>

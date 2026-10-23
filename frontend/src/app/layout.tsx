@@ -26,6 +26,9 @@ const THEME_SCRIPT = `(function(){try{var t=localStorage.getItem("knowgap.theme"
  *  否则带 background-color 过渡的卡片/按钮会比页面底色慢半拍，切换瞬间出现黑卡片 */
 const SYSTEM_THEME_SCRIPT = `(function(){try{var root=document.documentElement,timer=0;window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change",function(){if(root.dataset.theme)return;root.classList.add("theme-switching");clearTimeout(timer);timer=setTimeout(function(){root.classList.remove("theme-switching");},260);});}catch(e){}})();`;
 
+/** 在首帧前预留桌面标题栏高度；浏览器与快问浮窗不启用。 */
+const DESKTOP_CHROME_SCRIPT = `(function(){var c=window.knowgap&&window.knowgap.windowChrome;if(c&&["win32","darwin","linux"].includes(c.platform))document.documentElement.dataset.desktopPlatform=c.platform;})();`;
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -34,10 +37,14 @@ export default function RootLayout({
   return (
     <html lang="zh-CN" suppressHydrationWarning>
       <head>
+        <script dangerouslySetInnerHTML={{ __html: DESKTOP_CHROME_SCRIPT }} />
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
         <script dangerouslySetInnerHTML={{ __html: SYSTEM_THEME_SCRIPT }} />
       </head>
-      <body>{children}</body>
+      <body>
+        <div className="desktop-titlebar" aria-hidden="true"><span>KnowGap</span></div>
+        {children}
+      </body>
     </html>
   );
 }

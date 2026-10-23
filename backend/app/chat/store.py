@@ -428,7 +428,7 @@ class ChatStore:
             if row is None:
                 return False
             if subject_id is not UNSET and subject_id != row["subject_id"] and (row["kind"] or "chat") != "chat":
-                raise ValueError("主对话和 Thread 属于学习空间，不能单独移出。")
+                raise ValueError("主线和支线属于学习空间，不能单独移出。")
             if title is not UNSET:
                 db.execute("UPDATE conversations SET title = ?, title_source = 'user' WHERE id = ?",
                            (title, conversation_id))
@@ -626,13 +626,13 @@ class ChatStore:
                     (anchor_message_id, subject.main_conversation_id),
                 ).fetchone()
                 if anchor is None:
-                    raise LookupError("锚点消息不在主对话里。")
+                    raise LookupError("锚点消息不在主线里。")
             thread_id = new_id("conv")
             db.execute(
                 "INSERT INTO conversations(id, student_id, title, title_source, client_request_id, subject_id, kind, "
                 "parent_id, anchor_message_id, thread_status, created_at, updated_at) "
                 "VALUES (?, ?, ?, ?, ?, ?, 'thread', ?, ?, 'open', ?, ?)",
-                (thread_id, student_id, title or "新 Thread", "user" if title else "pending", client_request_id,
+                (thread_id, student_id, title or "新支线", "user" if title else "pending", client_request_id,
                  subject_id, subject.main_conversation_id, anchor_message_id, timestamp, timestamp),
             )
             return thread_id
@@ -678,7 +678,7 @@ class ChatStore:
             if row is None:
                 raise LookupError("会话不存在或已删除。")
             if row["kind"] != "thread" or not row["parent_id"]:
-                raise ValueError("只有 Thread 可以合并回主对话。")
+                raise ValueError("只有支线可以合并回主线。")
             existing = self._summary_message(db, row["parent_id"], conversation_id)
             if row["thread_status"] == "resolved" and existing:
                 card = json.loads(existing["meta_json"])["thread_summary"]
@@ -688,7 +688,7 @@ class ChatStore:
                 "SELECT DISTINCT memory_id FROM learner_memory_evidence WHERE conversation_id = ? ORDER BY memory_id",
                 (conversation_id,),
             )]
-            lines = [f"Thread「{title}」已解决", "", summary]
+            lines = [f"支线「{title}」已解决", "", summary]
             if takeaways:
                 lines += ["", *[f"- {item}" for item in takeaways]]
             message_id = self._insert(
@@ -712,7 +712,7 @@ class ChatStore:
             if row is None:
                 return False
             if row["kind"] != "thread":
-                raise ValueError("只有 Thread 可以重新打开。")
+                raise ValueError("只有支线可以重新打开。")
             db.execute(
                 "UPDATE conversations SET thread_status = 'open', resolved_at = NULL, updated_at = ? WHERE id = ?",
                 (now(), conversation_id),
@@ -735,7 +735,7 @@ class ChatStore:
                 "SELECT kind FROM conversations WHERE id = ? AND student_id = ?", (conversation_id, student_id),
             ).fetchone()
             if row is not None and row["kind"] == "main":
-                raise ValueError("主对话不能单独删除，请删除整个学习空间。")
+                raise ValueError("主线不能单独删除，请删除整个学习空间。")
             cursor = db.execute(
                 "DELETE FROM conversations WHERE id = ? AND student_id = ?", (conversation_id, student_id),
             )
@@ -779,6 +779,8 @@ class ChatStore:
             suggested_problem_id=meta.get("suggested_problem_id"),
             sources=[SourceReference(**source) for source in meta.get("sources", [])],
             truncated=bool(meta.get("truncated")),
+            reasoning=str(meta.get("reasoning") or ""),
+            files=[item for item in meta.get("files", []) if isinstance(item, dict) and item.get("id")],
             tool_calls=[ToolCallRecord(**item) for item in meta.get("tool_calls", []) if isinstance(item, dict) and item.get("id") and item.get("name")],
             thread_summary=self._thread_summary(meta.get("thread_summary")),
             thread_update=ThreadUpdate(**meta["thread_update"]) if meta.get("thread_update") else None,
@@ -1140,22 +1142,15 @@ class ChatStore:
                 (student_id,),
             ).fetchone()
             scheduled = None
-            focused = None
             if "agenda_tasks" in tables:
                 scheduled = db.execute(
                     "SELECT 1 FROM agenda_tasks WHERE student_id = ? AND source = 'ai_breakdown' LIMIT 1",
-                    (student_id,),
-                ).fetchone()
-            if "focus_sessions" in tables:
-                focused = db.execute(
-                    "SELECT 1 FROM focus_sessions WHERE student_id = ? AND status = 'completed' LIMIT 1",
                     (student_id,),
                 ).fetchone()
         return {
             "explained": explained is not None,
             "answered": answered is not None,
             "scheduled": scheduled is not None,
-            "focused": focused is not None,
         }
 
     def learning_preferences(self, student_id: str) -> dict:

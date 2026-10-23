@@ -4,10 +4,18 @@ pydantic
 pydantic-settings
 python-dotenv
 httpx[socks]>=0.28,<1
+google-auth[requests]>=2.40,<3
+pyjwt[crypto]>=2.9,<3
 pypdf>=5,<7
 python-docx==1.2.0
 python-pptx==1.0.2
 openpyxl==3.1.5
+# 旧版 .xls / .ppt / .doc 的读取
+xlrd==2.0.2
+olefile==0.47
+# 生成 PDF（嵌入中文字体）与渲染扫描版 PDF 的页面图像
+reportlab>=4.2,<6
+pypdfium2>=4.30,<6
 python-multipart>=0.0.20,<1
 # search_good_problems / problem_drill：公式校验与网页正文抽取
 sympy==1.14.0

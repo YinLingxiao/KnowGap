@@ -99,7 +99,7 @@ def subject_router(store: ChatStore, service=None) -> APIRouter:
             raise HTTPException(404, str(exc)) from None
         conversation = store.conversation(thread_id, current_student())
         if conversation is None:
-            raise HTTPException(404, "Thread 不存在或已删除。")
+            raise HTTPException(404, "支线不存在或已删除。")
         return conversation
 
     @router.delete("/{subject_id}", status_code=204)

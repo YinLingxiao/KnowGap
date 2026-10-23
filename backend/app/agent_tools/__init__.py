@@ -6,6 +6,7 @@ from pathlib import Path
 
 from app.agent_tools import agenda as agenda_tools
 from app.agent_tools import bash as bash_tool
+from app.agent_tools import documents as document_tools
 from app.agent_tools import files
 from app.agent_tools import problem_search
 from app.agent_tools.guard import (
@@ -28,15 +29,15 @@ DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "dispatch_thread",
-            "description": "主对话开始具体讲解、练习或研究时必须使用，用户无需提到 Thread。也用于「可以/开始吧」接受上轮具体任务。用户要求接着已有 Thread 时必须填其真实 thread_id，下一道练习也续接。独立新任务才省略 thread_id。交办后立即执行。",
+            "description": "主线开始具体讲解、练习或研究时必须使用，用户无需提到支线。也用于「可以/开始吧」接受上轮具体任务。用户要求接着已有支线时必须填其真实 thread_id，下一道练习也续接。独立新任务才省略 thread_id。交办后立即执行。",
             "parameters": {"type": "object", "properties": {
                 "title": {"type": "string", "description": "60 字以内的具体任务标题"},
                 "task": {"type": "string", "description": "自包含的任务说明：主题、目标、必要的前文/练习背景和下一步，保持用户原意；不能只写「可以」「继续」"},
-                "thread_id": {"type": "string", "description": "用户要继续已有 Thread 或补充相关任务时必须填 conversation_role.threads 对应项的真实 id；省略会新建，只有独立新任务才省略"},
+                "thread_id": {"type": "string", "description": "用户要继续已有支线或补充相关任务时必须填 conversation_role.threads 对应项的真实 id；省略会新建，只有独立新任务才省略"},
                 "skill": {
                     "type": "string",
                     "enum": ["deep_explain", "socratic_practice", "study_note_builder", "general"],
-                    "description": "推荐挂载给 Thread 的教学技能：原理精讲用 deep_explain，做题带练用 socratic_practice，整理讲义/实验用 study_note_builder",
+                    "description": "推荐挂载给支线的教学技能：原理精讲用 deep_explain，做题带练用 socratic_practice，整理讲义/实验用 study_note_builder",
                 },
             }, "required": ["title", "task"], "additionalProperties": False},
         },
@@ -45,7 +46,7 @@ DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "propose_threads",
-            "description": "仅在尚未选定任务、比较学习路线或只要建议时展示候选 Thread，不立即执行。用户已明确要讲解或练习，或已接受上轮任务时，使用 dispatch_thread 直接执行。",
+            "description": "仅在尚未选定任务、比较学习路线或只要建议时展示候选支线，不立即执行。用户已明确要讲解或练习，或已接受上轮任务时，使用 dispatch_thread 直接执行。",
             "parameters": {"type": "object", "properties": {
                 "proposals": {"type": "array", "minItems": 1, "maxItems": 4, "items": {
                     "type": "object",
@@ -64,7 +65,7 @@ DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "report_progress",
-            "description": "Thread 向主对话回报重要进展或本轮结果。summary 简明写明实际进展、结论或阻塞；需要用户作答、补充或决策时 needs_user=true。",
+            "description": "支线向主线回报重要进展或本轮结果。summary 简明写明实际进展、结论或阻塞；需要用户作答、补充或决策时 needs_user=true。",
             "parameters": {"type": "object", "properties": {
                 "summary": {"type": "string", "description": "600 字以内的进展或结果"},
                 "needs_user": {"type": "boolean"},
@@ -204,6 +205,7 @@ NEEDS_APPROVAL = {"write", "edit", "bash"}
 
 
 DEFINITIONS += agenda_tools.DEFINITIONS
+DEFINITIONS += document_tools.DEFINITIONS
 
 
 def _without_trailing_commas(raw: str) -> str:
@@ -304,15 +306,15 @@ async def run(name: str, arguments: dict, ctx) -> str:
             text = json.dumps({"problem_id": exercise.id, **reference_for(exercise)}, ensure_ascii=False)
         elif name == "dispatch_thread":
             if not getattr(ctx, "dispatch_thread", None):
-                raise ToolError("当前对话不能分派 Thread。")
+                raise ToolError("当前对话不能分派支线。")
             text = ctx.dispatch_thread(arguments)
         elif name == "propose_threads":
             if not getattr(ctx, "propose_threads", None):
-                raise ToolError("当前对话不能建议 Thread。")
+                raise ToolError("当前对话不能建议支线。")
             text = ctx.propose_threads(arguments)
         elif name == "report_progress":
             if not getattr(ctx, "report_progress", None):
-                raise ToolError("当前对话不是 Thread。")
+                raise ToolError("当前对话不是支线。")
             text = ctx.report_progress(arguments)
         elif name == "update_plan":
             from app.chat.plan import PlanStore
@@ -364,6 +366,8 @@ async def run(name: str, arguments: dict, ctx) -> str:
             text = await problem_search.run(arguments, ctx)
         elif name == problem_drill_skill.VERIFY_TOOL:
             text = await problem_drill_skill.run_verify(arguments, ctx)
+        elif name in document_tools.NAMES:
+            text = await asyncio.to_thread(document_tools.run, name, arguments, ctx)
         elif name in agenda_tools.NAMES:
             text = await asyncio.to_thread(agenda_tools.run, name, arguments, ctx)
         elif name == "session_search":

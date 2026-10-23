@@ -37,9 +37,9 @@ interface GraphNode {
 
 const TYPE_LABEL: Record<GraphKind, string> = {
   mastery: "已掌握",
-  "resolved-thread": "已解决 Thread",
+  "resolved-thread": "已解决支线",
   misconception: "误区",
-  "open-thread": "进行中 Thread",
+  "open-thread": "进行中支线",
   fog: "待解锁",
 };
 
@@ -333,14 +333,14 @@ export function ConceptGraph({
       ) : !showGraph ? (
         <div className={styles.empty}>
           <strong>讲过的概念会画在这里。</strong>
-          {onStart && <button type="button" className={styles.toolBtn} onClick={onStart}>去主对话讲一讲</button>}
+          {onStart && <button type="button" className={styles.toolBtn} onClick={onStart}>去主线讲一讲</button>}
           {fogLoading && <p className={styles.muted}>正在根据空间目标推演外环…</p>}
         </div>
       ) : (
         <>
           {settled + pending === 0 && (
             <p className={styles.guide}>
-              掌握和误区会落到环上。先在主对话里讲一讲你的理解。
+              掌握和误区会落到环上。先在主线里讲一讲你的理解。
             </p>
           )}
           <div className={styles.stage} ref={stageRef}>
@@ -493,7 +493,7 @@ export function ConceptGraph({
                   {(selectedNode.kind === "misconception" || selectedNode.kind === "fog") && (
                     <>
                       <button type="button" className={styles.attack} disabled={attacking} onClick={() => void attack(selectedNode)}>
-                        {attacking ? "正在开启…" : "🎯 开启专项 Thread 攻克此节点 →"}
+                        {attacking ? "正在开启…" : "🎯 开启支线攻克此节点 →"}
                       </button>
                       {attackError && <p className={styles.attackError}>{attackError}</p>}
                     </>
@@ -533,9 +533,9 @@ function ThreadList({
   if (!self && items.length === 0) return null;
   return (
     <section>
-      <h3 className={styles.blockTitle}>关联 Thread</h3>
+      <h3 className={styles.blockTitle}>关联支线</h3>
       {self && (
-        <button type="button" className={styles.threadBtn} onClick={() => onOpenThread(node.id)}>打开此 Thread</button>
+        <button type="button" className={styles.threadBtn} onClick={() => onOpenThread(node.id)}>打开此支线</button>
       )}
       {items.map((thread) => (
         <button key={thread.id} type="button" className={styles.threadBtn} onClick={() => onOpenThread(thread.id)}>

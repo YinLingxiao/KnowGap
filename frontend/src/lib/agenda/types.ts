@@ -32,7 +32,7 @@ export interface AgendaTask {
   updatedAt: string;
 }
 
-/** 进行中的空间 Thread，日程里只读展示 */
+/** 进行中的空间支线，日程里只读展示 */
 export interface AgendaThread {
   threadId: string;
   title: string;
@@ -90,15 +90,7 @@ export interface BreakdownDraft {
   children: TaskDraft[];
 }
 
-/** 番茄钟与日程之间的 window 事件 */
-export const FOCUS_START_EVENT = "knowgap:focus-start";
 export const AGENDA_CHANGED_EVENT = "knowgap:agenda-changed";
-
-export interface FocusStartDetail {
-  taskId: string | null;
-  title: string;
-  subjectId: string | null;
-}
 
 /** 打开全局「添加任务」弹窗；detail 里的字段作为默认值（如预览视图某天的「+ 添加任务」） */
 export const COMPOSE_TASK_EVENT = "knowgap:compose-task";

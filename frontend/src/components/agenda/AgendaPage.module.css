@@ -67,8 +67,6 @@
 
 .addTask:hover { background: var(--accent-solid-hover); }
 .addTask:focus-visible { outline: var(--focus-ring); outline-offset: 2px; }
-.addHint { color: var(--text-tertiary); font-size: var(--text-xs); white-space: nowrap; }
-.addHint kbd { font: inherit; font-family: var(--font-mono); }
 
 @media (pointer: coarse) { .addTask { min-height: 40px; } }
 
@@ -277,7 +275,6 @@
 /* 窄窗口：按钮只留图标，筛选框收窄，标题行不再被挤成竖排 */
 @container agendatop (max-width: 640px) {
   .addAction { display: flex; }
-  .addHint > span { display: none; }
   .badge {
     display: none;
   }

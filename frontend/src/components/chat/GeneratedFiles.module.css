@@ -1,0 +1,97 @@
+/* 生成的文件：整张卡片可点，点击下载 */
+.list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.card {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  width: min(100%, 320px);
+  min-height: 52px;
+  padding: 8px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
+  color: var(--text);
+  text-align: left;
+  transition: border-color var(--t-hover) var(--ease-out), background-color var(--t-hover) var(--ease-out);
+}
+
+.card:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--bg-hover);
+}
+
+.card:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.card:disabled {
+  cursor: progress;
+}
+
+.icon {
+  display: inline-grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.text {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.name {
+  overflow: hidden;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meta,
+.error {
+  font-size: var(--text-xs);
+}
+
+.meta {
+  color: var(--text-tertiary);
+}
+
+.error {
+  color: var(--red);
+}
+
+.action {
+  display: inline-grid;
+  flex-shrink: 0;
+  place-items: center;
+  color: var(--text-secondary);
+}
+
+.card:hover:not(:disabled) .action {
+  color: var(--accent-text);
+}
+
+.spin {
+  animation: generated-spin 900ms linear infinite;
+}
+
+@keyframes generated-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

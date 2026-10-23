@@ -12,7 +12,7 @@ import re
 import httpx
 from pydantic import BaseModel, Field
 
-from app.agents.llm import PROVIDER_FAILURES, ProviderError, request_error, shared_ssl_context, status_error
+from app.agents.llm import ChatCompletionsChat, PROVIDER_FAILURES, ProviderError, is_vertex_native, request_error, shared_ssl_context, status_error
 from app.vision.settings import VisionConfig
 
 KINDS = ("handwritten", "circuit", "problem", "other")
@@ -260,6 +260,12 @@ async def extract(
             ]},
         ],
     }
+    if is_vertex_native(config.base_url):
+        try:
+            result = await ChatCompletionsChat(config.llm_settings(), transport).complete_json(payload["messages"])
+            return parse_extraction(json.dumps(result, ensure_ascii=False), config.bbox_format, width, height)
+        except ProviderError as exc:
+            raise _vision_error(exc) from None
     if config.disable_thinking and re.search(r"qwen|qvq", config.model, re.IGNORECASE):
         # Qwen switch (DashScope and relays that forward extra fields); other providers may reject it.
         payload["enable_thinking"] = False

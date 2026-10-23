@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import {
-  ArrowDown, ArrowUpRight, BookOpenCheck, Brain, CheckCircle2, ChevronDown, ChevronRight, ChevronUp,
+  ArrowDown, BookOpenCheck, Brain, CheckCircle2, ChevronDown, ChevronRight, ChevronUp,
   Circle, CircleAlert, CircleDashed, CircleStop, CornerDownRight, Dumbbell, FileDown, FileText, Pin, PinOff,
   RotateCcw, Zap,
 } from "lucide-react";
@@ -13,10 +13,14 @@ import { parseFileMarkers } from "@/lib/chat/attachments";
 import { createMaterialClient } from "@/lib/api/material-client";
 import type { ChatMessage, LearnerMemory } from "@/lib/chat/types";
 import { cx } from "@/lib/cx";
+import { useSmoothText } from "@/hooks/useSmoothText";
 import type { Problem } from "@/lib/types";
 import { CopyButton, Markdown } from "./Markdown";
 import { FileCard, kindFromName, openFileLibrary, recalledFile, rememberFile, scaleOf } from "./FileCard";
 import { SELECTABLE_ATTR, SelectionToolbar } from "./SelectionToolbar";
+import { GeneratedFiles } from "./GeneratedFiles";
+import { ReasoningBlock } from "./ReasoningBlock";
+import { WorkingIndicator } from "./WorkingIndicator";
 import { ThreadProposals } from "./ThreadProposals";
 import { VisionMarkedText } from "./widgets/ImageMarker";
 import type { PlanChange } from "@/lib/chat/plan";
@@ -40,6 +44,9 @@ const TOOL_LABELS: Record<string, string> = {
   agenda_list: "查看日程",
   agenda_add: "写入日程",
   agenda_update: "调整日程",
+  create_document: "生成文件",
+  edit_document: "修改文件",
+  read_document: "读取文件",
 };
 
 /** 超过该字符数或行数的消息可折叠 */
@@ -47,6 +54,11 @@ const FOLD_CHARS = 650;
 const FOLD_LINES = 14;
 const PIN_KEY_PREFIX = "knowgap.pins.v1.";
 const SAVE_TO_PAGE_EVENT = "knowgap:save-to-page";
+
+/** 流式回复先过一道平滑显示，再交给 Markdown 渲染 */
+function SmoothMarkdown({ text, live }: { text: string; live: boolean }) {
+  return <Markdown text={useSmoothText(text, live)} />;
+}
 
 function isLongText(text: string): boolean {
   return text.length > FOLD_CHARS || text.split("\n").length > FOLD_LINES;
@@ -215,7 +227,7 @@ export function MessageList({
           const kind = kindFromName(material.title);
           rememberFile({ id: material.id, name: material.title, kind, units: material.pageCount,
             unitLabel: kind === "pptx" ? "张幻灯片" : kind === "xlsx" ? "个工作表" : kind === "docx" ? "节" : "页",
-            chars: 0, outline: [], subjectId: material.subjectId ?? null });
+            chars: 0, outline: [], subjectId: material.subjectId ?? null, notes: [] });
         }
         refreshFileMetadata((version) => version + 1);
       }).catch(() => { /* 资料服务暂不可用时仍显示文件名与类型 */ });
@@ -362,7 +374,7 @@ export function MessageList({
             if (message.role === "user") {
               const { files, body } = parseFileMarkers(message.content);
               const attempt = message.attempt ? ASSESSMENT[message.attempt.assessment] : null;
-              // 统计紧随这条用户消息之后的 Thread 进展更新数（参照 Claude: ↳ 1 reply / 2 replies）
+              // 统计紧随这条用户消息之后的支线进展更新数
               let replyUpdates = 0;
               for (let j = index + 1; j < messages.length; j += 1) {
                 if (messages[j].role === "user") break;
@@ -376,7 +388,7 @@ export function MessageList({
                     {files.map((file) => {
                       const attachment = recalledFile(file.id);
                       return <FileCard key={file.id} name={attachment?.name ?? file.name} kind={attachment?.kind}
-                        scale={attachment ? scaleOf(attachment) : undefined} onOpen={() => {
+                        scale={attachment ? scaleOf(attachment) : undefined} notes={attachment?.notes} onOpen={() => {
                           if (onOpenFile) { onOpenFile(file.id, conversationSubjectId); return; }
                           if (phase === "connecting" || phase === "streaming") {
                             setFileNavigationError("请等待当前回复完成，再打开资料库（将重新载入页面）。");
@@ -463,7 +475,6 @@ export function MessageList({
             }
             if (message.threadSummary) {
               const card = message.threadSummary;
-              const related = card.memoryIds.map((id) => memoriesById[id]).filter(Boolean);
               return (
                 <div key={message.id} data-msg-id={message.id} data-thread-summary={card.threadId} className={styles.row}>
                   {showNewDivider && (
@@ -471,23 +482,15 @@ export function MessageList({
                       <span>New</span>
                     </div>
                   )}
-                  <button className={cx(styles.summary, styles.summaryResolved)} onClick={() => onOpenSummary?.(card.threadId)}>
-                    <span className={styles.summaryHead}>
-                      <i className={cx(styles.summaryDot, styles.dot_resolved)} aria-hidden />
-                      <span className={styles.summaryTitle}>Thread「{card.title}」已解决</span>
-                      <ArrowUpRight size={13} className={styles.summaryArrow} aria-hidden />
-                    </span>
-                    <span className={styles.summaryBody}>{card.summary}</span>
-                    {card.takeaways.length > 0 && (
-                      <ul className={styles.takeaways}>
-                        {card.takeaways.map((item) => <li key={item}>{item}</li>)}
-                      </ul>
-                    )}
-                    {related.length > 0 && (
-                      <span className={styles.summaryMemories}>
-                        {related.map((memory) => memory.summary).join(" · ")}
-                      </span>
-                    )}
+                  <button
+                    type="button"
+                    className={styles.resolvedThread}
+                    onClick={() => onOpenSummary?.(card.threadId)}
+                    aria-label={`查看已解决的支线：${card.title}`}
+                    title={card.title}
+                  >
+                    <CheckCircle2 size={16} aria-hidden />
+                    <span className={styles.resolvedThreadTitle}>{card.title}</span>
                   </button>
                 </div>
               );
@@ -499,6 +502,7 @@ export function MessageList({
             const visibleTools = message.toolCalls.filter((call) => ![
               "dispatch_thread", "propose_threads", "report_progress", "exercise_reference", "plan_steps", "update_plan",
             ].includes(call.name) && !AGENDA_TOOLS.has(call.name));
+            const runningTool = streaming ? visibleTools.find((call) => !call.output) : undefined;
             const agendaCalls = message.toolCalls.filter((call) => AGENDA_TOOLS.has(call.name) && call.name !== "agenda_list");
             const used = message.usedMemoryIds.filter((id) => memoriesById[id]);
             const outside = [...new Set(used.map((id) => memoriesById[id].subjectId)
@@ -571,6 +575,9 @@ export function MessageList({
                     </div>
                   </div>
                 )}
+                {message.reasoning && (
+                  <ReasoningBlock text={message.reasoning} streaming={streaming} answering={message.content !== ""} />
+                )}
                 {message.content ? (
                   <>
                     <div
@@ -578,7 +585,7 @@ export function MessageList({
                       {...(!streaming && { [SELECTABLE_ATTR]: "" })}
                       {...(finished && message.content.length >= 80 ? { "data-coachmark": "select" } : {})}
                     >
-                      <Markdown text={message.content} />
+                      <SmoothMarkdown text={message.content} live={streaming} />
                     </div>
                     {fold.long && (
                       <button
@@ -591,16 +598,11 @@ export function MessageList({
                       </button>
                     )}
                   </>
-                ) : streaming ? (
-                  <p className={styles.thinking} role="status">
-                    <span className={styles.dots} aria-hidden>
-                      <i />
-                      <i />
-                      <i />
-                    </span>
-                    正在思考…
-                  </p>
+                ) : streaming && !message.reasoning ? (
+                  <WorkingIndicator label={runningTool ? `正在${TOOL_LABELS[runningTool.name] ?? runningTool.name}` : "正在思考"} />
                 ) : null}
+
+                {message.files && message.files.length > 0 && <GeneratedFiles files={message.files} />}
 
                 {message.threadProposals && message.threadProposals.length > 0 && (
                   <ThreadProposals

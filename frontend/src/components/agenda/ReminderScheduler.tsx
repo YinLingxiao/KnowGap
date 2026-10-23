@@ -2,8 +2,8 @@
 
 import { useEffect } from "react";
 import { agendaApi } from "@/lib/agenda/api";
-import { AGENDA_CHANGED_EVENT, FOCUS_START_EVENT } from "@/lib/agenda/types";
-import type { AgendaTask, FocusStartDetail } from "@/lib/agenda/types";
+import { AGENDA_CHANGED_EVENT } from "@/lib/agenda/types";
+import type { AgendaTask } from "@/lib/agenda/types";
 import { reminderBody, reminderDelay, reminderKey, reminderTime } from "@/lib/agenda/reminders";
 
 export function ReminderScheduler({ userId, subjects }: {
@@ -49,9 +49,6 @@ export function ReminderScheduler({ userId, subjects }: {
           const desktop = (window as unknown as { knowgap?: { showMain?: () => void } }).knowgap;
           try { desktop?.showMain?.(); } finally {
             window.focus();
-            window.dispatchEvent(new CustomEvent<FocusStartDetail>(FOCUS_START_EVENT, {
-              detail: { taskId: current.id, title: current.title, subjectId: current.subjectId },
-            }));
             notification.close();
           }
         };

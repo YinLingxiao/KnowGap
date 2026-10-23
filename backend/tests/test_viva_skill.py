@@ -89,7 +89,7 @@ def test_skill_prompt_per_round_for_chat_and_thread():
             assert "面试结束" in prompt and '"type":"viva_radar"' in prompt
     assert select_skill_prompt("thread", ANSWERS[0], earlier_user_texts=["模拟面试：栈"]).startswith(
         "【当前挂载 Skill：viva_interview")
-    # main 只负责协调，不在主对话里开面试
+    # main 只负责协调，不在主线里开面试
     assert select_skill_prompt("main", "模拟复试") is None
 
 

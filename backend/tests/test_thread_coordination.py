@@ -190,7 +190,7 @@ def test_dispatch_scope_validation_and_provider_failure(tmp_path):
         other = store.create_thread(STUDENT, other_sid, title="代数", anchor_message_id=None, client_request_id="other-thread-001")
         with pytest.raises(ValueError, match="本学习空间"):
             dispatch(store, STUDENT, main, source, "代数", "越界任务", other)
-        with pytest.raises(ValueError, match="主对话"):
+        with pytest.raises(ValueError, match="主线"):
             dispatch(store, "another-student", main, source, "Java", "任务", None)
         _ = [e async for e in service.events(service.begin(STUDENT, main, source, []))]
         await settle(service)

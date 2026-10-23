@@ -5,7 +5,7 @@ import { API_BASE_URL } from "@/lib/config";
 import type { Problem } from "@/lib/types";
 import { mapPlan, mapPlanChanges } from "./plan";
 import type {
-  ChatMessage, Conversation, ConversationSummary, LearnerMemory, LearnerMemoryStatus, MemoryChange, SpaceInput,
+  ChatMessage, Conversation, ConversationSummary, GeneratedFile, LearnerMemory, LearnerMemoryStatus, MemoryChange, SpaceInput,
   StreamEvent, Subject, TokenUsage, SpaceUsage,
 } from "./types";
 
@@ -46,6 +46,8 @@ function mapMessage(data: Wire): ChatMessage {
     suggestedProblemId: data.suggested_problem_id ?? null,
     sources: (data.sources ?? []).map((source: WireSource) => mapSource(source)),
     truncated: Boolean(data.truncated),
+    reasoning: String(data.reasoning ?? ""),
+    files: (Array.isArray(data.files) ? data.files : []).map(mapFile),
     toolCalls: (data.tool_calls ?? []).map((call: Wire) => ({
       id: String(call.id), name: String(call.name), arguments: String(call.arguments ?? ""),
       output: String(call.output ?? ""), ok: call.ok !== false,
@@ -123,6 +125,10 @@ function mapConversation(data: Wire): Conversation {
 
 const maybe = <T,>(value: Wire, map: (data: Wire) => T): T | null => (value ? map(value) : null);
 
+function mapFile(data: Wire): GeneratedFile {
+  return { id: String(data.id), name: String(data.name ?? "文件"), kind: String(data.kind ?? ""), size: Number(data.size ?? 0) };
+}
+
 function mapEvent(type: string, data: Wire): StreamEvent | null {
   switch (type) {
     case "thread_dispatched":
@@ -132,6 +138,10 @@ function mapEvent(type: string, data: Wire): StreamEvent | null {
         assistantMessage: maybe(data.assistant_message, mapMessage), discardedIds: data.discarded_ids ?? [],
         replayed: Boolean(data.replayed) };
     case "delta":
+      return { type, text: String(data.text ?? "") };
+    case "file":
+      return { type, file: mapFile(data) };
+    case "reasoning":
       return { type, text: String(data.text ?? "") };
     case "done":
     case "cancelled":
@@ -318,11 +328,11 @@ export const chatApi = {
   async skipOnboarding(): Promise<void> {
     await request(root, "/api/onboarding/skip", { method: "POST" });
   },
-  async checklist(): Promise<{ explained: boolean; answered: boolean; scheduled: boolean; focused: boolean }> {
+  async checklist(): Promise<{ explained: boolean; answered: boolean; scheduled: boolean }> {
     const data = await request<Wire>(root, "/api/onboarding/checklist", { cache: "no-store" });
     return {
       explained: Boolean(data.explained), answered: Boolean(data.answered),
-      scheduled: Boolean(data.scheduled), focused: Boolean(data.focused),
+      scheduled: Boolean(data.scheduled),
     };
   },
   async ackOnboarding(): Promise<void> {
@@ -468,6 +478,26 @@ export const chatApi = {
       method: "POST", body: JSON.stringify({ message_id: messageId, proposal_id: proposalId }),
     });
     return data.thread_id;
+  },
+  /** 下载 AI 生成的文件：带登录凭证取回文件内容，再交给浏览器保存 */
+  async downloadFile(file: Pick<GeneratedFile, "id" | "name">): Promise<void> {
+    let response: Response;
+    try {
+      response = await fetch(`${root}/api/files/${encodeURIComponent(file.id)}/download`, { headers: authHeader() });
+    } catch {
+      throw new ApiError("network", "无法连接到后端服务，文件没有下载。");
+    }
+    if (!response.ok) {
+      throw new ApiError(response.status === 404 ? "not_found" : "server", response.status === 404 ? "文件已经不在了，请让 AI 重新生成。" : `下载失败（HTTP ${response.status}）`, response.status);
+    }
+    const url = URL.createObjectURL(await response.blob());
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = file.name;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
   },
   async decideTool(approvalId: string, allow: boolean): Promise<void> {
     await request(root, `/api/chat/tool-approvals/${encodeURIComponent(approvalId)}`, {

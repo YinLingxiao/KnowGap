@@ -1,14 +1,9 @@
 /** 日程各视图的分组、排序与日期展示（纯函数，不依赖 React）。 */
 import { formatYmd } from "@/lib/agenda/quickAdd";
 import {
-  COMPOSE_TASK_EVENT, FOCUS_START_EVENT,
-  type AgendaTask, type AgendaThread, type ComposeTaskDetail, type FocusStartDetail, type TaskPriority,
+  COMPOSE_TASK_EVENT,
+  type AgendaTask, type AgendaThread, type ComposeTaskDetail, type TaskPriority,
 } from "@/lib/agenda/types";
-
-/** 通知番茄钟模块开始专注（约定见 docs/contracts/agenda.md 第 5 节） */
-export function dispatchFocusStart(detail: FocusStartDetail): void {
-  window.dispatchEvent(new CustomEvent<FocusStartDetail>(FOCUS_START_EVENT, { detail }));
-}
 
 /** 打开全局「添加任务」弹窗（约定见第 6.2 节） */
 export function dispatchCompose(detail: ComposeTaskDetail): void {
@@ -194,7 +189,7 @@ export interface ViewCounts {
   spaces: Map<string, number>;
 }
 
-/** 左侧导航各项的未完成数（Thread 计入今天/预览与所属空间） */
+/** 左侧导航各项的未完成数（支线计入今天/预览与所属空间） */
 export function countViews(tasks: AgendaTask[], threads: AgendaThread[], today: string): ViewCounts {
   const nodes = buildNodes(tasks);
   const spaces = new Map<string, number>();
@@ -291,7 +286,7 @@ export function buildUpcomingGroups(tasks: AgendaTask[], threads: AgendaThread[]
   return groups;
 }
 
-/** 学习空间视图：进行中 Thread / 闪回复习 / 任务 */
+/** 学习空间视图：进行中支线 / 闪回复习 / 任务 */
 export function buildSpaceGroups(
   tasks: AgendaTask[], threads: AgendaThread[], subjectId: string,
 ): AgendaGroup[] {
@@ -300,7 +295,7 @@ export function buildSpaceGroups(
   const reviews = nodes.filter((node) => node.kind === "review");
   const plain = nodes.filter((node) => node.kind === "task");
   const groups: AgendaGroup[] = [];
-  if (threadNodes.length) groups.push({ key: "threads", label: "进行中 Thread", nodes: sorted(threadNodes) });
+  if (threadNodes.length) groups.push({ key: "threads", label: "进行中支线", nodes: sorted(threadNodes) });
   if (reviews.length) groups.push({ key: "reviews", label: "闪回复习", nodes: sorted(reviews) });
   groups.push({ key: "tasks", label: "任务", nodes: sorted(plain), compose: { subjectId }, keepEmpty: true });
   return groups;

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import random
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
@@ -34,7 +33,6 @@ PROFILE_ENTRIES = (
 
 
 AGENDA_PREFIX = "task-seed-demo-"
-FOCUS_PREFIX = "focus-seed-demo-"
 
 
 def _subject_id(db, student_id: str, name: str) -> str | None:
@@ -75,34 +73,7 @@ def seed_agenda(store: ChatStore, student_id: str) -> None:
             )
 
 
-def seed_focus(store: ChatStore, student_id: str) -> None:
-    """演示专注记录：最近 12 周、固定随机种子，热力图每次看起来一样。"""
-    from app.focus.store import FocusStore
-
-    FocusStore(store).ensure()
-    rng = random.Random(20261024)
-    today = datetime.now().astimezone().replace(hour=0, minute=0, second=0, microsecond=0)
-    with store.connection() as db:
-        ds = _subject_id(db, student_id, DS_NAME)
-        index = 0
-        for back in range(83, -1, -1):
-            # 越接近考试越勤快：后几周专注天数更多
-            if rng.random() > 0.35 + 0.5 * (83 - back) / 83:
-                continue
-            for _ in range(rng.choice((1, 1, 2, 3))):
-                index += 1
-                minutes = rng.choice((25, 25, 45, 15))
-                started = today - timedelta(days=back) + timedelta(hours=rng.choice((9, 14, 16, 20)), minutes=rng.randrange(0, 50))
-                ended = started + timedelta(minutes=minutes)
-                db.execute(
-                    "INSERT OR IGNORE INTO focus_sessions(id, student_id, task_id, subject_id, title, planned_minutes, "
-                    "started_at, ended_at, actual_seconds, status, note) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, 'completed', ?)",
-                    (f"{FOCUS_PREFIX}{index:03d}", student_id, ds, "数据结构专注（演示）", minutes,
-                     started.isoformat(), ended.isoformat(), minutes * 60, "演示专注记录"),
-                )
-
-
-def _reset_agenda_and_focus(db, student_id: str, subject_ids: list[str]) -> None:
+def _reset_agenda(db, student_id: str, subject_ids: list[str]) -> None:
     tables = {row["name"] for row in db.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
     if "agenda_tasks" in tables:
         db.execute("DELETE FROM agenda_tasks WHERE student_id = ? AND id LIKE ?", (student_id, f"{AGENDA_PREFIX}%"))
@@ -121,7 +92,8 @@ def _reset_agenda_and_focus(db, student_id: str, subject_ids: list[str]) -> None
                 (student_id, student_id, *subject_ids),
             )
     if "focus_sessions" in tables:
-        db.execute("DELETE FROM focus_sessions WHERE student_id = ? AND id LIKE ?", (student_id, f"{FOCUS_PREFIX}%"))
+        # 番茄钟功能已移除；旧版本导入的演示专注记录仍留在库里，清除演示数据时一并删掉
+        db.execute("DELETE FROM focus_sessions WHERE student_id = ? AND id LIKE ?", (student_id, "focus-seed-demo-%"))
 
 
 def resolve_db(explicit: str | None) -> Path:
@@ -161,11 +133,11 @@ def _stamp_main(store: ChatStore, student_id: str, conversation_id: str, request
             (conversation_id, student_id),
         ).fetchone()
         if current is None:
-            raise RuntimeError(f"主对话不存在：{conversation_id}")
+            raise RuntimeError(f"主线不存在：{conversation_id}")
         if current["client_request_id"] == request_id:
             return
         if current["client_request_id"]:
-            raise RuntimeError(f"主对话已有其他标记：{conversation_id}")
+            raise RuntimeError(f"主线已有其他标记：{conversation_id}")
         db.execute(
             "UPDATE conversations SET client_request_id = ? WHERE id = ? AND student_id = ?",
             (request_id, conversation_id, student_id),
@@ -243,7 +215,7 @@ def _observe(store: ChatStore, student_id: str, subject_id: str, messages: dict[
 def _resolve(store: ChatStore, student_id: str, thread_id: str, title: str, summary: str, takeaways: list[str]) -> None:
     conversation = store.conversation(thread_id, student_id)
     if conversation is None:
-        raise RuntimeError(f"Thread 不存在：{title}")
+        raise RuntimeError(f"支线不存在：{title}")
     if conversation.thread_status == "resolved":
         return
     store.resolve_thread(thread_id, student_id, title, summary, takeaways)
@@ -321,10 +293,10 @@ def _seed_data_structures(store: ChatStore, student_id: str, deadline: str) -> N
     )))
     observations = (
         {"key": "ds-u1", "kind": "misconception", "topic": "栈的后进先出（演示）", "topic_key": "stack.lifo",
-         "summary": "把栈记成先进先出。", "quote": "栈是先进先出的", "reason": "主对话原话把栈说成先进先出",
+         "summary": "把栈记成先进先出。", "quote": "栈是先进先出的", "reason": "主线原话把栈说成先进先出",
          "signal": "supports", "tags": ["栈", "LIFO", "演示"]},
         {"key": "ds-t-stack", "kind": "misconception", "topic": "栈的后进先出（演示）", "topic_key": "stack.lifo",
-         "summary": "把栈记成先进先出。", "quote": "后进的要等先进的先弹出去", "reason": "Thread 里仍认为后进的要等先进的",
+         "summary": "把栈记成先进先出。", "quote": "后进的要等先进的先弹出去", "reason": "支线里仍认为后进的要等先进的",
          "signal": "supports", "tags": ["栈", "LIFO", "演示"]},
         {"key": "ds-u2", "kind": "misconception", "topic": "循环队列判满（演示）", "topic_key": "queue.circular.full",
          "summary": "认为队满和队空都只看 front 等于 rear。", "quote": "循环队列队满和队空都是 front 等于 rear",
@@ -340,7 +312,7 @@ def _seed_data_structures(store: ChatStore, student_id: str, deadline: str) -> N
          "reason": "原话把正常冲突当成函数损坏", "signal": "supports", "tags": ["哈希", "冲突", "演示"]},
         {"key": "ds-t-hash", "kind": "misconception", "topic": "哈希冲突（演示）", "topic_key": "hash.collision",
          "summary": "把哈希冲突理解成哈希函数写错。", "quote": "冲突就应该换一个哈希函数重写",
-         "reason": "Thread 里仍主张冲突就要重写函数", "signal": "supports", "tags": ["哈希", "冲突", "演示"]},
+         "reason": "支线里仍主张冲突就要重写函数", "signal": "supports", "tags": ["哈希", "冲突", "演示"]},
         {"key": "ds-u5", "kind": "misconception", "topic": "递归与系统栈（演示）", "topic_key": "recursion.stack",
          "summary": "认为递归不占用栈空间。", "quote": "递归调用不会占用栈空间",
          "reason": "原话否认递归使用系统栈", "signal": "supports", "tags": ["递归", "栈", "演示"]},
@@ -406,7 +378,6 @@ def seed_store(store: ChatStore, student_id: str) -> None:
     _seed_circuit(store, student_id, (today + timedelta(days=21)).isoformat())
     _seed_profile(store, student_id)
     seed_agenda(store, student_id)
-    seed_focus(store, student_id)
 
 
 def _seed_subject_ids(db, student_id: str) -> list[str]:
@@ -434,7 +405,7 @@ def reset_store(store: ChatStore, student_id: str) -> None:
     with store.connection() as db:
         db.execute("BEGIN IMMEDIATE")
         subject_ids = _seed_subject_ids(db, student_id)
-        _reset_agenda_and_focus(db, student_id, subject_ids)
+        _reset_agenda(db, student_id, subject_ids)
         if subject_ids:
             placeholders = ",".join("?" * len(subject_ids))
             db.execute(

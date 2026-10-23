@@ -1,0 +1,73 @@
+/* 16 秒一轮：环绕 → 波浪 → 菱形 → 花瓣；只移动粒子，不影响排版。 */
+.line {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.glyph {
+  flex-shrink: 0;
+  overflow: visible;
+  color: var(--accent);
+}
+
+.orbit {
+  transform-box: view-box;
+  transform-origin: center;
+  animation: working-orbit 16s ease-in-out infinite;
+}
+
+.particle {
+  transform-box: view-box;
+  transform-origin: center;
+  transform: translate(var(--ring-x), var(--ring-y));
+  animation: working-morph 16s cubic-bezier(0.45, 0, 0.2, 1) infinite;
+}
+
+.dot {
+  fill: currentColor;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: working-twinkle 1.8s ease-in-out var(--delay) infinite;
+}
+
+.label { color: var(--text-secondary); }
+
+.time {
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes working-orbit {
+  0% { transform: rotate(0deg); }
+  20%, 45% { transform: rotate(360deg); }
+  70% { transform: rotate(540deg); }
+  95%, 100% { transform: rotate(720deg); }
+}
+
+@keyframes working-morph {
+  0%, 19%, 100% { transform: translate(var(--ring-x), var(--ring-y)); }
+  25%, 44% { transform: translate(var(--wave-x), var(--wave-y)) scale(0.8, 1.4); }
+  50%, 69% { transform: translate(var(--diamond-x), var(--diamond-y)); }
+  75%, 94% { transform: rotate(var(--petal-angle)) translateY(-3.6px) scale(0.65, 1.7); }
+}
+
+@keyframes working-twinkle {
+  0%, 100% { opacity: 0.45; transform: scale(0.7); }
+  45% { opacity: 1; transform: scale(1); }
+}
+
+.glyph[data-paused] *,
+:global(:root[data-motion="reduced"]) .glyph * {
+  animation-play-state: paused;
+}
+
+:global(:root[data-motion="reduced"]) .glyph * {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .glyph * { animation: none; }
+}

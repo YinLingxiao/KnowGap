@@ -4,19 +4,16 @@ import json
 import re
 from pathlib import PurePosixPath
 from typing import Literal
-from zipfile import ZipFile
 
-from docx import Document
-from docx.table import Table
-from docx.text.paragraph import Paragraph
 from fastapi import HTTPException
-from openpyxl import load_workbook
-from pptx import Presentation
-from pptx.enum.shapes import MSO_SHAPE_TYPE
 from pypdf import PdfReader
 
+from app.agents.llm import ProviderError
 from app.memory.store import Store, ensure_column, new_id, now
 from app.models.schemas import Material as BaseMaterial, SourceReference
+from app.services.office_readers import (
+    Reading, read_doc, read_docx, read_ppt, read_pptx, read_xls, read_xlsx,
+)
 
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 MAX_TEXT = 200_000
@@ -24,6 +21,14 @@ MAX_DOCUMENTS = 30
 MAX_PAGES = 200
 CHUNK_SIZE = 1000
 UNIT_LABELS = {'pdf': '页', 'docx': '节', 'pptx': '张幻灯片', 'xlsx': '个工作表', 'text': '页'}
+# 旧版二进制格式存成对应的新格式类型（界面、技能、检索都按新格式处理），文件名保留原样
+LEGACY_KINDS = {'doc': 'docx', 'ppt': 'pptx', 'xls': 'xlsx'}
+SUPPORTED = {'pdf', 'txt', 'md', 'csv', 'docx', 'pptx', 'xlsx', *LEGACY_KINDS}
+SUPPORTED_HINT = 'PDF、Word（.docx / .doc）、PowerPoint（.pptx / .ppt）、Excel（.xlsx / .xls）、TXT、Markdown 或 CSV'
+
+
+class ScannedPdfError(HTTPException):
+    """PDF 没有文字层（扫描图片）。上传入口可以改走识图模型转写。"""
 
 
 class Material(BaseMaterial):
@@ -38,104 +43,6 @@ def outline_for(pages: list[tuple[int | None, str]]) -> list[str]:
         headings = [text.strip().splitlines()[0] for _, text in pages if text.strip()]
     # 课件常有几十张幻灯片：大纲要能列到每一张的标题，模型才知道后面讲了什么
     return list(dict.fromkeys(h[:200] for h in headings))[:80]
-
-
-def _markdown_row(values) -> str:
-    return '| ' + ' | '.join(str(v if v is not None else '').replace('|', '\\|').replace('\n', '<br>')
-                             for v in values) + ' |'
-
-
-def _slide_texts(shapes, skip_id=None) -> list[str]:
-    """幻灯片里的文字，包括组合图形里的文本框和表格（课件里很常见，只看顶层会漏掉大段内容）。"""
-    parts = []
-    for shape in shapes:
-        if skip_id is not None and shape.shape_id == skip_id:
-            continue
-        if getattr(shape, 'shape_type', None) == MSO_SHAPE_TYPE.GROUP:
-            parts.extend(_slide_texts(shape.shapes))
-            continue
-        if shape.has_text_frame and shape.text.strip():
-            parts.append(shape.text)
-        if getattr(shape, 'has_table', False) and shape.has_table:
-            parts.extend(_markdown_row(cell.text for cell in row.cells) for row in shape.table.rows)
-    return parts
-
-
-def _office_pages(kind: str, data: bytes) -> list[tuple[int, str]]:
-    # OOXML is a zip container: bound decompression as well as uploaded bytes.
-    with ZipFile(io.BytesIO(data)) as archive:
-        if sum(item.file_size for item in archive.infolist()) > 100 * 1024 * 1024:
-            raise HTTPException(413, '文件解压后过大，请按章节拆分。')
-    pages = []
-    if kind == 'docx':
-        document = Document(io.BytesIO(data))
-        buffer = ''
-        for block in document.iter_inner_content():
-            if isinstance(block, Paragraph):
-                text = block.text.strip()
-                style = block.style.name if block.style else ''
-                heading = re.match(r'(?:Heading|标题)\s*([1-9])$', style, re.I)
-                if text and (heading or style == 'Title'):
-                    text = '#' * (min(int(heading[1]), 6) if heading else 1) + ' ' + text
-            elif isinstance(block, Table):
-                rows = [[cell.text for cell in row.cells] for row in block.rows]
-                if not any(cell.strip() for row in rows for cell in row):
-                    continue
-                if rows:
-                    rows.insert(1, ['---'] * len(rows[0]))
-                text = '\n'.join(_markdown_row(row) for row in rows)
-            else:
-                continue
-            if not text:
-                continue
-            # Prefer paragraph/table boundaries; split unusually long blocks too.
-            for start in range(0, len(text), 1500):
-                part = text[start:start + 1500]
-                if buffer and len(buffer) + len(part) + 1 > 1500:
-                    pages.append((len(pages) + 1, buffer))
-                    buffer = ''
-                buffer += ('\n' if buffer else '') + part
-        if buffer:
-            pages.append((len(pages) + 1, buffer))
-    elif kind == 'pptx':
-        presentation = Presentation(io.BytesIO(data))
-        if len(presentation.slides) > MAX_PAGES:
-            raise HTTPException(413, f'单份资料最多 {MAX_PAGES} 张幻灯片。')
-        for number, slide in enumerate(presentation.slides, 1):
-            title = slide.shapes.title
-            parts = ['# ' + title.text] if title is not None and title.text.strip() else []
-            parts.extend(_slide_texts(slide.shapes, title.shape_id if title is not None else None))
-            if slide.has_notes_slide:
-                notes = slide.notes_slide.notes_text_frame
-                if notes is not None and notes.text.strip():
-                    parts.append('备注：' + notes.text)
-            pages.append((number, '\n'.join(parts)))
-    else:
-        workbook = load_workbook(io.BytesIO(data), read_only=True, data_only=True)
-        try:
-            if len(workbook.worksheets) > MAX_PAGES:
-                raise HTTPException(413, f'单份资料最多 {MAX_PAGES} 个工作表。')
-            has_values = False
-            for number, sheet in enumerate(workbook.worksheets, 1):
-                # Dimensions from the worksheet are the full size, not the preview size.
-                if sheet.max_row is None or sheet.max_column is None:
-                    sheet.calculate_dimension(force=True)
-                rows = list(sheet.iter_rows(max_row=min(sheet.max_row or 0, 200), values_only=True))
-                parts = [f'# {sheet.title}', f'总行数：{sheet.max_row}；总列数：{sheet.max_column}；仅展示前 200 行。']
-                if not any(v is not None and str(v).strip() for row in rows for v in row):
-                    pages.append((number, '\n'.join([*parts, '预览范围内无数据。'])))
-                    continue
-                has_values = True
-                for index, row in enumerate(rows):
-                    parts.append(_markdown_row(row))
-                    if index == 0:
-                        parts.append(_markdown_row('---' for _ in row))
-                pages.append((number, '\n'.join(parts)))
-            if not has_values:
-                raise HTTPException(422, '没有提取到文字，工作表前 200 行内没有可读取的数据。')
-        finally:
-            workbook.close()
-    return pages
 
 
 def terms(text: str) -> list[str]:
@@ -166,64 +73,119 @@ def chunks(text: str):
         yield buffer, start, end
 
 
-def extract(filename: str, data: bytes) -> tuple[str, list[tuple[int | None, str]]]:
+def _decode_text(data: bytes) -> str:
+    """文本资料的编码：UTF-8（带或不带 BOM）、带 BOM 的 UTF-16，再退回 GB18030（国内导出的 CSV 常是 GBK）。"""
+    if data[:2] in (b'\xff\xfe', b'\xfe\xff'):
+        try:
+            return data.decode('utf-16')
+        except UnicodeError:
+            pass
+    try:
+        return data.decode('utf-8-sig')
+    except UnicodeError:
+        pass
+    try:
+        return data.decode('gb18030')
+    except UnicodeError:
+        raise HTTPException(422, '无法识别文本编码，请另存为 UTF-8 后上传。') from None
+
+
+def _read_pdf(data: bytes) -> Reading:
+    if not data.lstrip().startswith(b'%PDF-'):
+        raise HTTPException(422, '文件不是有效的 PDF。')
+    try:
+        reader = PdfReader(io.BytesIO(data), strict=False)
+        if reader.is_encrypted:
+            try:
+                unlocked = reader.decrypt('')  # 很多 PDF 只是限制编辑，没有打开密码
+            except Exception:  # noqa: BLE001
+                unlocked = 0
+            if not unlocked:
+                raise HTTPException(422, '这份 PDF 需要密码才能打开，请先解除密码。')
+        if len(reader.pages) > MAX_PAGES:
+            raise HTTPException(413, f'单份资料最多 {MAX_PAGES} 页，请按章节拆分。')
+        pages, empty, length = [], [], 0
+        for number, page in enumerate(reader.pages, 1):
+            text = (page.extract_text() or '').replace('\x00', '')
+            if not text.strip():
+                empty.append(number)
+            length += len(text)
+            if length > MAX_TEXT:
+                raise HTTPException(413, '资料文字过多，请按章节拆分。')
+            pages.append((number, text))
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(422, 'PDF 无法解析，请确认文件完整并包含可复制的文字。') from None
+    notes = []
+    if empty and len(empty) < len(pages):
+        shown = '、'.join(str(n) for n in empty[:12])
+        notes.append(f'第 {shown}{" 等" if len(empty) > 12 else ""} 页没有可读的文字（可能是扫描图片或纯图片页），这些页的内容没有读取。')
+    return Reading(pages, notes)
+
+
+_OFFICE_READERS = {'docx': read_docx, 'pptx': read_pptx, 'xlsx': read_xlsx,
+                   'doc': read_doc, 'ppt': read_ppt, 'xls': read_xls}
+_LEGACY_HINT = {'doc': 'Word', 'ppt': 'PowerPoint', 'xls': 'Excel'}
+
+
+def extract_document(filename: str, data: bytes) -> tuple[str, Reading]:
+    """读取一份资料，返回 (类型, Reading)。旧版 doc / ppt / xls 的类型记作 docx / pptx / xlsx。"""
     if len(data) > MAX_UPLOAD_BYTES:
         raise HTTPException(413, '单份资料不能超过 20 MB。')
-    kind = PurePosixPath(filename).suffix.lower().lstrip('.')
-    if kind in {'doc', 'ppt', 'xls'}:
-        raise HTTPException(415, '不支持旧二进制格式，请另存为 .docx/.pptx/.xlsx 后上传。')
-    if kind not in {'pdf', 'txt', 'md', 'csv', 'docx', 'pptx', 'xlsx'}:
-        raise HTTPException(415, '请上传 PDF、DOCX、PPTX、XLSX、TXT、Markdown 或 CSV 文件。')
+    ext = PurePosixPath(filename).suffix.lower().lstrip('.')
+    if ext not in SUPPORTED:
+        raise HTTPException(415, f'请上传 {SUPPORTED_HINT} 文件。')
     if not data:
         raise HTTPException(422, '文件为空，请选择包含文字的资料。')
-    if kind == 'pdf':
-        if not data.lstrip().startswith(b'%PDF-'):
-            raise HTTPException(422, '文件不是有效的 PDF。')
+    if ext == 'pdf':
+        reading = _read_pdf(data)
+    elif ext in _OFFICE_READERS:
+        # 扩展名和内容对不上（有人直接改了后缀）时，按内容读：OLE 复合文档是旧格式，ZIP 是新格式
+        if data.startswith(b'\xd0\xcf\x11\xe0'):
+            ext = {'docx': 'doc', 'pptx': 'ppt', 'xlsx': 'xls'}.get(ext, ext)
+        elif data.startswith(b'PK'):
+            ext = {'doc': 'docx', 'ppt': 'pptx', 'xls': 'xlsx'}.get(ext, ext)
+        legacy = ext in LEGACY_KINDS
+        if not data.startswith((b'\xd0\xcf\x11\xe0', b'PK')):
+            raise HTTPException(422, '文件无法解析：内容不是有效的 Office 文件，请确认文件完整，或另存为新格式后上传。')
         try:
-            reader = PdfReader(io.BytesIO(data), strict=False)
-            if reader.is_encrypted:
-                raise HTTPException(422, '暂不支持加密 PDF，请先解除密码。')
-            if len(reader.pages) > MAX_PAGES:
-                raise HTTPException(413, f'单份资料最多 {MAX_PAGES} 页，请按章节拆分。')
-            pages, length = [], 0
-            for number, page in enumerate(reader.pages, 1):
-                text = (page.extract_text() or '').replace('\x00', '')
-                length += len(text)
-                if length > MAX_TEXT:
-                    raise HTTPException(413, '资料文字过多，请按章节拆分。')
-                pages.append((number, text))
+            reading = _OFFICE_READERS[ext](data)
         except HTTPException:
             raise
         except Exception:
-            raise HTTPException(422, 'PDF 无法解析，请确认文件完整并包含可复制的文字。') from None
-    elif kind in {'docx', 'pptx', 'xlsx'}:
-        try:
-            pages = _office_pages(kind, data)
-        except HTTPException:
-            raise
-        except Exception:
+            if legacy:
+                raise HTTPException(422, f'这份旧版文件没能解析（可能已损坏、加密或版本过旧）。请在 {_LEGACY_HINT[ext]} 或 WPS 里另存为新格式后上传。') from None
             raise HTTPException(422, '文件无法解析，请确认文件完整、未加密且格式正确。') from None
     else:
-        try:
-            text = data.decode('utf-8-sig').replace('\x00', '')
-        except UnicodeError:
-            raise HTTPException(422, '文本资料需使用 UTF-8 编码。') from None
+        text = _decode_text(data)
+        text = text.replace('\x00', '')
         if len(text) > MAX_TEXT:
             raise HTTPException(413, '资料文字过多，请按章节拆分。')
-        pages = [(None, text)]
-    if len(pages) > MAX_PAGES:
+        reading = Reading([(None, text)], [])
+    if len(reading.pages) > MAX_PAGES:
         raise HTTPException(413, f'单份资料最多 {MAX_PAGES} 页/节/幻灯片/工作表，请按章节拆分。')
-    if sum(len(text) for _, text in pages) > MAX_TEXT:
+    if sum(len(text) for _, text in reading.pages) > MAX_TEXT:
         raise HTTPException(413, '资料文字过多，请按章节拆分。')
-    if not any(text.strip() for _, text in pages):
-        detail = '这份 PDF 是扫描图片，暂不支持识别文字' if kind == 'pdf' else '没有提取到文字，请选择包含文字的资料。'
-        raise HTTPException(422, detail)
-    return kind, pages
+    if not any(text.strip() for _, text in reading.pages):
+        if ext == 'pdf':
+            raise ScannedPdfError(422, '这份 PDF 是扫描图片，暂不支持识别文字')
+        raise HTTPException(422, '没有提取到文字，请选择包含文字的资料。')
+    return LEGACY_KINDS.get(ext, ext), reading
+
+
+def extract(filename: str, data: bytes) -> tuple[str, list[tuple[int | None, str]]]:
+    kind, reading = extract_document(filename, data)
+    return kind, reading.pages
 
 
 class MaterialStore:
     def __init__(self, store: Store):
         self.store = store
+        # FileStore：保存上传原件，让 AI 能在原件上修改（edit_document）。由 main.py 挂上
+        self.originals = None
+        # async (pdf 字节) -> Reading：扫描版 PDF 转写，由 main.py 挂上；没有时扫描件直接报错
+        self.ocr = None
 
     def initialize(self):
         with self.store.connection() as db:
@@ -243,13 +205,32 @@ class MaterialStore:
             ensure_column(db, 'course_materials', 'subject_id', 'TEXT')
             ensure_column(db, 'course_materials', 'outline_json', "TEXT NOT NULL DEFAULT '[]'")
             ensure_column(db, 'course_materials', 'chars', 'INTEGER NOT NULL DEFAULT 0')
+            # 读取说明：哪些内容没读到（图片里的字、隐藏页、扫描页……），交给模型如实告诉学生
+            ensure_column(db, 'course_materials', 'notes_json', "TEXT NOT NULL DEFAULT '[]'")
 
-    def add(self, student_id: str, filename: str, data: bytes, subject_id: str | None = None) -> Material:
+    async def add_with_ocr(self, student_id: str, filename: str, data: bytes, subject_id: str | None = None) -> Material:
+        """上传入口用这个：扫描版 PDF 先尝试让识图模型转写，其余和 add 一样。"""
+        from starlette.concurrency import run_in_threadpool
+
+        try:
+            return await run_in_threadpool(self.add, student_id, filename, data, subject_id)
+        except ScannedPdfError:
+            if self.ocr is None:
+                raise
+            try:
+                reading = await self.ocr(data)
+            except ProviderError as exc:
+                raise HTTPException(422 if exc.status_code == 503 else 502, exc.detail) from None
+            return await run_in_threadpool(self.add, student_id, filename, data, subject_id, ('pdf', reading))
+
+    def add(self, student_id: str, filename: str, data: bytes, subject_id: str | None = None,
+            preread: tuple[str, Reading] | None = None) -> Material:
         if len(data) > MAX_UPLOAD_BYTES:
             raise HTTPException(413, '单份资料不能超过 20 MB。')
         title = PurePosixPath(filename.replace('\\', '/')).name
         title = ''.join(c for c in title if ord(c) >= 32 and ord(c) != 127)[:140] or '课程资料'
-        kind, pages = extract(title, data)
+        kind, reading = preread if preread is not None else extract_document(title, data)
+        pages = reading.pages
         document_id = new_id('material')
         records = [(new_id('source'), document_id, text, page,
                     start if page is None else None, end if page is None else None)
@@ -263,12 +244,18 @@ class MaterialStore:
             if count >= MAX_DOCUMENTS:
                 raise HTTPException(409, '最多保存 30 份资料，请删除不需要的资料后再上传。')
             db.execute('INSERT INTO course_materials(id, student_id, title, kind, page_count, chunk_count, created_at, '
-                       'subject_id, outline_json, chars) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                       'subject_id, outline_json, chars, notes_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
                        (document_id, student_id, title, kind, material.page_count, len(records), material.created_at,
-                         subject_id, json.dumps(outline_for(pages), ensure_ascii=False), sum(len(text) for _, text in pages)))
+                        subject_id, json.dumps(outline_for(pages), ensure_ascii=False), sum(len(text) for _, text in pages),
+                        json.dumps(reading.notes, ensure_ascii=False)))
             db.executemany('INSERT INTO course_chunks VALUES (?, ?, ?, ?, ?, ?)', records)
             db.executemany('INSERT INTO course_index(chunk_id, terms) VALUES (?, ?)',
                            [(record[0], ' '.join(terms(record[2]))) for record in records])
+        if self.originals is not None:
+            try:
+                self.originals.save_original(document_id, student_id, title, kind, data)
+            except Exception:
+                pass  # 原件只用于修改；保存不了不影响读取和检索
         return material
 
     def attachment(self, document_id: str, student_id: str, *, excerpt: bool = False,
@@ -282,7 +269,8 @@ class MaterialStore:
             kind = row['kind'] if row['kind'] in UNIT_LABELS else 'text'
             result = dict(id=row['id'], name=row['title'], kind=kind, units=row['page_count'] or 1,
                           unit_label=UNIT_LABELS[kind], chars=row['chars'],
-                          outline=json.loads(row['outline_json']), subject_id=row['subject_id'])
+                          outline=json.loads(row['outline_json']), subject_id=row['subject_id'],
+                          notes=json.loads(row['notes_json'] or '[]'))
             if excerpt:
                 # rowid preserves original extraction order, including chunks on the same page.
                 preview = ''
@@ -312,7 +300,9 @@ class MaterialStore:
                 return False
             db.execute('DELETE FROM course_index WHERE chunk_id IN (SELECT id FROM course_chunks WHERE document_id = ?)', (document_id,))
             db.execute('DELETE FROM course_materials WHERE id = ?', (document_id,))
-            return True
+        if self.originals is not None:
+            self.originals.delete(document_id, student_id)
+        return True
 
     def search_scoped(self, student_id: str, query: str, limit: int, subject_id: str | None) -> list[SourceReference]:
         """A Subject's own knowledge first, then unassigned materials; other Subjects' files are never mixed in."""

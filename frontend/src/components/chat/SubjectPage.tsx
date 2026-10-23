@@ -2,13 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Brain, CalendarDays, CheckCircle2, ChevronDown, ChevronRight, Download, FileText, Folder, GraduationCap, History, Link2, ListTodo,
-  LoaderCircle, Maximize2, MessagesSquare, Mic, Minimize2, MoreHorizontal, NotebookPen,
-  PanelLeftOpen, Plus, RotateCcw, Settings, SlidersHorizontal, Target, Trash2, Upload, Waypoints, X, Zap,
+  Brain, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Download, GraduationCap, History, Library as LibraryIcon, Link2, ListTodo,
+  LoaderCircle, Maximize2, MessagesSquare, Mic, Minimize2, MoreHorizontal,
+  PanelLeftOpen, Plus, RotateCcw, Settings, SlidersHorizontal, Target, Waypoints, X, Zap,
 } from "lucide-react";
-import { WIDGET_ASK_EVENT } from "./LearningWidget";
+import type { LucideIcon } from "lucide-react";
 import type { ChatController } from "@/hooks/useChat";
-import { createMaterialClient } from "@/lib/api/material-client";
+import { useSlidingThumb } from "@/hooks/useSlidingThumb";
 import { toApiError } from "@/lib/api/errors";
 import { chatApi } from "@/lib/chat/api";
 import { levelLabel, plainText } from "@/lib/chat/space";
@@ -16,7 +16,7 @@ import type { ConversationSummary, LearnerMemory, Subject, SpaceUsage, TokenUsag
 import { API_BASE_URL } from "@/lib/config";
 import { SPACE_PAGES_EVENT, spacePagesKey } from "@/lib/spacePages";
 import { cx } from "@/lib/cx";
-import type { CourseMaterial, Problem } from "@/lib/types";
+import type { Problem } from "@/lib/types";
 import { Button } from "../ui/Button";
 import { CHEATSHEET_OPENED_EVENT, GUIDES_RESET_EVENT, OPEN_SPACE_PANEL_EVENT, coachSeenKey } from "../onboarding/coach";
 import { CheatSheet } from "./CheatSheet";
@@ -25,6 +25,7 @@ import { SpaceTasks } from "../agenda/SpaceTasks";
 import { Composer } from "./Composer";
 import { Markdown } from "./Markdown";
 import { MemoryItem } from "./MemoryDrawer";
+import { Library } from "./Library";
 import { MessageList } from "./MessageList";
 import { UsageStats } from "./UsageStats";
 import styles from "./SubjectPage.module.css";
@@ -318,7 +319,7 @@ export function SubjectPage({
   const attackFromGraph = async (target: AttackTarget) => {
     const title = `专项：${target.label}`.trim().slice(0, 60);
     const prompt = target.kind === "misconception"
-      ? `针对我之前在「${target.label}」上的薄弱点（${target.summary}），请开启一个专项巩固 Thread 带我彻底搞懂并做一道题验证。`
+      ? `针对我之前在「${target.label}」上的薄弱点（${target.summary}），请开启一个巩固支线，带我彻底搞懂并做一道题验证。`
       : `请围绕待解锁概念「${target.label}」（${target.summary}）开启专项学习，从我已经掌握的内容往前推进一步，并做一道题验证。`;
     const anchorMessageId = [...(main?.messages ?? [])].reverse().find((message) => message.id)?.id;
     const thread = await chatApi.createThread(subject.id, {
@@ -418,6 +419,27 @@ export function SubjectPage({
   const failureFor = (id: string | null) => chat.sendFailure?.conversationId === id ? chat.sendFailure : null;
   const panelVisible = (!narrow && !panelCollapsed) || overlay;
   const isOverviewOn = panelVisible && panel.mode === "info" && panel.section === "about";
+  const libraryOpen = panel.mode === "pages" || (panel.mode === "info" && panel.section === "files");
+  // 只有选中的标签显示名字，其余只留图标（名字放在悬停提示和无障碍标签里）
+  const tabs: Array<{
+    key: string; icon: LucideIcon; label: string; title: string; active: boolean; open: () => void;
+    count?: number; coachmark?: string;
+  }> = [
+    { key: "list", icon: MessagesSquare, label: "支线", title: "支线", active: panel.mode === "list",
+      open: () => setPanel({ mode: "list" }), count: openThreads.length, coachmark: threadSignal ? "thread" : undefined },
+    { key: "library", icon: LibraryIcon, label: "资料库", title: "资料库：课程资料与空间笔记", active: libraryOpen,
+      open: () => setPanel({ mode: "info", section: "files" }) },
+    { key: "graph", icon: Waypoints, label: "图谱", title: "知识迷雾拓扑图", active: panel.mode === "graph",
+      open: () => setPanel({ mode: "graph" }), coachmark: weakReady && fogReady ? "fog" : undefined },
+    { key: "tasks", icon: ListTodo, label: "任务", title: "这个空间的日程任务", active: panel.mode === "tasks",
+      open: () => setPanel({ mode: "tasks" }) },
+    { key: "memory", icon: Brain, label: "记忆", title: `空间学习记忆 (${spaceMemories.length})`,
+      active: panel.mode === "info" && panel.section === "memory", open: () => setPanel({ mode: "info", section: "memory" }) },
+    { key: "about", icon: SlidersHorizontal, label: "概览", title: "空间概览与教学说明",
+      active: panel.mode === "info" && panel.section === "about", open: () => setPanel({ mode: "info", section: "about" }) },
+  ];
+  const tabsRef = useRef<HTMLDivElement>(null);
+  const tabThumb = useSlidingThumb(tabsRef, [panel.mode, panel.mode === "info" ? panel.section : null, openThreads.length, panelVisible]);
 
   return (
     <div className={cx(styles.page, !panelVisible && styles.pageSingle, panelVisible && panelExpanded && styles.pageExpanded)}>
@@ -475,7 +497,7 @@ export function SubjectPage({
                 onClick={() => showPanel({ mode: "list" })}
               >
                 <MessagesSquare size={13} aria-hidden />
-                <span>Threads</span>
+                <span>支线</span>
                 {openThreads.length > 0 && <span className={styles.tabCount}>{openThreads.length}</span>}
               </button>
             )}
@@ -500,7 +522,7 @@ export function SubjectPage({
 
         {confirmDelete && (
           <div className={styles.confirm} role="group">
-            <span>删除后，主对话和 Thread 会变成普通对话，记忆改为通用。</span>
+            <span>删除后，主线和支线会变成普通对话，记忆改为通用。</span>
             <button onClick={() => setConfirmDelete(false)}>取消</button>
             <button className={styles.danger} onClick={() => void onDelete()}>删除</button>
           </div>
@@ -526,7 +548,7 @@ export function SubjectPage({
                   <p className={styles.welcomeSub}>
                     {subject.goal
                       ? `当前目标：${subject.goal}。你可以直接提问，或从以下方式开始：`
-                      : "主对话负责规划整体路线，具体卡点与练习会在右侧开启并行 Thread。你可以从以下方式开始："}
+                      : "主线负责规划整体路线，具体卡点与练习会在右侧开启并行支线。你可以从以下方式开始："}
                   </p>
                   <div className={styles.starterPills}>
                     <button
@@ -551,7 +573,7 @@ export function SubjectPage({
                       onClick={() =>
                         void chat.sendTo(
                           mainId,
-                          `我想用费曼学习法自测「${subject.name}」的核心概念：请开启一个 Thread，由我讲给你听，你来挑刺追问我。`,
+                          `我想用费曼学习法自测「${subject.name}」的核心概念：请开启一个支线，由我讲给你听，你来挑刺追问我。`,
                         )
                       }
                     >
@@ -616,7 +638,7 @@ export function SubjectPage({
               </div>
             )}
             onRegenerate={() => void chat.regenerate(mainId)}
-            onStartExercise={(problemId) => void chat.sendTo(mainId, `请安排练习「${problemsById[problemId]?.title ?? problemId}」，在 Thread 中带我完成。`)}
+            onStartExercise={(problemId) => void chat.sendTo(mainId, `请安排练习「${problemsById[problemId]?.title ?? problemId}」，在支线中带我完成。`)}
             onOpenMemories={() => showPanel({ mode: "info", section: "memory" })}
             onOpenSummary={openThread}
             onConfirmProposal={async (messageId, proposalId) => {
@@ -632,14 +654,14 @@ export function SubjectPage({
             scrollTarget={scrollTarget}
           />
         ) : (
-          <div className={styles.center}><p>正在读取主对话…</p></div>
+          <div className={styles.center}><p>正在读取主线…</p></div>
         )}
         {mainId && (
           <div className={styles.dock}>
             {mergeNotice && (
               <div className={styles.mergeNotice} role="status">
                 <CheckCircle2 size={14} aria-hidden />
-                <span>已合并到主对话</span>
+                <span>已合并到主线</span>
                 <button
                   type="button"
                   className={styles.mergeAction}
@@ -676,7 +698,7 @@ export function SubjectPage({
               phase={chat.streamFor(mainId)?.phase ?? null}
               busy={false}
               problems={[]}
-              onStartExercise={(problemId) => void chat.sendTo(mainId, `请安排练习「${problemsById[problemId]?.title ?? problemId}」，在 Thread 中带我完成。`)}
+              onStartExercise={(problemId) => void chat.sendTo(mainId, `请安排练习「${problemsById[problemId]?.title ?? problemId}」，在支线中带我完成。`)}
               autoFocusKey={mainId}
               placeholder="描述学习需求、补充条件，或直接提问…"
             />
@@ -686,7 +708,7 @@ export function SubjectPage({
 
       {panelVisible && (
         <aside className={cx(styles.panel, narrow && styles.overlay)}>
-          {/* 右侧面板顶栏：列表态为 Tab 栏，进入具体 Thread 时切换为面包屑顶栏（Threads › 标题） */}
+          {/* 右侧面板顶栏：列表态为 Tab 栏，进入具体支线时切换为面包屑顶栏（支线 › 标题） */}
           <header className={styles.panelBar}>
             {panel.mode === "thread" && threadId ? (
               <div className={styles.breadcrumbBar}>
@@ -696,11 +718,11 @@ export function SubjectPage({
                   data-coachmark={threadSignal ? "thread" : undefined}
                   onClick={() => setPanel({ mode: "list" })}
                 >
-                  Threads
+                  支线
                 </button>
                 <ChevronRight size={13} className={styles.crumbSep} aria-hidden />
-                <strong className={styles.crumbCurrent} title={threadSummary?.title ?? "Thread"}>
-                  {threadSummary?.title ?? "Thread"}
+                <strong className={styles.crumbCurrent} title={threadSummary?.title ?? "支线"}>
+                  {threadSummary?.title ?? "支线"}
                 </strong>
                 {threadSummary?.executionStatus && (
                   <span className={styles.crumbStatus} role="status">
@@ -709,89 +731,31 @@ export function SubjectPage({
                 )}
               </div>
             ) : (
-              <div className={styles.panelTabs} role="tablist" aria-label="右侧面板视图">
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={panel.mode === "list"}
-                  className={cx(styles.panelTabPill, panel.mode === "list" && styles.panelTabActive)}
-                  data-coachmark={threadSignal ? "thread" : undefined}
-                  onClick={() => setPanel({ mode: "list" })}
-                >
-                  <MessagesSquare size={13} aria-hidden />
-                  <span className={styles.pillLabel}>Threads</span>
-                  {openThreads.length > 0 && <span className={styles.tabCount}>{openThreads.length}</span>}
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={panel.mode === "pages"}
-                  className={cx(styles.panelTabPill, panel.mode === "pages" && styles.panelTabActive)}
-                  onClick={() => setPanel({ mode: "pages" })}
-                  title="Pages（空间笔记白板）"
-                >
-                  <NotebookPen size={13} aria-hidden />
-                  <span className={styles.pillLabel}>Pages</span>
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={panel.mode === "graph"}
-                  className={cx(styles.panelTabPill, panel.mode === "graph" && styles.panelTabActive)}
-                  data-coachmark={weakReady && fogReady ? "fog" : undefined}
-                  onClick={() => setPanel({ mode: "graph" })}
-                  title="知识迷雾拓扑图"
-                >
-                  <Waypoints size={13} aria-hidden />
-                  <span className={styles.pillLabel}>图谱</span>
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={panel.mode === "tasks"}
-                  className={cx(styles.panelTabPill, panel.mode === "tasks" && styles.panelTabActive)}
-                  onClick={() => setPanel({ mode: "tasks" })}
-                  title="这个空间的日程任务"
-                >
-                  <ListTodo size={13} aria-hidden />
-                  <span className={styles.pillLabel}>任务</span>
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={panel.mode === "info" && panel.section === "files"}
-                  className={cx(styles.panelIconTab, panel.mode === "info" && panel.section === "files" && styles.panelTabActive)}
-                  onClick={() => setPanel({ mode: "info", section: "files" })}
-                  aria-label="课程资料"
-                  title="课程资料"
-                >
-                  <FileText size={14} aria-hidden />
-                  <span className={styles.tabLabel}>资料</span>
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={panel.mode === "info" && panel.section === "memory"}
-                  className={cx(styles.panelIconTab, panel.mode === "info" && panel.section === "memory" && styles.panelTabActive)}
-                  onClick={() => setPanel({ mode: "info", section: "memory" })}
-                  aria-label="空间学习记忆"
-                  title={`空间学习记忆 (${spaceMemories.length})`}
-                >
-                  <Brain size={14} aria-hidden />
-                  <span className={styles.tabLabel}>记忆</span>
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={panel.mode === "info" && panel.section === "about"}
-                  className={cx(styles.panelIconTab, panel.mode === "info" && panel.section === "about" && styles.panelTabActive)}
-                  onClick={() => setPanel({ mode: "info", section: "about" })}
-                  aria-label="空间概览与教学说明"
-                  title="空间概览与教学说明"
-                >
-                  <SlidersHorizontal size={14} aria-hidden />
-                  <span className={styles.tabLabel}>概览</span>
-                </button>
+              <div ref={tabsRef} className={styles.panelTabs} role="tablist" aria-label="右侧面板视图">
+                {tabThumb && (
+                  <span
+                    className={cx(styles.panelThumb, tabThumb.animate && styles.panelThumbSlide)}
+                    style={{ width: tabThumb.width, transform: `translateX(${tabThumb.x}px)` }}
+                    aria-hidden
+                  />
+                )}
+                {tabs.map((tab) => (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    role="tab"
+                    aria-selected={tab.active}
+                    aria-label={tab.label}
+                    title={tab.title}
+                    className={cx(styles.panelTab, tab.active && styles.panelTabActive)}
+                    data-coachmark={tab.coachmark}
+                    onClick={tab.open}
+                  >
+                    <tab.icon size={14} aria-hidden />
+                    {tab.active && <span className={styles.tabLabel}>{tab.label}</span>}
+                    {tab.active && tab.count !== undefined && tab.count > 0 && <span className={styles.tabCount}>{tab.count}</span>}
+                  </button>
+                ))}
               </div>
             )}
 
@@ -803,8 +767,8 @@ export function SubjectPage({
                       type="button"
                       className={styles.panelActionBtn}
                       onClick={() => void reopen(threadId)}
-                      aria-label="重新打开 Thread"
-                      title="重新打开 Thread"
+                      aria-label="重新打开支线"
+                      title="重新打开支线"
                     >
                       <RotateCcw size={14} />
                     </button>
@@ -815,8 +779,8 @@ export function SubjectPage({
                       disabled={Boolean(threadPhase) || resolvingId === threadId}
                       aria-busy={resolvingId === threadId || undefined}
                       onClick={() => void beginResolve(threadId)}
-                      aria-label="标记为已解决并合并回主对话"
-                      title="已解决（合并小结回主对话）"
+                      aria-label="标记为已解决并合并回主线"
+                      title="已解决（合并小结回主线）"
                     >
                       {resolvingId === threadId ? <LoaderCircle className={styles.spin} size={15} /> : <CheckCircle2 size={15} />}
                     </button>
@@ -885,7 +849,10 @@ export function SubjectPage({
           {panel.mode === "pages" && (
             <div className={styles.pagesPane}>
               <header className={styles.pagesBar}>
-                <strong>Pages · {subject.name}</strong>
+                <button type="button" className={styles.pagesBack} onClick={() => setPanel({ mode: "info", section: "files" })}>
+                  <ChevronLeft size={14} aria-hidden />资料库
+                </button>
+                <strong>空间笔记</strong>
                 <div className={styles.pagesViews} role="group" aria-label="笔记视图">
                   {([["edit", "编辑"], ["split", "分栏"], ["preview", "预览"]] as const).map(([id, label]) => (
                     <button
@@ -969,16 +936,18 @@ export function SubjectPage({
                   problems={chat.problems}
                   onStartExercise={(problemId) => void chat.startExerciseOn(threadId, problemId)}
                   autoFocusKey={threadId}
-                  placeholder="引导或追问这个 Thread…"
+                  placeholder="引导或追问这个支线…"
                 />
               </div>
             </div>
           )}
           {panel.mode === "info" && (
             <div className={styles.info}>
-              <header className={styles.threadSubHead}>
-                <strong>{panel.section === "about" ? "空间概览与教学说明" : panel.section === "files" ? "课程资料" : "空间学习记忆"}</strong>
-              </header>
+              {panel.section !== "files" && (
+                <header className={styles.threadSubHead}>
+                  <strong>{panel.section === "about" ? "空间概览与教学说明" : "空间学习记忆"}</strong>
+                </header>
+              )}
               {panel.section === "about" && (
                 <div className={styles.about}>
                   <div className={styles.aboutMeta}>
@@ -1000,7 +969,7 @@ export function SubjectPage({
                     />
                   </label>
 
-                  {/* 零成本足迹式知识看板（不耗额外 Token，自动聚合本空间卡点、已掌握与已解决 Thread） */}
+                  {/* 零成本足迹式知识看板（不耗额外 Token，自动聚合本空间卡点、已掌握与已解决支线） */}
                   <div className={styles.footprintSection}>
                     <span className={styles.footprintTitle}>空间知识足迹（自动聚合）</span>
                     <div className={styles.footprintStats}>
@@ -1010,7 +979,7 @@ export function SubjectPage({
                       </div>
                       <div className={styles.footprintStat}>
                         <strong>{openThreads.length}</strong>
-                        <span>进行中 Thread</span>
+                        <span>进行中支线</span>
                       </div>
                       <div className={styles.footprintStat}>
                         <strong>{spaceMemories.filter((m) => m.kind === "mastery" || m.status === "resolved").length + doneThreads.length}</strong>
@@ -1039,7 +1008,7 @@ export function SubjectPage({
                                   onClick={() =>
                                     void chat.sendTo(
                                       mainId,
-                                      `针对我之前在「${m.topic}」上的薄弱点（${m.summary}），请开启一个专项巩固 Thread 带我彻底搞懂并做一道题验证。`,
+                                      `针对我之前在「${m.topic}」上的薄弱点（${m.summary}），请开启一个巩固支线，带我彻底搞懂并做一道题验证。`,
                                     )
                                   }
                                 >
@@ -1065,7 +1034,7 @@ export function SubjectPage({
                             onClick={() => openThread(t.id)}
                           >
                             <CheckCircle2 size={13} className={styles.footprintDoneIcon} aria-hidden />
-                            <span>Thread · {t.title}</span>
+                            <span>支线 · {t.title}</span>
                           </button>
                         ))}
                         {spaceMemories
@@ -1081,13 +1050,20 @@ export function SubjectPage({
                   </div>
                 </div>
               )}
-              {panel.section === "files" && <Files subjectId={subject.id} onChange={() => void chat.loadSubjects()} />}
+              {panel.section === "files" && (
+                <Library
+                  subjectId={subject.id}
+                  notesChars={pages.id === subject.id ? pages.text.trim().length : 0}
+                  onOpenNotes={() => setPanel({ mode: "pages" })}
+                  onChange={() => void chat.loadSubjects()}
+                />
+              )}
               {panel.section === "memory" && (
                 <div className={styles.memoriesPane}>
                   {spaceMemories.length === 0 ? (
                     <div className={styles.muted}>
                       <p>这个空间的误区和掌握会出现在这里。</p>
-                      <button type="button" onClick={() => showPanel({ mode: "list" })}>去主对话讲一讲</button>
+                      <button type="button" onClick={() => showPanel({ mode: "list" })}>去主线讲一讲</button>
                     </div>
                   ) : (
                     spaceMemories.map((memory) => (
@@ -1113,7 +1089,7 @@ export function SubjectPage({
       {resolveFor && (
         <div className={styles.backdrop} onMouseDown={() => setResolveFor(null)}>
           <div className={styles.resolve} role="dialog" aria-modal="true" aria-label="合并小结" onMouseDown={(event) => event.stopPropagation()}>
-            <h2>合并回主对话</h2>
+            <h2>合并回主线</h2>
             {drafting && <p className={styles.muted}>正在起草小结…</p>}
             {draftError && <p className={styles.error}>{draftError}</p>}
             {draft && (
@@ -1214,14 +1190,14 @@ function ThreadList({
           {workingCount > 0 && <span className={styles.slotHint}>{Math.min(2, workingCount)}/2 执行中</span>}
         </div>
         <p>
-          当主对话开始拆解问题时，KnowGap 会在这里追踪每个 Thread 的实时状态：哪些正在执行、哪些等待你回应、哪些已解决。
+          当主线开始拆解问题时，KnowGap 会在这里追踪每个支线的实时状态：哪些正在执行、哪些等待你回应、哪些已解决。
         </p>
       </div>
 
       {isEmpty ? (
         <div className={styles.emptyThreadsCenter}>
           <MessagesSquare size={22} strokeWidth={1.5} aria-hidden />
-          <p>开始对话后，你的 Thread 会显示在这里。</p>
+          <p>开始对话后，你的支线会显示在这里。</p>
         </div>
       ) : (
         <>
@@ -1260,7 +1236,7 @@ function ThreadList({
                         disabled={running || resolvingId === item.id}
                         aria-busy={resolvingId === item.id || undefined}
                         onClick={() => onResolve(item.id)}
-                        title={running ? "执行中，完成后可归档" : "已解决（合并小结回主对话）"}
+                        title={running ? "执行中，完成后可归档" : "已解决（合并小结回主线）"}
                       >
                         {resolvingId === item.id ? "合并中…" : "归档总结"}
                       </button>
@@ -1306,151 +1282,3 @@ function ThreadList({
   );
 }
 
-function Files({ subjectId, onChange }: { subjectId: string; onChange: () => void }) {
-  const client = useMemo(() => createMaterialClient(), []);
-  const input = useRef<HTMLInputElement>(null);
-  const [documents, setDocuments] = useState<CourseMaterial[]>([]);
-  const [wsTree, setWsTree] = useState<{
-    workspace: string;
-    name: string;
-    entries: Array<{ name: string; path: string; kind: "dir" | "file"; children?: Array<{ name: string; path: string; kind: "dir" | "file" }> }>;
-  }>({ workspace: "", name: "", entries: [] });
-  const [openDirs, setOpenDirs] = useState<Record<string, boolean>>({});
-  const [error, setError] = useState<string | null>(null);
-  const refresh = useCallback(async () => {
-    try {
-      setDocuments(await client.list({ subjectId }));
-      setError(null);
-    } catch (failure) {
-      setError(toApiError(failure).message);
-    }
-  }, [client, subjectId]);
-  const refreshWs = useCallback(async () => {
-    try {
-      setWsTree(await chatApi.workspaceTree());
-    } catch { /* ignore */ }
-  }, []);
-  useEffect(() => {
-    void refresh();
-    void refreshWs();
-    const onEnv = () => void refreshWs();
-    window.addEventListener("knowgap:agent-env", onEnv);
-    return () => window.removeEventListener("knowgap:agent-env", onEnv);
-  }, [refresh, refreshWs]);
-  const upload = async (file: File) => {
-    try {
-      await client.upload(file, subjectId);
-      await refresh();
-      onChange();
-    } catch (failure) {
-      setError(toApiError(failure).message);
-    }
-  };
-  const remove = async (id: string) => {
-    await client.remove(id);
-    await refresh();
-    onChange();
-  };
-  return (
-    <div className={styles.files}>
-      <div className={styles.filesBlock}>
-        <div className={styles.filesBlockHead}>
-          <span className={styles.filesBlockTitle}>空间上传讲义 ({documents.length})</span>
-          <button className={styles.uploadBtn} onClick={() => input.current?.click()}>
-            <Upload size={12} aria-hidden />上传资料
-          </button>
-        </div>
-        <input ref={input} hidden type="file" accept=".pdf,.docx,.pptx,.xlsx,.txt,.md,.csv" onChange={(event) => { const file = event.target.files?.[0]; if (file) void upload(file); }} />
-        {error && <p className={styles.error}>{error}</p>}
-        <ul>
-          {documents.map((document) => (
-            <li key={document.id}>
-              <FileText size={13} aria-hidden />
-              <span>{document.title}</span>
-              <button aria-label={`删除 ${document.title}`} onClick={() => void remove(document.id)}><Trash2 size={12} /></button>
-            </li>
-          ))}
-          {documents.length === 0 && <li className={styles.muted}>还没有上传空间专属讲义。</li>}
-        </ul>
-      </div>
-
-      {/* 参照 LobeHub 图 1 右栏：本地工作区文件夹目录树 */}
-      <div className={styles.filesBlock}>
-        <div className={styles.filesBlockHead}>
-          <span className={styles.filesBlockTitle}>
-            本地工作区文件树 {wsTree.name ? `(${wsTree.name})` : ""}
-          </span>
-        </div>
-        {!wsTree.workspace ? (
-          <p className={styles.muted}>尚未绑定本地工作区目录。点击输入框左下方的「未选择工作区」即可选择本地文件夹。</p>
-        ) : wsTree.entries.length === 0 ? (
-          <p className={styles.muted}>该工作区文件夹为空。</p>
-        ) : (
-          <ul className={styles.wsTreeList}>
-            {wsTree.entries.map((entry) => (
-              <li key={entry.path} className={styles.wsTreeItem}>
-                {entry.kind === "dir" ? (
-                  <>
-                    <button
-                      type="button"
-                      className={styles.wsTreeRow}
-                      onClick={() => setOpenDirs((old) => ({ ...old, [entry.path]: !old[entry.path] }))}
-                    >
-                      {openDirs[entry.path] ? <ChevronDown size={13} aria-hidden /> : <ChevronRight size={13} aria-hidden />}
-                      <Folder size={13} className={styles.wsFolderIcon} aria-hidden />
-                      <span>{entry.name}</span>
-                    </button>
-                    {openDirs[entry.path] && entry.children && entry.children.length > 0 && (
-                      <ul className={styles.wsSubList}>
-                        {entry.children.map((sub) => (
-                          <li key={sub.path}>
-                            <button
-                              type="button"
-                              className={styles.wsTreeRow}
-                              onClick={() => {
-                                if (sub.kind === "file") {
-                                  window.dispatchEvent(
-                                    new CustomEvent<string>(WIDGET_ASK_EVENT, {
-                                      detail: `请读取工作区文件「${sub.path}」并帮我分析其中的核心内容：`,
-                                    }),
-                                  );
-                                }
-                              }}
-                            >
-                              {sub.kind === "dir" ? (
-                                <Folder size={12} className={styles.wsFolderIcon} aria-hidden />
-                              ) : (
-                                <FileText size={12} aria-hidden />
-                              )}
-                              <span>{sub.name}</span>
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </>
-                ) : (
-                  <button
-                    type="button"
-                    className={styles.wsTreeRow}
-                    onClick={() =>
-                      window.dispatchEvent(
-                        new CustomEvent<string>(WIDGET_ASK_EVENT, {
-                          detail: `请读取工作区文件「${entry.path}」并帮我分析其中的核心内容：`,
-                        }),
-                      )
-                    }
-                    title="点击将此文件带入输入框"
-                  >
-                    <FileText size={13} aria-hidden />
-                    <span>{entry.name}</span>
-                  </button>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-    </div>
-  );
-}

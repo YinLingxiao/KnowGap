@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { GraduationCap, Plus, X } from "lucide-react";
+import { DOCUMENT_EXTENSIONS } from "@/lib/chat/attachments";
 import { SPACE_COLORS, LEVELS } from "@/lib/chat/space";
 import type { Level, SpaceInput, Subject } from "@/lib/chat/types";
 import styles from "./CreateSpaceDialog.module.css";
@@ -163,7 +164,7 @@ export function CreateSpaceDialog({ subject, onClose, onCreate, onUpdate }: Crea
               onDrop={(event) => { event.preventDefault(); setOver(false); addFiles(event.dataTransfer.files); }}
             >
               <span>拖入 PDF、Word、PPT、Excel 或文本文件，或点击添加</span>
-              <input ref={fileRef} type="file" accept=".pdf,.docx,.pptx,.xlsx,.txt,.md,.csv" multiple hidden onChange={(event) => addFiles(event.target.files)} />
+              <input ref={fileRef} type="file" accept={DOCUMENT_EXTENSIONS.join(",")} multiple hidden onChange={(event) => addFiles(event.target.files)} />
             </div>
             {files.length > 0 && (
               <ul className={styles.fileList}>

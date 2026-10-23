@@ -75,7 +75,6 @@
 }
 
 .link,
-.focus,
 .reviewAction,
 .plan {
   display: inline-flex;
@@ -163,11 +162,6 @@
   color: var(--orange);
 }
 
-.focus {
-  color: var(--accent-text);
-}
-
-.focus:hover,
 .plan:hover {
   background: var(--accent-soft-strong);
 }

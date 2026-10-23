@@ -10,7 +10,7 @@
 | `manual` | `agenda_tasks` 表 | 用户手动或快录添加的待办，支持父子任务 |
 | `ai_breakdown` | `agenda_tasks` 表 | AI 拆解排期后用户确认入列的任务（父任务 + 子任务） |
 | `review` | `agenda_tasks` 表 | 艾宾浩斯错题闪回，由后端根据 `misconception` 学习记忆自动生成 |
-| Thread | **不存储**，`GET /api/agenda/feed` 实时聚合 | 进行中（open）的空间 Thread，截止日继承所属空间的 `deadline` |
+| 支线 | **不存储**，`GET /api/agenda/feed` 实时聚合 | 进行中（open）的空间支线，截止日继承所属空间的 `deadline` |
 
 ## 2. Task 对象
 
@@ -23,7 +23,7 @@
   "priority": 1,                     // 1~4，1 最高；P1 红 / P2 橙 / P3 蓝 / P4 无色
   "labels": ["电路原理"],
   "subject_id": "subj-…",            // 可空
-  "thread_id": null,                 // 关联的 Thread（conversation id），可空
+  "thread_id": null,                 // 关联的支线（conversation id），可空
   "scheduled_date": "2026-10-22",    // 计划哪天学（Schedule），可空
   "scheduled_start_at": "2026-10-22T15:00", // 计划几点开始（本地时间，无时区），可空；有值时 scheduled_date 必须等于其日期部分
   "duration_minutes": 45,            // 可空
@@ -84,7 +84,7 @@
 
 ### `POST /api/agenda/breakdown`
 请求体：`{"goal": "两周内搞定电路原理期末", "subject_id": "subj-…" | null, "deadline_date": "2026-11-05" | null, "today": "2026-10-21"}`。
-后端调用模型（可带上空间 goal、误区、进行中 Thread 作为参考），返回**草稿，不入库**：
+后端调用模型（可带上空间 goal、误区、进行中支线作为参考），返回**草稿，不入库**：
 ```json
 {"parent": TaskDraft, "children": [TaskDraft]}
 ```
@@ -102,7 +102,7 @@
 - **周历与 AI 拆解**（agenda-calendar 会话）拥有：`components/agenda/WeekCalendar.tsx`、`components/agenda/AiBreakdownDialog.tsx`，以独立组件交付，props 如下，由主界面挂载：
 
 ```ts
-// WeekCalendar：一周 7 列 × 时间轴；全天/仅日期任务放顶部全天行；截止日以红色旗标显示在对应日期；Thread 以蓝色条显示在截止日
+// WeekCalendar：一周 7 列 × 时间轴；全天/仅日期任务放顶部全天行；截止日以红色旗标显示在对应日期；支线以蓝色条显示在截止日
 interface WeekCalendarProps {
   weekStart: string;                 // 周一，YYYY-MM-DD
   tasks: AgendaTask[];
@@ -128,7 +128,6 @@ interface AiBreakdownDialogProps {
 }
 ```
 
-- **专注联动**：任务行上的「▶ 专注」按钮派发 `window` 事件 `knowgap:focus-start`，`detail: { taskId: string | null; title: string; subjectId: string | null }`；番茄钟模块监听该事件开始计时。番茄钟结项时如勾选「完成任务」，自行调用 `agendaApi.updateTask(taskId, { status: "done" })`，并派发 `knowgap:agenda-changed` 让日程页刷新。
 - **刷新**：任何模块改了任务后派发 `window` 事件 `knowgap:agenda-changed`（无 detail），日程页监听后重新拉取。
 
 ## 6. v2 增补（2026-10-21 晚）：提醒、全局添加任务、桌面托盘
@@ -149,8 +148,8 @@ interface AiBreakdownDialogProps {
 | 方法 / 事件 | 方向 | 说明 |
 | --- | --- | --- |
 | `showMain(): void` | 页面 → 主进程 | 显示并聚焦主窗口（窗口在托盘里时也能唤出）。通知点击、快问浮窗跳转都用它 |
-| `setTrayStatus({ focus?: string \| null; todayCount?: number })` | 页面 → 主进程 | 托盘悬停提示与菜单里的「专注中 12:34 · 标题」「今日待办 N 项」 |
+| `setTrayStatus({ todayCount?: number })` | 页面 → 主进程 | 托盘菜单里的「今日待办 N 项」 |
 | `getDesktopSettings(): Promise<{ closeToTray: boolean; openAtLogin: boolean }>` / `setDesktopSettings(patch)` | 页面 ↔ 主进程 | 设置页的两个开关 |
-| 页面 `window` 事件 `knowgap:tray-command`，`detail: "open-agenda" \| "start-focus" \| "quick-ask"` | 主进程 → 页面 | 托盘菜单命令，由 preload 转成 DOM 事件；`open-agenda` 复用 `knowgap:open-agenda`，`start-focus` 复用 `FOCUS_START_EVENT` |
+| 页面 `window` 事件 `knowgap:tray-command`，`detail` 为 `open-agenda` 或 `quick-ask` | 主进程 → 页面 | 托盘菜单命令，由 preload 转成 DOM 事件；`open-agenda` 复用 `knowgap:open-agenda` |
 - 浏览器（非 Electron）里 `window.knowgap` 不存在，所有调用都要可选链并静默降级。
 - 其他会话需要调用而类型尚未声明时，用局部类型断言，例如 `(window as unknown as { knowgap?: { showMain?: () => void } }).knowgap?.showMain?.()`，不要去改 SettingsDialog.tsx 里的全局声明（归 desktop-tray 会话）。

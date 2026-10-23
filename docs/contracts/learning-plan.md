@@ -18,7 +18,7 @@
       "title": "用 n=5, k=3 的小例子走一遍出列过程",   // 1~60 字
       "status": "done",               // pending | in_progress | awaiting_learner | done | skipped
       "note": "",                     // 可选，≤120 字，例如等待作答的问题
-      "thread_id": null,              // 可选，交给 Thread 执行的步骤
+      "thread_id": null,              // 可选，交给支线执行的步骤
       "completed_message_id": "msg-…",// 变为 done 时所在的消息，时间线标记用
       "updated_at": "…"
     }
@@ -38,7 +38,7 @@
   2. 同时最多一个 `in_progress`；多出的改为 `pending`。
   3. AI 不能把已 `done` 的步骤改回未完成（保持 `done`，在返回里提示）。
   4. `awaiting_learner → done` 只允许在学习者于该步进入等待之后已经发过新消息的轮次（服务端记录进入等待时的消息序号）；否则保持 `awaiting_learner`。
-  5. `thread_id` 必须是当前学生在同一学习空间里的 Thread，否则丢弃该字段。
+  5. `thread_id` 必须是当前学生在同一学习空间里的支线，否则丢弃该字段。
 - 返回给模型：归一化后的计划 JSON（含每步 id），以及被拒绝的改动说明。
 - 旧的 `plan_steps` 不再提供给模型；历史消息里的 `plan_steps` 调用前端不再渲染整张卡片。
 
@@ -56,7 +56,7 @@
 
 - SSE 新增事件 `plan`，数据为完整 Plan 对象：工具执行后、兜底推进后各推送一次。
 - 计划变更时，在**本轮助手消息**的 meta 写入 `plan_changes: [{"step_id", "title", "from", "to"}]`，消息接口返回 `plan_changes` 字段（前端时间线标记用）。
-- Thread 同步：带 `thread_id` 的步骤，在该 Thread 被标记为已解决时自动变为 `done`（推送到主对话的下一次 `plan` 事件或接口读取时可见）。
+- 支线同步：带 `thread_id` 的步骤，在该支线被标记为已解决时自动变为 `done`（推送到主线的下一次 `plan` 事件或接口读取时可见）。
 
 ## 7. REST 接口
 
@@ -74,4 +74,4 @@
 
 - 数据层：`frontend/src/lib/chat/plan.ts`（类型、映射、`planApi`、事件常量），两个会话只读，改动写进汇报。
 - `useChat` 收到 SSE `plan` 事件后派发 `window` 事件 `PLAN_EVENT = "knowgap:plan"`，`detail: { conversationId, plan }`（plan 已映射为前端类型）；计划条组件自己按 conversationId 订阅并在挂载时调用 `planApi.get`。
-- 计划条 `PlanBar` 挂在 `Composer` 输入框上方（Composer 已有 conversationId），因此首页对话、学习空间主对话、Thread 都自动拥有。
+- 计划条 `PlanBar` 挂在 `Composer` 输入框上方（Composer 已有 conversationId），因此首页对话、学习空间主线、支线都自动拥有。

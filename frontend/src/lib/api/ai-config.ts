@@ -5,11 +5,30 @@
 import { API_BASE_URL } from "../config";
 import { request } from "./http-client";
 
+export type AIAuthMode = "api_key" | "adc" | "chatgpt";
+
+export interface ChatGPTStatus {
+  connected: boolean;
+  email: string;
+  planEnabled: boolean;
+  reauthRequired: boolean;
+  expiresAt: number;
+  accounts: Array<{ clientId: string; email: string; active: boolean }>;
+  error: string;
+}
+
 interface WireAIConfig {
   base_url: string;
   model: string;
   has_api_key: boolean;
   configured: boolean;
+  auth_mode?: AIAuthMode;
+  project_id?: string;
+  location?: string;
+  chatgpt?: {
+    connected: boolean; email: string; plan_enabled: boolean; reauth_required: boolean;
+    expires_at: number; accounts: Array<{ client_id: string; email: string; active: boolean }>; error: string;
+  };
 }
 
 export interface AIConfigStatus {
@@ -18,6 +37,10 @@ export interface AIConfigStatus {
   hasApiKey: boolean;
   /** 必填项已填写；不代表已通过连接测试 */
   configured: boolean;
+  authMode?: AIAuthMode;
+  projectId?: string;
+  location?: string;
+  chatgpt?: ChatGPTStatus;
 }
 
 export interface AIConfigInput {
@@ -25,6 +48,9 @@ export interface AIConfigInput {
   model: string;
   /** 留空：同一服务地址下保留后端已保存的密钥 */
   apiKey: string;
+  authMode?: AIAuthMode;
+  projectId?: string;
+  location?: string;
 }
 
 export interface AIConfigTestResult {
@@ -33,7 +59,13 @@ export interface AIConfigTestResult {
 }
 
 function mapStatus(data: WireAIConfig): AIConfigStatus {
-  return { baseUrl: data.base_url, model: data.model, hasApiKey: data.has_api_key, configured: data.configured };
+  return { baseUrl: data.base_url, model: data.model, hasApiKey: data.has_api_key, configured: data.configured,
+    authMode: data.auth_mode ?? "api_key", projectId: data.project_id ?? "", location: data.location ?? "global",
+    chatgpt: data.chatgpt ? { connected: data.chatgpt.connected, email: data.chatgpt.email,
+      planEnabled: data.chatgpt.plan_enabled, reauthRequired: data.chatgpt.reauth_required,
+      expiresAt: data.chatgpt.expires_at, error: data.chatgpt.error,
+      accounts: (data.chatgpt.accounts ?? []).map((item) => ({ clientId: item.client_id, email: item.email, active: item.active })) }
+      : undefined };
 }
 
 function toWire(input: AIConfigInput) {
@@ -41,7 +73,9 @@ function toWire(input: AIConfigInput) {
   return JSON.stringify({
     base_url: input.baseUrl.trim(),
     model: input.model.trim(),
-    ...(apiKey ? { api_key: apiKey } : {}),
+    ...(input.authMode ? { auth_mode: input.authMode } : {}),
+    ...(input.authMode === "chatgpt" ? {} : input.authMode === "adc" ? { project_id: input.projectId?.trim() ?? "", location: input.location?.trim() ?? "global" }
+      : apiKey ? { api_key: apiKey } : {}),
   });
 }
 

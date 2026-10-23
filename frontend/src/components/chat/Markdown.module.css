@@ -1,6 +1,6 @@
 .markdown {
   min-width: 0;
-  max-width: 68ch;
+  max-width: var(--chat-text-w, 68ch);
   font-size: var(--text-read);
   line-height: var(--leading-read);
   overflow-wrap: anywhere;

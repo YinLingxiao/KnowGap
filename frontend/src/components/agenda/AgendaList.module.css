@@ -115,7 +115,7 @@
 
   position: relative;
   display: grid;
-  grid-template-columns: 18px 18px minmax(10em, 1fr) minmax(0, auto) 56px;
+  grid-template-columns: 18px 18px minmax(10em, 1fr) minmax(0, auto);
   align-items: center;
   gap: 6px;
   min-height: 34px;
@@ -152,7 +152,7 @@
 }
 
 .child {
-  grid-template-columns: 18px 18px minmax(10em, 1fr) minmax(0, auto) 56px;
+  grid-template-columns: 18px 18px minmax(10em, 1fr) minmax(0, auto);
   min-height: 30px;
   padding-left: 26px;
 }
@@ -345,36 +345,9 @@
   background: var(--green);
 }
 
-.focusBtn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  height: 22px;
-  border-radius: var(--radius-sm);
-  color: var(--text-tertiary);
-  font-size: var(--text-xs);
-  opacity: 0;
-}
-
-.row:hover .focusBtn,
-.selected .focusBtn,
-.focusBtn:focus-visible {
-  opacity: 1;
-}
-
-.focusBtn:hover {
-  background: var(--accent-soft);
-  color: var(--accent-text);
-}
-
-.focusSlot {
-  display: block;
-}
-
 @media (max-width: 760px) {
   .row {
-    grid-template-columns: 18px 18px minmax(0, 1fr) 56px;
+    grid-template-columns: 18px 18px minmax(0, 1fr);
   }
 
   .meta {

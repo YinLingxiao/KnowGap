@@ -245,8 +245,8 @@ async def analyze_image_for_relay(
     cfg = settings.config()
     vision_config = settings.vision_config(cfg)
     logic_settings, _ = settings.logic_settings(cfg)
-    logic_ready = bool(logic_settings.llm_api_key.get_secret_value() and logic_settings.llm_base_url.strip()
-                       and logic_settings.llm_model.strip())
+    logic_ready = (bool(settings.ai.chatgpt and settings.ai.status()["configured"])
+                   if logic_settings.llm_auth_mode == "chatgpt" else logic_settings.llm_configured)
     relay = cfg.dual_model_relay and logic_ready
     source = resolve_image(request, store, student_id)
     # Single-model fallback: without a separate brain, the eyes judge in the same call.

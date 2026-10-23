@@ -88,6 +88,16 @@
   font-size: var(--text-2xs);
 }
 
+/* 读取说明：这份文件里有些内容没有读到（图片里的字、隐藏页、扫描页……），琥珀色小标记，悬停看详情 */
+.noteDot {
+  padding: 0 5px;
+  border: 1px solid color-mix(in srgb, var(--amber, #e0a23a) 45%, var(--border));
+  border-radius: 4px;
+  color: var(--amber, #e0a23a);
+  font-size: var(--text-2xs);
+  cursor: help;
+}
+
 .errorText {
   color: var(--red);
   font-size: var(--text-2xs);

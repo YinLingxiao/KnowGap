@@ -30,7 +30,7 @@ from app.chat.agent import (
 from app.chat.store import ChatStore, INTERRUPTED
 from app.chat.attachments import attachment_query, prepare_attachment_history
 from app.chat.plan import PlanStore, brief
-from app.chat.checkpoints import resume_state
+from app.chat.checkpoints import MAX_TOOL_ROUNDS, resume_state
 from app.chat.usage import normalize_usage
 from app.chat.schemas import DispatchThread, ProposeThreads, ReportProgress
 from app.chat.skills.problem_drill_skill import SEARCH_TOOL, drill_plan, guard_reply, lesson_first, wants_problems
@@ -49,8 +49,31 @@ IMAGE_FAILED = ("【图片读取失败】学生发了一张图片，但识图没
 logger = logging.getLogger(__name__)
 _PROFILE_LABEL_RE = re.compile(r"^\s*\[(?:Identity|Preference|Context|Activity|Experience)\]\s*")
 ANALYSIS_TIMEOUT = 60
-MAX_TOOL_ROUNDS = 8
 THREAD_CONCURRENCY = 2
+
+
+MAX_REASONING_CHARS = 20_000
+EMPTY_REPLY_RETRIES = 2
+
+
+def flatten_tool_history(messages: list[dict]) -> list[dict]:
+    """工具调用与结果改写成普通对话文字，不修改传入的列表。"""
+    flat: list[dict] = []
+    for message in messages:
+        if message.get("role") == "tool":
+            flat.append({"role": "user", "content": f"（工具返回）{str(message.get('content') or '')[:1500]}"})
+        elif message.get("tool_calls"):
+            names = "、".join(str((call.get("function") or {}).get("name") or "") for call in message["tool_calls"])
+            flat.append({"role": message["role"], "content": f"{message.get('content') or ''}（已调用工具：{names}）".strip()})
+        else:
+            flat.append(message)
+    return flat
+
+
+def _reasoning_meta(thoughts: list[str]) -> dict:
+    """The model's visible thinking is stored for display only; it is never sent back to the model."""
+    text = "".join(thoughts).strip()
+    return {"reasoning": text[:MAX_REASONING_CHARS]} if text else {}
 
 
 def sse(event: str, data: dict) -> str:
@@ -104,6 +127,8 @@ class ChatService:
         self.settings = settings
         # (VisionStore, ServiceModels)，由 main.py 在视觉服务创建后挂上；没有时图片按「读取失败」处理
         self.vision = None
+        # FileStore，由 main.py 挂上；没有时不提供文件生成工具
+        self.files = None
         self.active: dict[str, Generation] = {}
         self.approvals: dict[str, asyncio.Future] = {}
         self.reviews: set[asyncio.Task] = set()
@@ -133,7 +158,7 @@ class ChatService:
             self.store.merge_meta(row["id"], {"pending_approval": None})
             checkpoint = self.store.message_meta(row["id"]).get("last_checkpoint")
             available, blocked = resume_state(checkpoint, "failed")
-            detail = blocked or ("已保存断点，可在 Thread 中点击「从断点继续」。" if available else "请检查已有进展后重试。")
+            detail = blocked or ("已保存断点，可在支线中点击「从断点继续」。" if available else "请检查已有进展后重试。")
             report(self.store, row["student_id"], row["conversation_id"], row["reply_to"], "failed",
                    f"服务重启中断了任务。{detail}")
         for row in queued:
@@ -200,7 +225,7 @@ class ChatService:
         self.approvals[approval_id] = future
         approval = {"id": approval_id, "name": name, "arguments": arguments}
         self.store.merge_meta(generation.assistant_message_id, {"pending_approval": approval})
-        self._report(generation, "waiting", "需要你在 Thread 中确认操作后继续。")
+        self._report(generation, "waiting", "需要你在支线中确认操作后继续。")
         generation.queue.put_nowait(("tool_approval", {"id": approval_id, "name": name, "arguments": arguments}))
         try:
             return bool(await asyncio.wait_for(future, 600))
@@ -275,7 +300,7 @@ class ChatService:
             body.title, body.task, body.thread_id, skill=body.skill,
         )
         if not self.store.replies(message_id):
-            report(self.store, student_id, thread_id, message_id, "queued", "已收到主对话交办的任务，等待执行。")
+            report(self.store, student_id, thread_id, message_id, "queued", "已收到主线交办的任务，等待执行。")
         self._start_delivery(student_id, thread_id)
         generation.queue.put_nowait(("thread_dispatched", {"thread_id": thread_id}))
         return json.dumps({"thread_id": thread_id, "delivered": True,
@@ -290,10 +315,10 @@ class ChatService:
             data = item.model_dump()
             if not any(p["title"] == item.title and p["task"] == item.task for p in proposals):
                 if len(proposals) >= 8:
-                    raise ValueError("每条回复最多建议 8 个 Thread。")
+                    raise ValueError("每条回复最多建议 8 个支线。")
                 proposals.append({"id": new_id("proposal"), **data, "thread_id": None})
         self.store.merge_meta(generation.assistant_message_id, {"thread_proposals": proposals})
-        return "已展示建议卡片，尚未创建或执行 Thread；等待用户选择。"
+        return "已展示建议卡片，尚未创建或执行支线；等待用户选择。"
 
     def confirm_proposal(self, student_id: str, conversation_id: str, message_id: str, proposal_id: str) -> str:
         # Never trust client-supplied titles/tasks or the *latest* user input. Older cards stay
@@ -302,7 +327,7 @@ class ChatService:
         if message is None or message.conversation_id != conversation_id:
             raise LookupError("建议不存在或不属于当前对话。")
         if self.store.role_context(conversation_id)["role"] != "main":
-            raise ValueError("只有学习空间主对话可以确认建议。")
+            raise ValueError("只有学习空间主线可以确认建议。")
         if message.role != "assistant" or message.status != "complete" or not message.reply_to:
             raise ValueError("请等待建议回复完成后再确认。")
         proposals = self.store.message_meta(message_id).get("thread_proposals", [])
@@ -311,7 +336,7 @@ class ChatService:
             raise LookupError("建议不存在。")
         if proposal.get("thread_id"):
             if not self.store.conversation(proposal["thread_id"], student_id):
-                raise ValueError("这个建议对应的 Thread 已删除，请重新规划。")
+                raise ValueError("这个建议对应的支线已删除，请重新规划。")
             return proposal["thread_id"]
         thread_id, delivery = dispatch(
             self.store, student_id, conversation_id, message.reply_to, proposal["title"], proposal["task"], None,
@@ -330,7 +355,7 @@ class ChatService:
                                                                "progress_summary": body.summary})
         report(self.store, student_id, generation.conversation_id, generation.user_message_id,
                "working", body.summary)
-        return "已将进展同步到主对话。"
+        return "已将进展同步到主线。"
 
     def stop(self, conversation_id: str) -> bool:
         generation = self.active.get(conversation_id)
@@ -360,7 +385,7 @@ class ChatService:
         generation.parent_id = self._thread_parent_id(student_id, conversation_id)
         generation.detached = detached
         self.active[conversation_id] = generation
-        self._report(generation, "working", "正在处理这项任务，详细过程可在 Thread 中查看。")
+        self._report(generation, "working", "正在处理这项任务，详细过程可在支线中查看。")
         generation.queue.put_nowait(("start", {
             "conversation": self._conversation(student_id, conversation_id),
             "user_message": self._message(student_id, user_message_id),
@@ -377,12 +402,12 @@ class ChatService:
         if message is None or message.conversation_id != conversation_id:
             raise LookupError("断点不存在或不属于当前对话。")
         if self.store.role_context(conversation_id)["role"] != "thread":
-            raise ValueError("目前仅执行 Thread 支持从断点继续。")
+            raise ValueError("目前仅执行支线支持从断点继续。")
         existing = self.active.get(conversation_id)
         if existing:
             if existing.assistant_message_id == message_id:
                 return existing  # A lost HTTP response must not launch a second worker.
-            raise ValueError("Thread 正在执行，请稍候。")
+            raise ValueError("支线正在执行，请稍候。")
         if self.closing or not self.has_thread_slot(student_id, conversation_id):
             raise ValueError("当前没有空闲执行槽位，请稍候。")
         checkpoint = self.store.message_meta(message_id).get("last_checkpoint")
@@ -534,6 +559,7 @@ class ChatService:
         queue = generation.queue
         assistant_id = generation.assistant_message_id
         parts: list[str] = []
+        thoughts: list[str] = []
         tool_log: list[dict] = []
         tool_messages: list[dict] = []
         last_flush = 0.0
@@ -623,6 +649,14 @@ class ChatService:
             # search_good_problems 用当前对话的模型抽题、用讲义库做本地检索
             ctx.model = model
             ctx.library = self.library
+            ctx.files = self.files
+            ctx.generated = []
+
+            def on_file(file: dict) -> None:
+                self.store.merge_meta(assistant_id, {"files": list(ctx.generated)})
+                if not generation.detached:
+                    queue.put_nowait(("file", file))
+            ctx.on_file = on_file
             if role["role"] == "main":
                 ctx.dispatch_thread = lambda arguments: self._dispatch_thread(student_id, generation, arguments)
                 ctx.propose_threads = lambda arguments: self._propose_threads(student_id, generation, arguments)
@@ -630,12 +664,16 @@ class ChatService:
                 ctx.report_progress = lambda arguments: self._progress(student_id, generation, ctx, arguments)
             definitions = [tool for tool in DEFINITIONS if (
                 tool["function"]["name"] in {"dispatch_thread", "propose_threads", "session_search", "memory", "update_plan",
-                                             "agenda_list", "agenda_add", "agenda_update"}
+                                             "agenda_list", "agenda_add", "agenda_update",
+                                             "create_document", "edit_document", "read_document"}
                 if role["role"] == "main" else tool["function"]["name"] not in {"dispatch_thread", "propose_threads"}
                 and (role["role"] == "thread" or tool["function"]["name"] != "report_progress")
             )]
             if exercise is None:
                 definitions = [tool for tool in definitions if tool["function"]["name"] != "exercise_reference"]
+            if self.files is None:
+                definitions = [tool for tool in definitions if tool["function"]["name"] not in
+                               {"create_document", "edit_document", "read_document"}]
             if ctx.workspace is None:
                 # 读写文件与终端命令属于开发者模式：没有绑定工作区时不提供给模型
                 definitions = [tool for tool in definitions if tool["function"]["name"] not in {"read", "write", "edit", "bash"}]
@@ -677,17 +715,24 @@ class ChatService:
                 parts.append(image_card + "\n\n")
                 if not generation.detached:
                     queue.put_nowait(("delta", {"text": image_card + "\n\n"}))
+            empty_retries = 0
             for round_index in range(state["rounds"], MAX_TOOL_ROUNDS):
+                nudged = empty_retries > 0 and not "".join(parts).strip()
+                if nudged:
+                    # 同样的请求再发一遍多半还是空的：第二次起带上一句提醒，改变一下请求
+                    messages.append({"role": "user", "content": "（系统提示：上一次没有给出任何文字，请直接回答学生。）"})
                 state.update(phase="model", rounds=round_index)
                 self._save_checkpoint(generation, state)
                 request_id = new_id("usage")
                 self._usage(request_id, model, generation.conversation_id, assistant_id, "chat")
                 calls = None
                 round_text: list[str] = []
+                # 最后一次重试：把历史里的工具调用压成普通文字再问，绕开个别模型对工具历史的挑剔
+                sent = flatten_tool_history(messages) if nudged and empty_retries >= EMPTY_REPLY_RETRIES else messages
                 try:
-                    stream = model.stream(messages, definitions)
+                    stream = model.stream(sent, definitions)
                 except TypeError:
-                    stream = model.stream(messages)
+                    stream = model.stream(sent)
                 async for kind, value in stream:
                     if kind == "text":
                         parts.append(value)
@@ -697,12 +742,22 @@ class ChatService:
                         elif time.monotonic() - last_flush >= 0.3:
                             self.store.finish_reply(assistant_id, content="".join(parts), status="streaming")
                             last_flush = time.monotonic()
+                    elif kind == "reasoning":
+                        thoughts.append(value)
+                        if not generation.detached:
+                            queue.put_nowait(("reasoning", {"text": value}))
                     elif kind == "usage":
                         self._usage(request_id, model, generation.conversation_id, assistant_id, "chat", value)
                     elif kind == "tool_calls":
                         calls = value
                     elif kind == "finish":
                         finish = value
+                if nudged:
+                    messages.pop()
+                if not calls and not "".join(parts).strip() and empty_retries < EMPTY_REPLY_RETRIES:
+                    # 个别模型偶尔只吐出思考、既没有正文也没有工具调用：自动再问几次，不让学生白等
+                    empty_retries += 1
+                    continue
                 if not calls:
                     break
                 assistant_calls = []
@@ -712,6 +767,7 @@ class ChatService:
                     assistant_calls.append({
                         "id": call["id"], "type": "function",
                         "function": {"name": call.get("name") or "", "arguments": call.get("arguments") or "{}"},
+                        **({"gemini_part": call["gemini_part"]} if isinstance(call.get("gemini_part"), dict) else {}),
                     })
                 batch = [{"role": "assistant", "content": "".join(round_text), "tool_calls": assistant_calls}]
                 messages.extend(batch)
@@ -739,7 +795,7 @@ class ChatService:
             cited = [source.model_dump() for source in sources if f"[{source.label}]" in text]
             self.store.finish_reply(assistant_id, content=text, status="complete", meta={
                 "context_memory_ids": [m.id for m, _ in memories], "sources": cited, "truncated": finish == "length",
-                "tool_calls": tool_log, "tool_messages": tool_messages,
+                "tool_calls": tool_log, "tool_messages": tool_messages, **_reasoning_meta(thoughts),
                 "last_checkpoint": {"version": 1, "phase": "done"},
             })
             self._release(generation)
@@ -791,12 +847,12 @@ class ChatService:
                 self.store.finish_reply(assistant_id, content="".join(parts),
                                         status="failed" if self.closing else "cancelled",
                                         error=INTERRUPTED if self.closing else None,
-                                        meta={"tool_calls": tool_log, "tool_messages": tool_messages})
+                                        meta={"tool_calls": tool_log, "tool_messages": tool_messages, **_reasoning_meta(thoughts)})
                 queue.put_nowait(("cancelled", {"message": self._message(student_id, assistant_id)}))
         except ProviderError as exc:
             close_tool_batch(tool_messages)
             self.store.finish_reply(assistant_id, content="".join(parts), status="failed", error=exc.detail,
-                                    meta={"tool_calls": tool_log, "tool_messages": tool_messages})
+                                    meta={"tool_calls": tool_log, "tool_messages": tool_messages, **_reasoning_meta(thoughts)})
             queue.put_nowait(("error", {
                 "detail": exc.detail, "status_code": exc.status_code,
                 "message": self._message(student_id, assistant_id),
@@ -807,7 +863,7 @@ class ChatService:
             try:
                 close_tool_batch(tool_messages)
                 self.store.finish_reply(assistant_id, content="".join(parts), status="failed", error=detail,
-                                        meta={"tool_calls": tool_log, "tool_messages": tool_messages})
+                                        meta={"tool_calls": tool_log, "tool_messages": tool_messages, **_reasoning_meta(thoughts)})
             except Exception:
                 logger.exception("Could not record the failed reply")
             queue.put_nowait(("error", {"detail": detail, "status_code": 500, "message": None}))
@@ -820,9 +876,9 @@ class ChatService:
                     status = result.status if result.status in {"failed", "cancelled"} else (
                         "waiting" if meta.get("needs_user") else "idle")
                     summary = result.error if result.status == "failed" else (
-                        "任务已停止，可在 Thread 中继续。" if result.status == "cancelled" else
+                        "任务已停止，可在支线中继续。" if result.status == "cancelled" else
                         meta.get("progress_summary") or f"本轮回复节选：{result.content[:500]}")
-                    self._report(generation, status, summary or "请打开 Thread 查看。")
+                    self._report(generation, status, summary or "请打开支线查看。")
             except Exception:
                 logger.exception("Could not publish thread status")
             try:
@@ -1053,7 +1109,7 @@ class ChatService:
         if conversation is None:
             raise LookupError("会话不存在或已删除。")
         if conversation.kind != "thread":
-            raise ValueError("只有 Thread 可以整理成小结。")
+            raise ValueError("只有支线可以整理成小结。")
         subject = self.store.conversation_subject(conversation_id)
         role = self.store.role_context(conversation_id)
         raw = await self._complete_json(

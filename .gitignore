@@ -47,4 +47,6 @@ backend/data/
 *.db-*
 ai-settings.json
 .ai-settings-*
+chatgpt-auth.json
+.chatgpt-auth-*
 

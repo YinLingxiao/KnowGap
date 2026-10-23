@@ -15,7 +15,7 @@ def dispatch(store: ChatStore, student: str, main_id: str, source_id: str,
         db.execute("BEGIN IMMEDIATE")
         main = db.execute("SELECT * FROM conversations WHERE id = ? AND student_id = ?", (main_id, student)).fetchone()
         if main is None or main["kind"] != "main" or not main["subject_id"]:
-            raise ValueError("只有学习空间的主对话可以分派 Thread。")
+            raise ValueError("只有学习空间的主线可以分派支线。")
         source = db.execute(
             "SELECT * FROM conversation_messages WHERE id = ? AND conversation_id = ? AND role = 'user'",
             (source_id, main_id),
@@ -28,7 +28,7 @@ def dispatch(store: ChatStore, student: str, main_id: str, source_id: str,
                 "AND subject_id = ? AND kind = 'thread'", (thread_id, student, main_id, main["subject_id"]),
             ).fetchone()
             if target is None:
-                raise ValueError("只能续接本学习空间的 Thread。")
+                raise ValueError("只能续接本学习空间的支线。")
         previous = db.execute(
             "SELECT thread_id, message_id FROM thread_dispatches WHERE source_message_id = ? AND (task_key = ? OR thread_id = ?)",
             (source_id, key, thread_id),
@@ -95,7 +95,7 @@ def report(store: ChatStore, student: str, thread_id: str, reply_id: str, status
         card = {"thread_id": thread_id, "title": thread["title"], "status": status, "summary": clip(summary, 600)}
         labels = {"queued": "已排队", "working": "正在执行", "waiting": "等待你", "idle": "本轮完成",
                   "failed": "执行失败", "cancelled": "已停止"}
-        content = f"Thread「{thread['title']}」· {labels[status]}\n\n{card['summary']}"
+        content = f"支线「{thread['title']}」· {labels[status]}\n\n{card['summary']}"
         request_id = f"report-{reply_id}"
         existing = db.execute(
             "SELECT id FROM conversation_messages WHERE conversation_id = ? AND client_request_id = ?",

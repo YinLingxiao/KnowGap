@@ -367,7 +367,7 @@ export function OnboardingStage({
               <div className={styles.reviewHead}>
                 <h2 className={styles.questionHeadline}>核对你的学习画像</h2>
                 <p className={styles.leadLine}>
-                  确认后将写入长期记忆（USER），后续所有主对话与 Thread 都会按此定制讲法。你可以直接点击修改或留空：
+                  确认后将写入长期记忆（USER），后续所有主线与支线都会按此定制讲法。你可以直接点击修改或留空：
                 </p>
               </div>
 

@@ -163,7 +163,7 @@ export function CheatSheet({ subject, notes, onClose }: { subject: Subject; note
             <div className={styles.sheetMeta}>
               {subject.goal && <span>目标：{subject.goal}</span>}
               {subject.deadline && <span>考试 {subject.deadline}{typeof days === "number" && days >= 0 ? `（剩 ${days} 天）` : ""}</span>}
-              {sheet && <span>待攻克 {sheet.stats.misconceptions} · 已掌握 {sheet.stats.mastered} · 已解决 Thread {sheet.stats.threadsResolved}</span>}
+              {sheet && <span>待攻克 {sheet.stats.misconceptions} · 已掌握 {sheet.stats.mastered} · 已解决支线 {sheet.stats.threadsResolved}</span>}
             </div>
           </header>
 
@@ -183,11 +183,11 @@ export function CheatSheet({ subject, notes, onClose }: { subject: Subject; note
                   ))}
                 </ol>
               ) : (
-                <div className={styles.empty}>{pending ? "读取中…" : <>记下的误区会出现在这里。<button type="button" onClick={onClose}>去主对话讲一讲</button></>}</div>
+                <div className={styles.empty}>{pending ? "读取中…" : <>记下的误区会出现在这里。<button type="button" onClick={onClose}>去主线讲一讲</button></>}</div>
               )}
             </Quadrant>
 
-            <Quadrant index="②" title="Thread 核心结论" hint="来自已解决 Thread 的总结" tone="green">
+            <Quadrant index="②" title="支线核心结论" hint="来自已解决支线的总结" tone="green">
               {conclusions.length ? (
                 <ul className={styles.list}>
                   {conclusions.map((c) => (
@@ -203,7 +203,7 @@ export function CheatSheet({ subject, notes, onClose }: { subject: Subject; note
                   ))}
                 </ul>
               ) : (
-                <div className={styles.empty}>{pending ? "读取中…" : <>已解决的支线结论会出现在这里。<button type="button" onClick={onClose}>去主对话讲一讲</button></>}</div>
+                <div className={styles.empty}>{pending ? "读取中…" : <>已解决的支线结论会出现在这里。<button type="button" onClick={onClose}>去主线讲一讲</button></>}</div>
               )}
             </Quadrant>
 

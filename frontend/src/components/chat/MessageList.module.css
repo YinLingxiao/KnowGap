@@ -20,6 +20,12 @@
   max-width: var(--chat-w);
   margin: 0 auto;
   padding: 18px 24px 32px;
+  /* 对话里的正文行宽：紧凑档保留 68ch 的阅读行长，其余档跟随列宽 */
+  --chat-text-w: none;
+}
+
+:global(:root[data-chat-width="narrow"]) .list {
+  --chat-text-w: 68ch;
 }
 
 .row {
@@ -45,7 +51,7 @@
 .fileNavigationError { color: var(--red); font-size: var(--text-xs); }
 
 .userBubble {
-  max-width: min(85%, 580px);
+  max-width: min(85%, var(--chat-bubble-w, 580px));
   padding: 10px 16px;
   border-radius: 18px 18px 6px 18px;
   background: var(--bg-user-bubble);
@@ -214,39 +220,6 @@
   opacity: 0.5;
 }
 
-.thinking {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  background: linear-gradient(90deg, var(--text-tertiary) 30%, var(--text) 50%, var(--text-tertiary) 70%) 0 0 / 200% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  font-size: var(--text-sm);
-  animation: shimmer 2.2s linear infinite;
-}
-
-.dots {
-  display: inline-flex;
-  gap: 3px;
-}
-
-.dots i {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--accent);
-  animation: pulse 1.2s infinite var(--ease);
-}
-
-.dots i:nth-child(2) {
-  animation-delay: 0.15s;
-}
-
-.dots i:nth-child(3) {
-  animation-delay: 0.3s;
-}
-
 @keyframes pulse {
   0%,
   80%,
@@ -410,7 +383,7 @@
   font-size: var(--text-xs);
 }
 
-/* Thread 进展胶囊（参照 Claude 主对话内联单行胶囊：[ • 标题  进展摘要 ]） */
+/* 支线进展胶囊（主线内联的单行胶囊：[ • 标题  进展摘要 ]） */
 .threadPill {
   display: inline-flex;
   align-items: center;
@@ -486,50 +459,47 @@
   white-space: nowrap;
 }
 
-/* Thread 合并小结卡片 */
-.summary {
-  display: flex;
-  flex-direction: column;
+/* 合并后仅保留完成状态与名称，总结继续保存在上下文中。 */
+.resolvedThread {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
   gap: 8px;
-  width: 100%;
-  padding: 14px 16px;
-  border: 1px solid var(--border-strong);
+  width: 320px;
+  max-width: 100%;
+  min-height: 48px;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  background: var(--bg-elevated);
-  box-shadow: var(--shadow-card);
+  background: var(--bg-subtle);
   color: var(--text);
+  font-size: var(--text-sm);
   text-align: left;
   transition:
     background-color var(--t-hover) var(--ease-out),
-    border-color var(--t-hover) var(--ease-out),
-    transform 200ms var(--ease-spring),
-    box-shadow 200ms var(--ease-out);
+    border-color var(--t-hover) var(--ease-out);
 }
 
-.summaryResolved {
-  border-color: color-mix(in srgb, var(--green) 38%, var(--border-strong));
-}
-
-.summary:hover {
-  border-color: color-mix(in srgb, var(--text) 22%, var(--border-strong));
+.resolvedThread:hover {
+  border-color: var(--border-strong);
   background: var(--bg-hover);
-  transform: translateY(-1.5px);
-  box-shadow: var(--shadow-elevated);
 }
 
-.summaryHead {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
+.resolvedThread:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
 }
 
-.summaryDot {
+.resolvedThread > svg {
   flex-shrink: 0;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--grey);
+  color: var(--green);
+}
+
+.resolvedThreadTitle {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dot_working,
@@ -548,57 +518,6 @@
 
 .dot_failed {
   background: var(--red);
-}
-
-.summaryTitle {
-  font-size: var(--text-sm);
-  font-weight: 600;
-}
-
-.summaryStatus {
-  color: var(--text-tertiary);
-  font-size: var(--text-xs);
-}
-
-.summaryArrow {
-  flex-shrink: 0;
-  margin-left: auto;
-  color: var(--text-tertiary);
-  transition: transform var(--t-hover) var(--ease-out), color var(--t-hover) var(--ease-out);
-}
-
-.summary:hover .summaryArrow {
-  color: var(--text);
-  transform: translate(1px, -1px);
-}
-
-.summaryBody {
-  color: var(--text-secondary);
-  font-size: var(--text-sm);
-  line-height: var(--leading-read);
-}
-
-.summary:not(.summaryResolved) .summaryBody {
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-}
-
-.takeaways {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding-left: 16px;
-  list-style: disc;
-  color: var(--text);
-  font-size: var(--text-sm);
-  line-height: var(--leading-read);
-}
-
-.summaryMemories {
-  color: var(--text-tertiary);
-  font-size: var(--text-xs);
 }
 
 .jump {
@@ -631,7 +550,7 @@
   color: var(--text);
 }
 
-/* plan_steps 步骤清单卡片（严格对齐 Claude Thread 的 ✓ / ○ 步骤框） */
+/* plan_steps 步骤清单卡片（✓ / ○ 步骤框） */
 .planCard {
   display: flex;
   flex-direction: column;
@@ -674,7 +593,7 @@
   color: var(--text-tertiary);
 }
 
-/* 工具调用：参照 Claude Thread 内的描边任务清单卡片（✓ 已完成 / ○ 执行中） */
+/* 工具调用：描边任务清单卡片（✓ 已完成 / ○ 执行中） */
 .toolChecklist {
   display: flex;
   flex-direction: column;
@@ -1071,6 +990,7 @@
   .actionGroup,
   .traceChevron,
   .threadPill,
+  .resolvedThread,
   .flash {
     transition: none;
     animation: none;

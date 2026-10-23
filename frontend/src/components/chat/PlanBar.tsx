@@ -128,8 +128,8 @@ function StepRow({ step, fresh, editing, onStartEdit, onCancelEdit, onRename, on
           >
             {step.title}
             {step.threadId && (
-              <span className={styles.thread} title="这一步交给了 Thread 执行">
-                <GitBranch size={10} aria-hidden />Thread
+              <span className={styles.thread} title="这一步交给了支线执行">
+                <GitBranch size={10} aria-hidden />支线
               </span>
             )}
           </span>

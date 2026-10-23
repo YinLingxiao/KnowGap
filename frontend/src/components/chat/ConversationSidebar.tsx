@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import {
   Brain, CalendarCheck, ChevronRight, CircleHelp, FolderKanban, ListPlus, Loader, MoreHorizontal, PanelLeftClose, Pencil, Plus,
@@ -22,7 +22,6 @@ interface SidebarProps {
   activeId: string | null;
   activeSubjectId: string | null;
   generatingIds: string[];
-  memoryCount: number;
   modelIssue: boolean;
   materialsActive: boolean;
   onNewChat: () => void;
@@ -33,8 +32,6 @@ interface SidebarProps {
   spacesActive: boolean;
   onOpenAgenda: () => void;
   agendaActive: boolean;
-  /** 侧栏里的专注计时入口，由 ChatApp 注入 */
-  focusSlot?: ReactNode;
   onRename: (id: string, title: string) => Promise<boolean>;
   onDelete: (id: string) => Promise<boolean>;
   onRetry: () => void;
@@ -49,10 +46,9 @@ interface SidebarProps {
 }
 
 function SectionHeader({
-  label, count, open, onToggle,
+  label, open, onToggle,
 }: {
   label: string;
-  count: number;
   open: boolean;
   onToggle: () => void;
 }) {
@@ -61,7 +57,6 @@ function SectionHeader({
       <button type="button" className={styles.sectionToggle} onClick={onToggle} aria-expanded={open}>
         <ChevronRight size={12} className={cx(styles.chevron, open && styles.chevronOpen)} aria-hidden />
         <span className={styles.sectionLabel}>{label}</span>
-        <span className={styles.count}>{count}</span>
       </button>
     </div>
   );
@@ -268,11 +263,10 @@ export function ConversationSidebar(props: SidebarProps) {
             className={styles.iconButton}
             onClick={() => window.dispatchEvent(new CustomEvent(COMPOSE_TASK_EVENT))}
             aria-label="添加任务"
-            title="添加任务（Q）"
+            title="添加任务"
           >
             <ListPlus size={16} aria-hidden />
           </button>
-          <div className={styles.focusShortcut}>{props.focusSlot}</div>
         </div>
 
         <div className={styles.primaryNav} role="group" aria-label="学习与安排">
@@ -301,7 +295,6 @@ export function ConversationSidebar(props: SidebarProps) {
           <button className={styles.navItem} onClick={props.onOpenMemory}>
             <Brain size={15} aria-hidden />
             <span>学习记忆</span>
-            {props.memoryCount > 0 && <span className={styles.count}>{props.memoryCount}</span>}
           </button>
           <button className={cx(styles.navItem, props.materialsActive && styles.navActive)} onClick={props.onOpenMaterials}>
             <SlidersHorizontal size={15} aria-hidden />
@@ -315,7 +308,6 @@ export function ConversationSidebar(props: SidebarProps) {
           <div className={styles.group}>
             <SectionHeader
               label="学习空间"
-              count={filteredSpaces.length}
               open={spacesOpen}
               onToggle={() => setSpacesOpen((value) => !value)}
             />
@@ -330,14 +322,6 @@ export function ConversationSidebar(props: SidebarProps) {
                     >
                       <span className={styles.spaceRing} style={{ color: subject.color }} aria-hidden />
                       <span className={styles.itemTitle}>{subject.name}</span>
-                      {subject.progress.openThreads > 0 && (
-                        <span
-                          className={styles.count}
-                          title={`${subject.progress.openThreads} 个 Thread 进行中`}
-                        >
-                          {subject.progress.openThreads}
-                        </span>
-                      )}
                     </button>
                   </li>
                 ))}
@@ -349,7 +333,6 @@ export function ConversationSidebar(props: SidebarProps) {
         <div className={styles.group}>
           <SectionHeader
             label="最近对话"
-            count={recentChats.length}
             open={recentsOpen}
             onToggle={() => setRecentsOpen((value) => !value)}
           />

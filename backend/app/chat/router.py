@@ -80,7 +80,7 @@ def chat_router(store: ChatStore, service: ChatService) -> APIRouter:
         if service.is_generating(conversation_id):
             raise HTTPException(409, "上一条回复仍在生成，请先停止或稍候。")
         if not service.has_thread_slot(current_student(), conversation_id):
-            raise HTTPException(409, "本空间已有 2 个 Thread 正在执行，请稍候再发送。")
+            raise HTTPException(409, "本空间已有 2 个支线正在执行，请稍候再发送。")
 
     def require_subject(subject_id: str | None) -> None:
         if subject_id is not None and store.subject(subject_id, current_student()) is None:

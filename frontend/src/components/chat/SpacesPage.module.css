@@ -1,4 +1,4 @@
-/* 学习空间总览页：参照 Claude Projects（居中窄容器 + 单行标题与图标按钮 + 双列描边卡片） */
+/* 学习空间总览页：居中窄容器 + 单行标题与图标按钮 + 双列描边卡片 */
 .page {
   position: relative;
   display: flex;
@@ -258,7 +258,7 @@
   font-weight: 500;
 }
 
-/* 参照 Claude 右上角 New project 按钮 */
+/* 右上角「新建空间」按钮 */
 .createBtn {
   display: inline-flex;
   align-items: center;

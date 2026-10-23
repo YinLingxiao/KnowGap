@@ -1,7 +1,8 @@
 # -*- mode: python ; coding: utf-8 -*-
-from PyInstaller.utils.hooks import collect_submodules
+from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs, collect_submodules
 
-hidden = collect_submodules("app") + [
+# reportlab 的字体与 PDF 对象模块按名字动态加载；pypdfium2 自带 pdfium 动态库
+hidden = collect_submodules("app") + collect_submodules("reportlab") + collect_submodules("pypdfium2") + collect_submodules("google.auth") + collect_submodules("google.oauth2") + collect_submodules("jwt") + [
     "uvicorn.logging",
     "uvicorn.loops",
     "uvicorn.loops.auto",
@@ -15,8 +16,8 @@ hidden = collect_submodules("app") + [
 a = Analysis(
     ["desktop_entry.py"],
     pathex=["."],
-    binaries=[],
-    datas=[],
+    binaries=collect_dynamic_libs("pypdfium2_raw") + collect_dynamic_libs("pypdfium2"),
+    datas=collect_data_files("reportlab") + collect_data_files("pypdfium2") + collect_data_files("pypdfium2_raw"),
     hiddenimports=hidden,
     hookspath=[],
     hooksconfig={},

@@ -22,7 +22,7 @@ const GROUPS: Array<{ title: string; items: Array<{ action: HelpAction; title: s
   {
     title: "学习",
     items: [
-      { action: "explain", title: "讲一个概念", how: "在空间主对话里提问", body: "用一个例子把概念讲清楚。" },
+      { action: "explain", title: "讲一个概念", how: "在空间主线里提问", body: "用一个例子把概念讲清楚。" },
       { action: "select", title: "划词追问", how: "选中回复里的一句话", body: "选中后可以追问、举例或存进笔记。" },
       { action: "quiz", title: "考一题", how: "发送「考考我」", body: "讲完就出一道小题检验。" },
       { action: "viva", title: "口试式追问", how: "输入 /viva", body: "让它顺着你的回答往下追问。" },
@@ -34,7 +34,6 @@ const GROUPS: Array<{ title: string; items: Array<{ action: HelpAction; title: s
       { action: "review", title: "闪回复习", how: "打开日程", body: "记过的误区会按时间回来复习。" },
       { action: "graph", title: "看薄弱点", how: "打开空间里的知识图谱", body: "误区和已掌握的概念会画在这里。" },
       { action: "sheet", title: "考前一页纸", how: "在空间顶栏打开", body: "把易错点和结论收成一页。" },
-      { action: "focus", title: "开始专注", how: "点侧栏的专注", body: "计时结束后写下这一段的收获。" },
     ],
   },
   {

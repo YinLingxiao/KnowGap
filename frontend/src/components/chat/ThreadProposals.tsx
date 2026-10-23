@@ -54,7 +54,7 @@ export function ThreadProposals({ proposals, disabled, onConfirm, onOpen }: {
                 onClick={() => threadId ? onOpen?.(threadId) : void confirm(p.id)}
               >
                 {threadId ? <Check size={12} aria-hidden /> : <Play size={11} aria-hidden />}
-                {threadId ? "查看 Thread" : busy ? "开启中…" : errors[p.id] ? "重试" : "开启 Thread"}
+                {threadId ? "查看支线" : busy ? "开启中…" : errors[p.id] ? "重试" : "开启支线"}
                 {threadId && <ArrowUpRight size={12} aria-hidden />}
               </button>
             </li>

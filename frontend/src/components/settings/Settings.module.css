@@ -476,6 +476,37 @@
   opacity: 0.6;
 }
 
+.accountRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  min-height: 30px;
+}
+
+.accountState {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  color: var(--text);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.accountRow .rowAction {
+  margin-left: 0;
+  height: 26px;
+  padding: 0 9px;
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+}
+
+.accountState > svg {
+  flex-shrink: 0;
+  color: var(--text-secondary);
+}
+
 .formActions {
   display: flex;
   flex-wrap: wrap;

@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { createMaterialClient } from "@/lib/api/material-client";
 import { toApiError } from "@/lib/api/errors";
+import { DOCUMENT_EXTENSIONS } from "@/lib/chat/attachments";
 import type { Subject } from "@/lib/chat/types";
 import { cx } from "@/lib/cx";
 import { formatRelativeTime } from "@/lib/labels";
@@ -318,7 +319,7 @@ export function MaterialLibrary({
       <input
         ref={fileInput}
         type="file"
-        accept=".pdf,.docx,.pptx,.xlsx,.txt,.md,.csv"
+        accept={DOCUMENT_EXTENSIONS.join(",")}
         className={styles.fileInput}
         aria-label="选择课程资料"
         onChange={(event) => {

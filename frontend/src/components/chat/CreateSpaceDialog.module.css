@@ -1,4 +1,4 @@
-/* 新建/编辑空间弹窗：严格参照 Claude "New project" 弹窗设计 + 阻尼弹簧动效 */
+/* 新建/编辑空间弹窗：阻尼弹簧动效 */
 .backdrop {
   position: fixed;
   z-index: 50;
@@ -240,7 +240,7 @@
   border-color: var(--accent);
 }
 
-/* 参照 Claude 的 Context (optional) 外框 + 内部虚线框 */
+/* 资料外框 + 内部虚线框 */
 .contextBox {
   display: flex;
   flex-direction: column;

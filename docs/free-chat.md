@@ -8,12 +8,12 @@
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| GET / POST | `/api/subjects` | 学习空间列表 / 新建。新建同时创建主对话，字段见下文 |
+| GET / POST | `/api/subjects` | 学习空间列表 / 新建。新建同时创建主线，字段见下文 |
 | GET / PATCH / DELETE | `/api/subjects/{id}` | 读取、修改、删除学习空间 |
-| GET / POST | `/api/subjects/{id}/threads` | 该空间的 Thread / 新建 Thread |
-| POST | `/api/conversations/{id}/resolve/draft` | 起草 Thread 小结，不保存 |
-| POST | `/api/conversations/{id}/resolve` | 确认小结，合并回主对话 |
-| POST | `/api/conversations/{id}/reopen` | 重新打开 Thread |
+| GET / POST | `/api/subjects/{id}/threads` | 该空间的支线 / 新建支线 |
+| POST | `/api/conversations/{id}/resolve/draft` | 起草支线小结，不保存 |
+| POST | `/api/conversations/{id}/resolve` | 确认小结，合并回主线 |
+| POST | `/api/conversations/{id}/reopen` | 重新打开支线 |
 | GET | `/api/conversations` | 会话列表（按更新时间倒序）；`?subject_id=` 只列某个 Subject |
 | POST | `/api/conversations` | 新建；可选 `subject_id`、`problem_id`（带入练习题）、`client_request_id`（同一 id 重复提交返回同一会话） |
 | GET | `/api/conversations/{id}` | 会话与全部消息（按 `seq`） |
@@ -56,23 +56,23 @@
 - 用户纠正后，`summary` 不会再被模型覆盖。
 - 删除会话后，记忆保留证据快照，并标记来源已删除。
 
-## 学习空间、主对话与 Thread
+## 学习空间、主线与支线
 
-界面叫学习空间，代码和表名仍是 `subject`。它不是一组平行对话：每个空间在创建时就有且只有一条主对话（`conversations.kind = main`），承载整体学习路线。具体卡点另开 Thread（`kind = thread`，`parent_id` 指向主对话，`anchor_message_id` 指向展开它的那条消息）。
+界面叫学习空间，代码和表名仍是 `subject`。它不是一组平行对话：每个空间在创建时就有且只有一条主线（`conversations.kind = main`），承载整体学习路线。具体卡点另开支线（`kind = thread`，`parent_id` 指向主线，`anchor_message_id` 指向展开它的那条消息）。
 
-- 新建：`POST /api/subjects` 接受 `goal`、`level`（`beginner` 零基础 / `some` 学过一些 / `fluent` 比较熟练 / `exam` 冲刺备考）、`deadline`、`color`。名称必填。同一个事务里创建主对话，返回 `main_conversation_id` 和 `progress`。`PATCH` 可以改这些字段。
-- Thread：`GET / POST /api/subjects/{id}/threads`。创建参数 `title?`、`anchor_message_id?`、`client_request_id`（重复提交返回同一条）。未解决的排在前面。
-- 合并：`POST /api/conversations/{id}/resolve/draft` 只起草，不写库，返回 `{title, summary, takeaways}`。小结必须是 2–4 句，要点最多 4 条；模型失败或格式不对时返回真实错误，Thread 状态不变。`POST /api/conversations/{id}/resolve` 用用户确认后的正文把 Thread 标为已解决，并在主对话追加一条 `kind = text` 的助手消息，细节在 `meta.thread_summary`（Thread id、标题、要点、相关记忆 id）。已解决时再次提交不追加。`POST /api/conversations/{id}/reopen` 重新打开，之后再次解决会再追加一条。
-- 上下文：主对话负责协调，通过 `dispatch_thread` 主动新建或续接 Thread 并开始执行；简单问题直接回答。模型能看到空间内已有 Thread 的 id、标题、状态与最近内容。Thread 接收用户原话、交办任务、锚点与主对话最近 6 条（截断），通过 `report_progress` 回报进展与本轮结果。`goal` / `level` / `deadline` 有值时才放进 `subject`，用来调整讲解深度和节奏。详见 [协调与执行设计](thread-coordination.md)。
-- 进度：`progress.to_review` 是疑似和需巩固的误区，`improving` 是改善中，`mastered` 是掌握记录加已解决的误区，另有未解决 / 已解决 Thread 数，以及空间内对话的最近更新时间。
-- 删除空间：主对话和 Thread 变回普通对话（清空 `parent_id`、锚点和状态），记忆改为通用，资料移到未归类。
-- 迁移：启动时给没有主对话的旧空间补一条，并把当时已经在空间里的其他对话转成未解决 Thread。之后新建的普通对话不会被这次迁移改掉。
+- 新建：`POST /api/subjects` 接受 `goal`、`level`（`beginner` 零基础 / `some` 学过一些 / `fluent` 比较熟练 / `exam` 冲刺备考）、`deadline`、`color`。名称必填。同一个事务里创建主线，返回 `main_conversation_id` 和 `progress`。`PATCH` 可以改这些字段。
+- 支线：`GET / POST /api/subjects/{id}/threads`。创建参数 `title?`、`anchor_message_id?`、`client_request_id`（重复提交返回同一条）。未解决的排在前面。
+- 合并：`POST /api/conversations/{id}/resolve/draft` 只起草，不写库，返回 `{title, summary, takeaways}`。小结必须是 2–4 句，要点最多 4 条；模型失败或格式不对时返回真实错误，支线状态不变。`POST /api/conversations/{id}/resolve` 用用户确认后的正文把支线标为已解决，并在主线追加一条 `kind = text` 的助手消息，细节在 `meta.thread_summary`（支线 id、标题、要点、相关记忆 id）。已解决时再次提交不追加。`POST /api/conversations/{id}/reopen` 重新打开，之后再次解决会再追加一条。
+- 上下文：主线负责协调，通过 `dispatch_thread` 主动新建或续接支线并开始执行；简单问题直接回答。模型能看到空间内已有支线的 id、标题、状态与最近内容。支线接收用户原话、交办任务、锚点与主线最近 6 条（截断），通过 `report_progress` 回报进展与本轮结果。`goal` / `level` / `deadline` 有值时才放进 `subject`，用来调整讲解深度和节奏。详见 [协调与执行设计](thread-coordination.md)。
+- 进度：`progress.to_review` 是疑似和需巩固的误区，`improving` 是改善中，`mastered` 是掌握记录加已解决的误区，另有未解决 / 已解决支线数，以及空间内对话的最近更新时间。
+- 删除空间：主线和支线变回普通对话（清空 `parent_id`、锚点和状态），记忆改为通用，资料移到未归类。
+- 迁移：启动时给没有主线的旧空间补一条，并把当时已经在空间里的其他对话转成未解决支线。之后新建的普通对话不会被这次迁移改掉。
 
-侧栏只放入口和「最近」（普通对话与学习空间按活跃时间混排，Thread 不出现）。总览页用进度，不用「更新于」。
+侧栏只放入口和「最近」（普通对话与学习空间按活跃时间混排，支线不出现）。总览页用进度，不用「更新于」。
 
 ## Subject 与分层检索
 
-学习空间相当于 Claude / ChatGPT 的 Project，但主线是一条对话而不是一组平行会话。它拥有主对话、Thread、说明（instructions）、知识库（课程资料）和记忆。
+学习空间相当于 Claude / ChatGPT 的 Project，但主线是一条对话而不是一组平行会话。它拥有主线、支线、说明（instructions）、知识库（课程资料）和记忆。
 
 - 说明会随每次对话发给模型，作为用户偏好，不能覆盖核心教学规则。
 - 资料检索：先查本 Subject 的资料，不够时再补充未归类资料。其他 Subject 的资料不会被检索。

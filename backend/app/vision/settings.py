@@ -9,6 +9,7 @@ the public view only reports whether a key is configured.
 import json
 import time
 from pathlib import Path
+from typing import Literal
 from urllib.parse import urlsplit
 
 from fastapi import HTTPException
@@ -33,6 +34,9 @@ class VisionConfig(BaseModel):
     base_url: str = ""
     model: str = ""
     api_key: SecretStr = SecretStr("")
+    auth_mode: Literal["api_key", "adc", "chatgpt"] = "api_key"
+    project_id: str = ""
+    location: str = "global"
     bbox_format: str = "xyxy_1000"
     # Non-streaming: the read timeout covers the whole generation, and dense pages take a while.
     timeout_seconds: float = 120
@@ -42,7 +46,15 @@ class VisionConfig(BaseModel):
 
     @property
     def configured(self) -> bool:
-        return bool(self.base_url and self.model and self.api_key.get_secret_value())
+        # Vision extraction still uses a model endpoint with its own API key/ADC; ChatGPT OAuth is chat-only for now.
+        if self.auth_mode == "chatgpt":
+            return False
+        return self.llm_settings().llm_configured
+
+    def llm_settings(self) -> Settings:
+        return Settings(_env_file=None, llm_base_url=self.base_url, llm_model=self.model, llm_api_key=self.api_key,
+                        llm_auth_mode=self.auth_mode, llm_project_id=self.project_id, llm_location=self.location,
+                        llm_timeout_seconds=min(self.timeout_seconds, 120))
 
 
 class _VisionEnv(BaseSettings):
@@ -189,7 +201,8 @@ class ServiceModels:
             return base, "global"
         if logic.base_url:
             return base.model_copy(update={"llm_base_url": logic.base_url, "llm_model": logic.model,
-                                           "llm_api_key": logic.api_key}), "service_models"
+                                           "llm_api_key": logic.api_key, "llm_auth_mode": "api_key",
+                                           "llm_project_id": "", "llm_location": "global"}), "service_models"
         return base.model_copy(update={"llm_model": logic.model}), "service_models"
 
     def vision_config(self, cfg: ServiceModelsConfig | None = None) -> VisionConfig:
@@ -201,7 +214,8 @@ class ServiceModels:
                 endpoint = {"base_url": vision.base_url, "api_key": vision.api_key}
             else:
                 logic, _ = self.logic_settings(cfg)
-                endpoint = {"base_url": logic.llm_base_url.strip().rstrip("/"), "api_key": logic.llm_api_key}
+                endpoint = {"base_url": logic.llm_base_url.strip().rstrip("/"), "api_key": logic.llm_api_key,
+                            "auth_mode": logic.llm_auth_mode, "project_id": logic.llm_project_id, "location": logic.llm_location}
             return VisionConfig(model=vision.model, bbox_format=vision.bbox_format, source="service_models",
                                 **endpoint, **common)
         if self.env.configured:
@@ -209,6 +223,7 @@ class ServiceModels:
         logic, _ = self.logic_settings(cfg)
         return VisionConfig(base_url=logic.llm_base_url.strip().rstrip("/"), model=logic.llm_model.strip(),
                             api_key=logic.llm_api_key, bbox_format=vision.bbox_format, source="logic",
+                            auth_mode=logic.llm_auth_mode, project_id=logic.llm_project_id, location=logic.llm_location,
                             timeout_seconds=self.env.timeout_seconds, disable_thinking=False)
 
     def public(self) -> dict:
@@ -216,7 +231,7 @@ class ServiceModels:
         logic, logic_source = self.logic_settings(cfg)
         vision = self.vision_config(cfg)
         memory_model = cfg.memory_model.model if cfg.memory_model.enabled and cfg.memory_model.model else logic.llm_model
-        logic_ready = bool(logic.llm_api_key.get_secret_value() and logic.llm_base_url.strip() and logic.llm_model.strip())
+        logic_ready = bool(self.ai.chatgpt and self.ai.status()["configured"]) if logic.llm_auth_mode == "chatgpt" else logic.llm_configured
         return {
             "logic_model": {
                 "base_url": cfg.logic_model.base_url, "model": cfg.logic_model.model,

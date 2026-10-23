@@ -28,10 +28,9 @@ export function AgendaRail({ view, counts, subjects, onChange, onAdd }: AgendaRa
   return (
     <>
       <nav className={styles.rail} aria-label="日程视图">
-        <button type="button" className={styles.add} onClick={onAdd} aria-keyshortcuts="Q" title="添加任务（Q）">
+        <button type="button" className={styles.add} onClick={onAdd} aria-keyshortcuts="Q" title="添加任务">
           <span className={styles.addIcon} aria-hidden><Plus size={13} strokeWidth={2.5} /></span>
           <span className={styles.name}>添加任务</span>
-          <kbd className={styles.addKey}>Q</kbd>
         </button>
         <ul className={styles.list}>
           {FIXED.map(({ key, icon: Icon }) => (

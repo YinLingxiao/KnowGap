@@ -1,6 +1,6 @@
 """考前急救一页纸: a four-quadrant exam cheat sheet for one learning space.
 
-① 易错红榜 and ② Thread 核心结论 come straight from subject_insights() — the model never writes them, so every
+① 易错红榜 and ② 支线核心结论 come straight from subject_insights() — the model never writes them, so every
 quote is a real learner quote. ③ 公式与适用边界 and ④ 易混对比 + 押题自测 are model-generated; when the model is
 missing, fails or times out they come back empty with a notice and ①② are still returned (never a 500).
 
@@ -37,7 +37,7 @@ PROMPT = """你是考前复习助手，为一名学生生成「考前一页纸�
  "contrasts":[{"a":"概念A","b":"概念B","difference":"一句话核心区别","tip":"记忆口诀或判别方法（可空）"}],
  "quiz":[{"question":"押题自测题，短小可在一分钟内作答","answer":"简明答案"}]}
 要求：
-- 内容只能基于输入里的学习空间信息、讲义片段、对话摘录、Thread 结论与笔记；材料不足时宁可少写，不要编造课程之外的内容。
+- 内容只能基于输入里的学习空间信息、讲义片段、对话摘录、支线结论与笔记；材料不足时宁可少写，不要编造课程之外的内容。
 - formulas 最多 8 条，优先覆盖学生的误区（misconceptions）相关知识；没有公式的学科可写核心定义/定理/算法步骤。
 - contrasts 最多 5 组，优先选学生容易混淆的概念；quiz 最多 6 题，优先针对误区出题。
 - 每个字段尽量简短（单条不超过 80 字），适合打印在一页 A4 上。数学公式使用 KaTeX 语法并用 $...$ 包裹。"""
@@ -177,12 +177,12 @@ def to_markdown(sheet: dict) -> str:
     if not s["pitfalls"]:
         lines.append("_暂无记录的误区。_")
 
-    lines += ["", "## ② Thread 核心结论", ""]
+    lines += ["", "## ② 支线核心结论", ""]
     for c in s["conclusions"]:
         lines.append(f"- **{c['title']}**：{c['summary']}".rstrip("："))
         lines += [f"  - {t}" for t in c["takeaways"]]
     if not s["conclusions"]:
-        lines.append("_暂无已解决的 Thread。_")
+        lines.append("_暂无已解决的支线。_")
 
     lines += ["", "## ③ 核心公式与适用边界", ""]
     for f in s["formulas"]:

@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowRight, BookOpen, ChevronRight, Play, RotateCcw } from "lucide-react";
+import { ArrowRight, BookOpen, ChevronRight, RotateCcw } from "lucide-react";
 import { agendaApi } from "@/lib/agenda/api";
 import {
-  AGENDA_CHANGED_EVENT, FOCUS_START_EVENT,
-  type AgendaFeed, type AgendaTask, type FocusStartDetail,
+  AGENDA_CHANGED_EVENT,
+  type AgendaFeed, type AgendaTask,
 } from "@/lib/agenda/types";
 import type { ConversationSummary, LearnerMemory, Subject } from "@/lib/chat/types";
 import styles from "./TodayPanel.module.css";
@@ -90,7 +90,7 @@ export function TodayPanel(props: TodayPanelProps) {
       if (conversation.kind !== "chat" && !(conversation.kind === "thread" && conversation.threadStatus === "open")) continue;
       items.set(conversation.id, {
         id: conversation.id, title: conversation.title, updatedAt: conversation.updatedAt,
-        context: conversation.kind === "thread" ? "进行中 Thread" : "最近对话",
+        context: conversation.kind === "thread" ? "进行中支线" : "最近对话",
       });
     }
     if (!failed) for (const thread of feed?.threads ?? []) {
@@ -158,15 +158,6 @@ export function TodayPanel(props: TodayPanelProps) {
                         {task.durationMinutes != null && <span>{task.durationMinutes} 分钟</span>}
                       </span>
                     </div>
-                    <button
-                      type="button"
-                      className={styles.focus}
-                      disabled={pending.has(task.id)}
-                      aria-label={`专注：${task.title}`}
-                      onClick={() => window.dispatchEvent(new CustomEvent<FocusStartDetail>(FOCUS_START_EVENT, {
-                        detail: { taskId: task.id, title: task.title, subjectId: task.subjectId },
-                      }))}
-                    ><Play size={12} aria-hidden />专注</button>
                   </li>
                 ))}
               </ul>

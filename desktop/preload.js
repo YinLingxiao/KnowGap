@@ -17,7 +17,7 @@ ipcRenderer.on("quick-shown", () => {
   for (const listener of quickShownListeners) listener();
 });
 
-const TRAY_COMMANDS = new Set(["open-agenda", "start-focus", "quick-ask"]);
+const TRAY_COMMANDS = new Set(["open-agenda", "quick-ask"]);
 
 function dispatchOnPage(type, detail) {
   const init = detail === undefined ? "" : `, { detail: ${JSON.stringify(detail)} }`;
@@ -30,12 +30,12 @@ ipcRenderer.on("tray-command", (_event, command) => {
   if (!TRAY_COMMANDS.has(command)) return;
   dispatchOnPage("knowgap:tray-command", command);
   if (command === "open-agenda") dispatchOnPage("knowgap:open-agenda");
-  if (command === "start-focus") {
-    dispatchOnPage("knowgap:focus-start", { taskId: null, title: "自由专注", subjectId: null });
-  }
 });
 
 contextBridge.exposeInMainWorld("knowgap", {
+  // Only the main window reserves title-bar space; the transparent quick panel
+  // uses the same preload, but must stay frameless and keep its original height.
+  windowChrome: process.argv.includes("--knowgap-main-window") ? { platform: process.platform } : undefined,
   selectFolder: (defaultPath) => ipcRenderer.invoke("select-folder", defaultPath),
   setTheme: (theme) => ipcRenderer.invoke("set-theme", theme),
   onOpenConversation: (listener) => {

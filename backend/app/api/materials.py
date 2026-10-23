@@ -36,7 +36,7 @@ def material_router(library: MaterialStore, subject_exists: Callable[[str], bool
             data = await file.read(MAX_UPLOAD_BYTES + 1)
             if len(data) > MAX_UPLOAD_BYTES:
                 raise HTTPException(413, '单份资料不能超过 20 MB。')
-            return await run_in_threadpool(library.add, owner(request, student_id), file.filename or '', data, subject_id)
+            return await library.add_with_ocr(owner(request, student_id), file.filename or '', data, subject_id)
         finally:
             await file.close()
 

@@ -35,7 +35,7 @@ export interface SpaceProgress {
   lastStudiedAt: string | null;
 }
 
-/** 学习空间：一条主对话、若干 Thread、说明、资料和记忆 */
+/** 学习空间：一条主线、若干支线、说明、资料和记忆 */
 export interface Subject {
   id: string;
   name: string;
@@ -124,6 +124,9 @@ export interface ChatMessage {
   suggestedProblemId: string | null;
   sources: SourceReference[];
   truncated: boolean;
+  /** 模型返回的思考过程（服务商不提供时为空）；只用于展示，不会再发给模型 */
+  reasoning?: string;
+  files?: GeneratedFile[];
   toolCalls: ToolCallView[];
   pendingApproval: ToolApproval | null;
   preferencePrompt: { id: string; text: string; content: string } | null;
@@ -135,6 +138,14 @@ export interface ChatMessage {
   threadUpdate?: { threadId: string; title: string; status: ExecutionStatus; summary: string } | null;
   planChanges?: PlanChange[];
   createdAt: string;
+}
+
+/** AI 生成或修改出来的文件（docx / pptx / xlsx / pdf / md），可以下载 */
+export interface GeneratedFile {
+  id: string;
+  name: string;
+  kind: string;
+  size: number;
 }
 
 export interface ToolCallView {
@@ -196,6 +207,8 @@ export type StreamEvent =
   | { type: "start"; conversation: ConversationSummary | null; userMessage: ChatMessage | null;
       assistantMessage: ChatMessage | null; discardedIds: string[]; replayed: boolean }
   | { type: "delta"; text: string }
+  | { type: "reasoning"; text: string }
+  | { type: "file"; file: GeneratedFile }
   | { type: "done"; message: ChatMessage | null }
   | { type: "cancelled"; message: ChatMessage | null }
   | { type: "error"; detail: string; statusCode: number; message: ChatMessage | null }

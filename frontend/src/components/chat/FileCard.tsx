@@ -52,9 +52,9 @@ const KIND_ICON = {
 export function kindFromName(name: string): AttachmentKind {
   const lower = name.toLowerCase();
   if (lower.endsWith(".pdf")) return "pdf";
-  if (lower.endsWith(".docx")) return "docx";
-  if (lower.endsWith(".pptx")) return "pptx";
-  if (lower.endsWith(".xlsx")) return "xlsx";
+  if (lower.endsWith(".docx") || lower.endsWith(".doc")) return "docx";
+  if (lower.endsWith(".pptx") || lower.endsWith(".ppt")) return "pptx";
+  if (lower.endsWith(".xlsx") || lower.endsWith(".xls")) return "xlsx";
   return "text";
 }
 
@@ -71,13 +71,15 @@ interface FileCardProps {
   scale?: string;
   /** 失败原因（后端返回的中文说明） */
   error?: string;
+  /** 读取说明：没读到的内容，鼠标停在规模信息上时显示，并以标记点提示 */
+  notes?: string[];
   /** 给出时显示 × 移除按钮（输入框里的待发送附件） */
   onRemove?: () => void;
   /** 给出时整张卡片可点击（消息里的只读卡片） */
   onOpen?: () => void;
 }
 
-export function FileCard({ name, kind, state = "ready", scale, error, onRemove, onOpen }: FileCardProps) {
+export function FileCard({ name, kind, state = "ready", scale, error, notes, onRemove, onOpen }: FileCardProps) {
   const resolved = kind ?? kindFromName(name);
   const Icon = state === "error" ? CircleAlert : KIND_ICON[resolved];
   const meta = state === "uploading" ? "正在上传并解析…" : state === "error" ? "" : scale || KIND_LABEL[resolved];
@@ -91,8 +93,11 @@ export function FileCard({ name, kind, state = "ready", scale, error, onRemove, 
         {state === "error" ? (
           <span className={styles.errorText} role="alert">{error || "上传失败"}</span>
         ) : (
-          <span className={styles.meta}>
+          <span className={styles.meta} title={notes?.length ? notes.join("\n") : undefined}>
             {meta}
+            {state === "ready" && notes && notes.length > 0 && (
+              <span className={styles.noteDot} aria-label={`读取说明：${notes.join(" ")}`} role="note">没读到的内容</span>
+            )}
             {state === "ready" && scale && <span className={styles.kind}>{KIND_LABEL[resolved]}</span>}
           </span>
         )}

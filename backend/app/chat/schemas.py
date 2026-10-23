@@ -255,6 +255,8 @@ class ChatMessage(BaseModel):
     suggested_problem_id: str | None = None
     sources: list[SourceReference] = Field(default_factory=list)
     truncated: bool = False
+    reasoning: str = ""
+    files: list[dict] = Field(default_factory=list)
     tool_calls: list[ToolCallRecord] = Field(default_factory=list)
     thread_summary: ThreadSummary | None = None
     thread_update: ThreadUpdate | None = None

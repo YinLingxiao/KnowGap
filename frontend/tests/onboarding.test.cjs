@@ -55,13 +55,14 @@ test('verified first-time user retains the original learning-topic flow', () => 
   assert.doesNotMatch(html, /先连上 AI 模型/);
 });
 
-test('checklist has six tasks with space creation first and existing space checked', () => {
+test('checklist has five tasks with space creation first and existing space checked', () => {
   const render = (hasSpace) => renderToStaticMarkup(React.createElement(GettingStarted, {
     userId: 'test', hasSpace, onCreateSpace: noop, onExplain: noop, onQuiz: noop,
-    onSchedule: noop, onFocus: noop, onSheet: noop,
+    onSchedule: noop, onSheet: noop,
   }));
   const empty = render(false);
-  assert.equal((empty.match(/<li>/g) || []).length, 6);
+  assert.equal((empty.match(/<li>/g) || []).length, 5);
+  assert.doesNotMatch(empty, /专注/);
   assert.ok(empty.indexOf('建一个学习空间') < empty.indexOf('讲懂一个概念'));
   assert.match(empty, /打开考前一页纸/);
   assert.doesNotMatch(empty, /disabled/);

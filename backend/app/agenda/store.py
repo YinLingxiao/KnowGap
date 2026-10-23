@@ -60,7 +60,7 @@ def references(db, student, data, task_id=None):
     if thread is not None and not db.execute(
         "SELECT 1 FROM conversations WHERE id = ? AND student_id = ? AND kind = 'thread'", (thread, student)
     ).fetchone():
-        raise HTTPException(422, "thread_id 不属于当前学生的 Thread")
+        raise HTTPException(422, "thread_id 不属于当前学生的支线")
     parent = data.get("parent_id")
     if parent is not None:
         row = db.execute("SELECT parent_id FROM agenda_tasks WHERE id = ? AND student_id = ?", (parent, student)).fetchone()

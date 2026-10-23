@@ -6,12 +6,14 @@ import tempfile
 import time
 from pathlib import Path
 from threading import RLock
+from typing import Literal
 from urllib.parse import urlsplit
 
 from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, SecretStr, ValidationError
 
 from app.config import Settings
+from app.agents.vertex_config import adc_base_url
 
 RAW_READ_ATTEMPTS = 4
 
@@ -21,6 +23,9 @@ class ConfigurationInput(BaseModel):
     base_url: str
     model: str
     api_key: SecretStr | None = None
+    auth_mode: Literal["api_key", "adc", "chatgpt"] = "api_key"
+    project_id: str = ""
+    location: str = "global"
 
 
 class AISettings:
@@ -28,11 +33,14 @@ class AISettings:
         self.path = settings.resolved_database_path().parent / "ai-settings.json"
         self.lock = RLock()
         self.current = settings
+        self.chatgpt = None
         if self.path.exists():
             try:
                 raw = json.loads(self.path.read_text(encoding="utf-8"))
                 if isinstance(raw, dict) and raw.get("base_url") and raw.get("model"):
-                    self.current = self.candidate({key: raw[key] for key in ("base_url", "model", "api_key") if key in raw})
+                    self.current = self.candidate({key: raw[key] for key in (
+                        "base_url", "model", "api_key", "auth_mode", "project_id", "location",
+                    ) if key in raw})
             except (OSError, ValueError, HTTPException, KeyError, TypeError):
                 raise RuntimeError("无法读取本地 AI 配置，请检查 ai-settings.json。") from None
 
@@ -45,18 +53,31 @@ class AISettings:
                      and not url.username and not url.password and not url.query and not url.fragment)
             _ = url.port
             model = data.model.strip()
+            project = data.project_id.strip() if data.auth_mode == "adc" else ""
+            location = data.location.strip() if data.auth_mode == "adc" else "global"
             key = data.api_key.get_secret_value().strip() if data.api_key is not None else ""
+            if data.auth_mode == "adc":
+                if base != adc_base_url(project, location):
+                    raise ValueError()
+                # ADC credentials come only from google-auth, never from this form or a stored API key.
+                key = ""
+            elif data.auth_mode == "chatgpt":
+                if base != "https://api.openai.com/v1":
+                    raise ValueError()
+                # ChatGPT OAuth tokens live in their own protected file; never reuse an API key.
+                key = ""
             # Empty password fields preserve the existing secret for the SAME provider only.
-            if not key and base == self.current.llm_base_url.strip().rstrip("/"):
+            if data.auth_mode == "api_key" and self.current.llm_auth_mode == "api_key" and not key and base == self.current.llm_base_url.strip().rstrip("/"):
                 key = self.current.llm_api_key.get_secret_value()
-            if not valid or not model or len(model) > 200 or not key or len(key) > 4096:
+            if not valid or not model or len(model) > 200 or (data.auth_mode == "api_key" and not key) or len(key) > 4096:
                 raise ValueError()
             if not key.isascii() or any(ord(c) < 32 or ord(c) == 127 for c in base + model + key):
                 raise ValueError()
         except (ValidationError, ValueError, TypeError):
-            raise HTTPException(422, "请填写有效的 API 根地址、模型名称和 API Key；更换服务地址时需重新填写密钥。") from None
+            raise HTTPException(422, "模型配置无效：API Key 模式需填写地址、模型和密钥；ADC 模式需填写有效的 Google Cloud 项目 ID、区域及对应原生地址；ChatGPT 套餐模式只支持 https://api.openai.com/v1。更换服务地址时需重新填写密钥。") from None
         return self.current.model_copy(update={
             "llm_base_url": base, "llm_model": model, "llm_api_key": SecretStr(key),
+            "llm_auth_mode": data.auth_mode, "llm_project_id": project, "llm_location": location,
         })
 
     def _raw(self) -> dict:
@@ -135,17 +156,28 @@ class AISettings:
     def status(self) -> dict:
         with self.lock:
             settings = self.current
-            has_key = bool(settings.llm_api_key.get_secret_value())
+            has_key = settings.llm_auth_mode == "api_key" and bool(settings.llm_api_key.get_secret_value())
+            chatgpt = self.chatgpt.status() if self.chatgpt is not None else {
+                "connected": False, "email": "", "plan_enabled": False, "reauth_required": False,
+                "accounts": [], "error": "",
+            }
+            usable = settings.llm_configured
+            if settings.llm_auth_mode == "chatgpt":
+                usable = usable and bool(chatgpt.get("connected") and chatgpt.get("plan_enabled"))
             return {"base_url": settings.llm_base_url, "model": settings.llm_model,
                     "has_api_key": has_key,
-                    "configured": has_key and bool(settings.llm_base_url and settings.llm_model)}
+                    "auth_mode": settings.llm_auth_mode, "project_id": settings.llm_project_id,
+                    "location": settings.llm_location, "chatgpt": chatgpt,
+                    "configured": usable}
 
     def save(self, body: dict) -> dict:
         with self.lock:
             candidate = self.candidate(body)
             payload = self._raw()
             payload.update({"base_url": candidate.llm_base_url, "model": candidate.llm_model,
-                            "api_key": candidate.llm_api_key.get_secret_value()})
+                            "api_key": candidate.llm_api_key.get_secret_value(),
+                            "auth_mode": candidate.llm_auth_mode, "project_id": candidate.llm_project_id,
+                            "location": candidate.llm_location})
             self._write(payload)
             self.current = candidate
             return self.status()

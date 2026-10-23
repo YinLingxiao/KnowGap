@@ -15,7 +15,7 @@ import { getAIConfig } from "@/lib/api/ai-config";
 import { uploadImage } from "@/lib/api/vision-client";
 import { toApiError } from "@/lib/api/errors";
 import {
-  ATTACHMENT_ACCEPT, MAX_FILE_MARKERS, attachmentApi, formatFileMarker, intentsFor, isDocumentFile, parseFileMarkers,
+  ATTACHMENT_ACCEPT, MAX_FILE_MARKERS, attachmentApi, formatFileMarker, intentsFor, isDocumentFile, parseFileMarkers, pickAttachmentFiles,
 } from "@/lib/chat/attachments";
 import { useDevMode } from "@/lib/devMode";
 import { PlanBar } from "./PlanBar";
@@ -206,7 +206,7 @@ function deriveInstantSuggestion(messages?: ChatMessage[]): string {
   if (!raw) return "";
 
   if (last.threadProposals && last.threadProposals.some((p) => !p.threadId)) {
-    return "那就按你规划的 Thread 路线推进，我们先从第一个方向开始拆解，结合具体例子讲讲。";
+    return "那就按你规划的支线路线推进，我们先从第一个方向开始拆解，结合具体例子讲讲。";
   }
   if (raw.includes("```knowgap-widget")) {
     if (raw.includes('"step_simulator"')) {
@@ -693,7 +693,7 @@ export function Composer({
     }
     // 旧版 Office 也交给后端返回准确的 415 中文说明，不尝试读取二进制文件。
     if (!isDocumentFile(file.name) && !/\.(doc|ppt|xls)$/i.test(file.name)) {
-      setFileHint("请选择 PDF、Word（.docx）、PPT（.pptx）、Excel（.xlsx）、TXT、Markdown 或 CSV 文件。");
+      setFileHint("请选择 PDF、Word（.docx / .doc）、PPT（.pptx / .ppt）、Excel（.xlsx / .xls）、TXT、Markdown 或 CSV 文件。");
       return;
     }
     if (!conversationId && !ensureConversation) {
@@ -780,8 +780,12 @@ export function Composer({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const triggerFilePicker = useCallback(() => {
-    fileInputRef.current?.click();
-  }, []);
+    // 先用 showOpenFilePicker：所有格式在同一个默认分组里；不支持时退回隐藏的 <input type="file">
+    void pickAttachmentFiles().then((files) => {
+      if (files === null) fileInputRef.current?.click();
+      else for (const file of files) void addFile(file);
+    });
+  }, [addFile]);
 
   const onFileInputChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
@@ -1055,7 +1059,8 @@ export function Composer({
             {parsedDraft.files.map((file) => {
               const attachment = recalledFile(file.id);
               return <FileCard key={file.id} name={attachment?.name ?? file.name} kind={attachment?.kind}
-                scale={attachment ? scaleOf(attachment) : undefined} onRemove={() => removeFile(file.id)} />;
+                scale={attachment ? scaleOf(attachment) : undefined} notes={attachment?.notes}
+                onRemove={() => removeFile(file.id)} />;
             })}
             {pendingFiles.map((item) => (
               <FileCard
@@ -1216,18 +1221,6 @@ export function Composer({
             {!value && !parsedDraft.files.length && activeGhost && (
               <div className={styles.ghostOverlay} aria-hidden="true">
                 <span className={styles.ghostText}>{activeGhost}</span>
-                <button
-                  type="button"
-                  tabIndex={-1}
-                  className={styles.ghostTabBadge}
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    acceptGhost();
-                  }}
-                  title="按 Tab 键或点击直接采纳这条追问建议"
-                >
-                  Tab
-                </button>
               </div>
             )}
           </div>

@@ -1,5 +1,5 @@
 export type TextSize = "small" | "medium" | "large";
-export type ChatWidth = "narrow" | "medium" | "wide";
+export type ChatWidth = "narrow" | "medium" | "wide" | "full";
 export type MotionChoice = "system" | "reduced";
 
 export interface Appearance {
@@ -21,7 +21,7 @@ export function readAppearance(userId: string): Appearance {
     const value = parsed as Partial<Appearance>;
     return {
       textSize: value.textSize === "small" || value.textSize === "large" ? value.textSize : "medium",
-      width: value.width === "narrow" || value.width === "wide" ? value.width : "medium",
+      width: value.width === "narrow" || value.width === "wide" || value.width === "full" ? value.width : "medium",
       motion: value.motion === "reduced" ? "reduced" : "system",
     };
   } catch {

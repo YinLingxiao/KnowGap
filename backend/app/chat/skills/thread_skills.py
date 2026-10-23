@@ -32,7 +32,7 @@ TRANSFER_LEARNING_GUIDE = """【先验锚点与对比迁移教学】
 结合 turn_context.prior_knowledge_anchors、经本轮原文核实的 reported_prior_knowledge 及交办任务中的明确旧知，选择与新课题相关的技能作为锚点。
 有相关锚点时，把同一个最小例子分别在旧知和新知中演绎，优先嵌入 comparison_matrix 微件，columns 使用「旧知机制」「新知机制」「跨领域负迁移易错点」，每行 values 与三列逐一对应。
 不要只列语法差异：说明概念映射、机制差异、类比何处失效，以及直接照搬旧习惯会犯什么错；用户当前的否认或修正优先于旧画像。
-没有相关锚点且 transfer_learning_hint 提示先验探针时，正常讲解同时只用 1 句话问相近语言或前置课程，不重复主对话刚问过的问题，不假设用户会 C/C++。
+没有相关锚点且 transfer_learning_hint 提示先验探针时，正常讲解同时只用 1 句话问相近语言或前置课程，不重复主线刚问过的问题，不假设用户会 C/C++。
 用户明确自述已掌握某技能时，用 memory 以「先验技能：xxx」格式写入 USER；自述旧知不是知识点掌握诊断，待确认、失败或拒绝均不能声称已记住。"""
 
 DEEP_EXPLAIN_SKILL = f"""【当前挂载 Skill：deep_explain（深度原理精讲）】
@@ -65,7 +65,7 @@ STUDY_NOTE_BUILDER_SKILL = f"""【当前挂载 Skill：study_note_builder（结�
 按以下工作流整理结构化讲义或代码演练：
 1. 用 `update_plan` 创建或整份更新讲义/实验的学习步骤（如：梳理核心概念框架、交互推演对比、自测），保留已有真实 id。新步骤先设 pending，实际开始才设 in_progress；自测时设 awaiting_learner 并在 note 写问题，答对才设 done。
 2. 在讲义正文中积极嵌入 `knowgap-widget`（如 `step_simulator` 过程推演 + `comparison_matrix` 对比表 + `micro_quiz` 自测题），让讲义具备可交互性。
-3. 完成后调用 `report_progress` 将讲义要点同步回主对话。
+3. 完成后调用 `report_progress` 将讲义要点同步回主线。
 
 {TRANSFER_LEARNING_GUIDE}
 

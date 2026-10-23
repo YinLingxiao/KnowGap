@@ -1,8 +1,8 @@
-/* 整体布局：Linear 2026 桌面端架构（底层暗色底壳 + 左侧高密度边栏 + 右侧内嵌圆角悬浮主画布 Inset Viewport） */
+/* 贴边应用外壳：用侧栏与主画布的底色区分区域，不再套圆角外框。 */
 .app {
   display: grid;
   grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
-  height: 100dvh;
+  height: calc(100dvh - var(--desktop-titlebar-height));
   overflow: hidden;
   background: var(--bg-app-shell, var(--bg-sidebar));
   transition: grid-template-columns var(--t-sidebar) var(--ease-out);
@@ -16,9 +16,7 @@
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  border-right: 1px solid transparent;
-  background: var(--bg-app-shell, var(--bg-sidebar));
-  transition: border-color var(--t-sidebar) var(--ease-out);
+  background: var(--bg-sidebar);
 }
 
 .sidebarInner {
@@ -34,7 +32,6 @@
 }
 
 .sidebarClosed .sidebar {
-  border-right-color: transparent;
   pointer-events: none;
 }
 
@@ -51,7 +48,7 @@
 .narrow .sidebar {
   position: fixed;
   z-index: 40;
-  top: 0;
+  top: var(--desktop-titlebar-height);
   bottom: 0;
   left: 0;
   width: min(280px, 86vw);
@@ -76,6 +73,7 @@
   position: fixed;
   z-index: 35;
   inset: 0;
+  top: var(--desktop-titlebar-height);
   border: 0;
   background: rgb(0 0 0 / 42%);
   backdrop-filter: blur(3px);
@@ -95,24 +93,8 @@
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  margin: 6px 6px 6px 0;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
   background: var(--bg);
-  box-shadow: var(--specular-top, inset 0 1px 0 rgba(255, 255, 255, 0.04));
   overflow: hidden;
-  transition: margin var(--t-sidebar) var(--ease-out);
-}
-
-.sidebarClosed .main {
-  margin: 6px;
-}
-
-.narrow .main {
-  margin: 0;
-  border: 0;
-  border-radius: 0;
-  box-shadow: none;
 }
 
 .main > * {
@@ -899,7 +881,7 @@
   transform: translateY(-1px);
 }
 
-/* 候选画像核对卡片（对齐 Claude 弹窗/卡片设计风格） */
+/* 候选画像核对卡片 */
 .onboardingDoneCard {
   display: flex;
   flex-direction: column;
@@ -1093,12 +1075,4 @@
   .disclaimer {
     display: none;
   }
-}
-
-.zen .topbarActions,
-.zen .homeTopRight,
-.zen .floatingToggle,
-.zen .backdrop,
-.zen .topbar > .iconButton {
-  display: none;
 }

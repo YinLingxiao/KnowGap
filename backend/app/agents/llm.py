@@ -1,6 +1,7 @@
 """Replaceable Chat Completions adapter. Never substitutes fabricated results."""
 
 import json
+import re
 from functools import cache
 from typing import AsyncIterator, Protocol
 from urllib.parse import urlsplit
@@ -56,12 +57,37 @@ def validate_evidence(result: TutorOutput, current_answer: str) -> None:
 
 
 class ChatCompletionsTutor:
-    def __init__(self, settings: Settings, transport: httpx.AsyncBaseTransport | None = None):
+    def __init__(self, settings: Settings, transport: httpx.AsyncBaseTransport | None = None, chatgpt_auth=None):
         self.settings = settings
         self.transport = transport
+        self.chatgpt_auth = chatgpt_auth
 
     async def generate(self, context: dict) -> TutorOutput:
         settings = self.settings
+        if settings.llm_auth_mode == "chatgpt":
+            from app.agents.openai_responses import OpenAIResponsesChat
+            result, usage = await OpenAIResponsesChat(settings, self.chatgpt_auth, self.transport).complete_json_with_usage([
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": json.dumps(context, ensure_ascii=False)},
+            ])
+            try:
+                output = TutorOutput.model_validate(result)
+            except ValidationError:
+                raise ProviderError(502, "模型输出不符合诊断格式，请重试；本次作答尚未保存。", usage=usage) from None
+            validate_evidence(output, context["current_answer"])
+            return output
+        if is_vertex_native(settings.llm_base_url):
+            from app.agents.gemini import GeminiNativeChat
+            result, usage = await GeminiNativeChat(settings, self.transport).complete_json_with_usage([
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": json.dumps(context, ensure_ascii=False)},
+            ])
+            try:
+                output = TutorOutput.model_validate(result)
+            except ValidationError:
+                raise ProviderError(502, "模型输出不符合诊断格式，请重试；本次作答尚未保存。", usage=usage) from None
+            validate_evidence(output, context["current_answer"])
+            return output
         if not (settings.llm_api_key.get_secret_value() and settings.llm_base_url.strip() and settings.llm_model.strip()):
             raise ProviderError(503, "模型未配置，请在后端 .env 设置 LLM_API_KEY、LLM_BASE_URL 和 LLM_MODEL。")
         base_url = settings.llm_base_url.strip().rstrip("/")
@@ -120,8 +146,37 @@ class ChatCompletionsTutor:
         return result
 
 
+def is_vertex_native(base_url: str) -> bool:
+    """Native Express and project-scoped Vertex roots; excludes OpenAI compatibility URLs."""
+    try:
+        url = urlsplit(base_url.strip().rstrip("/"))
+        if url.scheme != "https" or url.port not in {None, 443} or url.username or url.password or url.query or url.fragment:
+            return False
+        if url.hostname == "aiplatform.googleapis.com" and re.fullmatch(r"/v1(?:beta1)?/publishers/google/models", url.path):
+            return True
+        match = re.fullmatch(r"/v1/projects/([^/]+)/locations/([^/]+)/publishers/google/models", url.path)
+        if match:
+            from app.agents.vertex_config import adc_base_url
+            return base_url.strip().rstrip("/") == adc_base_url(match[1], match[2])
+        return False
+    except ValueError:
+        return False
+
+
+def openai_messages(messages: list[dict]) -> list[dict]:
+    """Native replay metadata is local-only; never send it to another provider."""
+    return [dict(message, tool_calls=[
+        {key: value for key, value in call.items() if key != "gemini_part"}
+        for call in message["tool_calls"]
+    ]) if message.get("tool_calls") else message for message in messages]
+
+
 def provider_endpoint(settings: Settings) -> tuple[str, str]:
     """Validate the configured provider; returns (base_url, api_key) or raises a user-facing error."""
+    if settings.llm_auth_mode == "chatgpt":
+        raise ProviderError(503, "ChatGPT 套餐使用独立的 Responses 接口，请检查认证方式。")
+    if settings.llm_auth_mode == "adc":
+        raise ProviderError(503, "ADC 仅支持配置好的 Vertex 原生项目接口，请检查认证方式和地址。")
     if not (settings.llm_api_key.get_secret_value() and settings.llm_base_url.strip() and settings.llm_model.strip()):
         raise ProviderError(503, "模型未配置，请在「设置 → 模型接入」填写 API 地址、模型名称和 API Key。")
     base_url = settings.llm_base_url.strip().rstrip("/")
@@ -187,6 +242,15 @@ def _arguments_text(raw) -> str:
     return str(raw or "")
 
 
+def _reasoning_of(part: dict) -> str:
+    # DeepSeek / Qwen gateways use reasoning_content; OpenRouter-style gateways use reasoning.
+    for field in ("reasoning_content", "reasoning"):
+        value = part.get(field)
+        if isinstance(value, str) and value:
+            return value
+    return ""
+
+
 def _tool_calls_from(raw: list) -> list[dict]:
     calls = []
     for call in raw if isinstance(raw, list) else []:
@@ -213,11 +277,12 @@ class _TransientStreamError(Exception):
 
 
 class ChatCompletionsChat:
-    """OpenAI-compatible streaming chat. Yields ("text", delta) pieces, then ("finish", reason)."""
+    """OpenAI-compatible streaming chat. Yields ("reasoning", delta) / ("text", delta) pieces, then ("finish", reason)."""
 
-    def __init__(self, settings: Settings, transport: httpx.AsyncBaseTransport | None = None):
+    def __init__(self, settings: Settings, transport: httpx.AsyncBaseTransport | None = None, chatgpt_auth=None):
         self.settings = settings
         self.transport = transport
+        self.chatgpt_auth = chatgpt_auth
 
     async def stream(self, messages: list[dict], tools: list[dict] | None = None) -> AsyncIterator[tuple[str, object]]:
         # Retry once on a connection-level failure, but only before any output reached the caller.
@@ -234,8 +299,18 @@ class ChatCompletionsChat:
 
     async def _stream_once(self, messages: list[dict], tools: list[dict] | None) -> AsyncIterator[tuple[str, object]]:
         settings = self.settings
+        if settings.llm_auth_mode == "chatgpt":
+            from app.agents.openai_responses import OpenAIResponsesChat
+            async for item in OpenAIResponsesChat(settings, self.chatgpt_auth, self.transport).stream(messages, tools):
+                yield item
+            return
+        if is_vertex_native(settings.llm_base_url):
+            from app.agents.gemini import GeminiNativeChat
+            async for item in GeminiNativeChat(settings, self.transport).stream(messages, tools):
+                yield item
+            return
         base_url, api_key = provider_endpoint(settings)
-        payload = {"model": settings.llm_model, "messages": messages, "stream": True,
+        payload = {"model": settings.llm_model, "messages": openai_messages(messages), "stream": True,
                    "stream_options": {"include_usage": True}}
         if tools:
             payload["tools"] = tools
@@ -259,6 +334,9 @@ class ChatCompletionsChat:
                             yield "usage", body["usage"]
                         choice = body["choices"][0]
                         message = choice.get("message") or {}
+                        thought = _reasoning_of(message)
+                        if thought:
+                            yield "reasoning", thought
                         if message.get("content"):
                             yield "text", message["content"]
                         calls = _tool_calls_from(message.get("tool_calls") or [])
@@ -287,6 +365,9 @@ class ChatCompletionsChat:
                             yield "usage", chunk["usage"]
                         for choice in chunk.get("choices") or []:
                             delta = choice.get("delta") or {}
+                            thought = _reasoning_of(delta)
+                            if thought:
+                                yield "reasoning", thought
                             text = delta.get("content")
                             if text:
                                 yield "text", text
@@ -332,8 +413,14 @@ class ChatCompletionsChat:
 
     async def complete_json_with_usage(self, messages: list[dict]) -> tuple[dict, dict | None]:
         settings = self.settings
+        if settings.llm_auth_mode == "chatgpt":
+            from app.agents.openai_responses import OpenAIResponsesChat
+            return await OpenAIResponsesChat(settings, self.chatgpt_auth, self.transport).complete_json_with_usage(messages)
+        if is_vertex_native(settings.llm_base_url):
+            from app.agents.gemini import GeminiNativeChat
+            return await GeminiNativeChat(settings, self.transport).complete_json_with_usage(messages)
         base_url, api_key = provider_endpoint(settings)
-        payload = {"model": settings.llm_model, "messages": messages, "response_format": {"type": "json_object"}}
+        payload = {"model": settings.llm_model, "messages": openai_messages(messages), "response_format": {"type": "json_object"}}
         try:
             async with httpx.AsyncClient(
                 timeout=settings.llm_timeout_seconds, transport=self.transport, verify=shared_ssl_context(),

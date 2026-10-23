@@ -31,8 +31,7 @@ def attachment_router(store: ChatStore, library: MaterialStore) -> APIRouter:
             data = await file.read(MAX_UPLOAD_BYTES + 1)
             if len(data) > MAX_UPLOAD_BYTES:
                 raise HTTPException(413, '单份资料不能超过 20 MB。')
-            material = await run_in_threadpool(library.add, student_id, file.filename or '', data,
-                                              subject.id if subject else None)
+            material = await library.add_with_ocr(student_id, file.filename or '', data, subject.id if subject else None)
             return await run_in_threadpool(library.attachment, material.id, student_id)
         finally:
             await file.close()
@@ -84,6 +83,7 @@ def prepare_attachment_history(history, library: MaterialStore | None, student_i
                         if index == latest_user:
                             item = {key: info[key] for key in ('id', 'name', 'kind', 'units', 'unit_label', 'outline')}
                             item['chars'] = info.get('chars')
+                            item['reading_notes'] = info.get('notes') or []
                             if info['id'] not in seen:
                                 item['excerpt'] = info['excerpt']
                                 item['excerpt_complete'] = info.get('excerpt_complete', False)

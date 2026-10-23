@@ -12,7 +12,7 @@ interface SubjectPickerProps {
   onCreate: () => void;
 }
 
-/** 首页输入框下方：选择新对话归入哪个 Subject（参照 Claude 的 Project 选择器） */
+/** 首页输入框下方：选择新对话归入哪个 Subject */
 export function SubjectPicker({ subjects, value, onChange, onCreate }: SubjectPickerProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);

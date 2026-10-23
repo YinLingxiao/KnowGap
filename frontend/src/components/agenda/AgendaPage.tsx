@@ -11,7 +11,7 @@ import AiBreakdownDialog from "./AiBreakdownDialog";
 import { AgendaList, useListState, type AgendaListProps, type SubjectInfo } from "./AgendaList";
 import {
   VIEW_LABELS, buildInboxGroups, buildTodayGroups, buildUpcomingGroups, compareSiblings, countViews,
-  dispatchCompose, dispatchFocusStart, mondayOf, parseViewKey, spaceIdOf, taskKey, threadKey,
+  dispatchCompose, mondayOf, parseViewKey, spaceIdOf, taskKey, threadKey,
   type AgendaGroup, type AgendaViewKey,
 } from "./agendaModel";
 import { AgendaRail } from "./AgendaRail";
@@ -37,7 +37,7 @@ interface AgendaPageProps {
   subjects: Subject[];
   sidebarOpen: boolean;
   onOpenSidebar: () => void;
-  /** 打开某个 Thread（对话 id 与所属空间） */
+  /** 打开某个支线（对话 id 与所属空间） */
   onOpenThread: (threadId: string, subjectId: string | null) => void;
   onOpenSpace: (subjectId: string) => void;
   onNotify: (toast: { tone: "success" | "error" | "info"; title: string; description?: string }) => void;
@@ -124,12 +124,6 @@ export function AgendaPage(props: AgendaPageProps) {
   const toggleDone = useCallback((task: AgendaTask) => {
     void update(task.id, { status: task.status === "done" ? "open" : "done" });
   }, [update]);
-  const focusTask = useCallback((task: AgendaTask) => {
-    dispatchFocusStart({ taskId: task.id, title: task.title, subjectId: task.subjectId });
-  }, []);
-  const focusThread = useCallback((thread: AgendaThread) => {
-    dispatchFocusStart({ taskId: null, title: thread.title, subjectId: thread.subjectId });
-  }, []);
   const openThread = useCallback((thread: AgendaThread) => {
     setSelectedKey(threadKey(thread.threadId));
     props.onOpenThread(thread.threadId, thread.subjectId);
@@ -192,8 +186,6 @@ export function AgendaPage(props: AgendaPageProps) {
     onOpenTask: openTask,
     onOpenThread: openThread,
     onToggleDone: toggleDone,
-    onFocusTask: focusTask,
-    onFocusThread: focusThread,
     onToggleGroup: toggleGroup,
     onToggleParent: toggleParent,
     onCompose: (defaults) => dispatchCompose(defaults),
@@ -283,7 +275,6 @@ export function AgendaPage(props: AgendaPageProps) {
           <button type="button" className={styles.addTask} aria-keyshortcuts="Q" onClick={() => dispatchCompose({ subjectId: spaceId })}>
             <Plus size={15} aria-hidden />添加任务
           </button>
-          <span className={styles.addHint}><span>快捷键 </span><kbd>Q</kbd></span>
         </div>
         <button type="button" className={styles.btn} onClick={() => setBreakdownOpen(true)} aria-label="AI 拆解排期" title="AI 拆解排期">
           <Sparkles size={13} aria-hidden />AI 拆解排期

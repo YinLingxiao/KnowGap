@@ -285,6 +285,13 @@ export function useChat(notify: Notify, userId: string) {
         case "delta":
           patchMessages(id, (messages) => messages.map((m) => (m.id === assistantId ? { ...m, content: m.content + event.text } : m)));
           break;
+        case "file":
+          patchMessages(id, (messages) => messages.map((m) => (m.id === assistantId && !m.files?.some((item) => item.id === event.file.id)
+            ? { ...m, files: [...(m.files ?? []), event.file] } : m)));
+          break;
+        case "reasoning":
+          patchMessages(id, (messages) => messages.map((m) => (m.id === assistantId ? { ...m, reasoning: (m.reasoning ?? "") + event.text } : m)));
+          break;
         case "done":
           patchMessages(id, (messages) => upsert(messages, event.message));
           setPhase(id, controller, "analyzing");
@@ -357,7 +364,7 @@ export function useChat(notify: Notify, userId: string) {
     }
   }, [runStream]);
 
-  /** 首页上传文件前调用：返回承接文件的对话 ID（空间的主对话，或新建的空对话），并发调用共用同一次创建 */
+  /** 首页上传文件前调用：返回承接文件的对话 ID（空间的主线，或新建的空对话），并发调用共用同一次创建 */
   const ensureUploadConversation = useCallback((): Promise<string | null> => {
     if (activeId) return Promise.resolve(activeId);
     const mainId = draftSubjectId ? subjects.find((item) => item.id === draftSubjectId)?.mainConversationId : null;
