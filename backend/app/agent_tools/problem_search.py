@@ -28,6 +28,7 @@ from urllib.parse import parse_qs, unquote, urljoin, urlsplit
 import httpx
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
+from app.agent_tools.quiz_markup import restore_quiz_widgets
 from app.config import BACKEND_ROOT, REPO_ROOT
 from app.services.materials import terms
 
@@ -782,6 +783,7 @@ def html_to_text(html: str) -> tuple[str, float | None, int]:
         return normalize_text(re.sub(r"<[^>]+>", " ", text)), None, 0
     soup = BeautifulSoup(html, "lxml")
     lost = restore_formulas(soup)
+    restore_quiz_widgets(soup)
     for tag in soup(["script", "style", "noscript", "iframe", "template"]):
         tag.decompose()
     body = soup.body or soup
