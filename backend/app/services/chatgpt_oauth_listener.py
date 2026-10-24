@@ -1,19 +1,11 @@
 """Short-lived loopback callback listener for ChatGPT OAuth (no app auth middleware)."""
 
-import html
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
 from app.agents.llm import ProviderError
-
-
-def _page(ok: bool, message: str) -> bytes:
-    title = "授权完成" if ok else "授权未完成"
-    return (f"<!doctype html><html lang='zh-CN'><meta charset='utf-8'><title>{title}</title>"
-            "<style>body{font:15px/1.7 system-ui,'Microsoft YaHei',sans-serif;max-width:560px;margin:14vh auto;"
-            "padding:0 24px;color:#222}h1{font-size:20px}p{color:#555}</style>"
-            f"<h1>{title}</h1><p>{html.escape(message)}</p><p>可以关闭此页面，回到 KnowGap。</p></html>").encode("utf-8")
+from app.services.oauth_page import render_oauth_page
 
 
 class OAuthListener:
@@ -48,7 +40,7 @@ class OAuthListener:
                 except Exception:
                     ok, message = False, "授权处理失败，请回到 KnowGap 重新连接。"
                     listener.auth.last_error = message
-                body = _page(ok, message)
+                body = render_oauth_page(ok, message)
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
                 self.send_header("Content-Length", str(len(body)))

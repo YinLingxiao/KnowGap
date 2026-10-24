@@ -398,3 +398,19 @@ def test_non_chatgpt_settings_are_not_routed_to_responses(tmp_path):
                                 FakeAuth())
     with pytest.raises(ProviderError, match="配置无效"):
         asyncio.run(model.complete_json([{"role": "user", "content": "x"}]))
+
+
+def test_oauth_callback_page_is_self_contained_and_escapes_the_message():
+    from app.services.oauth_page import render_oauth_page
+
+    ok = render_oauth_page(True, "ChatGPT 已连接，可以返回 KnowGap。").decode("utf-8")
+    assert "授权完成" in ok and "现在可以关闭此页面" in ok and "<svg" in ok
+    assert "prefers-color-scheme:dark" in ok and "prefers-reduced-motion" in ok
+    bad = render_oauth_page(False, "<script>alert(1)</script>").decode("utf-8")
+    assert "授权未完成" in bad and "请回到 KnowGap 重新连接" in bad
+    assert "<script>" not in bad and "&lt;script&gt;" in bad
+    for page in (ok, bad):
+        # The listener's CSP is default-src 'none'; the page may not need scripts or any outside resource.
+        assert "<script" not in page.replace("&lt;script", "") and "http://" not in page.replace("http://www.w3.org", "")
+        assert "src=" not in page and "href=" not in page
+
