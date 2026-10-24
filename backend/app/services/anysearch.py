@@ -1,6 +1,6 @@
 """AnySearch REST adapter; provider messages may contain credentials, never forward them."""
 import hashlib
-from typing import Protocol
+from typing import Callable, Protocol
 from urllib.parse import urlsplit
 from uuid import UUID
 
@@ -16,13 +16,16 @@ class SearchService(Protocol):
 
 
 class AnySearchClient:
-    def __init__(self, settings: Settings, transport: httpx.AsyncBaseTransport | None = None):
+    def __init__(self, settings: Settings, transport: httpx.AsyncBaseTransport | None = None,
+                 key_source: Callable[[], str] | None = None):
         self.settings = settings
         self.transport = transport
+        self.key_source = key_source
 
     async def search(self, query: str, limit: int = 5) -> WebSearchResponse:
         headers = {'Accept': 'application/json'}
-        key = self.settings.anysearch_api_key.get_secret_value().strip()
+        # 设置页里保存的密钥优先，其次才是环境变量 / .env。
+        key = ((self.key_source() if self.key_source else '') or self.settings.anysearch_api_key.get_secret_value()).strip()
         if key:
             headers['Authorization'] = 'Bearer ' + key
         try:

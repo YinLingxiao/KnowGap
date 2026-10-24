@@ -1,0 +1,46 @@
+.root {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  max-width: 100%;
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border-subtle);
+  color: var(--text);
+}
+
+.head h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--text-lg);
+  font-weight: 650;
+}
+
+.head p {
+  max-width: 640px;
+  margin: 3px 0 0;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  line-height: var(--leading-ui);
+}
+
+.status {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.status strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

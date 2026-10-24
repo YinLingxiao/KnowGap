@@ -30,6 +30,7 @@ from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from app.agent_tools.quiz_markup import restore_quiz_widgets
 from app.config import BACKEND_ROOT, REPO_ROOT
+from app.services.search_settings import saved_key as saved_search_key
 from app.services.materials import terms
 
 logger = logging.getLogger(__name__)
@@ -441,7 +442,9 @@ class LocalLectureProvider:
 
 
 def _env(name: str) -> str:
-    """密钥读取顺序与 Settings 一致：环境变量 > backend/.env > 仓库根 .env。"""
+    """密钥读取顺序：设置页保存的（仅 AnySearch） > 环境变量 > backend/.env > 仓库根 .env。"""
+    if name == "ANYSEARCH_API_KEY" and (saved := saved_search_key()):
+        return saved
     value = os.environ.get(name, "").strip()
     if value:
         return value

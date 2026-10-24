@@ -24,6 +24,7 @@ from app.services.teaching import teach
 from app.services.ai_settings import AISettings
 from app.services.chatgpt_auth import ChatGPTAuth
 from app.services.anysearch import AnySearchClient, SearchService
+from app.services.search_settings import SearchSettings
 from app.models.schemas import WebSearchResponse
 from app.services.materials import MaterialStore
 from app.api.materials import material_router
@@ -65,7 +66,8 @@ def create_app(
     ai_settings.chatgpt = chatgpt_auth
     ai_settings.library.chatgpt = chatgpt_auth
     model = tutor if tutor is not None else ChatCompletionsTutor(ai_settings.current, chatgpt_auth=chatgpt_auth)
-    search = search_service if search_service is not None else AnySearchClient(settings)
+    search_settings = SearchSettings(settings)
+    search = search_service if search_service is not None else AnySearchClient(settings, key_source=search_settings.saved_key)
     chat = chat_model if chat_model is not None else ChatCompletionsChat(
         ai_settings.current, chatgpt_auth=chatgpt_auth)
     model_library = None if chat_model is not None else ai_settings.library
@@ -156,6 +158,8 @@ def create_app(
         if request.url.path in {"/api/ai/config", "/api/ai/test"}:
             # FastAPI's default validation details include the rejected input, possibly a key.
             return JSONResponse(status_code=422, content={"detail": "AI 配置请求格式无效，请提交 JSON 对象。"})
+        if request.url.path in {"/api/search/config", "/api/search/test"}:
+            return JSONResponse(status_code=422, content={"detail": "搜索配置请求格式无效，请提交 JSON 对象。"})
         return await request_validation_exception_handler(request, exc)
 
     @app.exception_handler(StateConflict)
@@ -184,6 +188,8 @@ def create_app(
     app.state.model_library = ai_settings.library
     app.include_router(chatgpt_router(chatgpt_auth, ai_settings, require_local_configuration))
     app.include_router(models_router(ai_settings.library, require_local_configuration, chatgpt_auth))
+    from app.api.search_settings import search_settings_router
+    app.include_router(search_settings_router(search_settings, settings, require_local_configuration))
 
     @app.get("/api/ai/config")
     def get_ai_config(request: Request, response: Response):

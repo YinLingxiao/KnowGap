@@ -17,6 +17,7 @@ import { cx } from "@/lib/cx";
 import { THEME_LABEL, useThemeChoice, type ThemeChoice } from "../ThemeToggle";
 import type { AIConfigStatus } from "@/lib/api/ai-config";
 import { ModelAccessCard, type ModelSignal } from "./ModelAccessCard";
+import { SearchKeyCard } from "./SearchKeyCard";
 import { ServiceModelsSection } from "./ServiceModelsSection";
 import { useDevMode, writeDevMode } from "@/lib/devMode";
 import styles from "./Settings.module.css";
@@ -268,6 +269,7 @@ export function SettingsDialog({
                     <div style={{ marginTop: 18 }}>
                       <ServiceModelsSection />
                     </div>
+                    <SearchKeyCard />
                   </section>
                 )}
                 {tab === "workspace" && <WorkspacePane />}
