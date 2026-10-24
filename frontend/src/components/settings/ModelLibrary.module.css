@@ -298,6 +298,13 @@
   color: var(--text-tertiary);
 }
 
+/* The base .search is sized for a horizontal toolbar (160px is a width). In a column, such as the
+   candidate dialog, that basis would become its height, so stack it at its own 30px instead. */
+.searchBlock {
+  flex: 0 0 auto;
+  width: 100%;
+}
+
 .search input {
   width: 100%;
   min-width: 0;

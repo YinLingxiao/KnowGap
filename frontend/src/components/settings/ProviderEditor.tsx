@@ -493,7 +493,7 @@ export function ProviderEditor({ provider, client, onClose, onChange, onCreated,
       </p>
 
       <EditorDialog open={candidates !== null} title="可用模型" description="勾选后加入这个服务商，已添加的不会重复写入。" onClose={() => setCandidates(null)}>
-        <label className={styles.search}>
+        <label className={cx(styles.search, styles.searchBlock)}>
           <input value={fetchQuery} aria-label="搜索可添加的模型" placeholder="搜索可添加的模型" onChange={(event) => setFetchQuery(event.target.value)} />
         </label>
         {candidates && candidates.length === 0 ? (

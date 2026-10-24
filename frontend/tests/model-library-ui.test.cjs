@@ -62,3 +62,25 @@ test('model library settings keep secrets out of the page and expose the library
   assert.match(css, /@media \(max-width: 640px\)/);
   assert.match(read('components/settings/ServiceModelsSection.module.css'), /@media \(max-width: 640px\)/);
 });
+
+test('the candidate-model dialog search box keeps its own height in a column layout', () => {
+  const css = read('components/settings/ModelLibrary.module.css').split('\r').join('');
+  const editor = read('components/settings/ProviderEditor.tsx');
+  // .search carries `flex: 1 1 160px`, a width basis for the horizontal toolbar. Stacked in a column, that
+  // basis becomes its height (it rendered ~250px tall), so the dialog uses a block variant.
+  assert.match(css, /\.searchBlock \{[^}]*flex: 0 0 auto;[^}]*width: 100%;/);
+  assert.match(editor, /cx\(styles\.search, styles\.searchBlock\)/);
+});
+
+test('px flex bases in settings styles are only used on elements inside horizontal rows', () => {
+  const dir = path.join(root, 'components/settings');
+  const allowed = new Set(['.grow', '.search']);
+  for (const file of fs.readdirSync(dir).filter((name) => name.endsWith('.css'))) {
+    const css = fs.readFileSync(path.join(dir, file), 'utf8').split('\r').join('');
+    for (const match of css.matchAll(/([^{}]+)\{[^}]*?flex:\s*[\d.]+\s+[\d.]+\s+[\d.]+px[^}]*\}/g)) {
+      const selector = match[1].trim().split('\n').pop().trim();
+      assert.ok(allowed.has(selector), `${file}: ${selector} uses a px flex-basis; check it is not placed in a column, or add it here`);
+    }
+  }
+});
+
