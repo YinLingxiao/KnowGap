@@ -173,10 +173,50 @@ def test_tavily_requests_raw_content():
     assert hits[0].content == "完整正文" and hits[0].snippet == "摘要"
 
 
-def test_missing_keys_skip_web_providers():
+def test_missing_keys_skip_paid_providers_but_anysearch_needs_no_key(monkeypatch):
+    for name in ("VOLC_SEARCH_API_KEY", "TAVILY_API_KEY", "ANYSEARCH_API_KEY"):
+        monkeypatch.setattr(ps, "_env", lambda key, _unused=name: "")
     ctx = SimpleNamespace(library=None, student_id="s1")
     providers, scope = ps.default_providers(ctx, ps.SearchGoodProblemsInput(knowledge_point=KP))
-    assert providers == [] and scope == ""
+    assert [provider.name for provider in providers] == ["anysearch"] and providers[0].api_key == "" and scope == ""
+    monkeypatch.setattr(ps, "_env", lambda key: "tavily-key" if key == "TAVILY_API_KEY" else "")
+    providers, _ = ps.default_providers(ctx, ps.SearchGoodProblemsInput(knowledge_point=KP))
+    assert [provider.name for provider in providers] == ["tavily", "anysearch"]
+
+
+def test_anysearch_works_without_a_key_and_sends_one_when_given():
+    seen = []
+
+    def handle(request):
+        seen.append(request.headers.get("authorization"))
+        body = json.loads(request.content)
+        assert body["query"] == "栈和队列" and body["max_results"] == 3 and body["language"] == "zh-CN"
+        return httpx.Response(200, json={"code": 0, "message": "success", "data": {"results": [
+            {"title": "栈和队列的区别", "url": "https://blog.example.com/a", "snippet": "后进先出与先进先出", "content": "x"},
+            {"title": "坏链接", "url": "javascript:alert(1)", "snippet": "x"},
+            {"title": "带密码", "url": "https://user:pw@example.com/a", "snippet": "x"},
+            "not-a-row",
+        ]}})
+
+    anonymous = asyncio.run(ps.AnySearchProvider("", httpx.MockTransport(handle)).search("栈和队列", 3))
+    assert seen == [None] and [hit.url for hit in anonymous] == ["https://blog.example.com/a"]
+    assert anonymous[0].snippet == "后进先出与先进先出" and anonymous[0].provider == "anysearch" and anonymous[0].site == "blog.example.com"
+    asyncio.run(ps.AnySearchProvider("synthetic-any-key", httpx.MockTransport(handle)).search("栈和队列", 3))
+    assert seen[-1] == "Bearer synthetic-any-key"
+
+
+@pytest.mark.parametrize("response,reason", [
+    (httpx.Response(200, json={"code": 1, "message": "error"}), "provider"),
+    (httpx.Response(200, json={"code": 0, "data": {"results": "nope"}}), "format"),
+    (httpx.Response(200, text="<html>"), "format"),
+    (httpx.Response(402, json={}), "quota"),
+    (httpx.Response(429, json={}), "quota"),
+    (httpx.Response(500, json={}), "http"),
+])
+def test_anysearch_failures_are_classified_not_raised_as_raw_errors(response, reason):
+    with pytest.raises(ps.SearchFailure) as error:
+        asyncio.run(ps.AnySearchProvider("", httpx.MockTransport(lambda _: response)).search("q", 3))
+    assert error.value.kind == reason
 
 
 def test_lecture_provider_maps_library_results():
@@ -586,3 +626,27 @@ def test_definition_is_well_formed():
     function = ps.DEFINITION["function"]
     assert function["name"] == ps.TOOL_NAME and function["parameters"]["required"] == ["knowledge_point"]
     assert set(function["parameters"]["properties"]) == set(ps.SearchGoodProblemsInput.model_fields)
+
+
+def test_proxy_fake_ip_range_is_allowed_but_real_internal_addresses_are_not():
+    # 开代理（fake-ip DNS）时所有域名都解析到 198.18.0.0/15；这不是内网，不能因此拒掉所有网页
+    for address in ("198.18.0.1", "198.18.1.87", "198.19.255.254"):
+        assert ps._public_ip(address) is True
+    for address in ("127.0.0.1", "10.0.0.5", "172.16.3.4", "192.168.1.9", "169.254.169.254", "100.64.0.1",
+                    "0.0.0.0", "::1", "fe80::1", "fc00::1", "not-an-ip"):
+        assert ps._public_ip(address) is False, address
+    # the exception is exactly 198.18.0.0/15; its neighbours keep the standard library's verdict (ordinary public)
+    assert str(ps._PROXY_FAKE_IP) == "198.18.0.0/15" and ps._public_ip("198.17.255.255") and ps._public_ip("198.20.0.1")
+
+    async def fake_ip_resolver(host):
+        return ["198.18.1.87"]
+
+    async def mixed_resolver(host):
+        return ["198.18.1.87", "10.0.0.5"]
+
+    async def check(resolver):
+        return await ps.PageFetcher(resolver=resolver).allowed("https://blog.csdn.net/a/b")
+
+    assert asyncio.run(check(fake_ip_resolver)) is True
+    assert asyncio.run(check(mixed_resolver)) is False    # one internal answer still blocks the host
+

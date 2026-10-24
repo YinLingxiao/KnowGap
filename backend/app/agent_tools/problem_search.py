@@ -263,9 +263,10 @@ def _ssl_verify():
 async def _post_json(url: str, payload: dict, api_key: str, transport, timeout: float) -> dict:
     try:
         async with httpx.AsyncClient(timeout=timeout, transport=transport, verify=_ssl_verify()) as client:
-            response = await client.post(url, json=payload, headers={
-                "Authorization": f"Bearer {api_key}", "Accept": "application/json",
-            })
+            headers = {"Accept": "application/json"}
+            if api_key:  # 有的源（AnySearch）不填密钥也能用，空密钥不发授权头
+                headers["Authorization"] = f"Bearer {api_key}"
+            response = await client.post(url, json=payload, headers=headers)
     except httpx.TimeoutException:
         raise SearchFailure("timeout") from None
     except (httpx.RequestError, httpx.InvalidURL, UnicodeEncodeError, ImportError):
@@ -381,6 +382,44 @@ class TavilyProvider:
         return hits[:k]
 
 
+class AnySearchProvider:
+    """AnySearch。不填密钥也能用（匿名额度），在环境变量 / .env 里填 ANYSEARCH_API_KEY 可以拿到更高额度。
+
+    只返回标题和摘要，网页正文由后面的抓取步骤读取。
+    """
+
+    name = "anysearch"
+    URL = "https://api.anysearch.com/v1/search"
+
+    def __init__(self, api_key: str = "", transport: httpx.AsyncBaseTransport | None = None, timeout: float = PROVIDER_TIMEOUT):
+        self.api_key = api_key
+        self.transport = transport
+        self.timeout = timeout
+
+    async def search(self, query: str, k: int) -> list[RawHit]:
+        payload = {"query": query[:200], "max_results": max(1, min(k, 10)), "language": "zh-CN", "format": "json"}
+        body = await _post_json(self.URL, payload, self.api_key, self.transport, self.timeout)
+        if body.get("code") != 0:
+            raise SearchFailure("provider")
+        data = body.get("data")
+        rows = data.get("results") if isinstance(data, dict) else None
+        if not isinstance(rows, list):
+            raise SearchFailure("format")
+        hits = []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            url = safe_url(row.get("url"))
+            if not url:
+                continue
+            host = (urlsplit(url).hostname or "").lower()
+            hits.append(RawHit(
+                url=url, title=_s(row.get("title")).strip()[:200] or host, site=host,
+                snippet=_s(row.get("snippet") or row.get("content"))[:1000], provider=self.name,
+            ))
+        return hits[:k]
+
+
 class LocalLectureProvider:
     """复用现有讲义库（SQLite FTS5）。只检索当前学生自己的资料，范围与 search_scoped 一致。"""
 
@@ -424,6 +463,8 @@ def default_providers(ctx, inp: SearchGoodProblemsInput) -> tuple[list, str]:
         providers.append(VolcengineSearchProvider(key))
     if key := _env("TAVILY_API_KEY"):
         providers.append(TavilyProvider(key))
+    # 没有任何付费搜索密钥时，联网搜题就只剩讲义库；AnySearch 不用密钥，保证「联网」真的联网
+    providers.append(AnySearchProvider(_env("ANYSEARCH_API_KEY")))
     scope = ""
     library, student_id = getattr(ctx, "library", None), getattr(ctx, "student_id", None)
     if library is not None and student_id:
@@ -511,6 +552,12 @@ async def _system_resolver(host: str) -> list[str]:
     return [info[4][0].split("%")[0] for info in infos]
 
 
+# Clash / Surge / sing-box 等代理的「假 IP」DNS 会把每个域名解析成这个保留段（RFC 2544 测试网段），
+# 再由代理按域名去连真实服务器。标准库把它判为非公网，不放行的话开着代理的用户所有网页都抓不到。
+# 它不是内网地址；残余风险是代理自己的 DIRECT 规则可能把域名解析到内网，这里不处理。
+_PROXY_FAKE_IP = ipaddress.ip_network("198.18.0.0/15")
+
+
 def _public_ip(text: str) -> bool:
     try:
         ip = ipaddress.ip_address(text)
@@ -518,6 +565,8 @@ def _public_ip(text: str) -> bool:
         return False
     if ip.version == 6 and ip.ipv4_mapped:
         ip = ip.ipv4_mapped
+    if ip.version == 4 and ip in _PROXY_FAKE_IP:
+        return True
     return ip.is_global and not ip.is_multicast
 
 
