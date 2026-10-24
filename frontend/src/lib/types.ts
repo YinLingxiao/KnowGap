@@ -69,8 +69,10 @@ export interface WebSearchResponse {
 }
 
 export interface CourseMaterial {
-  id: string; title: string; kind: "pdf" | "txt" | "md";
+  id: string; title: string; kind: "pdf" | "txt" | "md" | "csv" | "docx" | "pptx" | "xlsx";
   pageCount: number; chunkCount: number; createdAt: string;
+  /** 原始文件字节数：预览面板用它在拉取整份文件前判断要不要降级成「下载查看」 */
+  sizeBytes: number;
   /** null：未归入任何 Subject */
   subjectId?: string | null;
 }

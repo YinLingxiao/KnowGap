@@ -40,6 +40,13 @@ def material_router(library: MaterialStore, subject_exists: Callable[[str], bool
         finally:
             await file.close()
 
+    @router.get('/{document_id}/outline')
+    def material_outline(document_id: str, request: Request, student_id: str | None = None):
+        result = library.attachment(document_id, owner(request, student_id))
+        if result is None:
+            raise HTTPException(404, '资料不存在或已删除。')
+        return {'outline': result['outline']}
+
     @router.get('/search', response_model=list[SourceReference])
     def search_materials(request: Request, q: Annotated[str, Query(min_length=1, max_length=600)],
                          limit: Annotated[int, Query(ge=1, le=10)] = 5,

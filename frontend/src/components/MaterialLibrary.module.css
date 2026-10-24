@@ -35,10 +35,22 @@
   display: none;
 }
 
+/* 有预览面板打开时让 .container 退让出右侧空间；没有分栏需求时整行居中保持原样 */
+.layoutRow {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  gap: 0;
+  margin: 0 auto;
+  width: 100%;
+  max-width: 1400px;
+}
+
 .container {
   width: 100%;
   max-width: 960px;
   margin: 0 auto;
+  min-width: 0;
 }
 
 /* 顶栏 */
@@ -280,6 +292,10 @@
 }
 
 .iconTxt {
+  color: var(--text-secondary);
+}
+
+.iconOffice {
   color: var(--text-secondary);
 }
 
