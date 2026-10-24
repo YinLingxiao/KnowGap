@@ -167,7 +167,10 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
         return;
       }
       if (needsModelTest.current) {
-        await testAIConfig({ baseUrl: config.baseUrl, model: config.model, apiKey: "" });
+        await testAIConfig({
+          baseUrl: config.baseUrl, model: config.model, apiKey: "",
+          authMode: config.authMode, projectId: config.projectId, location: config.location,
+        });
         needsModelTest.current = false;
         setSettingsOpen(false);
       }

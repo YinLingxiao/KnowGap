@@ -77,6 +77,16 @@ def input_items(messages: list[dict]) -> tuple[list[dict], str]:
     return items, "\n\n".join(systems)
 
 
+def ensure_json_word(items: list[dict]) -> list[dict]:
+    """json_object mode is rejected (HTTP 400) unless the word "json" is in an input message; instructions don't count."""
+    for item in items:
+        content = item.get("content")
+        parts = [content] if isinstance(content, str) else [part.get("text", "") for part in content or [] if isinstance(part, dict)]
+        if any("json" in str(part).lower() for part in parts):
+            return items
+    return [*items, {"role": "user", "content": "请只输出一个 JSON 对象。"}]
+
+
 def response_tools(tools: list[dict] | None) -> list[dict]:
     result = []
     for tool in tools or []:
@@ -420,8 +430,8 @@ class OpenAIResponsesChat:
         if not is_chatgpt(self.settings):
             raise ProviderError(503, "ChatGPT 套餐配置无效，请检查地址、模型和认证方式。")
         items, instructions = input_items(messages)
-        payload = {"model": self.settings.llm_model.strip(), "input": items, "store": False, "stream": True,
-                   "text": {"format": {"type": "json_object"}}}
+        payload = {"model": self.settings.llm_model.strip(), "input": ensure_json_word(items), "store": False,
+                   "stream": True, "text": {"format": {"type": "json_object"}}}
         if instructions:
             payload["instructions"] = instructions
         token = await self._token()

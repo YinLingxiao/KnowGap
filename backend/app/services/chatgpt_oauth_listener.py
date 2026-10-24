@@ -1,5 +1,6 @@
 """Short-lived loopback callback listener for ChatGPT OAuth (no app auth middleware)."""
 
+import socket
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
@@ -8,13 +9,25 @@ from app.agents.llm import ProviderError
 from app.services.oauth_page import render_oauth_page
 
 
+class _LoopbackServer(ThreadingHTTPServer):
+    # Two processes must never share the callback port: on Windows SO_REUSEADDR lets a second
+    # listener bind silently, and the browser's callback can land on one that never answers.
+    allow_reuse_address = False
+    daemon_threads = True
+
+    def server_bind(self):
+        if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
+
+
 class OAuthListener:
     def __init__(self, auth, redirect_uri: str):
         parsed = urlsplit(redirect_uri)
         self.auth = auth
         self.redirect_uri = redirect_uri
         self.path = parsed.path
-        self.server = ThreadingHTTPServer(("127.0.0.1", parsed.port), self._handler())
+        self.server = _LoopbackServer(("127.0.0.1", parsed.port), self._handler())
         self.thread = threading.Thread(target=self.server.serve_forever, name="chatgpt-oauth", daemon=True)
 
     def _handler(listener):
@@ -48,8 +61,13 @@ class OAuthListener:
                 self.send_header("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'")
                 self.end_headers()
                 self.wfile.write(body)
-                threading.Thread(target=self.server.shutdown, daemon=True).start()
+                threading.Thread(target=listener._finish, daemon=True).start()
         return Handler
+
+    def _finish(self) -> None:
+        # Stopping the loop alone leaves the socket listening, so a later callback would hang unanswered.
+        self.server.shutdown()
+        self.server.server_close()
 
     def start(self) -> None:
         self.thread.start()

@@ -344,6 +344,29 @@ def test_responses_json_mode_requires_completed_and_parses_object(tmp_path):
     assert OpenAIResponsesChat(chatgpt_settings(tmp_path), FakeAuth()).settings.llm_auth_mode == "chatgpt"
 
 
+def test_responses_json_mode_always_has_the_word_json_in_an_input_message(tmp_path):
+    # The API answers HTTP 400 for json_object unless an input message (not instructions) says "json".
+    seen = []
+
+    def handler(request):
+        seen.append(json.loads(request.content))
+        return httpx.Response(200, text=sse(("response.output_text.delta", {"delta": "{}"}),
+                                            ("response.completed", {"response": {"status": "completed"}})),
+                              headers={"content-type": "text/event-stream"})
+
+    async def run(messages):
+        model = OpenAIResponsesChat(chatgpt_settings(tmp_path), FakeAuth(), httpx.MockTransport(handler))
+        return await model.complete_json(messages)
+
+    asyncio.run(run([{"role": "system", "content": "只输出 JSON"}, {"role": "user", "content": "说明栈的出入顺序"}]))
+    asyncio.run(run([{"role": "user", "content": [{"type": "text", "text": "Return JSON"}]}]))
+    for body in seen:
+        texts = [item["content"] if isinstance(item["content"], str) else " ".join(p["text"] for p in item["content"])
+                 for item in body["input"]]
+        assert any("json" in text.lower() for text in texts), body["input"]
+    assert len(seen[1]["input"]) == 1  # not added when the caller already says it
+
+
 def test_chatgpt_status_endpoint_is_local_and_starts_disconnected(tmp_path):
     with TestClient(create_app(isolated_settings(tmp_path))) as client:
         response = client.get("/api/chatgpt/status")
@@ -391,6 +414,43 @@ def test_loopback_callback_listener_accepts_query_and_serves_a_plain_page():
     finally:
         auth.listener.shutdown()
         auth.listener.server_close()
+
+
+def test_callback_port_is_exclusive_and_released_after_the_callback():
+    import socket
+    import time
+    from app.services.chatgpt_oauth_listener import start_listener
+
+    class Fake:
+        listener = None
+
+        def complete(self, query):
+            return {}
+
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    first, second = Fake(), Fake()
+    redirect = start_listener(first, preferred_port=port)
+    try:
+        # A second process must not share the port; it moves on to the next one.
+        other = start_listener(second, preferred_port=port)
+        assert other != redirect
+        second.listener.shutdown()
+        second.listener.server_close()
+        assert httpx.get(redirect + "?state=s&code=c", timeout=5).status_code == 200
+        # After the callback the socket is closed, not left listening with nobody to answer.
+        for _ in range(50):
+            try:
+                socket.create_connection(("127.0.0.1", port), timeout=0.2).close()
+            except OSError:
+                break
+            time.sleep(0.1)
+        else:
+            raise AssertionError("callback port is still accepting connections")
+    finally:
+        first.listener.shutdown()
+        first.listener.server_close()
 
 
 def test_non_chatgpt_settings_are_not_routed_to_responses(tmp_path):
