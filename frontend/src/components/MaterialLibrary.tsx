@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
-  BookOpen, Check, ChevronDown, FileCode2, FileText, Folder, LayoutGrid,
-  List, ListFilter, MoreHorizontal, PanelLeftOpen, Plus, Search, Trash2, Upload, X,
+  BookOpen, Check, ChevronDown, FileCode2, FileSpreadsheet, FileText, FileType, Folder, LayoutGrid,
+  List, ListFilter, MoreHorizontal, PanelLeftOpen, Plus, Presentation, Search, Sheet, Trash2, Upload, X,
 } from "lucide-react";
+import { MaterialPreviewPanel } from "./MaterialPreviewPanel";
 import { createMaterialClient } from "@/lib/api/material-client";
 import { toApiError } from "@/lib/api/errors";
 import { DOCUMENT_EXTENSIONS } from "@/lib/chat/attachments";
@@ -16,11 +17,18 @@ import { sourceLocation } from "./SourceReferences";
 import styles from "./MaterialLibrary.module.css";
 
 type ViewMode = "grid" | "list";
-type KindFilter = "all" | "pdf" | "md" | "txt";
+type KindFilter = "all" | "pdf" | "md" | "txt" | "csv" | "docx" | "pptx" | "xlsx";
 type ScopeFilter = "all" | "general" | string;
+const UPLOAD_EXTENSION_RE = /\.(pdf|txt|md|csv|docx|doc|pptx|ppt|xlsx|xls)$/i;
+const MAX_UPLOAD_BYTES = 20 * 1024 * 1024; // 与后端 MAX_UPLOAD_BYTES 一致
+
+type MaterialKind = "pdf" | "md" | "txt" | "csv" | "docx" | "pptx" | "xlsx";
+
+// Office 格式复用聊天附件卡片（FileCard.tsx / GeneratedFiles.tsx）同一套图标，保持全站一致。
+const OFFICE_ICON = { docx: FileType, pptx: Presentation, xlsx: FileSpreadsheet } as const;
 
 /** 参照截图 2/3/4 绘制的彩色文件类型图标（小号用于列表/卡片头，大号用于网格卡片中央） */
-function FileKindIcon({ kind, size = "sm" }: { kind: "pdf" | "md" | "txt"; size?: "sm" | "lg" }) {
+function FileKindIcon({ kind, size = "sm" }: { kind: MaterialKind; size?: "sm" | "lg" }) {
   if (size === "lg") {
     if (kind === "pdf") {
       return (
@@ -46,6 +54,13 @@ function FileKindIcon({ kind, size = "sm" }: { kind: "pdf" | "md" | "txt"; size?
         </svg>
       );
     }
+    if (kind === "docx" || kind === "pptx" || kind === "xlsx") {
+      const Icon = OFFICE_ICON[kind];
+      return <Icon size={40} strokeWidth={1.4} aria-hidden className={styles.iconOffice} />;
+    }
+    if (kind === "csv") {
+      return <Sheet size={40} strokeWidth={1.4} aria-hidden className={styles.iconTxt} />;
+    }
     return (
       <svg width="40" height="40" viewBox="0 0 40 40" fill="none" aria-hidden className={styles.iconTxt}>
         <path
@@ -66,6 +81,21 @@ function FileKindIcon({ kind, size = "sm" }: { kind: "pdf" | "md" | "txt"; size?
     return (
       <span className={cx(styles.miniIconWrap, styles.iconMd)}>
         <FileCode2 size={15} aria-hidden />
+      </span>
+    );
+  }
+  if (kind === "docx" || kind === "pptx" || kind === "xlsx") {
+    const Icon = OFFICE_ICON[kind];
+    return (
+      <span className={cx(styles.miniIconWrap, styles.iconOffice)}>
+        <Icon size={15} aria-hidden />
+      </span>
+    );
+  }
+  if (kind === "csv") {
+    return (
+      <span className={cx(styles.miniIconWrap, styles.iconTxt)}>
+        <Sheet size={15} aria-hidden />
       </span>
     );
   }
@@ -109,6 +139,7 @@ export function MaterialLibrary({
   const [error, setError] = useState<string | null>(null);
   const [searched, setSearched] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [previewDoc, setPreviewDoc] = useState<CourseMaterial | null>(null);
 
   const fileInput = useRef<HTMLInputElement>(null);
   const filterRef = useRef<HTMLDivElement>(null);
@@ -167,12 +198,12 @@ export function MaterialLibrary({
     if (pending.current) return;
     setError(null);
     setNotice(null);
-    if (file.size > 5 * 1024 * 1024) {
-      setError("单份资料不能超过 5 MB。");
+    if (file.size > MAX_UPLOAD_BYTES) {
+      setError("单份资料不能超过 20 MB。");
       return;
     }
-    if (!/\.(pdf|txt|md)$/i.test(file.name)) {
-      setError("此资料库入口暂仅支持 PDF、TXT 或 Markdown；Word、PPT、Excel、CSV 请在对话中上传。");
+    if (!UPLOAD_EXTENSION_RE.test(file.name)) {
+      setError("请上传 PDF、Word（.docx / .doc）、PowerPoint（.pptx / .ppt）、Excel（.xlsx / .xls）、TXT、Markdown 或 CSV 文件。");
       return;
     }
     pending.current = true;
@@ -227,6 +258,7 @@ export function MaterialLibrary({
       await client.remove(document.id);
       setDocuments((current) => current.filter((item) => item.id !== document.id));
       setResults((current) => current.filter((source) => source.documentId !== document.id));
+      setPreviewDoc((current) => (current?.id === document.id ? null : current));
       setNotice(`已删除 ${document.title}。`);
       setConfirmId(null);
       setMenuDocId(null);
@@ -286,6 +318,24 @@ export function MaterialLibrary({
       active: kindFilter === "txt",
       onSelect: () => setKindFilter(kindFilter === "txt" ? "all" : "txt"),
     },
+    {
+      id: "docx",
+      label: "Word",
+      active: kindFilter === "docx",
+      onSelect: () => setKindFilter(kindFilter === "docx" ? "all" : "docx"),
+    },
+    {
+      id: "pptx",
+      label: "PowerPoint",
+      active: kindFilter === "pptx",
+      onSelect: () => setKindFilter(kindFilter === "pptx" ? "all" : "pptx"),
+    },
+    {
+      id: "xlsx",
+      label: "Excel",
+      active: kindFilter === "xlsx",
+      onSelect: () => setKindFilter(kindFilter === "xlsx" ? "all" : "xlsx"),
+    },
     ...subjects.map((sub) => ({
       id: `sub-${sub.id}`,
       label: sub.name,
@@ -328,6 +378,7 @@ export function MaterialLibrary({
         }}
       />
 
+      <div className={styles.layoutRow}>
       <div className={styles.container}>
         {/* 顶栏：左标题「资料库」，右筛选浮层 + 网格/列表切换 + 搜索框 + 新建/上传按钮 */}
         <header className={styles.header}>
@@ -591,7 +642,7 @@ export function MaterialLibrary({
             <BookOpen size={22} aria-hidden />
             <h2>资料库还是空的</h2>
             <p>
-              拖入或点击右上角「上传」添加 PDF、Markdown 或 TXT 讲义（单份最大 5 MB）。通用资料在所有对话中生效，空间专属资料仅在对应学习空间内检索。
+              拖入或点击右上角「上传」添加 PDF、Word、PowerPoint、Excel、Markdown、TXT 或 CSV 讲义（单份最大 20 MB）。通用资料在所有对话中生效，空间专属资料仅在对应学习空间内检索。
             </p>
             <button type="button" className={styles.uploadPillBtn} onClick={() => triggerUpload(undefined)}>
               <Plus size={14} aria-hidden />
@@ -627,12 +678,8 @@ export function MaterialLibrary({
 
                   <div
                     className={styles.gridCardCenter}
-                    onClick={() => {
-                      const baseTitle = doc.title.replace(/\.(pdf|md|txt)$/i, "");
-                      setQuery(baseTitle);
-                      void searchContent(undefined, baseTitle);
-                    }}
-                    title="点击预览文档片段"
+                    onClick={() => setPreviewDoc(doc)}
+                    title="点击预览"
                   >
                     <FileKindIcon kind={doc.kind} size="lg" />
                   </div>
@@ -701,11 +748,7 @@ export function MaterialLibrary({
                   <li key={doc.id} className={cx(styles.listRow, menuDocId === doc.id && styles.cardMenuOpen)}>
                     <div
                       className={styles.listRowMain}
-                      onClick={() => {
-                        const baseTitle = doc.title.replace(/\.(pdf|md|txt)$/i, "");
-                        setQuery(baseTitle);
-                        void searchContent(undefined, baseTitle);
-                      }}
+                      onClick={() => setPreviewDoc(doc)}
                     >
                       <FileKindIcon kind={doc.kind} size="sm" />
                       <span className={styles.listRowTitle}>{doc.title}</span>
@@ -771,6 +814,8 @@ export function MaterialLibrary({
             </ul>
           </div>
         )}
+      </div>
+      <MaterialPreviewPanel material={previewDoc} onClose={() => setPreviewDoc(null)} />
       </div>
     </section>
   );

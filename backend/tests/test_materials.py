@@ -136,6 +136,26 @@ def test_deleted_during_generation_conflicts(tmp_path):
         assert response.status_code == 409 and client.get('/api/memories').json() == []
 
 
+def test_size_bytes_round_trips_in_list_response(tmp_path):
+    with TestClient(create_app(config(tmp_path))) as client:
+        text = '栈遵循后进先出，只能访问栈顶。\nLIFO means last in first out.'
+        document = upload(client, text).json()
+        assert document['size_bytes'] == len(text.encode('utf-8'))
+        listed = client.get('/api/materials').json()
+        assert listed[0]['size_bytes'] == document['size_bytes']
+
+
+def test_outline_endpoint_returns_headings_and_is_owner_scoped(tmp_path):
+    with TestClient(create_app(config(tmp_path))) as client:
+        document = upload(client, '# 第一章\n内容。\n# 第二章\n更多内容。', 'notes.md').json()
+        response = client.get(f"/api/materials/{document['id']}/outline")
+        assert response.status_code == 200
+        assert response.json()['outline'] == ['第一章', '第二章']
+        assert client.get('/api/materials/unknown-id/outline').status_code == 404
+        assert client.get(f"/api/materials/{document['id']}/outline",
+                          params={'student_id': 'someone-else'}).status_code == 422
+
+
 def test_unbound_inline_citation_is_rejected(tmp_path):
     class UnboundTutor:
         async def generate(self, context):
