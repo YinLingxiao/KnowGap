@@ -1,6 +1,6 @@
 {
   "name": "knowgap-desktop",
-  "version": "0.5.9",
+  "version": "0.5.10",
   "description": "KnowGap（知隙）桌面端：本地学习助手",
   "author": "KnowGap",
   "private": true,
