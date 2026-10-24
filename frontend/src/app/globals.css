@@ -4,6 +4,10 @@
   --font-sans: "Geist Variable", "Inter Variable", "Inter", "Noto Sans SC Variable", "PingFang SC",
     "Microsoft YaHei UI", "Microsoft YaHei", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", "Cascadia Code", "SF Mono", Consolas, monospace;
+  /* 等宽字体栈里没有中文字体，汉字会掉到系统默认等宽（Windows 上是宋体）。
+     卡片和行内代码里常带汉字，用这一套；代码块仍用 --font-mono，保持 ASCII 对齐。 */
+  --font-mono-cjk: "JetBrains Mono", "Cascadia Code", "SF Mono", Consolas, "Noto Sans SC Variable", "PingFang SC",
+    "Microsoft YaHei UI", "Microsoft YaHei", monospace;
 
   /* 浅色模式：浅雾灰侧栏与贴边白色主画布 */
   --bg-app-shell: #f1f3f6;

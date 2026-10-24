@@ -14,6 +14,7 @@ import python from "highlight.js/lib/languages/python";
 import sql from "highlight.js/lib/languages/sql";
 import typescript from "highlight.js/lib/languages/typescript";
 import { Check, Copy } from "lucide-react";
+import { normalizeMathDelimiters } from "@/lib/chat/mathDelimiters";
 import { LearningWidget } from "./LearningWidget";
 import { mathRehypePlugins, mathRemarkPlugins } from "./math";
 import styles from "./Markdown.module.css";
@@ -126,12 +127,12 @@ const components: Components = {
 const remarkPlugins = [remarkGfm, ...(mathRemarkPlugins ?? [])];
 const rehypePlugins: Options["rehypePlugins"] = [...(mathRehypePlugins ?? []), [rehypeHighlight, highlightOptions]];
 
-/** 模型回复的 Markdown（GFM + $…$ / $$…$$ 公式）。不渲染原始 HTML。 */
+/** 模型回复的 Markdown（GFM + $…$ / $$…$$ 公式，也认 \(…\) / \[…\]）。不渲染原始 HTML。 */
 export const Markdown = memo(function Markdown({ text }: { text: string }) {
   return (
     <div className={styles.markdown}>
       <ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins} components={components}>
-        {text}
+        {normalizeMathDelimiters(text)}
       </ReactMarkdown>
     </div>
   );

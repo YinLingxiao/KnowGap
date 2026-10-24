@@ -32,6 +32,7 @@
     "react-markdown": "^9.0.1",
     "rehype-highlight": "7.0.2",
     "rehype-katex": "7.0.1",
+    "remark-cjk-friendly": "2.3.3",
     "remark-gfm": "^4.0.0",
     "remark-math": "6.0.0"
   },

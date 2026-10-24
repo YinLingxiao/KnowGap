@@ -76,8 +76,8 @@
   border-radius: 999px;
   background: var(--accent-soft);
   color: var(--accent-text);
-  font-family: var(--font-mono);
-  font-size: var(--text-2xs);
+  /* 徽章是中文标签，不用等宽字体（汉字会掉到宋体） */
+  font-size: var(--text-xs);
   font-weight: 600;
   letter-spacing: 0.02em;
   line-height: 1;
@@ -89,6 +89,12 @@
   font-weight: 600;
 }
 
+/* 微测题干通常是一整句话甚至一段，常规偏中字重比全粗体好读 */
+.quizQuestion {
+  font-weight: 500;
+  line-height: var(--leading-read);
+}
+
 .stepCounter,
 .formulaBadge {
   flex-shrink: 0;
@@ -97,9 +103,12 @@
   border-radius: 999px;
   background: var(--bg-subtle);
   color: var(--text-secondary);
-  font-family: var(--font-mono);
-  font-size: var(--text-2xs);
+  font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;
+}
+
+.formulaBadge {
+  font-family: var(--font-mono-cjk);
 }
 
 /* 1. step_simulator 状态网格 */
@@ -134,7 +143,7 @@
 
 .stateVal {
   color: var(--text);
-  font-family: var(--font-mono);
+  font-family: var(--font-mono-cjk);
   font-size: var(--text-sm);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -149,14 +158,15 @@
 
 .stepLabel {
   color: var(--text);
-  font-size: var(--text-xs);
+  font-size: var(--text-sm);
   font-weight: 600;
+  line-height: var(--leading-ui);
 }
 
 .stepDetail {
-  margin-top: 3px;
+  margin-top: 4px;
   color: var(--text-secondary);
-  font-size: var(--text-xs);
+  font-size: var(--text-sm);
   line-height: var(--leading-read);
 }
 
@@ -272,20 +282,32 @@
 }
 
 /* 2. comparison_matrix 交互对比卡 */
+/* 维度胶囊：单行横向滚动，不再换成两三行；选中态用强调色 */
 .dimFilterRow {
   display: flex;
-  flex-wrap: wrap;
   gap: 6px;
+  margin: 0 -2px;
+  padding: 2px;
+  overflow-x: auto;
+  /* 不显示滚动条（Windows 上会带箭头，很笨重），用右侧渐隐提示还能往右滑 */
+  scrollbar-width: none;
+  mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent);
+}
+
+.dimFilterRow::-webkit-scrollbar {
+  display: none;
 }
 
 .dimPill {
-  height: 24px;
-  padding: 0 10px;
+  flex-shrink: 0;
+  height: 26px;
+  padding: 0 11px;
   border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--bg-subtle);
   color: var(--text-secondary);
   font-size: var(--text-xs);
+  white-space: nowrap;
   transition:
     background-color var(--t-hover) var(--ease-out),
     border-color var(--t-hover) var(--ease-out),
@@ -302,14 +324,17 @@
   transform: scale(0.96);
 }
 
-.dimPillOn {
-  border-color: var(--border-strong);
-  background: var(--bg-active);
-  color: var(--text);
+.dimPillOn,
+.dimPillOn:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: var(--accent-soft);
+  color: var(--accent-text);
   font-weight: 500;
 }
 
+/* 容器查询的基准：由卡片宽度（而不是窗口宽度）决定用表格还是堆叠 */
 .matrixScroll {
+  container-type: inline-size;
   overflow-x: auto;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
@@ -321,22 +346,22 @@
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
-  font-size: var(--text-xs);
+  font-size: var(--text-sm);
+  line-height: var(--leading-ui);
   font-variant-numeric: tabular-nums;
+  /* 第一列占固定比例，其余内容列平分，不会被某一格的长文字撑得宽窄不一 */
+  table-layout: fixed;
+  /* 正文的 overflow-wrap: anywhere 会让表格最小宽度塌缩，把 top==MaxSize-1 这类词拆碎 */
+  overflow-wrap: break-word;
 }
 
+/* 只留横向细线：竖线、斑马纹、悬停变色都去掉，减少「格子」感 */
 .matrixTable th,
 .matrixTable td {
-  padding: 8px 12px;
-  border-right: 1px solid var(--border);
-  border-bottom: 1px solid var(--border-subtle, var(--border));
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border);
   text-align: left;
   vertical-align: top;
-}
-
-.matrixTable th:last-child,
-.matrixTable td:last-child {
-  border-right: 0;
 }
 
 .matrixTable tbody tr:last-child td {
@@ -344,40 +369,105 @@
 }
 
 .matrixTable th {
+  background: var(--bg-subtle);
   border-bottom-color: var(--border-strong);
-  background: var(--bg-active);
-  color: var(--text);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
   font-weight: 600;
   letter-spacing: 0.01em;
 }
 
-/* 高对比斑马纹 + 悬停高亮 */
-.matrixTable tbody tr:nth-child(even) td {
-  background: color-mix(in srgb, var(--bg-subtle) 80%, transparent);
-}
-
-.matrixTable tbody tr {
-  transition: background-color var(--t-hover) var(--ease-out);
-}
-
-.matrixTable tbody tr:hover td {
-  background: var(--bg-hover);
+/* 第一列允许换行并限宽，别再被最长的维度名撑成半个表格 */
+.matrixTable th:first-child {
+  width: 22%;
 }
 
 .dimCell {
-  font-weight: 600;
   color: var(--text);
-  white-space: nowrap;
+  font-weight: 500;
+}
+
+/* 卡片较窄（支线面板）：每个维度堆成一块，列名放在每段内容前面 */
+@container (max-width: 560px) {
+  .matrixTable,
+  .matrixTable tbody,
+  .matrixTable tr,
+  .matrixTable td {
+    display: block;
+  }
+
+  /* 表头在堆叠时多余，但保留给读屏软件 */
+  .matrixTable thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .matrixTable tbody tr {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 8px 14px;
+    padding: 10px 12px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .matrixTable tbody tr:last-child {
+    border-bottom: 0;
+  }
+
+  .matrixTable td {
+    padding: 0;
+    border: 0;
+  }
+
+  .matrixTable .dimCell {
+    grid-column: 1 / -1;
+    font-weight: 600;
+  }
+
+  .matrixTable td[data-label]::before {
+    display: block;
+    margin-bottom: 1px;
+    color: var(--text-tertiary);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    content: attr(data-label);
+  }
 }
 
 .matrixTakeaway {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
   padding: 8px 12px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg-subtle);
   color: var(--text-secondary);
-  font-size: var(--text-xs);
+  font-size: var(--text-sm);
   line-height: var(--leading-ui);
+}
+
+.matrixTakeaway > span,
+.takeawayList {
+  min-width: 0;
+}
+
+.takeawayList > div + div {
+  margin-top: 4px;
+}
+
+.takeawayList strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.takeawayIcon {
+  flex-shrink: 0;
+  margin-top: 3px;
+  color: var(--amber);
 }
 
 /* 3. parameter_lab 参数实验室 */
@@ -401,11 +491,11 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: var(--text-xs);
+  font-size: var(--text-sm);
 }
 
 .sliderHeader strong {
-  font-family: var(--font-mono);
+  font-family: var(--font-mono-cjk);
   font-variant-numeric: tabular-nums;
   color: var(--accent-text);
 }
@@ -450,7 +540,7 @@
   background: var(--bg-subtle);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
   color: var(--text);
-  font-size: var(--text-xs);
+  font-size: var(--text-sm);
   text-align: left;
   transition:
     background-color var(--t-hover) var(--ease-out),
@@ -512,7 +602,7 @@
   gap: 6px;
   padding: 10px 12px;
   border-radius: var(--radius-lg);
-  font-size: var(--text-xs);
+  font-size: var(--text-sm);
   line-height: var(--leading-ui);
 }
 

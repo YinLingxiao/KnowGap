@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
 import {
   CheckCircle2, ChevronLeft, ChevronRight, CircleAlert, HelpCircle,
-  Layers, MessageSquarePlus, Sliders, Sparkles,
+  Layers, Lightbulb, MessageSquarePlus, Sliders, Sparkles,
 } from "lucide-react";
 import { cx } from "@/lib/cx";
 import { parseWidgetJson } from "@/lib/chat/widgetJson";
@@ -113,7 +113,7 @@ function StepSimulatorWidget({ data }: { data: Record<string, unknown> }) {
             <Layers size={12} aria-hidden />
             交互推演
           </span>
-          <strong className={styles.widgetTitle}>{title}</strong>
+          <strong className={styles.widgetTitle}><MathText text={title} /></strong>
         </div>
         <span className={styles.stepCounter}>
           步骤 {safeIdx + 1} / {steps.length}
@@ -132,8 +132,8 @@ function StepSimulatorWidget({ data }: { data: Record<string, unknown> }) {
       )}
 
       <div className={styles.stepBody}>
-        <p className={styles.stepLabel}>{current?.label}</p>
-        <p className={styles.stepDetail}>{current?.detail}</p>
+        <p className={styles.stepLabel}><MathText text={String(current?.label ?? "")} /></p>
+        <p className={styles.stepDetail}><MathText text={String(current?.detail ?? "")} /></p>
       </div>
 
       <footer className={styles.widgetFoot}>
@@ -196,6 +196,8 @@ function ComparisonMatrixWidget({ data }: { data: Record<string, unknown> }) {
 
   if (columns.length === 0 || rows.length === 0) return null;
   const shownRows = activeDim === "all" ? rows : rows.filter((r) => r.dimension === activeDim);
+  // 「全部维度」下也要看得到模型写的要点：多行时在每条前面带上维度名
+  const takeaways = shownRows.filter((row) => row.takeaway);
 
   return (
     <section className={styles.widgetCard} aria-label={title}>
@@ -205,13 +207,14 @@ function ComparisonMatrixWidget({ data }: { data: Record<string, unknown> }) {
             <Sparkles size={12} aria-hidden />
             交互对比
           </span>
-          <strong className={styles.widgetTitle}>{title}</strong>
+          <strong className={styles.widgetTitle}><MathText text={title} /></strong>
         </div>
       </header>
 
-      <div className={styles.dimFilterRow}>
+      <div className={styles.dimFilterRow} role="group" aria-label="聚焦维度">
         <button
           type="button"
+          aria-pressed={activeDim === "all"}
           className={cx(styles.dimPill, activeDim === "all" && styles.dimPillOn)}
           onClick={() => setActiveDim("all")}
         >
@@ -221,6 +224,7 @@ function ComparisonMatrixWidget({ data }: { data: Record<string, unknown> }) {
           <button
             key={r.dimension}
             type="button"
+            aria-pressed={activeDim === r.dimension}
             className={cx(styles.dimPill, activeDim === r.dimension && styles.dimPillOn)}
             onClick={() => setActiveDim(activeDim === r.dimension ? "all" : r.dimension)}
           >
@@ -229,22 +233,25 @@ function ComparisonMatrixWidget({ data }: { data: Record<string, unknown> }) {
         ))}
       </div>
 
+      {/* 容器窄时（支线面板）样式把每个维度堆成一块，列名由 data-label 带出；role 保证改成块级后仍是表格语义 */}
       <div className={styles.matrixScroll}>
-        <table className={styles.matrixTable}>
-          <thead>
-            <tr>
-              <th>对比维度</th>
+        <table className={styles.matrixTable} role="table">
+          <thead role="rowgroup">
+            <tr role="row">
+              <th role="columnheader">对比维度</th>
               {columns.map((col) => (
-                <th key={col}>{col}</th>
+                <th key={col} role="columnheader"><MathText text={col} /></th>
               ))}
             </tr>
           </thead>
-          <tbody>
+          <tbody role="rowgroup">
             {shownRows.map((row) => (
-              <tr key={row.dimension}>
-                <td className={styles.dimCell}>{row.dimension}</td>
+              <tr key={row.dimension} role="row">
+                <td role="rowheader" className={styles.dimCell}><MathText text={row.dimension} /></td>
                 {columns.map((col, idx) => (
-                  <td key={`${row.dimension}-${col}`}>{row.values?.[idx] ?? "—"}</td>
+                  <td key={`${row.dimension}-${col}`} role="cell" data-label={col.replace(/[`*$]/g, "")}>
+                    <MathText text={String(row.values?.[idx] ?? "—")} />
+                  </td>
                 ))}
               </tr>
             ))}
@@ -252,8 +259,18 @@ function ComparisonMatrixWidget({ data }: { data: Record<string, unknown> }) {
         </table>
       </div>
 
-      {shownRows.length === 1 && shownRows[0].takeaway && (
-        <p className={styles.matrixTakeaway}>💡 {shownRows[0].takeaway}</p>
+      {takeaways.length > 0 && (
+        <div className={styles.matrixTakeaway}>
+          <Lightbulb size={14} className={styles.takeawayIcon} aria-hidden />
+          <div className={styles.takeawayList}>
+            {takeaways.map((row) => (
+              <div key={row.dimension}>
+                {shownRows.length > 1 && <strong><MathText text={row.dimension} />：</strong>}
+                <MathText text={String(row.takeaway)} />
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
       <footer className={styles.widgetFoot}>
@@ -297,7 +314,7 @@ function ParameterLabWidget({ data }: { data: Record<string, unknown> }) {
             <Sliders size={12} aria-hidden />
             参数实验
           </span>
-          <strong className={styles.widgetTitle}>{title}</strong>
+          <strong className={styles.widgetTitle}><MathText text={title} /></strong>
         </div>
         {formula && <code className={styles.formulaBadge}>{formula}</code>}
       </header>
@@ -333,7 +350,12 @@ function ParameterLabWidget({ data }: { data: Record<string, unknown> }) {
         })}
       </div>
 
-      {insight && <p className={styles.matrixTakeaway}>💡 {insight}</p>}
+      {insight && (
+        <p className={styles.matrixTakeaway}>
+          <Lightbulb size={14} className={styles.takeawayIcon} aria-hidden />
+          <span><MathText text={insight} /></span>
+        </p>
+      )}
 
       <footer className={styles.widgetFoot}>
         <span className={styles.footHint}>拖动滑块调整参数，或将当前参数发送给 AI 推演</span>
@@ -375,9 +397,9 @@ function MicroQuizWidget({ data }: { data: Record<string, unknown> }) {
             <HelpCircle size={12} aria-hidden />
             随堂微测
           </span>
-          <strong className={styles.widgetTitle}>
+          <div className={cx(styles.widgetTitle, styles.quizQuestion)}>
             <MathText text={question} />
-          </strong>
+          </div>
         </div>
         {source && (
           <ProblemSourceBadge

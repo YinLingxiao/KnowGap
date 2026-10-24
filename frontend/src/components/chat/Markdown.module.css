@@ -112,7 +112,7 @@
   border-radius: var(--radius-sm);
   background: var(--bg-subtle);
   color: var(--text);
-  font-family: var(--font-mono); /* taste-skill-ignore */
+  font-family: var(--font-mono-cjk); /* taste-skill-ignore */
   font-size: 0.86em;
   font-variant-ligatures: none;
 }
