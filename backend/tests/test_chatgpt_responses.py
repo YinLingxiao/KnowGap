@@ -414,3 +414,51 @@ def test_oauth_callback_page_is_self_contained_and_escapes_the_message():
         assert "<script" not in page.replace("&lt;script", "") and "http://" not in page.replace("http://www.w3.org", "")
         assert "src=" not in page and "href=" not in page
 
+
+def test_responses_non_stream_html_is_reported_with_its_shape_not_its_body(tmp_path, caplog):
+    html_page = "<html>captive portal SECRET-PAGE-TEXT</html>"
+    with caplog.at_level("WARNING"):
+        with pytest.raises(ProviderError) as error:
+            collect(tmp_path, lambda _: httpx.Response(200, text=html_page, headers={"content-type": "text/html; charset=utf-8"}))
+    assert error.value.status_code == 502
+    assert "HTTP 200" in error.value.detail and "text/html" in error.value.detail and "代理" in error.value.detail
+    assert "SECRET-PAGE-TEXT" not in error.value.detail and "SECRET-PAGE-TEXT" not in caplog.text
+    assert "access-first" not in error.value.detail and "access-first" not in caplog.text
+
+
+def test_responses_ignores_events_that_are_not_objects_and_tolerates_odd_fields(tmp_path):
+    body = (
+        "event: ping\ndata: [1, 2]\n\n"
+        "event: note\ndata: \"just text\"\n\n"
+        + sse(
+            ("response.output_item.added", {"item": "not-an-object"}),
+            ("response.output_text.delta", {"delta": "你好"}),
+            ("response.completed", {"response": "also-not-an-object"}),
+        )
+    )
+    items = collect(tmp_path, lambda _: httpx.Response(200, text=body, headers={"content-type": "text/event-stream"}))
+    assert ("text", "你好") in items and items[-1] == ("finish", "stop")
+
+
+def test_responses_parse_failure_names_the_shape_and_logs_no_content(tmp_path, caplog):
+    body = sse(
+        ("response.output_text.delta", {"delta": "PRIVATE-PROMPT-ECHO"}),
+        ("response.completed", {"response": {"status": "completed", "output": 7}}),
+    )
+    with caplog.at_level("WARNING"):
+        with pytest.raises(ProviderError) as error:
+            collect(tmp_path, lambda _: httpx.Response(200, text=body, headers={"content-type": "text/event-stream"}))
+    detail = error.value.detail
+    assert "HTTP 200" in detail and "text/event-stream" in detail and "TypeError" in detail
+    assert "response.completed" in caplog.text and "PRIVATE-PROMPT-ECHO" not in caplog.text
+
+
+def test_responses_plain_json_body_handles_string_content_and_error_objects(tmp_path):
+    ok = {"status": "completed", "output": [{"type": "message", "content": "你好，我是回复"}]}
+    items = collect(tmp_path, lambda _: httpx.Response(200, json=ok))
+    assert ("text", "你好，我是回复") in items and items[-1] == ("finish", "stop")
+    failure = {"error": {"code": "subscription_sharing_usage_limit_exceeded"}}
+    with pytest.raises(ProviderError) as error:
+        collect(tmp_path, lambda _: httpx.Response(200, json=failure))
+    assert "额度" in error.value.detail
+

@@ -1,12 +1,15 @@
 """OpenAI Responses adapter for ChatGPT plan usage (OAuth), not Chat Completions."""
 
 import json
+import logging
 from typing import AsyncIterator
 
 import httpx
 
 from app.agents.llm import ProviderError, request_error, shared_ssl_context, TRANSIENT_FAILURES, _TransientStreamError
 from app.config import Settings
+
+logger = logging.getLogger(__name__)
 
 RESPONSES_URL = "https://api.openai.com/v1/responses"
 USAGE_LIMIT = "subscription_sharing_usage_limit_exceeded"
@@ -157,6 +160,13 @@ def _stream_error(body, request_id: str = "") -> ProviderError:
     return ProviderError(status, message + suffix)
 
 
+def _unreadable(reason: str, shape: dict, request_id: str = "", error: str = "") -> str:
+    parts = [f"HTTP {shape['status']}" if shape.get("status") else "", shape.get("type") or "", error]
+    detail = " · ".join(part for part in parts if part)
+    suffix = f"（请求 ID：{request_id}）" if request_id else ""
+    return f"ChatGPT 套餐{reason}" + (f"（{detail}）" if detail else "") + "，请重试；仍失败请把这行提示发给开发者。" + suffix
+
+
 class OpenAIResponsesChat:
     def __init__(self, settings: Settings, auth, transport: httpx.AsyncBaseTransport | None = None):
         self.settings = settings
@@ -194,6 +204,7 @@ class OpenAIResponsesChat:
         if tool_specs := response_tools(tools):
             payload["tools"] = tool_specs
         timeout = httpx.Timeout(self.settings.llm_timeout_seconds, read=self.settings.llm_timeout_seconds)
+        shape = {"status": 0, "type": "", "events": []}
         try:
             async with httpx.AsyncClient(timeout=timeout, transport=self.transport,
                                          verify=shared_ssl_context()) as client:
@@ -201,6 +212,8 @@ class OpenAIResponsesChat:
                                          headers={"Authorization": f"Bearer {token}",
                                                   "Accept": "text/event-stream"}) as response:
                     request_id = response.headers.get("x-request-id", "")
+                    shape["status"] = response.status_code
+                    shape["type"] = response.headers.get("content-type", "").split(";")[0].strip()
                     if not response.is_success:
                         raw = await response.aread()
                         try:
@@ -210,8 +223,15 @@ class OpenAIResponsesChat:
                         if response.status_code == 401 and not force:
                             raise _AuthRetry()
                         raise _http_error(response.status_code, body, request_id)
-                    if "text/event-stream" not in response.headers.get("content-type", ""):
-                        body = json.loads(await response.aread())
+                    if "text/event-stream" not in shape["type"]:
+                        raw = await response.aread()
+                        try:
+                            body = json.loads(raw)
+                        except ValueError:
+                            # Typically a proxy, captive portal or WAF page rather than the Responses API.
+                            logger.warning("ChatGPT 返回了非 JSON 内容：HTTP %s，类型 %s，长度 %s",
+                                           shape["status"], shape["type"] or "无", len(raw))
+                            raise ProviderError(502, _unreadable("返回的不是模型响应（可能被网络代理或防火墙拦截）", shape, request_id)) from None
                         async for item in self._from_body(body, request_id):
                             yield item
                         return
@@ -219,7 +239,11 @@ class OpenAIResponsesChat:
                     completed = False
                     finish = "stop"
                     async for event, data in self._events(response):
+                        if not isinstance(data, dict):
+                            continue
                         kind = data.get("type") or event
+                        if kind and kind not in shape["events"] and len(shape["events"]) < 12:
+                            shape["events"].append(str(kind)[:48])
                         if kind == "response.output_text.delta":
                             delta = data.get("delta")
                             if isinstance(delta, str) and delta:
@@ -229,7 +253,7 @@ class OpenAIResponsesChat:
                             if isinstance(delta, str) and delta:
                                 yield "reasoning", delta
                         elif kind == "response.output_item.added":
-                            item = data.get("item") or {}
+                            item = data.get("item") if isinstance(data.get("item"), dict) else {}
                             if item.get("type") == "function_call":
                                 calls[item.get("id") or item.get("call_id") or ""] = {
                                     "id": item.get("call_id") or item.get("id") or "",
@@ -245,7 +269,7 @@ class OpenAIResponsesChat:
                             if key in calls and isinstance(data.get("arguments"), str):
                                 calls[key]["arguments"] = data["arguments"]
                         elif kind == "response.output_item.done":
-                            item = data.get("item") or {}
+                            item = data.get("item") if isinstance(data.get("item"), dict) else {}
                             if item.get("type") == "function_call":
                                 calls[item.get("id") or item.get("call_id") or ""] = {
                                     "id": item.get("call_id") or item.get("id") or "",
@@ -253,7 +277,7 @@ class OpenAIResponsesChat:
                                     "arguments": item.get("arguments") or "{}",
                                 }
                         elif kind == "response.completed":
-                            body = data.get("response") or {}
+                            body = data.get("response") if isinstance(data.get("response"), dict) else {}
                             if usage := response_usage(body.get("usage")):
                                 yield "usage", usage
                             for item in body.get("output") or []:
@@ -283,8 +307,11 @@ class OpenAIResponsesChat:
             raise _TransientStreamError(exc) from None
         except httpx.RequestError as exc:
             raise request_error(exc) from None
-        except (ValueError, KeyError, IndexError, TypeError, AttributeError):
-            raise ProviderError(502, "ChatGPT 套餐响应格式无法解析，请检查接口兼容性。") from None
+        except (ValueError, KeyError, IndexError, TypeError, AttributeError) as exc:
+            # Only the shape of the exchange is logged: no body, no token, no prompt.
+            logger.warning("ChatGPT 响应解析失败：%s，HTTP %s，类型 %s，已见事件 %s",
+                           type(exc).__name__, shape["status"], shape["type"] or "无", shape["events"])
+            raise ProviderError(502, _unreadable("响应格式无法解析", shape, "", type(exc).__name__)) from None
 
     async def _events(self, response):
         event = ""
@@ -305,12 +332,15 @@ class OpenAIResponsesChat:
         if data_lines:
             raw = "\n".join(data_lines)
             if raw and raw != "[DONE]":
-                yield event, json.loads(raw)
+                try:
+                    yield event, json.loads(raw)
+                except ValueError:
+                    raise ProviderError(502, "ChatGPT 套餐流式响应无法解析。") from None
 
     async def _from_body(self, body: dict, request_id: str):
         if not isinstance(body, dict):
             raise ProviderError(502, "ChatGPT 套餐响应格式无法解析。")
-        if body.get("status") == "failed":
+        if body.get("status") == "failed" or (isinstance(body.get("error"), dict) and not body.get("output")):
             raise _stream_error(body, request_id)
         if usage := response_usage(body.get("usage")):
             yield "usage", usage
@@ -322,8 +352,12 @@ class OpenAIResponsesChat:
                 calls.append({"id": item.get("call_id") or item.get("id") or "",
                               "name": item.get("name") or "", "arguments": item.get("arguments") or "{}"})
             if item.get("type") == "message":
-                for part in item.get("content") or []:
-                    if part.get("type") == "output_text" and part.get("text"):
+                content = item.get("content") or []
+                if isinstance(content, str):
+                    yield "text", content
+                    continue
+                for part in content:
+                    if isinstance(part, dict) and part.get("type") == "output_text" and part.get("text"):
                         yield "text", part["text"]
         if calls:
             yield "tool_calls", calls
