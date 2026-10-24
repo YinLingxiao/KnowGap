@@ -202,6 +202,25 @@ def test_dispatch_scope_validation_and_provider_failure(tmp_path):
     asyncio.run(scenario())
 
 
+def test_blank_thread_id_from_the_model_means_a_new_thread(tmp_path):
+    # GPT 类模型对可选参数常传 ""：不能当成一个叫 "" 的支线，否则写消息时外键失败
+    from app.chat.schemas import DispatchThread
+
+    body = DispatchThread(title="Cache 练习", task="按考研题型练习", thread_id="", skill="")
+    assert body.thread_id is None and body.skill is None
+    assert DispatchThread(title="t", task="x", thread_id="  ").thread_id is None
+    assert DispatchThread(title="t", task="x", thread_id="conv-1").thread_id == "conv-1"
+
+    async def scenario():
+        store, service, sid, main = setup(tmp_path, Coordinator())
+        source = store.add_user_message(main, "搜两道题", "blank-thread-001")
+        thread_id, message_id = dispatch(store, STUDENT, main, source, "Cache 练习", "任务", "")
+        assert thread_id and store.conversation(thread_id, STUDENT).parent_id == main
+        assert store.threads(sid, STUDENT)[0].id == thread_id and message_id
+        await service.close()
+    asyncio.run(scenario())
+
+
 def test_quick_question_stays_in_main_and_direct_thread_reply_reports_back(tmp_path):
     async def scenario():
         model = Coordinator()

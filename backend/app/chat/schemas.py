@@ -2,7 +2,7 @@
 
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
 from app.models.schemas import Assessment, SourceReference
 
@@ -88,6 +88,12 @@ class DispatchThread(StrictModel):
     task: MessageText
     thread_id: str | None = None
     skill: Literal["deep_explain", "socratic_practice", "study_note_builder", "feynman_challenge", "general"] | None = None
+
+    @field_validator("thread_id", "skill", mode="before")
+    @classmethod
+    def blank_means_omitted(cls, value):
+        # 有的模型（如 GPT）对可选字段传 ""，而不是省略；空串当作没有，否则会往 id 为空的支线里写消息
+        return None if isinstance(value, str) and not value.strip() else value
 
 
 class ProposalInput(StrictModel):

@@ -10,6 +10,7 @@ def dispatch(store: ChatStore, student: str, main_id: str, source_id: str,
              title: str, task: str, thread_id: str | None, *, task_key: str | None = None,
              skill: str | None = None) -> tuple[str, str]:
     # Creation and delivery are atomic. Replaying a coordinator turn cannot deliver twice.
+    thread_id = thread_id or None
     key = task_key or thread_id or normalize(title).casefold()
     with store.connection() as db:
         db.execute("BEGIN IMMEDIATE")
