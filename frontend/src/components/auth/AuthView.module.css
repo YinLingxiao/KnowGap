@@ -1,16 +1,50 @@
 .canvas {
+  /* 登录页粒子背景：浅色为白底蓝点，深色为黑底青点（与预览站点一致） */
+  --auth-particle-bg: #ffffff;
+  --auth-particle-color: #0066cc;
+  --auth-particle-trail: rgba(255, 255, 255, 0.2);
+
+  position: relative;
+  overflow: hidden;
   min-height: calc(100dvh - var(--desktop-titlebar-height));
   display: grid;
   place-items: center;
   padding: 24px;
-  background:
-    radial-gradient(700px 420px at 50% 0%, var(--accent-soft-strong), transparent 70%),
-    linear-gradient(var(--border-subtle) 1px, transparent 1px) 0 0 / 48px 48px,
-    linear-gradient(90deg, var(--border-subtle) 1px, transparent 1px) 0 0 / 48px 48px,
-    var(--bg);
+  background: var(--auth-particle-bg);
+}
+
+:global(html[data-theme="dark"]) .canvas {
+  --auth-particle-bg: #08080a;
+  --auth-particle-color: #00f0ff;
+  --auth-particle-trail: rgba(8, 8, 10, 0.1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :global(html:not([data-theme="light"])) .canvas {
+    --auth-particle-bg: #08080a;
+    --auth-particle-color: #00f0ff;
+    --auth-particle-trail: rgba(8, 8, 10, 0.1);
+  }
+}
+
+.themeSlot {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius-sm) + 3px);
+  background: color-mix(in srgb, var(--bg-elevated) 76%, transparent);
+  box-shadow: var(--shadow-card);
+  backdrop-filter: blur(8px);
 }
 
 .card {
+  position: relative;
+  z-index: 1;
   width: min(400px, 100%);
   padding: 30px 28px 24px;
   border: 1px solid var(--border-strong);

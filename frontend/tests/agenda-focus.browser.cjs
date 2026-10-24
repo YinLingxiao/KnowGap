@@ -38,7 +38,7 @@ const path = require('node:path');
       await page.emulateMedia({ colorScheme: theme });
       // Leave the app in its default system-following theme.
       await page.evaluate(() => document.documentElement.removeAttribute('data-theme'));
-      for (const [view, name] of [['inbox', '收件箱'], ['today', '今天'], ['upcoming', '预览'], ['week', '周历'], ['space', '数据结构（演示）']]) {
+      for (const [view, name] of [['inbox', '待办'], ['today', '今天'], ['upcoming', '预览'], ['week', '周历'], ['space', '数据结构（演示）']]) {
         await agenda.locator('nav').getByRole('button', { name: new RegExp(`^${name.replace(/[（）]/g, '\\$&')}`) }).click();
         await add.waitFor({ state: 'visible' });
         assert.ok(await add.locator('svg').count());

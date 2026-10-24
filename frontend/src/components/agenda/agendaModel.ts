@@ -16,7 +16,7 @@ export type GroupKey = string;
 export type AgendaViewKey = "inbox" | "today" | "upcoming" | "week" | `space:${string}`;
 
 export const VIEW_LABELS: Record<"inbox" | "today" | "upcoming" | "week", string> = {
-  inbox: "收件箱",
+  inbox: "待办",
   today: "今天",
   upcoming: "预览",
   week: "周历",
@@ -247,7 +247,7 @@ export function buildTodayGroups(
 /** 「收件箱」视图 */
 export function buildInboxGroups(tasks: AgendaTask[], options?: { includeDone?: boolean }): AgendaGroup[] {
   const nodes = buildNodes(tasks, options).filter(isInboxNode);
-  return [{ key: "inbox", label: "收件箱", nodes: sorted(nodes), compose: {}, keepEmpty: true }];
+  return [{ key: "inbox", label: "待办", nodes: sorted(nodes), compose: {}, keepEmpty: true }];
 }
 
 export const UPCOMING_DAYS = 14;
@@ -424,7 +424,7 @@ export function buildTodaySuggestions(
       id: `inbox:${inbox.task.id}`,
       kind: "inbox",
       title: inbox.task.title,
-      detail: "收件箱里还没排期",
+      detail: "待办里还没排期",
       taskId: inbox.task.id,
       subjectId: null,
     });

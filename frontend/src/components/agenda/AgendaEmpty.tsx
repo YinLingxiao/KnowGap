@@ -91,7 +91,7 @@ const COPY: Record<Exclude<AgendaEmptyProps["variant"], "week">, {
   },
   "today-empty": {
     title: () => "今天还没有安排",
-    text: () => "可以从收件箱拉一条过来，或让 AI 按截止日拆开。",
+    text: () => "可以从待办拉一条过来，或让 AI 按截止日拆开。",
     action: "添加任务",
   },
   upcoming: {

@@ -135,7 +135,7 @@ export function TaskComposer({ subjects }: { subjects: Subject[] }) {
         ...(fields.scheduledStartAt && fields.reminderMinutes != null ? { reminderMinutes: fields.reminderMinutes } : {}),
       });
       window.dispatchEvent(new Event(AGENDA_CHANGED_EVENT));
-      setToast(`已添加到${created.scheduledDate ? ` ${dateLabel(created.scheduledDate)}` : subject?.name ? `「${subject.name}」` : "收件箱"}`);
+      setToast(`已添加到${created.scheduledDate ? ` ${dateLabel(created.scheduledDate)}` : subject?.name ? `「${subject.name}」` : "待办"}`);
       if (keepOpen) {
         setText(""); setNotes(""); setIgnored([]); setExpanded(false); setPanel(null); setLabelDraft("");
         setDefaults({ scheduledDate: fields.scheduledDate, subjectId: fields.subjectId });
@@ -230,9 +230,9 @@ export function TaskComposer({ subjects }: { subjects: Subject[] }) {
             <div className={styles.presets}>{fields.labels.map(label => <button type="button" key={label} aria-label={`移除标签 ${label}`} onClick={() => patch({ labels: fields.labels.filter(item => item !== label) })}>#{label}<X size={12} /></button>)}</div>
           </>}
           {panel === "subject" && <div className={styles.options}>
-            <button type="button" aria-pressed={!fields.subjectId} onClick={() => { patch({ subjectId: null }); setPanel(null); }}><Inbox size={14} />收件箱</button>
+            <button type="button" aria-pressed={!fields.subjectId} onClick={() => { patch({ subjectId: null }); setPanel(null); }}><Inbox size={14} />待办</button>
             {subjects.map(item => <button type="button" key={item.id} aria-pressed={fields.subjectId === item.id} onClick={() => { patch({ subjectId: item.id }); setPanel(null); }}><span className={styles.dot} style={{ background: subjectTone(item.color) }} aria-hidden />{item.name}{fields.subjectId === item.id && <Check size={14} />}</button>)}
-            {!subjects.length && <p className={styles.hint}>暂无学习空间，任务将放入收件箱。</p>}
+            {!subjects.length && <p className={styles.hint}>暂无学习空间，任务将放入待办。</p>}
           </div>}
         </div>}
         {parsed.tokens.length > 0 && <div className={styles.recognized} aria-label="已识别的片段，点击取消识别"><span>已识别</span>{parsed.tokens.map(token => <button type="button" key={`${token.key}:${token.start}`} title={`取消识别「${token.raw}」，文字保留在标题中`} onClick={() => cancelToken(token)}>{token.raw}<X size={10} /></button>)}</div>}
@@ -243,7 +243,7 @@ export function TaskComposer({ subjects }: { subjects: Subject[] }) {
       {open && toast && <div className={styles.inlineSuccess} role="status"><Check size={14} /><span>{toast}</span><button type="button" onClick={() => { window.dispatchEvent(new Event("knowgap:open-agenda")); setToast(""); close(); }}>查看日程</button></div>}
       {confirmClose && <div className={styles.confirm} role="alert"><span>放弃尚未添加的任务？</span><button type="button" onClick={() => { setConfirmClose(false); input.current?.focus(); }}>继续编辑</button><button type="button" onClick={() => setOpen(false)}>放弃</button></div>}
       <footer className={styles.footer}>
-        <span className={styles.destination}>{subject ? <><span className={styles.dot} style={{ background: subjectTone(subject.color) }} />{subject.name}</> : <><Inbox size={14} />收件箱</>}</span>
+        <span className={styles.destination}>{subject ? <><span className={styles.dot} style={{ background: subjectTone(subject.color) }} />{subject.name}</> : <><Inbox size={14} />待办</>}</span>
         <button type="button" disabled={busy} className={styles.cancel} onClick={close}>取消</button>
         <button type="button" className={styles.submit} disabled={busy || !validTitle || confirmClose} onClick={() => void submit()}>{busy ? <Loader size={14} className={styles.spin} /> : <Plus size={14} />}添加任务</button>
       </footer>
