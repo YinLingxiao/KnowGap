@@ -160,6 +160,30 @@ def _stream_error(body, request_id: str = "") -> ProviderError:
     return ProviderError(status, message + suffix)
 
 
+_KINDS = {"empty": "空内容", "html": "HTML 网页", "binary": "二进制数据", "text": "纯文本"}
+
+
+def _sniff(raw: bytes) -> str:
+    """按内容判断响应是什么：json / sse / empty / html / binary / text。"""
+    text = raw[:512].decode("utf-8", "replace").lstrip("\ufeff \t\r\n")
+    if not text:
+        return "empty"
+    if text[0] in "{[":
+        return "json"
+    if text.startswith(("event:", "data:", ":")) or text.startswith("id:") or text.startswith("retry:"):
+        return "sse"
+    if text.lower().startswith(("<!doctype", "<html", "<")):
+        return "html"
+    if "\ufffd" in text[:64] or any(ord(ch) < 9 for ch in text[:64]):
+        return "binary"
+    return "text"
+
+
+def _head(raw: bytes) -> str:
+    """开头几个可见字符，只用于判断类别；内容是事件流或 JSON 时不会走到这里。"""
+    return "".join(ch if ch.isprintable() else "?" for ch in raw[:48].decode("utf-8", "replace"))
+
+
 def _unreadable(reason: str, shape: dict, request_id: str = "", error: str = "") -> str:
     parts = [f"HTTP {shape['status']}" if shape.get("status") else "", shape.get("type") or "", error]
     detail = " · ".join(part for part in parts if part)
@@ -225,80 +249,27 @@ class OpenAIResponsesChat:
                         raise _http_error(response.status_code, body, request_id)
                     if "text/event-stream" not in shape["type"]:
                         raw = await response.aread()
+                        kind = _sniff(raw)
+                        if kind == "sse":
+                            # 有的链路会丢掉 Content-Type，但内容仍是事件流：按内容判断，不按头判断
+                            shape["type"] = shape["type"] or "(无 Content-Type，按事件流解析)"
+                            async for item in self._consume(self._events_from_text(raw.decode("utf-8", "replace")), request_id, shape):
+                                yield item
+                            return
                         try:
+                            if kind != "json":
+                                raise ValueError(kind)
                             body = json.loads(raw)
                         except ValueError:
-                            # Typically a proxy, captive portal or WAF page rather than the Responses API.
-                            logger.warning("ChatGPT 返回了非 JSON 内容：HTTP %s，类型 %s，长度 %s",
-                                           shape["status"], shape["type"] or "无", len(raw))
-                            raise ProviderError(502, _unreadable("返回的不是模型响应（可能被网络代理或防火墙拦截）", shape, request_id)) from None
+                            # 既不是 JSON 也不是事件流：多半是代理、防火墙或网关给的网页。只记类别和开头，不记内容。
+                            logger.warning("ChatGPT 返回了无法识别的内容：HTTP %s，类型 %s，长度 %s，开头 %s",
+                                           shape["status"], shape["type"] or "无", len(raw), _head(raw))
+                            raise ProviderError(502, _unreadable(f"返回的不是模型响应（{_KINDS.get(kind, '未知内容')}，可能被网络代理或防火墙拦截）", shape, request_id)) from None
                         async for item in self._from_body(body, request_id):
                             yield item
                         return
-                    calls: dict[str, dict] = {}
-                    completed = False
-                    finish = "stop"
-                    async for event, data in self._events(response):
-                        if not isinstance(data, dict):
-                            continue
-                        kind = data.get("type") or event
-                        if kind and kind not in shape["events"] and len(shape["events"]) < 12:
-                            shape["events"].append(str(kind)[:48])
-                        if kind == "response.output_text.delta":
-                            delta = data.get("delta")
-                            if isinstance(delta, str) and delta:
-                                yield "text", delta
-                        elif kind in {"response.reasoning_summary_text.delta", "response.reasoning_text.delta"}:
-                            delta = data.get("delta")
-                            if isinstance(delta, str) and delta:
-                                yield "reasoning", delta
-                        elif kind == "response.output_item.added":
-                            item = data.get("item") if isinstance(data.get("item"), dict) else {}
-                            if item.get("type") == "function_call":
-                                calls[item.get("id") or item.get("call_id") or ""] = {
-                                    "id": item.get("call_id") or item.get("id") or "",
-                                    "name": item.get("name") or "",
-                                    "arguments": item.get("arguments") or "",
-                                }
-                        elif kind == "response.function_call_arguments.delta":
-                            key = data.get("item_id") or ""
-                            if key in calls and isinstance(data.get("delta"), str):
-                                calls[key]["arguments"] += data["delta"]
-                        elif kind == "response.function_call_arguments.done":
-                            key = data.get("item_id") or ""
-                            if key in calls and isinstance(data.get("arguments"), str):
-                                calls[key]["arguments"] = data["arguments"]
-                        elif kind == "response.output_item.done":
-                            item = data.get("item") if isinstance(data.get("item"), dict) else {}
-                            if item.get("type") == "function_call":
-                                calls[item.get("id") or item.get("call_id") or ""] = {
-                                    "id": item.get("call_id") or item.get("id") or "",
-                                    "name": item.get("name") or "",
-                                    "arguments": item.get("arguments") or "{}",
-                                }
-                        elif kind == "response.completed":
-                            body = data.get("response") if isinstance(data.get("response"), dict) else {}
-                            if usage := response_usage(body.get("usage")):
-                                yield "usage", usage
-                            for item in body.get("output") or []:
-                                if isinstance(item, dict) and item.get("type") == "function_call":
-                                    calls[item.get("call_id") or item.get("id") or ""] = {
-                                        "id": item.get("call_id") or item.get("id") or "",
-                                        "name": item.get("name") or "", "arguments": item.get("arguments") or "{}"}
-                            completed = True
-                            finish = "stop"
-                        elif kind == "response.incomplete":
-                            completed = True
-                            finish = "length"
-                        elif kind in {"response.failed", "error"}:
-                            raise _stream_error(data.get("response") or data, request_id)
-                    if not completed:
-                        raise ProviderError(502, "ChatGPT 回复流提前结束，请重试。")
-                    valid = [{"id": call["id"], "name": call["name"], "arguments": call["arguments"] or "{}"}
-                             for call in calls.values() if call.get("name")]
-                    if valid:
-                        yield "tool_calls", valid
-                    yield "finish", finish
+                    async for item in self._consume(self._events(response), request_id, shape):
+                        yield item
         except ProviderError:
             raise
         except _AuthRetry:
@@ -314,9 +285,20 @@ class OpenAIResponsesChat:
             raise ProviderError(502, _unreadable("响应格式无法解析", shape, "", type(exc).__name__)) from None
 
     async def _events(self, response):
+        async for item in self._sse(response.aiter_lines()):
+            yield item
+
+    async def _events_from_text(self, text: str):
+        async def lines():
+            for line in text.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+                yield line
+        async for item in self._sse(lines()):
+            yield item
+
+    async def _sse(self, lines_source):
         event = ""
         data_lines: list[str] = []
-        async for line in response.aiter_lines():
+        async for line in lines_source:
             if line.startswith("event:"):
                 event = line[6:].strip()
             elif line.startswith("data:"):
@@ -336,6 +318,73 @@ class OpenAIResponsesChat:
                     yield event, json.loads(raw)
                 except ValueError:
                     raise ProviderError(502, "ChatGPT 套餐流式响应无法解析。") from None
+
+    async def _consume(self, events, request_id: str, shape: dict):
+        """把解析好的 (event, data) 流翻译成统一的 (kind, value)；流式响应和嗅探出的事件流共用。"""
+        calls: dict[str, dict] = {}
+        completed = False
+        finish = "stop"
+        async for event, data in events:
+            if not isinstance(data, dict):
+                continue
+            kind = data.get("type") or event
+            if kind and kind not in shape["events"] and len(shape["events"]) < 12:
+                shape["events"].append(str(kind)[:48])
+            if kind == "response.output_text.delta":
+                delta = data.get("delta")
+                if isinstance(delta, str) and delta:
+                    yield "text", delta
+            elif kind in {"response.reasoning_summary_text.delta", "response.reasoning_text.delta"}:
+                delta = data.get("delta")
+                if isinstance(delta, str) and delta:
+                    yield "reasoning", delta
+            elif kind == "response.output_item.added":
+                item = data.get("item") if isinstance(data.get("item"), dict) else {}
+                if item.get("type") == "function_call":
+                    calls[item.get("id") or item.get("call_id") or ""] = {
+                        "id": item.get("call_id") or item.get("id") or "",
+                        "name": item.get("name") or "",
+                        "arguments": item.get("arguments") or "",
+                    }
+            elif kind == "response.function_call_arguments.delta":
+                key = data.get("item_id") or ""
+                if key in calls and isinstance(data.get("delta"), str):
+                    calls[key]["arguments"] += data["delta"]
+            elif kind == "response.function_call_arguments.done":
+                key = data.get("item_id") or ""
+                if key in calls and isinstance(data.get("arguments"), str):
+                    calls[key]["arguments"] = data["arguments"]
+            elif kind == "response.output_item.done":
+                item = data.get("item") if isinstance(data.get("item"), dict) else {}
+                if item.get("type") == "function_call":
+                    calls[item.get("id") or item.get("call_id") or ""] = {
+                        "id": item.get("call_id") or item.get("id") or "",
+                        "name": item.get("name") or "",
+                        "arguments": item.get("arguments") or "{}",
+                    }
+            elif kind == "response.completed":
+                body = data.get("response") if isinstance(data.get("response"), dict) else {}
+                if usage := response_usage(body.get("usage")):
+                    yield "usage", usage
+                for item in body.get("output") or []:
+                    if isinstance(item, dict) and item.get("type") == "function_call":
+                        calls[item.get("call_id") or item.get("id") or ""] = {
+                            "id": item.get("call_id") or item.get("id") or "",
+                            "name": item.get("name") or "", "arguments": item.get("arguments") or "{}"}
+                completed = True
+                finish = "stop"
+            elif kind == "response.incomplete":
+                completed = True
+                finish = "length"
+            elif kind in {"response.failed", "error"}:
+                raise _stream_error(data.get("response") or data, request_id)
+        if not completed:
+            raise ProviderError(502, "ChatGPT 回复流提前结束，请重试。")
+        valid = [{"id": call["id"], "name": call["name"], "arguments": call["arguments"] or "{}"}
+                 for call in calls.values() if call.get("name")]
+        if valid:
+            yield "tool_calls", valid
+        yield "finish", finish
 
     async def _from_body(self, body: dict, request_id: str):
         if not isinstance(body, dict):

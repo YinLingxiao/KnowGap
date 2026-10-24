@@ -415,15 +415,51 @@ def test_oauth_callback_page_is_self_contained_and_escapes_the_message():
         assert "src=" not in page and "href=" not in page
 
 
-def test_responses_non_stream_html_is_reported_with_its_shape_not_its_body(tmp_path, caplog):
-    html_page = "<html>captive portal SECRET-PAGE-TEXT</html>"
+def test_responses_html_page_is_classified_and_only_its_opening_is_logged(tmp_path, caplog):
+    html_page = "<!doctype html><html><head><title>Blocked</title></head>" + "x" * 200 + "TAIL-SECRET-TEXT</html>"
     with caplog.at_level("WARNING"):
         with pytest.raises(ProviderError) as error:
             collect(tmp_path, lambda _: httpx.Response(200, text=html_page, headers={"content-type": "text/html; charset=utf-8"}))
     assert error.value.status_code == 502
-    assert "HTTP 200" in error.value.detail and "text/html" in error.value.detail and "代理" in error.value.detail
-    assert "SECRET-PAGE-TEXT" not in error.value.detail and "SECRET-PAGE-TEXT" not in caplog.text
+    assert "HTTP 200" in error.value.detail and "text/html" in error.value.detail and "HTML 网页" in error.value.detail
+    assert "<!doctype html>" in caplog.text            # the opening identifies what kind of page it is
+    assert "TAIL-SECRET-TEXT" not in error.value.detail and "TAIL-SECRET-TEXT" not in caplog.text
     assert "access-first" not in error.value.detail and "access-first" not in caplog.text
+
+
+def test_responses_event_stream_without_a_content_type_is_still_parsed(tmp_path):
+    body = sse(
+        ("response.created", {"response": {"id": "r1", "instructions": "x" * 5000}}),
+        ("response.reasoning_summary_text.delta", {"delta": "先想"}),
+        ("response.output_text.delta", {"delta": "你好，"}),
+        ("response.output_text.delta", {"delta": "我在。"}),
+        ("response.completed", {"response": {"status": "completed", "output": [],
+                                             "usage": {"input_tokens": 9, "output_tokens": 3}}}),
+    )
+    # some proxies / gateways drop the Content-Type of a streamed answer; the body is still an event stream
+    response = httpx.Response(200, content=body.encode("utf-8"))
+    response.headers.pop("content-type", None)
+    items = collect(tmp_path, lambda _: response)
+    assert ("text", "你好，") in items and ("text", "我在。") in items and ("reasoning", "先想") in items
+    assert ("usage", {"prompt_tokens": 9, "completion_tokens": 3}) in items and items[-1] == ("finish", "stop")
+
+
+def test_responses_event_stream_without_a_content_type_that_fails_reports_the_provider_error(tmp_path):
+    body = sse(("response.failed", {"response": {"error": {"code": "subscription_sharing_usage_limit_exceeded"}}}))
+    response = httpx.Response(200, content=body.encode("utf-8"))
+    response.headers.pop("content-type", None)
+    with pytest.raises(ProviderError) as error:
+        collect(tmp_path, lambda _: response)
+    assert "额度" in error.value.detail
+
+
+@pytest.mark.parametrize("payload,label", [(b"", "空内容"), (b"\x00\x01\x02binary", "二进制数据"), (b"plain words", "纯文本")])
+def test_responses_other_unreadable_bodies_are_named(tmp_path, payload, label):
+    response = httpx.Response(200, content=payload)
+    response.headers.pop("content-type", None)
+    with pytest.raises(ProviderError) as error:
+        collect(tmp_path, lambda _: response)
+    assert label in error.value.detail and "HTTP 200" in error.value.detail
 
 
 def test_responses_ignores_events_that_are_not_objects_and_tolerates_odd_fields(tmp_path):
