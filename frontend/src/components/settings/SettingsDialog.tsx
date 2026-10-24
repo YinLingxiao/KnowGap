@@ -150,6 +150,7 @@ interface SettingsDialogProps {
   health: HealthState;
   studentId: string;
   modelSignal: ModelSignal;
+  modelError?: string;
   onCheckHealth: () => void;
   onConfigChange: (config: AIConfigStatus, saved: boolean) => void;
   onClose: () => void;
@@ -160,7 +161,7 @@ interface SettingsDialogProps {
 }
 
 export function SettingsDialog({
-  source, health, studentId, modelSignal, onCheckHealth, onConfigChange, onClose, user, initialTab = "general", onLogout, onRename,
+  source, health, studentId, modelSignal, modelError = "", onCheckHealth, onConfigChange, onClose, user, initialTab = "general", onLogout, onRename,
 }: SettingsDialogProps) {
   const ref = useRef<HTMLDialogElement>(null);
   const [tab, setTab] = useState<Tab>(initialTab);
@@ -260,6 +261,7 @@ export function SettingsDialog({
                       source={source}
                       health={health}
                       signal={modelSignal}
+                      setupError={modelError}
                       onCheckHealth={onCheckHealth}
                       onConfigChange={onConfigChange}
                     />

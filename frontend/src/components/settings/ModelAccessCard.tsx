@@ -32,6 +32,7 @@ interface ModelAccessCardProps {
   signal: ModelSignal;
   onCheckHealth: () => void;
   onConfigChange: (config: AIConfigStatus, saved: boolean) => void;
+  setupError?: string;
   plain?: boolean;
   client?: ModelLibraryClient;
 }
@@ -74,7 +75,7 @@ function statusOf(providers: ProviderPublic[], key: string | null): AIConfigStat
 }
 
 export function ModelAccessCard({
-  source, health, signal, onCheckHealth, onConfigChange, plain = false, client,
+  source, health, signal, onCheckHealth, onConfigChange, plain = false, client, setupError = "",
 }: ModelAccessCardProps) {
   const fieldId = useId();
   const library = client ?? modelLibraryApi;
@@ -89,15 +90,25 @@ export function ModelAccessCard({
   const [notice, setNotice] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
 
   const reload = useCallback(async (saved = false) => {
-    const [nextProviders, nextCatalog, nextDefault] = await Promise.all([
+    const [nextProviders, nextCatalog, loadedDefault] = await Promise.all([
       library.listProviders(),
       library.listSelectableModels(),
       library.getDefaultModel(),
     ]);
+    let nextDefault = loadedDefault;
+    let picked = false;
+    // 默认模型为空或已不可用、但有可选模型时，自动选第一个，否则会一直卡在「先连上 AI 模型」
+    const firstKey = nextCatalog[0]?.key;
+    if (firstKey && !nextCatalog.some((model) => model.key === loadedDefault.key)) {
+      nextDefault = await library.setDefaultModel(firstKey);
+      picked = true;
+    }
     setProviders(nextProviders);
     setCatalog(nextCatalog);
     setDefaultKey(nextDefault.key);
-    onConfigChange(statusOf(nextProviders, nextDefault.key), saved);
+    const status = statusOf(nextProviders, nextDefault.key);
+    onConfigChange(status, saved || picked);
+    return status;
   }, [library, onConfigChange]);
 
   useEffect(() => {
@@ -130,6 +141,17 @@ export function ModelAccessCard({
       setBusy(false);
     }
   };
+
+  const saveAndTest = () => void run(async () => {
+    const key = defaultKey && catalog.some((model) => model.key === defaultKey) ? defaultKey : catalog[0]?.key;
+    if (!key) return;
+    if (key !== defaultKey) await library.setDefaultModel(key);
+    const status = await reload(true);
+    window.dispatchEvent(new Event(MODELS_CHANGED_EVENT));
+    setNotice(status.configured
+      ? { tone: "ok", text: "正在测试连接，通过后会离开此页。" }
+      : { tone: "error", text: "默认模型还不可用。请确认服务商已启用，并且密钥或 ChatGPT 套餐已授权。" });
+  });
 
   return (
     <section className={plain ? settings.embed : cx(settings.card, settings.cardWide)} aria-labelledby={plain ? undefined : `${fieldId}-title`} aria-busy={loading || undefined}>
@@ -210,7 +232,10 @@ export function ModelAccessCard({
                   ))}
                 </select>
               </label>
-              <p className={styles.note}>新对话使用默认模型。输入框里更换模型只影响当前这条对话。</p>
+              <p className={styles.note}>新对话使用默认模型。选好后点保存并测试，通过才会离开此页。</p>
+              <Button size="sm" variant="primary" disabled={busy || catalog.length === 0} onClick={saveAndTest}>
+                保存并测试
+              </Button>
               <ProviderList
                 providers={providers}
                 busy={busy}
@@ -229,10 +254,10 @@ export function ModelAccessCard({
               {signal.detail || "诊断时后端没有拿到有效的模型结果。"}
             </p>
           )}
-          {notice && (
-            <p className={cx(styles.outcome, notice.tone === "ok" ? styles.ok : styles.bad)} role={notice.tone === "ok" ? "status" : "alert"}>
-              {notice.tone === "ok" ? <CircleCheck size={14} aria-hidden /> : <TriangleAlert size={14} aria-hidden />}
-              {notice.text}
+          {(notice || setupError) && (
+            <p className={cx(styles.outcome, notice?.tone === "ok" && !setupError ? styles.ok : styles.bad)} role={notice?.tone === "ok" && !setupError ? "status" : "alert"}>
+              {notice?.tone === "ok" && !setupError ? <CircleCheck size={14} aria-hidden /> : <TriangleAlert size={14} aria-hidden />}
+              {notice?.tone === "error" ? notice.text : setupError || notice?.text}
             </p>
           )}
         </div>
@@ -250,7 +275,7 @@ export function ModelAccessCard({
             provider={editing}
             client={library}
             onClose={() => setEditor(undefined)}
-            onChange={() => reload()}
+            onChange={async () => { await reload(); }}
             onCreated={(id) => setEditor(id)}
             onDeleted={(text) => {
               setEditor(undefined);

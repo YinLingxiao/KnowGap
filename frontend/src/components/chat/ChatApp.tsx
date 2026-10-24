@@ -155,20 +155,25 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
     }
   }, []);
 
-  const checkModel = useCallback(async () => {
+  const checkModel = useCallback(async (fromSave = false) => {
     setModelChecking(true);
     setModelError("");
     try {
       const config = await getAIConfig();
-      if (!config.configured) needsModelTest.current = true;
-      if (config.configured && needsModelTest.current) {
+      if (!config.configured) {
+        needsModelTest.current = true;
+        setModelConfigured(false);
+        if (fromSave) setModelError("默认模型还不可用。请确认服务商已启用，并且密钥或 ChatGPT 套餐已授权。");
+        return;
+      }
+      if (needsModelTest.current) {
         await testAIConfig({ baseUrl: config.baseUrl, model: config.model, apiKey: "" });
         needsModelTest.current = false;
         setSettingsOpen(false);
       }
-      setModelConfigured(config.configured);
-    } catch {
-      setModelError("无法确认模型连接，请检查后端是否启动、模型配置是否可用，然后重试。");
+      setModelConfigured(true);
+    } catch (error: unknown) {
+      setModelError(error instanceof Error && error.message ? error.message : "无法确认模型连接，请检查后端是否启动、模型配置是否可用，然后重试。");
     } finally {
       setModelChecking(false);
     }
@@ -348,7 +353,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
       needsModelTest.current = true;
       setModelConfigured(false);
     } else if (saved) {
-      void checkModel();
+      void checkModel(true);
     }
   }, [checkModel]);
 
@@ -919,6 +924,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
           user={user}
           initialTab={settingsTab}
           modelSignal={modelSignal}
+          modelError={modelError}
           onCheckHealth={() => void checkHealth()}
           onConfigChange={handleConfigChange}
           onLogout={onLogout}
