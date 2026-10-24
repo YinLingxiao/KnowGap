@@ -51,27 +51,27 @@ def _clean(content) -> str:
     return text.replace("\x00", "")
 
 
-async def _ocr_page_native(url: str, config, transport: httpx.AsyncBaseTransport | None) -> str:
+async def _ocr_page_native(url: str, config, transport: httpx.AsyncBaseTransport | None, prompt: str = OCR_PROMPT) -> str:
     """Vertex / Gemini 原生接口没有 /chat/completions，走和对话相同的原生通道。"""
     from app.agents.gemini import GeminiNativeChat
 
     messages = [{"role": "user", "content": [
         {"type": "image_url", "image_url": {"url": url}},
-        {"type": "text", "text": OCR_PROMPT},
+        {"type": "text", "text": prompt},
     ]}]
     chat = GeminiNativeChat(config.llm_settings(), transport)
     return _clean("".join([value async for kind, value in chat.stream(messages) if kind == "text"]))
 
 
-async def _ocr_page(png: bytes, config, transport: httpx.AsyncBaseTransport | None) -> str:
+async def _ocr_page(png: bytes, config, transport: httpx.AsyncBaseTransport | None, prompt: str = OCR_PROMPT) -> str:
     url = "data:image/png;base64," + base64.b64encode(png).decode("ascii")
     if is_vertex_native(config.base_url):
-        return await _ocr_page_native(url, config, transport)
+        return await _ocr_page_native(url, config, transport, prompt)
     payload = {
         "model": config.model, "temperature": 0,
         "messages": [{"role": "user", "content": [
             {"type": "image_url", "image_url": {"url": url}},
-            {"type": "text", "text": OCR_PROMPT},
+            {"type": "text", "text": prompt},
         ]}],
     }
     if config.disable_thinking and re.search(r"qwen|qvq", config.model, re.IGNORECASE):
@@ -121,4 +121,4 @@ async def ocr_pdf(data: bytes, service_models, *, transport: httpx.AsyncBaseTran
     blank = [number for number, text, reason in results if not text.strip() and not reason]
     if blank:
         notes.append("第 " + "、".join(map(str, blank)) + " 页没有识别到文字。")
-    return Reading(pages, notes)
+    return Reading(pages, notes, extra={number: text for number, text in pages})

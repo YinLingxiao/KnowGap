@@ -165,15 +165,30 @@ def edit_document(arguments: dict, ctx) -> str:
 
 
 def read_document(arguments: dict, ctx) -> str:
-    from app.services.materials import extract_document
+    from app.services.materials import ScannedPdfError, extract_document
+    from app.services.office_readers import Reading
 
     files = _require(ctx)
     record, data = _resolve(files, ctx, arguments.get("file_id"))
+    library = getattr(ctx, "library", None)
+    recognized, stored_notes = library.recognized_text(record["id"], ctx.student_id) if library is not None else ({}, [])
     try:
-        _, reading = extract_document(record["name"], data)
+        _, reading = extract_document(record["name"], data, allow_empty=bool(recognized))
+    except ScannedPdfError as exc:
+        if not recognized:
+            raise ToolError(f"这个文件读不出文字：{exc.detail}") from exc
+        reading = Reading([], [])
     except Exception as exc:
         raise ToolError(f"这个文件读不出文字：{getattr(exc, 'detail', exc)}") from exc
     pages = reading.pages
+    if recognized:
+        # 上传时识图模型读出的文字（图片、扫描页）：原件里没有，按页并回，说明也用上传时那份
+        by_number = dict(pages)
+        for number, found in recognized.items():
+            base = by_number.get(number, "")
+            by_number[number] = found if found in base else (base + "\n\n" + found if base.strip() else found)
+        pages = sorted(by_number.items())
+        reading = Reading(pages, stored_notes or reading.notes)
     start = max(1, int(arguments.get("start") or 1))
     limit = min(max(1, int(arguments.get("limit") or 5)), 20)
     chunk = pages[start - 1:start - 1 + limit]

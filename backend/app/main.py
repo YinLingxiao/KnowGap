@@ -110,6 +110,11 @@ def create_app(
         from app.services.pdf_ocr import ocr_pdf
         return await ocr_pdf(data, service_models)
     library.ocr = read_scanned_pdf
+
+    async def read_slide_pictures(kind: str, data: bytes, reading):
+        from app.services.slide_images import add_picture_text
+        return await add_picture_text(kind, data, reading, service_models)
+    library.slide_ocr = read_slide_pictures
     app.include_router(material_router(library, lambda subject_id: chat_store.subject(subject_id, current_student()) is not None))
     app.include_router(chat_router(chat_store, chat_service))
     from app.chat.attachments import attachment_router; app.include_router(attachment_router(chat_store, library))

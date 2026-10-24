@@ -39,6 +39,8 @@ _CONTROL = re.compile(r'[\x00-\x08\x0e-\x1f\x7f]')
 class Reading:
     pages: list[tuple[int, str]]
     notes: list[str] = field(default_factory=list)
+    # 识图模型读出来的文字（页码 → 文字）。原件里没有它，read_document 重新解析原件时要靠它补回
+    extra: dict[int, str] = field(default_factory=dict)
 
 
 def _x(element, expression: str):
@@ -491,6 +493,31 @@ def _persist_directory(ole, buf: bytes) -> dict[int, int]:
     return directory
 
 
+def _ppt_slide_containers(buf: bytes, directory: dict[int, int]) -> tuple[list[int], dict[int, int]]:
+    """幻灯片容器在流里的偏移（按放映顺序），以及 备注页 slideId → persistId。"""
+    # 幻灯片顺序 = Document 里 SlideListWithText(实例 0) 里 SlidePersistAtom 的顺序
+    slide_ids: list[int] = []
+    notes_persist: dict[int, int] = {}
+    for rtype, _v, _i, body, length in _records(buf, 0, len(buf)):
+        if rtype != _RT_DOCUMENT:
+            continue
+        for rtype2, _v2, inst2, body2, length2 in _records(buf, body, body + length):
+            if rtype2 != _RT_SLIDE_LIST or inst2 not in (0, 2):
+                continue
+            for rtype3, _v3, _i3, body3, length3 in _records(buf, body2, body2 + length2):
+                if rtype3 != _RT_SLIDE_PERSIST or length3 < 16:
+                    continue
+                persist_id, slide_id = struct.unpack_from('<I', buf, body3)[0], struct.unpack_from('<I', buf, body3 + 12)[0]
+                if inst2 == 0:
+                    slide_ids.append(persist_id)
+                else:
+                    notes_persist[slide_id] = persist_id
+    containers = [directory[i] for i in slide_ids if i in directory]
+    if not containers:  # 没有持久化目录（或损坏）：按流里 Slide 容器出现的顺序读
+        containers = [off - 8 for rtype, _v, _i, off, _l in _records(buf, 0, len(buf)) if rtype == _RT_SLIDE]
+    return containers, notes_persist
+
+
 def read_ppt(data: bytes) -> Reading:
     ole = _ole(data)
     try:
@@ -499,26 +526,7 @@ def read_ppt(data: bytes) -> Reading:
         has_pictures = ole.exists('Pictures') and ole.get_size('Pictures') > 0
         buf = ole.openstream('PowerPoint Document').read()
         directory = _persist_directory(ole, buf)
-        # 幻灯片顺序 = Document 里 SlideListWithText(实例 0) 里 SlidePersistAtom 的顺序
-        slide_ids: list[int] = []
-        notes_persist: dict[int, int] = {}       # 备注页 slideId → persistId
-        for rtype, _v, _i, body, length in _records(buf, 0, len(buf)):
-            if rtype != _RT_DOCUMENT:
-                continue
-            for rtype2, _v2, inst2, body2, length2 in _records(buf, body, body + length):
-                if rtype2 != _RT_SLIDE_LIST or inst2 not in (0, 2):
-                    continue
-                for rtype3, _v3, _i3, body3, length3 in _records(buf, body2, body2 + length2):
-                    if rtype3 != _RT_SLIDE_PERSIST or length3 < 16:
-                        continue
-                    persist_id, slide_id = struct.unpack_from('<I', buf, body3)[0], struct.unpack_from('<I', buf, body3 + 12)[0]
-                    if inst2 == 0:
-                        slide_ids.append(persist_id)
-                    else:
-                        notes_persist[slide_id] = persist_id
-        containers = [directory[i] for i in slide_ids if i in directory]
-        if not containers:  # 没有持久化目录（或损坏）：按流里 Slide 容器出现的顺序读
-            containers = [off - 8 for rtype, _v, _i, off, _l in _records(buf, 0, len(buf)) if rtype == _RT_SLIDE]
+        containers, notes_persist = _ppt_slide_containers(buf, directory)
         _limit_pages(containers, '张幻灯片')
         pages = []
         for number, offset in enumerate(containers, 1):

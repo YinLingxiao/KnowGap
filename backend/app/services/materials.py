@@ -129,7 +129,7 @@ _OFFICE_READERS = {'docx': read_docx, 'pptx': read_pptx, 'xlsx': read_xlsx,
 _LEGACY_HINT = {'doc': 'Word', 'ppt': 'PowerPoint', 'xls': 'Excel'}
 
 
-def extract_document(filename: str, data: bytes) -> tuple[str, Reading]:
+def extract_document(filename: str, data: bytes, *, allow_empty: bool = False) -> tuple[str, Reading]:
     """读取一份资料，返回 (类型, Reading)。旧版 doc / ppt / xls 的类型记作 docx / pptx / xlsx。"""
     if len(data) > MAX_UPLOAD_BYTES:
         raise HTTPException(413, '单份资料不能超过 20 MB。')
@@ -167,7 +167,7 @@ def extract_document(filename: str, data: bytes) -> tuple[str, Reading]:
         raise HTTPException(413, f'单份资料最多 {MAX_PAGES} 页/节/幻灯片/工作表，请按章节拆分。')
     if sum(len(text) for _, text in reading.pages) > MAX_TEXT:
         raise HTTPException(413, '资料文字过多，请按章节拆分。')
-    if not any(text.strip() for _, text in reading.pages):
+    if not allow_empty and not any(text.strip() for _, text in reading.pages):
         if ext == 'pdf':
             raise ScannedPdfError(422, '这份 PDF 是扫描图片，暂不支持识别文字')
         raise HTTPException(422, '没有提取到文字，请选择包含文字的资料。')
@@ -186,6 +186,8 @@ class MaterialStore:
         self.originals = None
         # async (pdf 字节) -> Reading：扫描版 PDF 转写，由 main.py 挂上；没有时扫描件直接报错
         self.ocr = None
+        # async (kind, 原件字节, Reading) -> Reading：把课件里的图片交给识图模型，文字并回对应幻灯片
+        self.slide_ocr = None
 
     def initialize(self):
         with self.store.connection() as db:
@@ -207,11 +209,16 @@ class MaterialStore:
             ensure_column(db, 'course_materials', 'chars', 'INTEGER NOT NULL DEFAULT 0')
             # 读取说明：哪些内容没读到（图片里的字、隐藏页、扫描页……），交给模型如实告诉学生
             ensure_column(db, 'course_materials', 'notes_json', "TEXT NOT NULL DEFAULT '[]'")
+            # 识图模型读出的文字（页码 → 文字）：原件里没有，read_document 重新解析原件时用它补回
+            ensure_column(db, 'course_materials', 'ocr_json', "TEXT NOT NULL DEFAULT '{}'")
 
     async def add_with_ocr(self, student_id: str, filename: str, data: bytes, subject_id: str | None = None) -> Material:
         """上传入口用这个：扫描版 PDF 先尝试让识图模型转写，其余和 add 一样。"""
         from starlette.concurrency import run_in_threadpool
 
+        extension = PurePosixPath(filename).suffix.lower()
+        if self.slide_ocr is not None and extension in ('.ppt', '.pptx'):
+            return await self._add_slides(student_id, filename, data, subject_id)
         try:
             return await run_in_threadpool(self.add, student_id, filename, data, subject_id)
         except ScannedPdfError:
@@ -222,6 +229,19 @@ class MaterialStore:
             except ProviderError as exc:
                 raise HTTPException(422 if exc.status_code == 503 else 502, exc.detail) from None
             return await run_in_threadpool(self.add, student_id, filename, data, subject_id, ('pdf', reading))
+
+    async def _add_slides(self, student_id: str, filename: str, data: bytes, subject_id: str | None) -> Material:
+        """课件：先读文字，再让识图模型读幻灯片里的图片；图片读不了不影响文字。"""
+        from starlette.concurrency import run_in_threadpool
+
+        kind, reading = await run_in_threadpool(extract_document, filename, data, allow_empty=True)
+        try:
+            reading = await self.slide_ocr(kind, data, reading)
+        except Exception:  # noqa: BLE001 - 图片只是增强，失败时保留已读到的文字
+            pass
+        if not any(text.strip() for _, text in reading.pages):
+            raise HTTPException(422, '没有提取到文字，请选择包含文字的资料。')
+        return await run_in_threadpool(self.add, student_id, filename, data, subject_id, (kind, reading))
 
     def add(self, student_id: str, filename: str, data: bytes, subject_id: str | None = None,
             preread: tuple[str, Reading] | None = None) -> Material:
@@ -244,10 +264,11 @@ class MaterialStore:
             if count >= MAX_DOCUMENTS:
                 raise HTTPException(409, '最多保存 30 份资料，请删除不需要的资料后再上传。')
             db.execute('INSERT INTO course_materials(id, student_id, title, kind, page_count, chunk_count, created_at, '
-                       'subject_id, outline_json, chars, notes_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                       'subject_id, outline_json, chars, notes_json, ocr_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
                        (document_id, student_id, title, kind, material.page_count, len(records), material.created_at,
                         subject_id, json.dumps(outline_for(pages), ensure_ascii=False), sum(len(text) for _, text in pages),
-                        json.dumps(reading.notes, ensure_ascii=False)))
+                        json.dumps(reading.notes, ensure_ascii=False),
+                        json.dumps({str(page): text for page, text in reading.extra.items()}, ensure_ascii=False)))
             db.executemany('INSERT INTO course_chunks VALUES (?, ?, ?, ?, ?, ?)', records)
             db.executemany('INSERT INTO course_index(chunk_id, terms) VALUES (?, ?)',
                            [(record[0], ' '.join(terms(record[2]))) for record in records])
@@ -257,6 +278,18 @@ class MaterialStore:
             except Exception:
                 pass  # 原件只用于修改；保存不了不影响读取和检索
         return material
+
+    def recognized_text(self, document_id: str, student_id: str) -> tuple[dict[int, str], list[str]]:
+        """上传时由识图模型读出的文字（页码 → 文字），和当时的读取说明。没有就返回空。"""
+        with self.store.connection() as db:
+            row = db.execute('SELECT ocr_json, notes_json FROM course_materials WHERE id = ? AND student_id = ?',
+                             (document_id, student_id)).fetchone()
+        if row is None:
+            return {}, []
+        try:
+            return {int(page): text for page, text in json.loads(row['ocr_json'] or '{}').items()}, json.loads(row['notes_json'] or '[]')
+        except (ValueError, TypeError):
+            return {}, []
 
     def attachment(self, document_id: str, student_id: str, *, excerpt: bool = False,
                    excerpt_limit: int = 3000) -> dict | None:
