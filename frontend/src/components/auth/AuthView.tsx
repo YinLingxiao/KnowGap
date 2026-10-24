@@ -5,6 +5,8 @@ import Image from "next/image";
 import { Eye, EyeOff, MailCheck } from "lucide-react";
 import { sendEmailCode } from "@/lib/api/auth";
 import { cx } from "@/lib/cx";
+import { ThemeToggle } from "../ThemeToggle";
+import { InteractiveParticleBackground } from "./InteractiveParticleBackground";
 import styles from "./AuthView.module.css";
 
 const EMAIL_CHECK = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
@@ -115,6 +117,10 @@ export function AuthView({
 
   return (
     <div className={styles.canvas}>
+      <InteractiveParticleBackground />
+      <div className={styles.themeSlot}>
+        <ThemeToggle />
+      </div>
       <section className={styles.card} aria-labelledby="auth-title">
         <div className={styles.brandHead}>
           <Image src="/brand/knowgap-logo-v1.png" alt="" width={36} height={36} className={styles.logo} />
