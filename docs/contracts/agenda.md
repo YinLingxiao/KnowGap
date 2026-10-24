@@ -142,7 +142,7 @@ interface AiBreakdownDialogProps {
 ### 6.2 全局「添加任务」弹窗
 - 任何模块派发 `window` 事件 `COMPOSE_TASK_EVENT = "knowgap:compose-task"`，`detail: ComposeTaskDetail`（`scheduledDate / subjectId / parentId / title` 均可选，作为默认值），即打开弹窗。
 - 弹窗由 task-composer 会话实现并在 ChatApp 挂载一次；创建成功后派发 `AGENDA_CHANGED_EVENT`。
-- 日程页各视图里的「+ 添加任务」一律派发这个事件，不再各自实现输入框（行内快录 QuickAdd 可保留在「今天/收件箱」顶部）。
+- 日程页各视图里的「+ 添加任务」一律派发这个事件，不再各自实现输入框（行内快录 QuickAdd 可保留在「今天/待办」顶部）。
 
 ### 6.3 桌面端桥接（`window.knowgap`，preload 暴露）
 | 方法 / 事件 | 方向 | 说明 |
