@@ -222,25 +222,45 @@ export function InteractiveParticleBackground() {
       frameId = window.requestAnimationFrame(frame);
     };
 
-    const resizeObserver = new ResizeObserver(() => start());
+    // ResizeObserver 注册后会立刻回调一次，而下面已经手动 start() 过，第一次直接跳过，避免重复初始化。
+    let firstResize = true;
+    const resizeObserver = new ResizeObserver(() => {
+      if (firstResize) {
+        firstResize = false;
+        return;
+      }
+      start();
+    });
     resizeObserver.observe(canvas);
 
     start();
 
+    // 页面打开后用户才改“减少动态效果”（系统设置或应用内开关）时，立即切换成静态或恢复动画。
+    const syncMotion = () => {
+      if (reducedMotion() !== reduced) start();
+    };
+    const onThemeOrMotionChange = () => {
+      applyThemePalette();
+      syncMotion();
+    };
+
     // 主题切换（含“跟随系统”下的系统深浅色变化）时同步背景与粒子颜色。
-    const themeObserver = new MutationObserver(applyThemePalette);
+    const themeObserver = new MutationObserver(onThemeOrMotionChange);
     themeObserver.observe(document.documentElement, {
       attributes: true,
-      attributeFilter: ["data-theme"],
+      attributeFilter: ["data-theme", "data-motion"],
     });
     const colorScheme = window.matchMedia("(prefers-color-scheme: dark)");
     colorScheme.addEventListener("change", applyThemePalette);
+    const motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+    motionQuery.addEventListener("change", syncMotion);
 
     return () => {
       stop();
       resizeObserver.disconnect();
       themeObserver.disconnect();
       colorScheme.removeEventListener("change", applyThemePalette);
+      motionQuery.removeEventListener("change", syncMotion);
     };
   }, []);
 
