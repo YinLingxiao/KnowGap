@@ -34,6 +34,8 @@ class ScannedPdfError(HTTPException):
 class Material(BaseMaterial):
     """Extended library wire model; preserve the existing fields and legacy text kinds."""
     kind: Literal['pdf', 'txt', 'md', 'csv', 'docx', 'pptx', 'xlsx']
+    # 原始文件字节数：前端预览面板用它在拉取整份文件前决定要不要降级成「下载查看」
+    size_bytes: int = 0
 
 
 def outline_for(pages: list[tuple[int | None, str]]) -> list[str]:
@@ -211,6 +213,8 @@ class MaterialStore:
             ensure_column(db, 'course_materials', 'notes_json', "TEXT NOT NULL DEFAULT '[]'")
             # 识图模型读出的文字（页码 → 文字）：原件里没有，read_document 重新解析原件时用它补回
             ensure_column(db, 'course_materials', 'ocr_json', "TEXT NOT NULL DEFAULT '{}'")
+            # 原始文件字节数：预览面板用它判断要不要降级，历史记录没有这列时统一按 0（会直接尝试渲染，不影响正确性）
+            ensure_column(db, 'course_materials', 'size_bytes', 'INTEGER NOT NULL DEFAULT 0')
 
     async def add_with_ocr(self, student_id: str, filename: str, data: bytes, subject_id: str | None = None) -> Material:
         """上传入口用这个：扫描版 PDF 先尝试让识图模型转写，其余和 add 一样。"""
@@ -257,18 +261,20 @@ class MaterialStore:
                    for page, content in pages for text, start, end in chunks(content) if text.strip()]
         material = Material(id=document_id, title=title, kind=kind,
                             page_count=len(pages) if kind in {'pdf', 'docx', 'pptx', 'xlsx'} else 0,
-                            chunk_count=len(records), created_at=now(), subject_id=subject_id)
+                            chunk_count=len(records), created_at=now(), subject_id=subject_id, size_bytes=len(data))
         with self.store.connection() as db:
             db.execute('BEGIN IMMEDIATE')
             count = db.execute('SELECT COUNT(*) FROM course_materials WHERE student_id = ?', (student_id,)).fetchone()[0]
             if count >= MAX_DOCUMENTS:
                 raise HTTPException(409, '最多保存 30 份资料，请删除不需要的资料后再上传。')
             db.execute('INSERT INTO course_materials(id, student_id, title, kind, page_count, chunk_count, created_at, '
-                       'subject_id, outline_json, chars, notes_json, ocr_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                       'subject_id, outline_json, chars, notes_json, ocr_json, size_bytes) '
+                       'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
                        (document_id, student_id, title, kind, material.page_count, len(records), material.created_at,
                         subject_id, json.dumps(outline_for(pages), ensure_ascii=False), sum(len(text) for _, text in pages),
                         json.dumps(reading.notes, ensure_ascii=False),
-                        json.dumps({str(page): text for page, text in reading.extra.items()}, ensure_ascii=False)))
+                        json.dumps({str(page): text for page, text in reading.extra.items()}, ensure_ascii=False),
+                        len(data)))
             db.executemany('INSERT INTO course_chunks VALUES (?, ?, ?, ?, ?, ?)', records)
             db.executemany('INSERT INTO course_index(chunk_id, terms) VALUES (?, ?)',
                            [(record[0], ' '.join(terms(record[2]))) for record in records])
