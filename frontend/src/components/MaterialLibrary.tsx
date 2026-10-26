@@ -319,6 +319,12 @@ export function MaterialLibrary({
       onSelect: () => setKindFilter(kindFilter === "txt" ? "all" : "txt"),
     },
     {
+      id: "csv",
+      label: "CSV",
+      active: kindFilter === "csv",
+      onSelect: () => setKindFilter(kindFilter === "csv" ? "all" : "csv"),
+    },
+    {
       id: "docx",
       label: "Word",
       active: kindFilter === "docx",

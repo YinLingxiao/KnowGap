@@ -29,6 +29,9 @@ import styles from "./MaterialPreviewPanel.module.css";
 // 如果实测发现偏大偏小可以调整。
 const DEGRADE_BYTES = { pdf: 12 * 1024 * 1024, office: 8 * 1024 * 1024 } as const;
 
+// 预览只逐页铺 canvas，几百页的 PDF 会吃掉大量内存，超出的部分请下载查看。
+const MAX_PDF_PAGES = 100;
+
 const TITLE_ICON = { docx: FileType, pptx: Presentation, xlsx: FileSpreadsheet } as const;
 
 /** 导出供单测直接调用，不需要真实 DOM/网络就能验证分发逻辑。 */
@@ -62,33 +65,74 @@ type RenderState =
   | { status: "error"; message: string }
   | { status: "ready"; bytes: ArrayBuffer; legacy: boolean };
 
+const LOADING: RenderState = { status: "loading" };
+
 function useMaterialBytes(material: CourseMaterial | null): RenderState {
-  const [state, setState] = useState<RenderState>({ status: "loading" });
+  // 结果带上它属于哪份资料：切换资料后的第一帧 effect 还没跑，不能把上一份的字节交给新资料的渲染分支。
+  const [result, setResult] = useState<{ id: string; state: RenderState } | null>(null);
   const client = useMemo(() => createMaterialClient(), []);
 
   useEffect(() => {
     if (!material) return;
     let cancelled = false;
-    setState({ status: "loading" });
+    const { id } = material;
     if (material.sizeBytes > degradeThreshold(material.kind)) {
-      setState({ status: "degraded" });
+      setResult({ id, state: { status: "degraded" } });
       return;
     }
     (async () => {
       try {
-        const blob = await client.downloadBytes(material.id);
+        const blob = await client.downloadBytes(id);
         if (cancelled) return;
         const buffer = await blob.arrayBuffer();
         if (cancelled) return;
-        setState({ status: "ready", bytes: buffer, legacy: isLegacyOle(new Uint8Array(buffer.slice(0, 4))) });
+        setResult({ id, state: { status: "ready", bytes: buffer, legacy: isLegacyOle(new Uint8Array(buffer.slice(0, 4))) } });
       } catch (failure) {
-        if (!cancelled) setState({ status: "error", message: toApiError(failure).message });
+        if (!cancelled) setResult({ id, state: { status: "error", message: toApiError(failure).message } });
       }
     })();
     return () => { cancelled = true; };
   }, [material, client]);
 
-  return state;
+  return result && result.id === material?.id ? result.state : LOADING;
+}
+
+/** UTF-8 优先；不是合法 UTF-8 时按 GB18030 解（Excel 在中文 Windows 上导出的 CSV 默认是 GBK），去掉 BOM。 */
+export function decodeText(bytes: ArrayBuffer): string {
+  let text: string;
+  try {
+    text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    text = new TextDecoder("gb18030").decode(bytes);
+  }
+  return text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
+}
+
+/** 支持双引号包裹、字段内逗号/换行、"" 转义的最小 CSV 解析；空行跳过。 */
+export function parseCsv(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = "";
+  let quoted = false;
+  const endRow = () => {
+    row.push(cell);
+    cell = "";
+    if (row.length > 1 || row[0] !== "") rows.push(row);
+    row = [];
+  };
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    if (quoted) {
+      if (char === '"' && text[index + 1] === '"') { cell += '"'; index += 1; }
+      else if (char === '"') quoted = false;
+      else cell += char;
+    } else if (char === '"') quoted = true;
+    else if (char === ",") { row.push(cell); cell = ""; }
+    else if (char === "\n") endRow();
+    else if (char !== "\r") cell += char;
+  }
+  endRow();
+  return rows;
 }
 
 async function saveBlob(blob: Blob, filename: string): Promise<void> {
@@ -139,6 +183,7 @@ function DownloadButton({ material }: { material: CourseMaterial }) {
 function PdfView({ bytes }: { bytes: ArrayBuffer }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
+  const [truncatedAt, setTruncatedAt] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -152,7 +197,8 @@ function PdfView({ bytes }: { bytes: ArrayBuffer }) {
         // bytes 可能被 React 严格模式下的重复 effect 或其他读取者转移，复制一份给 pdf.js 专用。
         const doc = await pdfjs.getDocument({ data: bytes.slice(0) }).promise;
         if (cancelled) return;
-        for (let number = 1; number <= doc.numPages; number += 1) {
+        if (doc.numPages > MAX_PDF_PAGES) setTruncatedAt(doc.numPages);
+        for (let number = 1; number <= Math.min(doc.numPages, MAX_PDF_PAGES); number += 1) {
           const page = await doc.getPage(number);
           if (cancelled) return;
           const viewport = page.getViewport({ scale: 1.3 });
@@ -174,16 +220,28 @@ function PdfView({ bytes }: { bytes: ArrayBuffer }) {
   }, [bytes]);
 
   if (error) return <div className={styles.state}><TriangleAlert size={24} aria-hidden /><p>{error}</p></div>;
-  return <div ref={hostRef} className={styles.pdfPages} aria-label="PDF 预览" />;
+  return (
+    <>
+      {truncatedAt && (
+        <p className={styles.outlineBanner}>
+          <TriangleAlert size={14} aria-hidden />
+          共 {truncatedAt} 页，仅预览前 {MAX_PDF_PAGES} 页，完整内容请下载查看
+        </p>
+      )}
+      <div ref={hostRef} className={styles.pdfPages} aria-label="PDF 预览" />
+    </>
+  );
 }
 
 // ------------------------------------------------------------------ DOCX（沙箱 iframe）
 
-/** iframe 内自包含的页面：全局 <script> 加载 jszip + docx-preview（UMD 版，不是 ESM，
- *  不依赖打包器解析裸模块说明符），用 message 事件接收父页面传入的文件字节再渲染。
+/** iframe 内自包含的页面：不带任何外部 <script src>——opaque origin 的 iframe 去加载同站
+ *  /vendor 下的脚本，在部分浏览器里会被本地网络访问限制直接拦掉（实测加载失败，docx 一直
+ *  报「无法渲染」）。所以 jszip + docx-preview（UMD 版）的脚本文本由父页面取好，连同文件字节
+ *  一起经 message 传进来，iframe 里再执行并渲染。
  *  sandbox="allow-scripts" 不带 allow-same-origin：iframe 是 opaque origin，脚本能跑，
  *  但读不到父页面的 cookie / localStorage / DOM，postMessage 的 targetOrigin 只能是 "*"，
- *  这里传的只是文件字节，不是敏感数据，可以接受。 */
+ *  这里传的只是脚本文本和文件字节，不是敏感数据，可以接受。 */
 const DOCX_IFRAME_HTML = `<!doctype html>
 <html><head><meta charset="utf-8" /><style>
   body { margin: 0; padding: 12px; font-family: sans-serif; }
@@ -192,14 +250,13 @@ const DOCX_IFRAME_HTML = `<!doctype html>
 <body>
   <div id="styles"></div>
   <div id="container"></div>
-  <script src="/vendor/jszip.min.js"></script>
-  <script src="/vendor/docx-preview.min.js"></script>
   <script>
     window.addEventListener("message", async function (event) {
       if (event.source !== window.parent) return;
       try {
+        event.data.scripts.forEach(function (code) { (0, eval)(code); });
         await window.docx.renderAsync(
-          event.data,
+          event.data.bytes,
           document.getElementById("container"),
           document.getElementById("styles"),
           { inWrapper: true, ignoreWidth: false, className: "docx" },
@@ -212,6 +269,17 @@ const DOCX_IFRAME_HTML = `<!doctype html>
   </script>
 </body></html>`;
 
+/** jszip 必须先于 docx-preview 执行（后者读全局 JSZip）。同站取回，浏览器会缓存。 */
+const DOCX_SCRIPTS = ["/vendor/jszip.min.js", "/vendor/docx-preview.min.js"];
+
+async function loadDocxScripts(): Promise<string[]> {
+  return Promise.all(DOCX_SCRIPTS.map(async (url) => {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return response.text();
+  }));
+}
+
 function DocxView({ bytes }: { bytes: ArrayBuffer }) {
   const frameRef = useRef<HTMLIFrameElement>(null);
   const [error, setError] = useState(false);
@@ -220,9 +288,14 @@ function DocxView({ bytes }: { bytes: ArrayBuffer }) {
     const frame = frameRef.current;
     if (!frame) return undefined;
     let loaded = false;
+    let cancelled = false;
+    const scripts = loadDocxScripts();
+    scripts.catch(() => { if (!cancelled) setError(true); });
     const onLoad = () => {
       loaded = true;
-      frame.contentWindow?.postMessage(bytes, "*");
+      scripts.then((code) => {
+        if (!cancelled) frame.contentWindow?.postMessage({ scripts: code, bytes }, "*");
+      }).catch(() => undefined);
     };
     const onMessage = (event: MessageEvent) => {
       if (event.source !== frame.contentWindow) return;
@@ -234,6 +307,7 @@ function DocxView({ bytes }: { bytes: ArrayBuffer }) {
     // 下的重复 effect），浏览器可能不会重新触发 load 事件，这里主动兜底一次。
     if (frame.contentDocument?.readyState === "complete" && !loaded) onLoad();
     return () => {
+      cancelled = true;
       frame.removeEventListener("load", onLoad);
       window.removeEventListener("message", onMessage);
     };
@@ -330,10 +404,7 @@ function XlsxView({ bytes }: { bytes: ArrayBuffer }) {
 }
 
 function CsvView({ bytes }: { bytes: ArrayBuffer }) {
-  const rows = useMemo(() => {
-    const text = new TextDecoder("utf-8").decode(bytes);
-    return text.replace(/\r\n/g, "\n").split("\n").filter((line) => line.length > 0).map((line) => line.split(","));
-  }, [bytes]);
+  const rows = useMemo(() => parseCsv(decodeText(bytes)), [bytes]);
   return <SheetTable rows={rows} />;
 }
 
@@ -386,8 +457,8 @@ function PreviewBody({ material, state }: { material: CourseMaterial; state: Ren
   const { bytes, legacy } = state;
   switch (previewMode(material.kind, legacy)) {
     case "pdf": return <PdfView bytes={bytes} />;
-    case "markdown": return <Markdown text={new TextDecoder("utf-8").decode(bytes)} />;
-    case "text": return <pre className={styles.plainText}>{new TextDecoder("utf-8").decode(bytes)}</pre>;
+    case "markdown": return <Markdown text={decodeText(bytes)} />;
+    case "text": return <pre className={styles.plainText}>{decodeText(bytes)}</pre>;
     case "csv": return <CsvView bytes={bytes} />;
     case "xlsx": return <XlsxView bytes={bytes} />;
     case "outline": return <OutlineView material={material} />;
