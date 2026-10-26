@@ -190,7 +190,7 @@ def test_anysearch_works_without_a_key_and_sends_one_when_given():
     def handle(request):
         seen.append(request.headers.get("authorization"))
         body = json.loads(request.content)
-        assert body["query"] == "栈和队列" and body["max_results"] == 3 and body["language"] == "zh-CN"
+        assert body["query"] == "栈和队列" and body["max_results"] == 3 and body["language"] == "zh-CN" and body["format"] == "markdown"
         return httpx.Response(200, json={"code": 0, "message": "success", "data": {"results": [
             {"title": "栈和队列的区别", "url": "https://blog.example.com/a", "snippet": "后进先出与先进先出", "content": "x"},
             {"title": "坏链接", "url": "javascript:alert(1)", "snippet": "x"},
@@ -200,7 +200,8 @@ def test_anysearch_works_without_a_key_and_sends_one_when_given():
 
     anonymous = asyncio.run(ps.AnySearchProvider("", httpx.MockTransport(handle)).search("栈和队列", 3))
     assert seen == [None] and [hit.url for hit in anonymous] == ["https://blog.example.com/a"]
-    assert anonymous[0].snippet == "后进先出与先进先出" and anonymous[0].provider == "anysearch" and anonymous[0].site == "blog.example.com"
+    assert anonymous[0].snippet == "后进先出与先进先出" and anonymous[0].content == "x"
+    assert anonymous[0].provider == "anysearch" and anonymous[0].site == "blog.example.com"
     asyncio.run(ps.AnySearchProvider("synthetic-any-key", httpx.MockTransport(handle)).search("栈和队列", 3))
     assert seen[-1] == "Bearer synthetic-any-key"
 
@@ -294,6 +295,57 @@ def test_fetch_follows_safe_redirect_and_limits_size():
     assert "定积分" in asyncio.run(fetcher.fetch("https://good.example.com/old"))
     assert asyncio.run(fetcher.fetch("https://good.example.com/big")) is None
     assert asyncio.run(fetcher.fetch("https://good.example.com/pdf")) is None
+
+
+def test_extract_fallback_when_direct_fetch_fails():
+    def page(_request):
+        return httpx.Response(521)
+
+    def extract(request):
+        assert str(request.url) == "https://api.anysearch.com/v1/extract"
+        assert request.headers.get("authorization") is None
+        assert json.loads(request.content) == {"url": "https://good.example.com/a"}
+        text = "定积分换元法讲解。" * 20 + " ![](https://www.zhihu.com/equation?tex=x%5E2)"
+        return httpx.Response(200, json={"code": 0, "data": {"content": text, "title": "t"}})
+
+    fetcher = ps.PageFetcher(transport=httpx.MockTransport(page), resolver=public_resolver,
+                              extract=ps.AnySearchExtractor("", httpx.MockTransport(extract)))
+    hit = ps.RawHit(url="https://good.example.com/a", title="t", site="good.example.com")
+    stats = Counter()
+    pages = asyncio.run(ps.load_pages([hit], fetcher, stats))
+    assert len(pages) == 1 and "$x^2$" in pages[0].text and pages[0].link_density is None
+    assert stats["extracted"] == 1 and "fetch_failed" not in stats
+
+
+@pytest.mark.parametrize("response", [
+    httpx.Response(422, json={"code": -1, "message": "Unable to extract content from the URL."}),
+    httpx.Response(200, json={"code": -1, "data": {"content": "定积分" * 40}}),
+    httpx.Response(200, json={"code": 0, "data": {"content": 9}}),
+])
+def test_extract_failure_counts_as_fetch_failed(response):
+    fetcher = ps.PageFetcher(transport=httpx.MockTransport(lambda _request: httpx.Response(521)),
+                              resolver=public_resolver,
+                              extract=ps.AnySearchExtractor("", httpx.MockTransport(lambda _request: response)))
+    hit = ps.RawHit(url="https://good.example.com/a", title="t", site="good.example.com")
+    stats = Counter()
+    assert asyncio.run(ps.load_pages([hit], fetcher, stats)) == []
+    assert stats["fetch_failed"] == 1 and "extracted" not in stats
+
+
+def test_extract_is_not_sent_to_blocked_urls():
+    calls = []
+
+    def extract(request):
+        calls.append(str(request.url))
+        return httpx.Response(200, json={"code": 0, "data": {"content": "定积分" * 40}})
+
+    fetcher = ps.PageFetcher(transport=httpx.MockTransport(lambda _request: httpx.Response(200)),
+                              resolver=public_resolver,
+                              extract=ps.AnySearchExtractor("", httpx.MockTransport(extract)))
+    hit = ps.RawHit(url="https://evil.example.com/a", title="t", site="evil.example.com")
+    stats = Counter()
+    assert asyncio.run(ps.load_pages([hit], fetcher, stats)) == []
+    assert calls == [] and stats["fetch_failed"] == 1
 
 
 # ------------------------------------------------------------ 公式还原

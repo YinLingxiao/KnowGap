@@ -359,3 +359,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-desktop.ps1
 仓库：<https://github.com/YinLingxiao/KnowGap>
 
 更早的设计说明和接口约定在 `docs/`。那些文档里有当时的计划和后来改过的行为，和本文冲突时以当前代码为准。
+
+## 贡献者
+
+- [YinLingxiao](https://github.com/YinLingxiao)
+- [Ccui](https://github.com/xxxxbai-ai)：资料库预览面板（PR #12）
