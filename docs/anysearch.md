@@ -23,6 +23,7 @@ AnySearch Key 与模型 Key 独立，均不进入前端公开环境变量。
 `GET /api/search?q=搜索关键词&limit=5`：q 为 1–600 个字符，limit 为 1–10。
 返回 provider、query、results、request_id；每条结果有 id、label、title、url、snippet。
 后端调用 `POST https://api.anysearch.com/v1/search`，使用 JSON 格式和 zh-CN 语言偏好。
+联网搜题在本机抓取失败后调用 `POST /v1/extract` 取正文。匿名额度按天按 IP 计算，建议在 `backend/.env` 配置 `ANYSEARCH_API_KEY`。
 响应去重，链接仅保留有效 HTTP/HTTPS 地址，禁止携带 URL 用户名/密码。
 不抓取任意用户提供 URL，不执行搜索结果中的指令。
 

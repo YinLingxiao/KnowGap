@@ -44,6 +44,7 @@ MAX_PAGES = 8               # 最多处理几个页面
 MAX_COUNT = 5               # 一次最多返回几道题
 PROVIDER_TIMEOUT = 8.0      # 单个搜索请求超时（秒）
 FETCH_TIMEOUT = 5.0         # 单个页面抓取超时（秒）
+ANYSEARCH_EXTRACT_TIMEOUT = 15.0  # /v1/extract 取正文超时（秒）
 EXTRACT_TIMEOUT = 40.0      # 单个页面 LLM 抽题超时（秒）
 TOTAL_TIMEOUT = 90.0        # 整个工具调用的兜底超时（秒）
 MAX_PAGE_BYTES = 2 * 1024 * 1024
@@ -387,7 +388,7 @@ class TavilyProvider:
 class AnySearchProvider:
     """AnySearch。不填密钥也能用（匿名额度），在环境变量 / .env 里填 ANYSEARCH_API_KEY 可以拿到更高额度。
 
-    只返回标题和摘要，网页正文由后面的抓取步骤读取。
+    搜索带回的正文通常很短，不够就由后面的抓取步骤读取；抓取失败再用 /v1/extract 兜底。
     """
 
     name = "anysearch"
@@ -399,7 +400,7 @@ class AnySearchProvider:
         self.timeout = timeout
 
     async def search(self, query: str, k: int) -> list[RawHit]:
-        payload = {"query": query[:200], "max_results": max(1, min(k, 10)), "language": "zh-CN", "format": "json"}
+        payload = {"query": query[:200], "max_results": max(1, min(k, 10)), "language": "zh-CN", "format": "markdown"}
         body = await _post_json(self.URL, payload, self.api_key, self.transport, self.timeout)
         if body.get("code") != 0:
             raise SearchFailure("provider")
@@ -415,11 +416,35 @@ class AnySearchProvider:
             if not url:
                 continue
             host = (urlsplit(url).hostname or "").lower()
+            content = _s(row.get("content"))
             hits.append(RawHit(
                 url=url, title=_s(row.get("title")).strip()[:200] or host, site=host,
-                snippet=_s(row.get("snippet") or row.get("content"))[:1000], provider=self.name,
+                snippet=_s(row.get("snippet") or content)[:1000], content=content, provider=self.name,
             ))
         return hits[:k]
+
+
+class AnySearchExtractor:
+    """本机抓不到网页时，让 AnySearch 代抽正文。失败返回 None，不把供应商原文带出去。"""
+
+    URL = "https://api.anysearch.com/v1/extract"
+
+    def __init__(self, api_key: str = "", transport: httpx.AsyncBaseTransport | None = None,
+                 timeout: float = ANYSEARCH_EXTRACT_TIMEOUT):
+        self.api_key = api_key
+        self.transport = transport
+        self.timeout = timeout
+
+    async def __call__(self, url: str) -> str | None:
+        try:
+            body = await _post_json(self.URL, {"url": url}, self.api_key, self.transport, self.timeout)
+        except SearchFailure:
+            return None
+        if body.get("code") != 0:
+            return None
+        data = body.get("data")
+        content = data.get("content") if isinstance(data, dict) else None
+        return content if isinstance(content, str) and content.strip() else None
 
 
 class LocalLectureProvider:
@@ -582,12 +607,14 @@ class PageFetcher:
     """
 
     def __init__(self, transport: httpx.AsyncBaseTransport | None = None, resolver: Resolver | None = None,
-                 timeout: float = FETCH_TIMEOUT, max_bytes: int = MAX_PAGE_BYTES, max_redirects: int = MAX_REDIRECTS):
+                 timeout: float = FETCH_TIMEOUT, max_bytes: int = MAX_PAGE_BYTES, max_redirects: int = MAX_REDIRECTS,
+                 extract: Callable[[str], Awaitable[str | None]] | None = None):
         self.transport = transport
         self.resolver = resolver or _system_resolver
         self.timeout = timeout
         self.max_bytes = max_bytes
         self.max_redirects = max_redirects
+        self.extract = extract
 
     async def allowed(self, url: str) -> bool:
         url = safe_url(url)
@@ -869,6 +896,14 @@ async def load_pages(hits: list[RawHit], fetcher: PageFetcher | None, stats: Cou
             if html:
                 body, density, lost = html_to_text(html)
                 return Page(hit, body, density, lost)
+            extract = getattr(fetcher, "extract", None)
+            if extract is not None and await fetcher.allowed(hit.url):
+                async with semaphore:
+                    extracted = await extract(hit.url)
+                if extracted:
+                    body, lost = restore_markdown_formulas(extracted)
+                    stats["extracted"] += 1
+                    return Page(hit, normalize_text(body), None, lost)
         stats["fetch_failed"] += 1
         return None
 
@@ -1335,7 +1370,9 @@ async def search_good_problems(arguments: dict, ctx=None, *, providers: list | N
         ranked = await _search_all(providers, build_queries(inp), inp, stats, errors)
         hits = fuse(ranked, stats)
         stats["pages_considered"] = min(len(hits), MAX_PAGES)
-        pages = await load_pages(hits[:MAX_PAGES], fetcher if fetcher is not None else PageFetcher(), stats)
+        if fetcher is None:
+            fetcher = PageFetcher(extract=AnySearchExtractor(_env("ANYSEARCH_API_KEY")))
+        pages = await load_pages(hits[:MAX_PAGES], fetcher, stats)
         extracted = await extract_all(pages, inp.knowledge_point, extractor, stats)
         retrieved_at = (today or date.today()).isoformat()
         built, productive = _build_all(extracted, inp.knowledge_point, retrieved_at, stats)
