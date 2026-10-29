@@ -6,11 +6,13 @@ import {
   List, ListFilter, MoreHorizontal, PanelLeftOpen, Plus, Presentation, Search, Sheet, Trash2, Upload, X,
 } from "lucide-react";
 import { MaterialPreviewPanel } from "./MaterialPreviewPanel";
+import { useI18n } from "@/components/LanguageProvider";
 import { createMaterialClient } from "@/lib/api/material-client";
 import { toApiError } from "@/lib/api/errors";
 import { DOCUMENT_EXTENSIONS } from "@/lib/chat/attachments";
 import type { Subject } from "@/lib/chat/types";
 import { cx } from "@/lib/cx";
+import { errorText } from "@/lib/i18n/errors";
 import { formatRelativeTime } from "@/lib/labels";
 import type { CourseMaterial, SourceReference } from "@/lib/types";
 import { sourceLocation } from "./SourceReferences";
@@ -121,6 +123,7 @@ export function MaterialLibrary({
   sidebarOpen?: boolean;
   onOpenSidebar?: () => void;
 }) {
+  const { lang, t } = useI18n();
   const client = useMemo(() => createMaterialClient(), []);
   const [documents, setDocuments] = useState<CourseMaterial[]>([]);
   const [results, setResults] = useState<SourceReference[]>([]);
@@ -158,11 +161,11 @@ export function MaterialLibrary({
     try {
       setDocuments(await client.list({}));
     } catch (failure) {
-      setError(toApiError(failure).message);
+      setError(errorText(toApiError(failure), t, lang));
     } finally {
       setLoading(false);
     }
-  }, [client]);
+  }, [client, lang, t]);
 
   useEffect(() => {
     if (enabled) void refresh();
@@ -216,7 +219,7 @@ export function MaterialLibrary({
         : "通用资料库";
       setNotice(`已添加 ${document.title} 至${scopeName}。`);
     } catch (failure) {
-      setError(toApiError(failure).message);
+      setError(errorText(toApiError(failure), t, lang));
     } finally {
       pending.current = false;
       setOperation(null);
@@ -241,7 +244,7 @@ export function MaterialLibrary({
         setSearched(true);
       }
     } catch (failure) {
-      if (version === generation.current) setError(toApiError(failure).message);
+      if (version === generation.current) setError(errorText(toApiError(failure), t, lang));
     } finally {
       pending.current = false;
       setOperation(null);
@@ -263,7 +266,7 @@ export function MaterialLibrary({
       setConfirmId(null);
       setMenuDocId(null);
     } catch (failure) {
-      setError(toApiError(failure).message);
+      setError(errorText(toApiError(failure), t, lang));
     } finally {
       pending.current = false;
       setOperation(null);
@@ -377,7 +380,7 @@ export function MaterialLibrary({
         type="file"
         accept={DOCUMENT_EXTENSIONS.join(",")}
         className={styles.fileInput}
-        aria-label="选择课程资料"
+        aria-label={t("materials.chooseFile")}
         onChange={(event) => {
           const file = event.target.files?.[0];
           if (file) void upload(file, uploadTargetSubjectId);
@@ -388,7 +391,7 @@ export function MaterialLibrary({
       <div className={styles.container}>
         {/* 顶栏：左标题「资料库」，右筛选浮层 + 网格/列表切换 + 搜索框 + 新建/上传按钮 */}
         <header className={styles.header}>
-          <h1 id="materials-title" className={styles.title}>资料库</h1>
+          <h1 id="materials-title" className={styles.title}>{t("materials.libraryTitle")}</h1>
 
           <div className={styles.toolbar}>
             {/* 筛选下拉框（参照图 3） */}
@@ -493,8 +496,8 @@ export function MaterialLibrary({
             <form className={styles.searchBox} onSubmit={(e) => void searchContent(e)} role="search">
               <Search size={13} aria-hidden />
               <input
-                aria-label="搜索资料库"
-                placeholder="搜索资料库…"
+                aria-label={t("materials.searchLibrary")}
+                placeholder={t("materials.searchLibraryPlaceholder")}
                 value={query}
                 maxLength={600}
                 onChange={(event) => {
@@ -513,7 +516,7 @@ export function MaterialLibrary({
                     setSearched(false);
                     setResults([]);
                   }}
-                  aria-label="清空搜索"
+                  aria-label={t("materials.clearSearch")}
                 >
                   <X size={12} />
                 </button>
@@ -534,7 +537,7 @@ export function MaterialLibrary({
                   }
                 }}
               >
-                <span>{operation === "upload" ? "解析中…" : "上传"}</span>
+                <span>{operation === "upload" ? t("materials.parsingShort") : t("materials.uploadShort")}</span>
                 {subjects.length > 0 ? <ChevronDown size={13} aria-hidden /> : <Plus size={13} aria-hidden />}
               </button>
 
@@ -588,7 +591,7 @@ export function MaterialLibrary({
           <div className={styles.errorBanner} role="alert">
             <span>{error}</span>
             <button type="button" onClick={() => { setError(null); void refresh(); }}>
-              重试
+              {t("common.retry")}
             </button>
           </div>
         )}
@@ -601,24 +604,23 @@ export function MaterialLibrary({
         {/* 当输入了搜索词时，可一键检索资料内部原文片段 */}
         {query.trim() && !searched && operation !== "search" && (
           <div className={styles.deepSearchPrompt}>
-            <span>想在所有资料的正文里查找“{query.trim()}”？</span>
+            <span>{t("materials.fullTextPrompt", { query: query.trim() })}</span>
             <button type="button" onClick={() => void searchContent()}>
-              全文检索原文片段 →
+              {t("materials.fullTextAction")}
             </button>
           </div>
         )}
 
-        {operation === "search" && <p className={styles.statusText}>正在检索资料中的相关原文…</p>}
+        {operation === "search" && <p className={styles.statusText}>{t("materials.searchingStatus")}</p>}
         {searched && results.length === 0 && (
-          <p className={styles.statusText}>没有在资料正文中找到与“{query.trim()}”匹配的片段。</p>
+          <p className={styles.statusText}>{t("materials.noTextMatch", { query: query.trim() })}</p>
         )}
         {results.length > 0 && (
-          <section className={styles.resultsSection} aria-label="原文检索结果">
+          <section className={styles.resultsSection} aria-label={t("materials.resultsAria")}>
             <div className={styles.resultsHead}>
-              <h3>匹配到的原文片段 ({results.length})</h3>
+              <h3>{t("materials.matches", { count: results.length })}</h3>
               <button type="button" onClick={() => { setResults([]); setSearched(false); }}>
-                收起结果
-              </button>
+                {t("materials.collapseResults")}              </button>
             </div>
             <div className={styles.resultsList}>
               {results.map((source) => (
@@ -638,25 +640,25 @@ export function MaterialLibrary({
         {!enabled ? (
           <div className={styles.emptyCard}>
             <BookOpen size={22} aria-hidden />
-            <h2>连接后端后可使用资料库</h2>
-            <p>支持上传 PDF、Markdown、TXT 讲义或笔记，对话时 AI 会自动检索并引用相关段落。</p>
+            <h2>{t("materials.backendNeededTitle")}</h2>
+            <p>{t("materials.backendNeededBody")}</p>
           </div>
         ) : loading && documents.length === 0 ? (
-          <p className={styles.statusText}>正在加载资料库…</p>
+          <p className={styles.statusText}>{t("materials.loadingLibrary")}</p>
         ) : documents.length === 0 ? (
           <div className={styles.emptyCard}>
             <BookOpen size={22} aria-hidden />
-            <h2>资料库还是空的</h2>
+            <h2>{t("materials.emptyTitle")}</h2>
             <p>
-              拖入或点击右上角「上传」添加 PDF、Word、PowerPoint、Excel、Markdown、TXT 或 CSV 讲义（单份最大 20 MB）。通用资料在所有对话中生效，空间专属资料仅在对应学习空间内检索。
+              {t("materials.emptyBody")}
             </p>
             <button type="button" className={styles.uploadPillBtn} onClick={() => triggerUpload(undefined)}>
               <Plus size={14} aria-hidden />
-              <span>上传第一份资料</span>
+              <span>{t("materials.uploadFirst")}</span>
             </button>
           </div>
         ) : filteredDocs.length === 0 ? (
-          <p className={styles.statusText}>当前筛选条件下没有匹配的资料。</p>
+          <p className={styles.statusText}>{t("materials.noFilterMatches")}</p>
         ) : viewMode === "grid" ? (
           /* 网格卡片视图（严格对齐图 3 & 图 4） */
           <div className={styles.cardGrid}>
@@ -675,7 +677,7 @@ export function MaterialLibrary({
                     <button
                       type="button"
                       className={styles.cardMoreBtn}
-                      aria-label={`${doc.title} 更多操作`}
+                      aria-label={t("materials.moreActions", { title: doc.title })}
                       onClick={() => setMenuDocId(menuDocId === doc.id ? null : doc.id)}
                     >
                       <MoreHorizontal size={14} />
@@ -685,17 +687,17 @@ export function MaterialLibrary({
                   <div
                     className={styles.gridCardCenter}
                     onClick={() => setPreviewDoc(doc)}
-                    title="点击预览"
+                    title={t("materials.preview")}
                   >
                     <FileKindIcon kind={doc.kind} size="lg" />
                   </div>
 
                   <div className={styles.gridCardFoot}>
                     <span className={styles.scopeBadge}>
-                      {space ? space.name : "通用"}
+                      {space ? space.name : t("materials.general")}
                     </span>
                     <span>
-                      {doc.pageCount > 0 ? `${doc.pageCount} 页` : `${doc.chunkCount} 段`}
+                      {doc.pageCount > 0 ? t("materials.pageCount", { count: doc.pageCount }) : t("materials.chunks", { count: doc.chunkCount })}
                     </span>
                   </div>
 
@@ -711,7 +713,7 @@ export function MaterialLibrary({
                           void searchContent(undefined, baseTitle);
                         }}
                       >
-                        检索内容片段
+                        {t("materials.searchSnippets")}
                       </button>
                       {confirmId === doc.id ? (
                         <button
@@ -721,7 +723,7 @@ export function MaterialLibrary({
                           disabled={Boolean(operation)}
                           onClick={() => void remove(doc)}
                         >
-                          {operation === "delete" ? "删除中…" : "确认删除"}
+                          {operation === "delete" ? t("materials.deleting") : t("materials.confirmDelete")}
                         </button>
                       ) : (
                         <button
@@ -731,7 +733,7 @@ export function MaterialLibrary({
                           onClick={() => setConfirmId(doc.id)}
                         >
                           <Trash2 size={13} aria-hidden />
-                          <span>删除资料</span>
+                          <span>{t("materials.deleteMaterial")}</span>
                         </button>
                       )}
                     </div>
@@ -744,8 +746,8 @@ export function MaterialLibrary({
           /* 列表视图（严格对齐图 2） */
           <div className={styles.listTable}>
             <div className={styles.listHead}>
-              <span>名称</span>
-              <span>最近活动时间</span>
+              <span>{t("materials.name")}</span>
+              <span>{t("materials.recentActivity")}</span>
             </div>
             <ul className={styles.listBody}>
               {filteredDocs.map((doc) => {
@@ -758,19 +760,19 @@ export function MaterialLibrary({
                     >
                       <FileKindIcon kind={doc.kind} size="sm" />
                       <span className={styles.listRowTitle}>{doc.title}</span>
-                      <span className={styles.scopeBadge}>{space ? space.name : "通用"}</span>
+                      <span className={styles.scopeBadge}>{space ? space.name : t("materials.general")}</span>
                       <span className={styles.listRowChunks}>
-                        {doc.pageCount > 0 ? `${doc.pageCount} 页 · ` : ""}
-                        {doc.chunkCount} 片段
+                        {doc.pageCount > 0 ? `${t("materials.pageCount", { count: doc.pageCount })} · ` : ""}
+                        {t("materials.chunks", { count: doc.chunkCount })}
                       </span>
                     </div>
 
                     <div className={styles.listRowRight}>
-                      <span className={styles.listRowTime}>{formatRelativeTime(doc.createdAt)}</span>
+                      <span className={styles.listRowTime}>{formatRelativeTime(doc.createdAt, lang)}</span>
                       <button
                         type="button"
                         className={styles.rowMoreBtn}
-                        aria-label={`${doc.title} 更多操作`}
+                        aria-label={t("materials.moreActions", { title: doc.title })}
                         onClick={() => setMenuDocId(menuDocId === doc.id ? null : doc.id)}
                       >
                         <MoreHorizontal size={15} />
@@ -789,7 +791,7 @@ export function MaterialLibrary({
                             void searchContent(undefined, baseTitle);
                           }}
                         >
-                          检索内容片段
+                          {t("materials.searchSnippets")}
                         </button>
                         {confirmId === doc.id ? (
                           <button
@@ -799,7 +801,7 @@ export function MaterialLibrary({
                             disabled={Boolean(operation)}
                             onClick={() => void remove(doc)}
                           >
-                            {operation === "delete" ? "删除中…" : "确认删除"}
+                            {operation === "delete" ? t("materials.deleting") : t("materials.confirmDelete")}
                           </button>
                         ) : (
                           <button
@@ -809,7 +811,7 @@ export function MaterialLibrary({
                             onClick={() => setConfirmId(doc.id)}
                           >
                             <Trash2 size={13} aria-hidden />
-                            <span>删除资料</span>
+                            <span>{t("materials.deleteMaterial")}</span>
                           </button>
                         )}
                       </div>

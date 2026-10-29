@@ -13,6 +13,8 @@ import { parseFileMarkers } from "@/lib/chat/attachments";
 import { createMaterialClient } from "@/lib/api/material-client";
 import type { ChatMessage, LearnerMemory } from "@/lib/chat/types";
 import { cx } from "@/lib/cx";
+import { useI18n } from "@/components/LanguageProvider";
+import type { MessageKey } from "@/lib/i18n";
 import { useSmoothText } from "@/hooks/useSmoothText";
 import type { Problem } from "@/lib/types";
 import { CopyButton, Markdown } from "./Markdown";
@@ -28,10 +30,10 @@ import { AGENDA_TOOLS, AgendaToolCard } from "./AgendaToolCard";
 import { hasVisionMarker } from "./widgets/visionData";
 import styles from "./MessageList.module.css";
 
-const ASSESSMENT: Record<string, { label: string; tone: string }> = {
-  correct: { label: "判断正确", tone: styles.good },
-  incorrect: { label: "还有问题", tone: styles.warn },
-  uncertain: { label: "依据还不够", tone: styles.muted },
+const ASSESSMENT: Record<string, { labelKey: MessageKey; tone: string }> = {
+  correct: { labelKey: "messages.assessment.correct", tone: styles.good },
+  incorrect: { labelKey: "messages.assessment.incorrect", tone: styles.warn },
+  uncertain: { labelKey: "messages.assessment.uncertain", tone: styles.muted },
 };
 
 const TOOL_LABELS: Record<string, string> = {
@@ -130,11 +132,12 @@ function useSummaryCard() {
 }
 
 function ExerciseCard({ problem, fallback }: { problem: Problem | undefined; fallback: string }) {
+  const { t } = useI18n();
   return (
-    <section className={styles.exercise} aria-label="练习题">
+    <section className={styles.exercise} aria-label={t("messages.exerciseAria")}>
       <header className={styles.exerciseHead}>
         <Dumbbell size={13} aria-hidden />
-        <span>练习</span>
+        <span>{t("messages.exercise")}</span>
         {problem && <strong>{problem.title}</strong>}
       </header>
       {problem ? (
@@ -143,11 +146,11 @@ function ExerciseCard({ problem, fallback }: { problem: Problem | undefined; fal
           {problem.inputSequence && problem.outputSequence && (
             <dl className={styles.sequences}>
               <div>
-                <dt>入栈顺序</dt>
+                <dt>{t("messages.pushOrder")}</dt>
                 <dd>{problem.inputSequence.join("  ")}</dd>
               </div>
               <div>
-                <dt>目标出栈序列</dt>
+                <dt>{t("messages.popOrder")}</dt>
                 <dd>{problem.outputSequence.join("  ")}</dd>
               </div>
             </dl>
@@ -156,12 +159,13 @@ function ExerciseCard({ problem, fallback }: { problem: Problem | undefined; fal
       ) : (
         <Markdown text={fallback} />
       )}
-      <p className={styles.exerciseHint}>在下方写下你的判断和理由；也可以先提问，或者直接说想看答案。</p>
+      <p className={styles.exerciseHint}>{t("messages.exerciseHint")}</p>
     </section>
   );
 }
 
 function ResumeCheckpoint({ onResume }: { onResume: () => Promise<void> }) {
+  const { t } = useI18n();
   const busy = useRef(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
@@ -177,7 +181,7 @@ function ResumeCheckpoint({ onResume }: { onResume: () => Promise<void> }) {
   return (
     <span>
       <button className={styles.inlineButton} onClick={() => void resume()} disabled={pending} aria-busy={pending}>
-        <RotateCcw size={13} aria-hidden />{pending ? "正在恢复…" : "从断点继续"}
+        <RotateCcw size={13} aria-hidden />{pending ? t("messages.restoring") : t("messages.resume")}
       </button>
       {error && <span className={styles.resumeError} role="alert">{error}</span>}
     </span>
@@ -209,6 +213,7 @@ export function MessageList({
   onRegenerate, onStartExercise, onOpenMemories, onOpenSummary, onDecideTool, onConfirmProposal, onResumeCheckpoint,
   onSendText, onOpenWeakPoints, onOpenFile, collapseLong = true, scrollTarget,
 }: MessageListProps) {
+  const { t } = useI18n();
   const summaryCard = useSummaryCard();
   const [fileNavigationError, setFileNavigationError] = useState("");
   const [, refreshFileMetadata] = useState(0);
@@ -346,7 +351,7 @@ export function MessageList({
           {topSlot}
           {fileNavigationError && <p className={styles.fileNavigationError} role="alert">{fileNavigationError}</p>}
           {pinnedMessages.length > 0 && (
-            <nav className={styles.pinBar} aria-label="置顶消息">
+            <nav className={styles.pinBar} aria-label={t("messages.pinBar")}>
               <Pin size={12} className={styles.pinBarIcon} aria-hidden />
               <span className={styles.pinCount}>{String(pinnedMessages.length).padStart(2, "0")}</span>
               {pinnedMessages.map((pinned, pinIdx) => (
@@ -384,18 +389,18 @@ export function MessageList({
               const userPinned = pinnedIds.includes(message.id);
               return (
                 <div key={message.id} data-msg-id={message.id} className={cx(styles.row, styles.userRow)}>
-                  {files.length > 0 && <div className={styles.userFiles} role="list" aria-label="消息附件">
+                  {files.length > 0 && <div className={styles.userFiles} role="list" aria-label={t("messages.attachments")}>
                     {files.map((file) => {
                       const attachment = recalledFile(file.id);
                       return <FileCard key={file.id} name={attachment?.name ?? file.name} kind={attachment?.kind}
                         scale={attachment ? scaleOf(attachment) : undefined} notes={attachment?.notes} onOpen={() => {
                           if (onOpenFile) { onOpenFile(file.id, conversationSubjectId); return; }
                           if (phase === "connecting" || phase === "streaming") {
-                            setFileNavigationError("请等待当前回复完成，再打开资料库（将重新载入页面）。");
+                            setFileNavigationError(t("messages.fileNavWait"));
                             return;
                           }
                           try { openFileLibrary(conversationSubjectId); }
-                          catch (error) { setFileNavigationError(error instanceof Error ? error.message : "请从侧栏打开资料库。"); }
+                          catch (error) { setFileNavigationError(error instanceof Error ? error.message : t("messages.fileNavFallback")); }
                         }} />;
                     })}
                   </div>}
@@ -406,7 +411,7 @@ export function MessageList({
                     {userFold.long && (
                       <button className={styles.foldToggle} onClick={() => toggleFold(message, userFold.folded)} aria-expanded={!userFold.folded}>
                         {userFold.folded ? <ChevronDown size={12} aria-hidden /> : <ChevronUp size={12} aria-hidden />}
-                        {userFold.folded ? "展开全文" : "收起折叠"}
+                        {userFold.folded ? t("messages.expand") : t("messages.collapse")}
                       </button>
                     )}
                     {replyUpdates > 0 && (
@@ -416,32 +421,32 @@ export function MessageList({
                       </span>
                     )}
                     {message.attempt && attempt && (
-                      <span className={cx(styles.note, attempt.tone)} title={`依据：${message.attempt.evidence}`}>
+                      <span className={cx(styles.note, attempt.tone)} title={t("messages.evidenceTitle", { evidence: message.attempt.evidence })}>
                         <BookOpenCheck size={12} aria-hidden />
-                        练习 · {attempt.label}
-                        {message.attempt.issue && <span className={styles.noteDetail}>：{message.attempt.issue}</span>}
+                        {t("messages.exerciseResult", { label: t(attempt.labelKey) })}
+                        {message.attempt.issue && <span className={styles.noteDetail}>{t("messages.issue", { issue: message.attempt.issue })}</span>}
                       </span>
                     )}
                     {message.memoryChanges.length > 0 && (
                       <button
                         className={cx(styles.note, styles.memoryNote)}
                         onClick={() => onOpenMemories(message.memoryChanges.map((change) => change.memory.id))}
-                        title="查看、纠正或删除"
+                        title={t("messages.viewMemory")}
                       >
                         <Brain size={12} aria-hidden />
-                        {message.memoryChanges[0].action === "created" ? "记下了" : "更新了"}：
+                        {message.memoryChanges[0].action === "created" ? t("messages.memoryCreated") : t("messages.memoryUpdated")}
                         {message.memoryChanges[0].memory.summary}
-                        {message.memoryChanges.length > 1 && ` 等 ${message.memoryChanges.length} 条`}
+                        {message.memoryChanges.length > 1 && t("messages.memoryMore", { count: message.memoryChanges.length })}
                       </button>
                     )}
                     <button
                       className={cx(styles.action, userPinned && styles.actionOn)}
                       onClick={() => togglePin(message.id)}
                       aria-pressed={userPinned}
-                      title={userPinned ? "取消置顶" : "置顶这条消息"}
+                      title={userPinned ? t("messages.unpinTitle") : t("messages.pinTitle")}
                     >
                       {userPinned ? <PinOff size={13} aria-hidden /> : <Pin size={13} aria-hidden />}
-                      <span>{userPinned ? "取消置顶" : "置顶"}</span>
+                      <span>{userPinned ? t("messages.unpin") : t("messages.pin")}</span>
                     </button>
                     <CopyButton text={message.content} className={styles.action} />
                   </div>
@@ -486,7 +491,7 @@ export function MessageList({
                     type="button"
                     className={styles.resolvedThread}
                     onClick={() => onOpenSummary?.(card.threadId)}
-                    aria-label={`查看已解决的支线：${card.title}`}
+                    aria-label={t("messages.threadResolvedAria", { title: card.title })}
                     title={card.title}
                   >
                     <CheckCircle2 size={16} aria-hidden />
@@ -535,9 +540,9 @@ export function MessageList({
                 {visibleTools.length > 0 && (
                   <div className={cx(styles.toolChecklist, styles.traceBox)}>
                     <div className={styles.traceHead}>
-                      <span className={styles.traceTitle}>工具调用</span>
+                      <span className={styles.traceTitle}>{t("messages.toolCalls")}</span>
                       <span className={styles.traceBadge}>
-                        {visibleTools.filter((call) => Boolean(call.output)).length}/{visibleTools.length} 步
+                        {t("messages.toolSteps", { done: visibleTools.filter((call) => Boolean(call.output)).length, total: visibleTools.length })}
                       </span>
                     </div>
                     {visibleTools.map((call) => {
@@ -556,7 +561,7 @@ export function MessageList({
                               <CircleDashed size={14} className={styles.toolIconSpin} aria-hidden />
                             )}
                             <span className={styles.toolName}>{TOOL_LABELS[call.name] ?? call.name}</span>
-                            <span className={styles.toolStatus}>{done ? (call.ok ? "已完成" : "未成功") : "执行中"}</span>
+                            <span className={styles.toolStatus}>{done ? (call.ok ? t("messages.toolDone") : t("messages.toolStatusFailed")) : t("messages.toolRunningShort")}</span>
                           </summary>
                           {call.arguments && <pre>{call.arguments}</pre>}
                           {call.output && <pre>{call.output}</pre>}
@@ -567,11 +572,11 @@ export function MessageList({
                 )}
                 {message.pendingApproval && onDecideTool && (
                   <div className={styles.approval}>
-                    <p>允许执行 {TOOL_LABELS[message.pendingApproval.name] ?? message.pendingApproval.name}？</p>
+                    <p>{t("messages.allowTool", { name: TOOL_LABELS[message.pendingApproval.name] ?? message.pendingApproval.name })}</p>
                     <pre>{message.pendingApproval.arguments}</pre>
                     <div>
-                      <button onClick={() => onDecideTool(message.pendingApproval!.id, false)}>拒绝</button>
-                      <button className={styles.approvalPrimary} onClick={() => onDecideTool(message.pendingApproval!.id, true)}>允许</button>
+                      <button onClick={() => onDecideTool(message.pendingApproval!.id, false)}>{t("messages.deny")}</button>
+                      <button className={styles.approvalPrimary} onClick={() => onDecideTool(message.pendingApproval!.id, true)}>{t("messages.allow")}</button>
                     </div>
                   </div>
                 )}
@@ -594,12 +599,12 @@ export function MessageList({
                         aria-expanded={!fold.folded}
                       >
                         {fold.folded ? <ChevronDown size={12} aria-hidden /> : <ChevronUp size={12} aria-hidden />}
-                        {fold.folded ? "展开全文" : "收起折叠"}
+                        {fold.folded ? t("messages.expand") : t("messages.collapse")}
                       </button>
                     )}
                   </>
                 ) : streaming && !message.reasoning ? (
-                  <WorkingIndicator label={runningTool ? `正在${TOOL_LABELS[runningTool.name] ?? runningTool.name}` : "正在思考"} />
+                  <WorkingIndicator label={runningTool ? t("messages.thinkingTool", { name: TOOL_LABELS[runningTool.name] ?? runningTool.name }) : t("messages.thinking")} />
                 ) : null}
 
                 {message.files && message.files.length > 0 && <GeneratedFiles files={message.files} />}
@@ -617,8 +622,8 @@ export function MessageList({
                   <div className={styles.failure} role="alert">
                     <CircleAlert size={14} aria-hidden />
                     <div>
-                      <p className={styles.failureTitle}>{message.content ? "回复中断" : "没有拿到回复"}</p>
-                      <p>{message.error ?? "模型请求失败。"}</p>
+                      <p className={styles.failureTitle}>{message.content ? t("messages.interrupted") : t("messages.noResponse")}</p>
+                      <p>{message.error ?? t("messages.modelFailed")}</p>
                       {message.checkpointBlockedReason && <p>{message.checkpointBlockedReason}</p>}
                     </div>
                     {message.checkpointAvailable && onResumeCheckpoint ? (
@@ -626,26 +631,25 @@ export function MessageList({
                     ) : isLast && !message.checkpointBlockedReason && (
                       <button className={styles.inlineButton} onClick={onRegenerate} disabled={phase !== null && phase !== "analyzing"}>
                         <RotateCcw size={13} aria-hidden />
-                        重试
-                      </button>
+                        {t("common.retry")}                      </button>
                     )}
                   </div>
                 )}
                 {message.status === "cancelled" && (
                   <p className={styles.stopped}>
                     <CircleStop size={13} aria-hidden />
-                    {message.content ? "已停止生成，上面是停止前的部分。" : "已停止生成。"}
+                    {message.content ? t("messages.stoppedPartial") : t("messages.stopped")}
                   </p>
                 )}
-                {message.truncated && <p className={styles.stopped}>回复达到长度上限，可以让我继续说完。</p>}
+                {message.truncated && <p className={styles.stopped}>{t("messages.truncated")}</p>}
 
                 {finished && (message.preferencePrompt || message.nextActions?.length > 0) && (
                   <div className={styles.nudges}>
                     {message.preferencePrompt && !settledPrompts.has(message.preferencePrompt.id) && (
                       <p className={styles.nudge}>
                         <span>{message.preferencePrompt.text}</span>
-                        <button type="button" onClick={() => decidePreference(message.preferencePrompt!.id, true)}>记住</button>
-                        <button type="button" onClick={() => decidePreference(message.preferencePrompt!.id, false)}>不用</button>
+                        <button type="button" onClick={() => decidePreference(message.preferencePrompt!.id, true)}>{t("messages.rememberPreference")}</button>
+                        <button type="button" onClick={() => decidePreference(message.preferencePrompt!.id, false)}>{t("messages.dismissPreference")}</button>
                       </p>
                     )}
                     <div className={styles.nudge}>
@@ -678,7 +682,7 @@ export function MessageList({
                       <li key={source.id} title={source.excerpt}>
                         <FileText size={12} aria-hidden />
                         {source.label} · {source.title}
-                        {source.page ? ` · 第 ${source.page} 页` : ""}
+                        {source.page ? t("messages.sourcePage", { page: source.page }) : ""}
                       </li>
                     ))}
                   </ul>
@@ -689,9 +693,13 @@ export function MessageList({
                     {used.length > 0 && (
                       <button className={cx(styles.note, styles.memoryNote)} onClick={() => onOpenMemories(used)}>
                         <Brain size={12} aria-hidden />
-                        参考了 {used.length} 条学习记忆
+                        {t("messages.memoryUsed", { count: used.length })}
                         {outside.length > 0 &&
-                          `（${outsideCount} 条来自「${subjectNames[outside[0]] ?? "其他学习空间"}」${outside.length > 1 ? "等" : ""}）`}
+                          t("messages.memoryOutside", {
+                            count: outsideCount,
+                            name: subjectNames[outside[0]] ?? t("memory.general"),
+                            more: outside.length > 1 ? t("messages.memoryOutsideMore") : "",
+                          })}
                       </button>
                     )}
                     {suggested && (
@@ -701,29 +709,29 @@ export function MessageList({
                         disabled={phase !== null && phase !== "analyzing"}
                       >
                         <Dumbbell size={12} aria-hidden />
-                        做这道练习：{suggested.title}
+                        {t("messages.exerciseSuggest", { title: suggested.title })}
                       </button>
                     )}
                     {message.content && message.status !== "failed" && (
-                      <div className={styles.actionGroup} role="group" aria-label="消息操作">
+                      <div className={styles.actionGroup} role="group" aria-label={t("messages.messageActions")}>
                         <CopyButton text={message.content} className={styles.action} />
                         <button
                           className={cx(styles.action, pinned && styles.actionOn)}
                           onClick={() => togglePin(message.id)}
                           aria-pressed={pinned}
-                          title={pinned ? "取消置顶" : "置顶这条消息"}
+                          title={pinned ? t("messages.unpinTitle") : t("messages.pinTitle")}
                         >
                           {pinned ? <PinOff size={13} aria-hidden /> : <Pin size={13} aria-hidden />}
-                          <span>{pinned ? "取消置顶" : "置顶"}</span>
+                          <span>{pinned ? t("messages.unpin") : t("messages.pin")}</span>
                         </button>
                         {finished && (
                           <button
                             className={cx(styles.action, savedId === message.id && styles.actionOn)}
                             onClick={() => saveToPage(message)}
-                            title="把这条回复存入学习空间的笔记页"
+                            title={t("messages.saveToNotesTitle")}
                           >
                             <FileDown size={13} aria-hidden />
-                            <span>{savedId === message.id ? "已发送到笔记" : "存入空间笔记"}</span>
+                            <span>{savedId === message.id ? t("messages.savedToNotes") : t("messages.saveToNotes")}</span>
                           </button>
                         )}
                       </div>
@@ -731,14 +739,14 @@ export function MessageList({
                     {isLast && message.status !== "failed" && (
                       <button className={styles.action} onClick={onRegenerate} disabled={phase !== null && phase !== "analyzing"}>
                         <RotateCcw size={13} aria-hidden />
-                        <span>重新生成</span>
+                        <span>{t("messages.regenerate")}</span>
                       </button>
                     )}
                     {finished && (
-                      <span className={styles.tokenNote} title="按回复文本粗略估算，非计费口径">
+                      <span className={styles.tokenNote} title={t("messages.tokenNote")}>
                         <Zap size={11} aria-hidden />
                         ~{estimateTokens(message.content)} tokens
-                        {message.toolCalls.length > 0 && ` · ${message.toolCalls.length} 步工具`}
+                        {message.toolCalls.length > 0 && t("messages.toolCountSuffix", { count: message.toolCalls.length })}
                       </span>
                     )}
                   </div>
@@ -751,12 +759,12 @@ export function MessageList({
               <div className={styles.failure}>
                 <CircleAlert size={14} aria-hidden />
                 <div>
-                  <p className={styles.failureTitle}>这条消息还没有回复</p>
-                  <p>生成可能在刷新或断网时中断了。</p>
+                  <p className={styles.failureTitle}>{t("messages.noReplyTitle")}</p>
+                  <p>{t("messages.noReplyBody")}</p>
                 </div>
                 <button className={styles.inlineButton} onClick={onRegenerate}>
                   <RotateCcw size={13} aria-hidden />
-                  生成回复
+                  {t("messages.generateReply")}
                 </button>
               </div>
             </div>
@@ -772,7 +780,7 @@ export function MessageList({
       {showJump && (
         <button className={styles.jump} onClick={() => { following.current = true; setShowJump(false); toBottom(); }}>
           <ArrowDown size={14} aria-hidden />
-          回到底部
+          {t("messages.backToBottom")}
         </button>
       )}
     </div>

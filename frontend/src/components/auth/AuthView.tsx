@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import Image from "next/image";
 import { Eye, EyeOff, MailCheck } from "lucide-react";
 import { sendEmailCode } from "@/lib/api/auth";
+import { useI18n } from "@/components/LanguageProvider";
 import { cx } from "@/lib/cx";
 import { ThemeToggle } from "../ThemeToggle";
 import { InteractiveParticleBackground } from "./InteractiveParticleBackground";
@@ -22,6 +23,7 @@ export function AuthView({
   onRegister: (email: string, password: string, displayName: string, code: string) => Promise<void>;
   onDemo: () => void;
 }) {
+  const { t } = useI18n();
   const [mode, setMode] = useState<"login" | "register">("login");
   const [loginMethod, setLoginMethod] = useState<"password" | "code">("password");
   const [email, setEmail] = useState("");
@@ -50,7 +52,7 @@ export function AuthView({
   const handleSendCode = async () => {
     const trimmedEmail = email.trim();
     if (!EMAIL_CHECK.test(trimmedEmail)) {
-      setLocalError("请先输入有效的邮箱地址（如 name@example.com）。");
+      setLocalError(t("auth.invalidEmail"));
       return;
     }
     if (sendingCode || countdown > 0) return;
@@ -64,10 +66,10 @@ export function AuthView({
       if (res.delivery === "demo" && res.demoCode) {
         setDemoCode(res.demoCode);
       } else {
-        setCodeSentHint("验证码已发送至你的邮箱，5 分钟内有效。");
+        setCodeSentHint(t("auth.codeSent"));
       }
     } catch (err) {
-      setLocalError(err instanceof Error ? err.message : "验证码发送失败，请稍后重试。");
+      setLocalError(err instanceof Error ? err.message : t("auth.sendFailed"));
     } finally {
       setSendingCode(false);
     }
@@ -77,15 +79,15 @@ export function AuthView({
     event.preventDefault();
     const trimmedEmail = email.trim();
     if (!EMAIL_CHECK.test(trimmedEmail)) {
-      setLocalError("请输入有效的邮箱地址（如 name@example.com）。");
+      setLocalError(t("auth.invalidEmail"));
       return;
     }
     if (needsCode && code.trim().length !== 6) {
-      setLocalError("请输入 6 位数字邮箱验证码。");
+      setLocalError(t("auth.invalidCode"));
       return;
     }
     if (needsPassword && password.length < 6) {
-      setLocalError("密码长度至少为 6 位。");
+      setLocalError(t("auth.passwordTooShort"));
       return;
     }
     if (busy) return;
@@ -102,7 +104,7 @@ export function AuthView({
         await onRegister(trimmedEmail, password, displayName, code.trim());
       }
     } catch (err) {
-      setLocalError(err instanceof Error ? err.message : "操作失败，请稍后重试。");
+      setLocalError(err instanceof Error ? err.message : t("auth.actionFailed"));
     } finally {
       setBusy(false);
     }
@@ -124,11 +126,11 @@ export function AuthView({
       <section className={styles.card} aria-labelledby="auth-title">
         <div className={styles.brandHead}>
           <Image src="/brand/knowgap-logo-v1.png" alt="" width={36} height={36} className={styles.logo} />
-          <h1 id="auth-title">{mode === "login" ? "欢迎回到 KnowGap" : "创建你的学习账号"}</h1>
-          <p>把一次提问，接成持续的学习</p>
+          <h1 id="auth-title">{mode === "login" ? t("auth.loginTitle") : t("auth.registerTitle")}</h1>
+          <p>{t("auth.subtitle")}</p>
         </div>
 
-        <div className={styles.modeSwitch} role="tablist" aria-label="登录或注册">
+        <div className={styles.modeSwitch} role="tablist" aria-label={t("auth.modeAria")}>
           <span
             className={cx(styles.modeThumb, mode === "register" && styles.modeThumbRight)}
             aria-hidden
@@ -145,7 +147,7 @@ export function AuthView({
               setCodeSentHint("");
             }}
           >
-            邮箱登录
+            {t("auth.loginTab")}
           </button>
           <button
             type="button"
@@ -159,13 +161,13 @@ export function AuthView({
               setCodeSentHint("");
             }}
           >
-            邮箱注册
+            {t("auth.registerTab")}
           </button>
         </div>
 
         <form className={styles.form} onSubmit={(e) => void handleSubmit(e)}>
           <label className={styles.field}>
-            <span className={styles.fieldLabel}>邮箱</span>
+            <span className={styles.fieldLabel}>{t("auth.email")}</span>
             <input
               type="email"
               className={styles.input}
@@ -182,7 +184,7 @@ export function AuthView({
             <div className={styles.collapseInner}>
               <div className={styles.field}>
                 <div className={styles.fieldLabelRow}>
-                  <span className={styles.fieldLabel}>邮箱验证码</span>
+                  <span className={styles.fieldLabel}>{t("auth.code")}</span>
                   {mode === "login" && (
                     <button
                       type="button"
@@ -192,7 +194,7 @@ export function AuthView({
                         setLocalError("");
                       }}
                     >
-                      改用密码登录
+                      {t("auth.usePassword")}
                     </button>
                   )}
                 </div>
@@ -203,7 +205,7 @@ export function AuthView({
                     maxLength={6}
                     inputMode="numeric"
                     tabIndex={needsCode ? 0 : -1}
-                    placeholder="6 位数字验证码"
+                    placeholder={t("auth.codePlaceholder")}
                     onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
                   />
                   <button
@@ -213,7 +215,7 @@ export function AuthView({
                     tabIndex={needsCode ? 0 : -1}
                     onClick={() => void handleSendCode()}
                   >
-                    {sendingCode ? "发送中…" : countdown > 0 ? `${countdown}s 后重发` : "获取验证码"}
+                    {sendingCode ? t("auth.sending") : countdown > 0 ? t("auth.resend", { seconds: countdown }) : t("auth.getCode")}
                   </button>
                 </div>
                 {demoCode && (
@@ -221,11 +223,11 @@ export function AuthView({
                     type="button"
                     className={styles.demoMailToast}
                     onClick={() => setCode(demoCode)}
-                    title="点击一键填入验证码"
+                    title={t("auth.demoCodeTitle")}
                   >
                     <MailCheck size={14} aria-hidden />
                     <span>
-                      本机演示验证码：<strong>{demoCode}</strong>（点击一键填入）
+                      {t("auth.demoCode")}<strong>{demoCode}</strong>{t("auth.demoCodeClick")}
                     </span>
                   </button>
                 )}
@@ -239,14 +241,14 @@ export function AuthView({
             <div className={styles.collapseInner}>
               <label className={styles.field}>
                 <span className={styles.fieldLabel}>
-                  显示昵称 <small>(可选)</small>
+                  {t("auth.nickname")} <small>{t("common.optional")}</small>
                 </span>
                 <input
                   className={styles.input}
                   value={displayName}
                   maxLength={30}
                   tabIndex={mode === "register" ? 0 : -1}
-                  placeholder="用于首页问候与侧栏头像展示"
+                  placeholder={t("auth.nicknamePlaceholder")}
                   onChange={(event) => setDisplayName(event.target.value)}
                 />
               </label>
@@ -258,7 +260,7 @@ export function AuthView({
             <div className={styles.collapseInner}>
               <div className={styles.field}>
                 <div className={styles.fieldLabelRow}>
-                  <span className={styles.fieldLabel}>{mode === "register" ? "设置密码" : "密码"}</span>
+                  <span className={styles.fieldLabel}>{mode === "register" ? t("auth.setPassword") : t("auth.password")}</span>
                   {mode === "login" && (
                     <button
                       type="button"
@@ -268,7 +270,7 @@ export function AuthView({
                         setLocalError("");
                       }}
                     >
-                      改用验证码登录
+                      {t("auth.useCode")}
                     </button>
                   )}
                 </div>
@@ -280,7 +282,7 @@ export function AuthView({
                     maxLength={128}
                     tabIndex={needsPassword ? 0 : -1}
                     autoComplete={mode === "login" ? "current-password" : "new-password"}
-                    placeholder={mode === "login" ? "输入登录密码" : "设置密码（至少 6 位）"}
+                    placeholder={mode === "login" ? t("auth.passwordPlaceholderLogin") : t("auth.passwordPlaceholderRegister")}
                     onChange={(event) => setPassword(event.target.value)}
                   />
                   <button
@@ -288,7 +290,7 @@ export function AuthView({
                     className={styles.eyeBtn}
                     tabIndex={needsPassword ? 0 : -1}
                     onClick={() => setShowPassword((v) => !v)}
-                    aria-label={showPassword ? "隐藏密码" : "显示密码"}
+                    aria-label={showPassword ? t("auth.hidePassword") : t("auth.showPassword")}
                   >
                     {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
                   </button>
@@ -304,12 +306,12 @@ export function AuthView({
           )}
 
           <button type="submit" className={styles.submitBtn} disabled={!canSubmit}>
-            {busy ? "处理中…" : mode === "login" ? "登录" : "验证邮箱并注册"}
+            {busy ? t("common.processing") : mode === "login" ? t("auth.login") : t("auth.register")}
           </button>
         </form>
 
         <button type="button" className={styles.demoBtn} onClick={onDemo}>
-          使用本机演示身份直接进入 →
+          {t("auth.demo")}
         </button>
       </section>
     </div>
