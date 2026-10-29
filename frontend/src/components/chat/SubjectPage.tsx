@@ -103,7 +103,7 @@ export function SubjectPage({
   onEdit: () => void;
   onDelete: () => Promise<boolean>;
 }) {
-  const { lang } = useI18n();
+  const { lang, t } = useI18n();
   const mainId = subject.mainConversationId;
   const { loadConversation, loadSubjects, loadMemories, threadDispatch } = chat;
   const [panel, setPanel] = useState<Panel>({ mode: "list" });
@@ -427,17 +427,17 @@ export function SubjectPage({
     key: string; icon: LucideIcon; label: string; title: string; active: boolean; open: () => void;
     count?: number; coachmark?: string;
   }> = [
-    { key: "list", icon: MessagesSquare, label: "支线", title: "支线", active: panel.mode === "list",
+    { key: "list", icon: MessagesSquare, label: t("space.tab.threads"), title: t("space.tab.threads"), active: panel.mode === "list",
       open: () => setPanel({ mode: "list" }), count: openThreads.length, coachmark: threadSignal ? "thread" : undefined },
-    { key: "library", icon: LibraryIcon, label: "资料库", title: "资料库：课程资料与空间笔记", active: libraryOpen,
+    { key: "library", icon: LibraryIcon, label: t("space.tab.library"), title: t("space.tab.libraryTitle"), active: libraryOpen,
       open: () => setPanel({ mode: "info", section: "files" }) },
-    { key: "graph", icon: Waypoints, label: "图谱", title: "知识迷雾拓扑图", active: panel.mode === "graph",
+    { key: "graph", icon: Waypoints, label: t("space.tab.graph"), title: t("space.tab.graphTitle"), active: panel.mode === "graph",
       open: () => setPanel({ mode: "graph" }), coachmark: weakReady && fogReady ? "fog" : undefined },
-    { key: "tasks", icon: ListTodo, label: "任务", title: "这个空间的日程任务", active: panel.mode === "tasks",
+    { key: "tasks", icon: ListTodo, label: t("space.tab.tasks"), title: t("space.tab.tasksTitle"), active: panel.mode === "tasks",
       open: () => setPanel({ mode: "tasks" }) },
-    { key: "memory", icon: Brain, label: "记忆", title: `空间学习记忆 (${spaceMemories.length})`,
+    { key: "memory", icon: Brain, label: t("space.tab.memory"), title: t("space.tab.memoryTitle", { count: spaceMemories.length }),
       active: panel.mode === "info" && panel.section === "memory", open: () => setPanel({ mode: "info", section: "memory" }) },
-    { key: "about", icon: SlidersHorizontal, label: "概览", title: "空间概览与教学说明",
+    { key: "about", icon: SlidersHorizontal, label: t("space.tab.overview"), title: t("space.tab.overviewTitle"),
       active: panel.mode === "info" && panel.section === "about", open: () => setPanel({ mode: "info", section: "about" }) },
   ];
   const tabsRef = useRef<HTMLDivElement>(null);
@@ -448,7 +448,7 @@ export function SubjectPage({
       <section className={styles.main}>
         <header className={styles.header}>
           {!sidebarOpen && (
-            <button className={styles.icon} onClick={onOpenSidebar} aria-label="展开侧栏" title="展开侧栏">
+            <button className={styles.icon} onClick={onOpenSidebar} aria-label={t("sidebar.expand")} title={t("sidebar.expand")}>
               <PanelLeftOpen size={16} />
             </button>
           )}
@@ -459,23 +459,23 @@ export function SubjectPage({
             <h1>{subject.name}</h1>
             {levelLabel(subject.level, lang) && <span className={styles.tag}>{levelLabel(subject.level, lang)}</span>}
             {subject.deadline && (
-              <span className={styles.metaPill} title={`截止 ${subject.deadline}`}>
+              <span className={styles.metaPill} title={t("space.deadlineTitle", { date: subject.deadline })}>
                 <CalendarDays size={11} aria-hidden />
                 <span>{subject.deadline}</span>
               </span>
             )}
             {subject.goal && (
-              <span className={cx(styles.metaPill, styles.metaGoal)} title={`目标：${subject.goal}`}>
+              <span className={cx(styles.metaPill, styles.metaGoal)} title={t("space.goalTitle", { goal: subject.goal })}>
                 <Target size={11} aria-hidden />
                 <span>{subject.goal}</span>
               </span>
             )}
           </div>
 
-          <div className={styles.tools} role="group" aria-label="空间操作">
-            <button type="button" className={styles.overviewBtn} data-coachmark={weakReady ? "sheet" : undefined} onClick={() => { setCheatSheetOpen(true); window.dispatchEvent(new Event(CHEATSHEET_OPENED_EVENT)); }} title="生成考前急救一页纸">
+          <div className={styles.tools} role="group" aria-label={t("space.toolsAria")}>
+            <button type="button" className={styles.overviewBtn} data-coachmark={weakReady ? "sheet" : undefined} onClick={() => { setCheatSheetOpen(true); window.dispatchEvent(new Event(CHEATSHEET_OPENED_EVENT)); }} title={t("space.sheetTitle")}>
               <Zap size={13} aria-hidden />
-              <span>考前一页纸</span>
+              <span>{t("space.sheet")}</span>
             </button>
             <button
               type="button"
@@ -489,7 +489,7 @@ export function SubjectPage({
               }}
             >
               <SlidersHorizontal size={13} aria-hidden />
-              <span>概览</span>
+              <span>{t("space.tab.overview")}</span>
             </button>
             {!panelVisible && (
               <button
@@ -499,21 +499,21 @@ export function SubjectPage({
                 onClick={() => showPanel({ mode: "list" })}
               >
                 <MessagesSquare size={13} aria-hidden />
-                <span>支线</span>
+                <span>{t("space.tab.threads")}</span>
                 {openThreads.length > 0 && <span className={styles.tabCount}>{openThreads.length}</span>}
               </button>
             )}
-            <button className={styles.icon} aria-label="空间设置" title="编辑学习空间" onClick={onEdit}>
+            <button className={styles.icon} aria-label={t("space.settings")} title={t("space.editSpace")} onClick={onEdit}>
               <Settings size={15} />
             </button>
-            <button className={styles.icon} aria-label="更多" title="更多操作" onClick={() => setMenu((open) => !open)}>
+            <button className={styles.icon} aria-label={t("space.moreActions")} title={t("space.moreActions")} onClick={() => setMenu((open) => !open)}>
               <MoreHorizontal size={16} />
             </button>
           </div>
           {menu && (
             <div className={styles.menu}>
-              <button onClick={() => { setMenu(false); onEdit(); }}>编辑空间</button>
-              <button className={styles.danger} onClick={() => { setMenu(false); setConfirmDelete(true); }}>删除空间</button>
+              <button onClick={() => { setMenu(false); onEdit(); }}>{t("space.editSpaceShort")}</button>
+              <button className={styles.danger} onClick={() => { setMenu(false); setConfirmDelete(true); }}>{t("space.deleteSpace")}</button>
             </div>
           )}
         </header>
@@ -524,9 +524,9 @@ export function SubjectPage({
 
         {confirmDelete && (
           <div className={styles.confirm} role="group">
-            <span>删除后，主线和支线会变成普通对话，记忆改为通用。</span>
-            <button onClick={() => setConfirmDelete(false)}>取消</button>
-            <button className={styles.danger} onClick={() => void onDelete()}>删除</button>
+            <span>{t("space.deleteWarning")}</span>
+            <button onClick={() => setConfirmDelete(false)}>{t("common.cancel")}</button>
+            <button className={styles.danger} onClick={() => void onDelete()}>{t("common.delete")}</button>
           </div>
         )}
 
@@ -656,7 +656,7 @@ export function SubjectPage({
             scrollTarget={scrollTarget}
           />
         ) : (
-          <div className={styles.center}><p>正在读取主线…</p></div>
+          <div className={styles.center}><p>{t("space.loadingMainShort")}</p></div>
         )}
         {mainId && (
           <div className={styles.dock}>
