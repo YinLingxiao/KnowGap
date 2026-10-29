@@ -11,6 +11,7 @@ import {
   Type, Workflow,
 } from "lucide-react";
 import type { StreamPhase } from "@/hooks/useChat";
+import { useI18n } from "@/components/LanguageProvider";
 import { modelLibraryApi, type CatalogModel, type ModelLibraryClient } from "@/lib/api/model-library";
 import { uploadImage } from "@/lib/api/vision-client";
 import { toApiError } from "@/lib/api/errors";
@@ -253,10 +254,12 @@ function deriveInstantSuggestion(messages?: ChatMessage[]): string {
 
 export function Composer({
   value: draft, onChange: onChangeRaw, onSend, onStop, phase, busy, problems = [], onStartExercise, autoFocusKey,
-  placeholder = "继续提问，或说说你的理解…", hero = false, inputId = COMPOSER_ID,
+  placeholder, hero = false, inputId = COMPOSER_ID,
   conversationId, messages, ensureConversation, onFilesCleared,
   modelKey = null, onModelKeyChange, modelClient,
 }: ComposerProps) {
+  const { t } = useI18n();
+  const resolvedPlaceholder = placeholder ?? t("composer.continue");
   // 草稿 = 开头的附件标记行 + 图片标记行 + 正文。输入框和下面所有逻辑只处理正文（value / onChange），标记由这里统一保留
   const parsedDraft = useMemo(() => parseFileMarkers(draft), [draft]);
   const draftImages = useMemo(
@@ -1218,7 +1221,7 @@ export function Composer({
 
         <div className={styles.inputRow}>
           <label htmlFor={inputId} className="sr-only">
-            发送消息
+            {t("composer.sendMessage")}
           </label>
           <div className={styles.inputStack}>
             <textarea
@@ -1244,7 +1247,7 @@ export function Composer({
               }}
               onKeyDown={handleKeyDown}
               onPaste={onPaste}
-              placeholder={activeGhost ? "" : placeholder}
+              placeholder={activeGhost ? "" : resolvedPlaceholder}
             />
             {!value && !parsedDraft.files.length && activeGhost && (
               <div className={styles.ghostOverlay} aria-hidden="true">
@@ -1272,8 +1275,8 @@ export function Composer({
                 }}
                 aria-expanded={menuOpen}
                 aria-haspopup="menu"
-                aria-label="更多：附件、技能、工作区与对话设置"
-                title="添加附件、选择技能，或调整工作区与对话设置"
+                aria-label={t("composer.addMore")}
+                title={t("composer.addMoreTitle")}
                 disabled={generating || locked}
               >
                 <Plus size={16} aria-hidden />
@@ -1293,7 +1296,7 @@ export function Composer({
                       >
                         <span className={styles.lobeMenuLeft}>
                           <Paperclip size={15} aria-hidden />
-                          <span>附件</span>
+                          <span>{t("composer.attach")}</span>
                         </span>
                         <ChevronRight size={14} className={styles.lobeMenuArrow} aria-hidden />
                       </button>
@@ -1306,8 +1309,8 @@ export function Composer({
                       >
                         <span className={styles.lobeMenuLeft}>
                           <Layers size={15} aria-hidden />
-                          <span>技能</span>
-                          <span className={styles.lobeMenuPill}>自动 | {skillItems.totalCount}</span>
+                          <span>{t("composer.skills")}</span>
+                          <span className={styles.lobeMenuPill}>{t("composer.auto")} | {skillItems.totalCount}</span>
                         </span>
                         <ChevronRight size={14} className={styles.lobeMenuArrow} aria-hidden />
                       </button>
@@ -1321,7 +1324,7 @@ export function Composer({
                         >
                           <span className={styles.lobeMenuLeft}>
                             <Dumbbell size={15} aria-hidden />
-                            <span>练习题</span>
+                            <span>{t("composer.exercises")}</span>
                             <span className={styles.lobeMenuPill}>{problems.length}</span>
                           </span>
                           <ChevronRight size={14} className={styles.lobeMenuArrow} aria-hidden />
@@ -1341,12 +1344,12 @@ export function Composer({
                       >
                         <span className={styles.lobeMenuLeft}>
                           <Mic size={15} aria-hidden />
-                          <span>费曼自测</span>
+                          <span>{t("composer.feynman")}</span>
                         </span>
                       </button>
 
                       <div className={styles.lobeMenuDivider} role="separator" />
-                      <p className={styles.lobeMenuSection}>对话设置</p>
+                      <p className={styles.lobeMenuSection}>{t("composer.conversationSettings")}</p>
 
                       {devTools && (
                       <button
@@ -1362,16 +1365,16 @@ export function Composer({
                         title={
                           hasFolderPicker
                             ? workspace
-                              ? `当前工作区：${workspace}（点击重新选择文件夹，右键手动输入）`
-                              : "点击选择本地工作区文件夹"
+                              ? t("composer.workspaceCurrent", { path: workspace })
+                              : t("composer.chooseWorkspace")
                             : workspace
-                              ? `当前工作区：${workspace}`
-                              : "绑定本地工作区文件夹"
+                              ? t("composer.workspaceCurrentSimple", { path: workspace })
+                              : t("composer.bindWorkspace")
                         }
                       >
                         <span className={styles.lobeMenuLeft}>
                           <Target size={15} aria-hidden />
-                          <span>目标与工作区</span>
+                          <span>{t("composer.workspace")}</span>
                           <span className={styles.lobeMenuPill}>{wsShortName}</span>
                         </span>
                       </button>
@@ -1386,7 +1389,7 @@ export function Composer({
                       >
                         <span className={styles.lobeMenuLeft}>
                           <Type size={15} aria-hidden />
-                          <span>格式工具</span>
+                          <span>{t("composer.formatTools")}</span>
                         </span>
                         <span className={cx(styles.lobeSwitch, formatBarOpen && styles.lobeSwitchOn)} aria-hidden>
                           <i />
@@ -1400,11 +1403,11 @@ export function Composer({
                         aria-checked={autoApprove}
                         className={styles.lobeMenuItem}
                         onClick={() => void saveEnv(workspace, !autoApprove)}
-                        title="开启后 Agent 写入工作区文件无需逐次弹窗确认（终端命令仍需确认）"
+                        title={t("composer.approveWritesTitle")}
                       >
                         <span className={styles.lobeMenuLeft}>
                           <ShieldCheck size={15} aria-hidden />
-                          <span>帮我批准</span>
+                          <span>{t("composer.approveWrites")}</span>
                         </span>
                         <span className={cx(styles.lobeSwitch, autoApprove && styles.lobeSwitchOn)} aria-hidden>
                           <i />
@@ -1421,9 +1424,9 @@ export function Composer({
                           onClick={() => setPlusPane("root")}
                         >
                           <ChevronLeft size={14} aria-hidden />
-                          <span>返回</span>
+                          <span>{t("composer.back")}</span>
                         </button>
-                        <span className={styles.lobeSubheadHint}>带入一道人工校验的练习题</span>
+                        <span className={styles.lobeSubheadHint}>{t("composer.exercisesHint")}</span>
                       </div>
                       <div className={styles.cmdScroll}>
                         {problems.map((problem) => (

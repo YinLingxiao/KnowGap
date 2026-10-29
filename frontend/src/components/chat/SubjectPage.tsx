@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { ChatController } from "@/hooks/useChat";
+import { useI18n } from "@/components/LanguageProvider";
 import { useSlidingThumb } from "@/hooks/useSlidingThumb";
 import { toApiError } from "@/lib/api/errors";
 import { chatApi } from "@/lib/chat/api";
@@ -102,6 +103,7 @@ export function SubjectPage({
   onEdit: () => void;
   onDelete: () => Promise<boolean>;
 }) {
+  const { lang } = useI18n();
   const mainId = subject.mainConversationId;
   const { loadConversation, loadSubjects, loadMemories, threadDispatch } = chat;
   const [panel, setPanel] = useState<Panel>({ mode: "list" });
@@ -455,7 +457,7 @@ export function SubjectPage({
           </span>
           <div className={styles.heading}>
             <h1>{subject.name}</h1>
-            {levelLabel(subject.level) && <span className={styles.tag}>{levelLabel(subject.level)}</span>}
+            {levelLabel(subject.level, lang) && <span className={styles.tag}>{levelLabel(subject.level, lang)}</span>}
             {subject.deadline && (
               <span className={styles.metaPill} title={`截止 ${subject.deadline}`}>
                 <CalendarDays size={11} aria-hidden />
@@ -956,7 +958,7 @@ export function SubjectPage({
                 <div className={styles.about}>
                   <div className={styles.aboutMeta}>
                     <div><span>目标</span><p>{subject.goal || "未填写"}</p></div>
-                    {levelLabel(subject.level) && <div><span>基础</span><p>{levelLabel(subject.level)}</p></div>}
+                    {levelLabel(subject.level, lang) && <div><span>基础</span><p>{levelLabel(subject.level, lang)}</p></div>}
                     {subject.deadline && <div><span>截止</span><p>{subject.deadline}</p></div>}
                   </div>
                   <label className={styles.aboutField}>

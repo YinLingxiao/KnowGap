@@ -5,6 +5,8 @@ import {
   Brain, Cpu, FolderOpen, Gauge, Monitor, Moon, Plus, Search, Settings, Sliders, Sparkles, Sun, Trash2, Upload, User, X,
 } from "lucide-react";
 import { chatApi } from "@/lib/chat/api";
+import { useI18n } from "@/components/LanguageProvider";
+import type { Language, MessageKey } from "@/lib/i18n";
 import type { LearnerMemory, TokenUsage } from "@/lib/chat/types";
 import { updatePassword, type AuthUser } from "@/lib/api/auth";
 import type { HealthState } from "@/hooks/useWorkbench";
@@ -14,7 +16,7 @@ import {
 } from "@/lib/appearance";
 import type { DataSource } from "@/lib/config";
 import { cx } from "@/lib/cx";
-import { THEME_LABEL, useThemeChoice, type ThemeChoice } from "../ThemeToggle";
+import { THEME_KEY, useThemeChoice, type ThemeChoice } from "../ThemeToggle";
 import type { AIConfigStatus } from "@/lib/api/ai-config";
 import { ModelAccessCard, type ModelSignal } from "./ModelAccessCard";
 import { SearchKeyCard } from "./SearchKeyCard";
@@ -56,28 +58,28 @@ type Effort = "off" | "low" | "medium" | "high";
 const EFFORT_STORAGE_KEY = "knowgap.thinking.effort.v1";
 const EFFORT_EVENT = "knowgap:thinking-effort";
 
-const GROUPS: Array<{ title: string; items: Array<{ key: Tab; label: string; icon: typeof Settings }> }> = [
+const GROUPS: Array<{ titleKey: MessageKey; items: Array<{ key: Tab; labelKey: MessageKey; icon: typeof Settings }> }> = [
   {
-    title: "设置",
+    titleKey: "settings.group.settings",
     items: [
-      { key: "general", label: "通用", icon: Settings },
-      { key: "account", label: "账号", icon: User },
-      { key: "usage", label: "用量", icon: Gauge },
-      { key: "memory", label: "记忆", icon: Brain },
-      { key: "preferences", label: "学习偏好", icon: Sparkles },
-      { key: "reflect", label: "复盘 (Reflect)", icon: Sparkles },
+      { key: "general", labelKey: "settings.tab.general", icon: Settings },
+      { key: "account", labelKey: "settings.tab.account", icon: User },
+      { key: "usage", labelKey: "settings.tab.usage", icon: Gauge },
+      { key: "memory", labelKey: "settings.tab.memory", icon: Brain },
+      { key: "preferences", labelKey: "settings.tab.preferences", icon: Sparkles },
+      { key: "reflect", labelKey: "settings.tab.reflect", icon: Sparkles },
     ],
   },
   {
-    title: "本机与环境",
+    titleKey: "settings.group.local",
     items: [
-      { key: "models", label: "模型接入", icon: Cpu },
-      { key: "workspace", label: "开发者工具", icon: FolderOpen },
+      { key: "models", labelKey: "settings.tab.models", icon: Cpu },
+      { key: "workspace", labelKey: "settings.tab.workspace", icon: FolderOpen },
     ],
   },
   {
-    title: "定制",
-    items: [{ key: "skills", label: "技能 (Skills)", icon: Sliders }],
+    titleKey: "settings.group.custom",
+    items: [{ key: "skills", labelKey: "settings.tab.skills", icon: Sliders }],
   },
 ];
 
@@ -86,20 +88,24 @@ const THEME_OPTIONS: Array<{ id: ThemeChoice; icon: typeof Monitor }> = [
   { id: "light", icon: Sun },
   { id: "dark", icon: Moon },
 ];
-const TEXT_SIZES: Array<{ id: TextSize; label: string }> = [
-  { id: "small", label: "小" },
-  { id: "medium", label: "标准" },
-  { id: "large", label: "大" },
+const TEXT_SIZES: Array<{ id: TextSize; labelKey: MessageKey }> = [
+  { id: "small", labelKey: "settings.textSize.small" },
+  { id: "medium", labelKey: "settings.textSize.medium" },
+  { id: "large", labelKey: "settings.textSize.large" },
 ];
-const WIDTHS: Array<{ id: ChatWidth; label: string }> = [
-  { id: "narrow", label: "紧凑" },
-  { id: "medium", label: "标准" },
-  { id: "wide", label: "宽屏" },
-  { id: "full", label: "全宽" },
+const WIDTHS: Array<{ id: ChatWidth; labelKey: MessageKey }> = [
+  { id: "narrow", labelKey: "settings.width.narrow" },
+  { id: "medium", labelKey: "settings.width.medium" },
+  { id: "wide", labelKey: "settings.width.wide" },
+  { id: "full", labelKey: "settings.width.full" },
 ];
-const MOTIONS: Array<{ id: MotionChoice; label: string }> = [
-  { id: "system", label: "跟随系统" },
-  { id: "reduced", label: "减弱" },
+const MOTIONS: Array<{ id: MotionChoice; labelKey: MessageKey }> = [
+  { id: "system", labelKey: "settings.motion.system" },
+  { id: "reduced", labelKey: "settings.motion.reduced" },
+];
+const LANGUAGE_OPTIONS: Array<{ id: Language; label: string }> = [
+  { id: "zh", label: "中文" },
+  { id: "en", label: "English" },
 ];
 const EFFORTS: Array<{ id: Effort; label: string }> = [
   { id: "off", label: "标准" },
@@ -168,6 +174,7 @@ export function SettingsDialog({
   const [tab, setTab] = useState<Tab>(initialTab);
   const [query, setQuery] = useState("");
   const userId = user?.id || studentId;
+  const { t } = useI18n();
 
   useEffect(() => {
     setTab(initialTab);
@@ -179,15 +186,19 @@ export function SettingsDialog({
   }, []);
 
   const groups = useMemo(() => {
+    const localized = GROUPS.map((group) => ({
+      title: t(group.titleKey),
+      items: group.items.map((item) => ({ ...item, label: t(item.labelKey) })),
+    }));
     const needle = query.trim().toLowerCase();
-    if (!needle) return GROUPS;
-    return GROUPS.map((group) => ({
+    if (!needle) return localized;
+    return localized.map((group) => ({
       ...group,
       items: group.items.filter(
         (item) => item.label.toLowerCase().includes(needle) || group.title.toLowerCase().includes(needle),
       ),
     })).filter((group) => group.items.length > 0);
-  }, [query]);
+  }, [query, t]);
 
   return (
     <dialog
@@ -200,7 +211,7 @@ export function SettingsDialog({
       }}
     >
       <div className={styles.frame}>
-        <h2 id="settings-title" className="sr-only">设置</h2>
+        <h2 id="settings-title" className="sr-only">{t("settings.title")}</h2>
         <div className={styles.layout}>
           <aside className={styles.sidebar}>
             <label className={styles.searchBox}>
@@ -208,8 +219,8 @@ export function SettingsDialog({
               <input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="搜索设置…"
-                aria-label="搜索设置"
+                placeholder={t("settings.searchPlaceholder")}
+                aria-label={t("settings.searchAria")}
               />
             </label>
             {groups.map((group) => (
@@ -233,7 +244,7 @@ export function SettingsDialog({
             ))}
           </aside>
           <div className={styles.content}>
-            <button className={styles.closeBtn} onClick={onClose} aria-label="关闭设置">
+            <button className={styles.closeBtn} onClick={onClose} aria-label={t("settings.close")}>
               <X size={16} />
             </button>
             <div className={styles.contentScroll}>
@@ -341,6 +352,7 @@ function Toggle({ checked, label, onChange }: { checked: boolean; label: string;
 }
 
 function DesktopRows() {
+  const { t } = useI18n();
   const [desktop, setDesktop] = useState<{ closeToTray: boolean; openAtLogin: boolean } | null>(null);
   useEffect(() => {
     const api = window.knowgap;
@@ -366,18 +378,19 @@ function DesktopRows() {
   };
   return (
     <>
-      <p className={styles.sectionLabel}>桌面</p>
-      <SettingRow title="关闭时最小化到托盘" desc="关闭窗口后继续在后台运行，可从托盘图标重新打开。">
-        <Toggle checked={desktop.closeToTray} label="关闭时最小化到托盘" onChange={(closeToTray) => patch({ closeToTray })} />
+      <p className={styles.sectionLabel}>{t("settings.desktop.section")}</p>
+      <SettingRow title={t("settings.desktop.closeToTray")} desc={t("settings.desktop.closeToTrayDesc")}>
+        <Toggle checked={desktop.closeToTray} label={t("settings.desktop.closeToTray")} onChange={(closeToTray) => patch({ closeToTray })} />
       </SettingRow>
-      <SettingRow title="开机自启" desc="登录系统后只在托盘启动，不打开主窗口。">
-        <Toggle checked={desktop.openAtLogin} label="开机自启" onChange={(openAtLogin) => patch({ openAtLogin })} />
+      <SettingRow title={t("settings.desktop.openAtLogin")} desc={t("settings.desktop.openAtLoginDesc")}>
+        <Toggle checked={desktop.openAtLogin} label={t("settings.desktop.openAtLogin")} onChange={(openAtLogin) => patch({ openAtLogin })} />
       </SettingRow>
     </>
   );
 }
 
 function GeneralPane({ userId }: { userId: string }) {
+  const { lang, setLang, t } = useI18n();
   const [theme, setTheme] = useThemeChoice();
   const [look, setLook] = useState<Appearance>(() => readAppearance(userId));
   useEffect(() => {
@@ -389,37 +402,45 @@ function GeneralPane({ userId }: { userId: string }) {
   }
   return (
     <section>
-      <h2 className={styles.sectionTitle}>通用</h2>
-      <p className={styles.sectionLabel}>外观与排版</p>
-      <SettingRow title="主题" desc="选择深色、浅色或跟随操作系统。">
+      <h2 className={styles.sectionTitle}>{t("settings.general.title")}</h2>
+      <p className={styles.sectionLabel}>{t("settings.general.section")}</p>
+      <SettingRow title={t("settings.general.language")} desc={t("settings.general.languageDesc")}>
         <Pills
-          label="主题"
+          label={t("settings.general.languageAria")}
+          value={lang}
+          options={LANGUAGE_OPTIONS}
+          onChange={setLang}
+        />
+      </SettingRow>
+      <SettingRow title={t("settings.general.theme")} desc={t("settings.general.themeDesc")}>
+        <Pills
+          label={t("settings.general.theme")}
           value={theme}
-          options={THEME_OPTIONS.map((item) => ({ ...item, label: THEME_LABEL[item.id] }))}
+          options={THEME_OPTIONS.map((item) => ({ ...item, label: t(THEME_KEY[item.id]) }))}
           onChange={setTheme}
         />
       </SettingRow>
-      <SettingRow title="对话字号" desc="调整消息正文与阅读区域的字体大小。">
+      <SettingRow title={t("settings.general.textSize")} desc={t("settings.general.textSizeDesc")}>
         <Pills
-          label="对话字号"
+          label={t("settings.general.textSize")}
           value={look.textSize}
-          options={TEXT_SIZES}
+          options={TEXT_SIZES.map((item) => ({ ...item, label: t(item.labelKey) }))}
           onChange={(textSize) => patch({ ...look, textSize })}
         />
       </SettingRow>
-      <SettingRow title="对话列宽" desc="调整对话流与底部输入框的宽度：紧凑适合专注阅读，全宽会铺满整个对话区。">
+      <SettingRow title={t("settings.general.width")} desc={t("settings.general.widthDesc")}>
         <Pills
-          label="对话列宽"
+          label={t("settings.general.width")}
           value={look.width}
-          options={WIDTHS}
+          options={WIDTHS.map((item) => ({ ...item, label: t(item.labelKey) }))}
           onChange={(width) => patch({ ...look, width })}
         />
       </SettingRow>
-      <SettingRow title="界面动效" desc="减弱下拉框、弹窗与流式响应的过渡动画。">
+      <SettingRow title={t("settings.general.motion")} desc={t("settings.general.motionDesc")}>
         <Pills
-          label="界面动效"
+          label={t("settings.general.motion")}
           value={look.motion}
-          options={MOTIONS}
+          options={MOTIONS.map((item) => ({ ...item, label: t(item.labelKey) }))}
           onChange={(motion) => patch({ ...look, motion })}
         />
       </SettingRow>

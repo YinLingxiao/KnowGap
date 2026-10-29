@@ -4,6 +4,7 @@ import { isValidElement, memo, useState, type ReactNode } from "react";
 import ReactMarkdown, { type Components, type Options } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight, { type Options as HighlightOptions } from "rehype-highlight";
+import { useI18n } from "@/components/LanguageProvider";
 import bash from "highlight.js/lib/languages/bash";
 import c from "highlight.js/lib/languages/c";
 import cpp from "highlight.js/lib/languages/cpp";
@@ -49,8 +50,10 @@ export async function copyText(text: string): Promise<boolean> {
   }
 }
 
-export function CopyButton({ text, label = "复制", className }: { text: string; label?: string; className?: string }) {
+export function CopyButton({ text, label, className }: { text: string; label?: string; className?: string }) {
+  const { t } = useI18n();
   const [copied, setCopied] = useState(false);
+  const title = label ?? t("common.copy");
   return (
     <button
       type="button"
@@ -62,11 +65,11 @@ export function CopyButton({ text, label = "复制", className }: { text: string
           window.setTimeout(() => setCopied(false), 1400);
         }
       }}
-      aria-label={copied ? "已复制" : label}
-      title={copied ? "已复制" : label}
+      aria-label={copied ? t("common.copied") : title}
+      title={copied ? t("common.copied") : title}
     >
       {copied ? <Check size={13} aria-hidden /> : <Copy size={13} aria-hidden />}
-      <span>{copied ? "已复制" : label}</span>
+      <span>{copied ? t("common.copied") : title}</span>
     </button>
   );
 }
@@ -96,9 +99,9 @@ const components: Components = {
               <i />
               <i />
             </span>
-            <span className={styles.lang}>{language || "代码"}</span>
+            <span className={styles.lang}>{language || "code"}</span>
           </span>
-          <CopyButton text={code} label="复制代码" />
+          <CopyButton text={code} />
         </div>
         <pre className={styles.pre}>{children}</pre>
       </div>

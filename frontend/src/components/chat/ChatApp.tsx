@@ -7,10 +7,13 @@ import {
   Mic, PanelLeftOpen, RotateCcw, X,
 } from "lucide-react";
 import { useChat } from "@/hooks/useChat";
+import { useI18n } from "@/components/LanguageProvider";
 import type { HealthState } from "@/hooks/useWorkbench";
 import { getAIConfig, testAIConfig, type AIConfigStatus } from "@/lib/api/ai-config";
 import { API_BASE_URL, DATA_SOURCE } from "@/lib/config";
 import { cx } from "@/lib/cx";
+import { errorText } from "@/lib/i18n/errors";
+import type { Translate } from "@/lib/i18n";
 import type { Problem } from "@/lib/types";
 import { createMaterialClient } from "@/lib/api/material-client";
 import { chatApi } from "@/lib/chat/api";
@@ -75,12 +78,12 @@ function readView(userId: string): View {
   return { type: "chat" };
 }
 
-function greeting(name: string, hour = new Date().getHours()): string {
-  if (hour < 5) return `夜深了，${name}`;
-  if (hour < 11) return `早上好，${name}`;
-  if (hour < 13) return `中午好，${name}`;
-  if (hour < 18) return `下午好，${name}`;
-  return `晚上好，${name}`;
+function greeting(t: Translate, name: string, hour = new Date().getHours()): string {
+  if (hour < 5) return t("chat.greeting.late", { name });
+  if (hour < 11) return t("chat.greeting.morning", { name });
+  if (hour < 13) return t("chat.greeting.noon", { name });
+  if (hour < 18) return t("chat.greeting.afternoon", { name });
+  return t("chat.greeting.evening", { name });
 }
 
 function isTyping(target: EventTarget | null) {
@@ -96,6 +99,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
   onLogout: () => void;
   onRename: (name: string) => Promise<void>;
 }) {
+  const { lang, t } = useI18n();
   const { toasts, push, dismiss } = useToasts();
   const chat = useChat(push, user.id);
   const [narrow, setNarrow] = useState(false);
@@ -385,10 +389,9 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
   if (DATA_SOURCE !== "api") {
     return (
       <div className={styles.mockNotice}>
-        <h1>自由对话需要连接后端</h1>
+        <h1>{t("chat.mockTitle")}</h1>
         <p>
-          在 <code>frontend/.env.local</code> 中设置 <code>NEXT_PUBLIC_DATA_SOURCE=api</code>，启动 FastAPI 后端后重启前端。
-          聊天不会使用模拟数据伪造回复。
+          {t("chat.mockBefore")}<code>frontend/.env.local</code>{t("chat.mockMiddle")}<code>NEXT_PUBLIC_DATA_SOURCE=api</code>{t("chat.mockAfter")}
         </p>
       </div>
     );
@@ -403,7 +406,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
   const contextSubjectName = contextSubjectId ? subjectNames[contextSubjectId] ?? null : null;
   // 首页开始输入后只留问候和输入框
   const composing = chat.draft.length > 0;
-  const title = chat.activeConversation?.title ?? (chat.activeId ? "加载中…" : "新对话");
+  const title = chat.activeConversation?.title ?? (chat.activeId ? t("chat.loading") : t("chat.newChat"));
   const thread = chat.activeThread;
   const spaceMainId = pageSubject?.mainConversationId ?? null;
   const spaceMessages = spaceMainId ? chat.messagesFor(spaceMainId)?.messages ?? [] : [];
@@ -416,31 +419,31 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
   const failedReply = latestAssistant?.status === "failed" && modelNotReady(latestAssistant.error)
     && hiddenModelFail !== latestAssistant.id ? latestAssistant : null;
   const replyGap = !shownFailure ? failedReply : null;
-  const failureMessage = shownFailure?.error.message ?? replyGap?.error ?? "";
+  const failureMessage = shownFailure ? errorText(shownFailure.error, t, lang) : replyGap?.error ?? "";
   const offerSettings = modelNotReady(failureMessage);
   const modelBanner = modelConfigured === false ? (
     <div className={styles.modelBanner} role="status">
-      <span>还没连上 AI 模型，回复会失败</span>
-      <button type="button" onClick={() => openSettings("models")}>去设置</button>
+      <span>{t("chat.modelMissing")}</span>
+      <button type="button" onClick={() => openSettings("models")}>{t("chat.goSettings")}</button>
     </div>
   ) : null;
   const failureBar = (shownFailure || replyGap) && (
     <div className={styles.sendFailure} role="alert">
       <CircleAlert size={14} aria-hidden />
       <span className={styles.sendFailureText}>
-        发送失败：{failureMessage}
-        {shownFailure && shownFailure.error.kind !== "conflict" && "（输入还在）"}
+        {t("chat.sendFailed")}{failureMessage}
+        {shownFailure && shownFailure.error.kind !== "conflict" && t("chat.sendInputKept")}
       </span>
       {offerSettings && (
-        <button type="button" onClick={() => openSettings("models")}>去设置</button>
+        <button type="button" onClick={() => openSettings("models")}>{t("chat.goSettings")}</button>
       )}
       {shownFailure?.error.kind === "conflict" && chat.activeId ? (
-        <button onClick={() => { chat.dismissSendFailure(); void chat.loadConversation(chat.activeId!); }}>刷新对话</button>
+        <button onClick={() => { chat.dismissSendFailure(); void chat.loadConversation(chat.activeId!); }}>{t("chat.refreshConversation")}</button>
       ) : (
         <button onClick={() => {
           if (replyGap) void chat.regenerate(replyGap.conversationId);
           else void chat.sendMessage();
-        }}>重试</button>
+        }}>{t("common.retry")}</button>
       )}
       <button
         className={styles.dismiss}
@@ -448,7 +451,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
           if (replyGap) setHiddenModelFail(replyGap.id);
           chat.dismissSendFailure();
         }}
-        aria-label="关闭提示"
+        aria-label={t("chat.dismissNotice")}
       >
         <X size={13} />
       </button>
@@ -466,7 +469,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
       {narrow && (
         <button
           className={cx(styles.backdrop, sidebarOpen && styles.backdropOpen)}
-          aria-label="关闭侧栏"
+          aria-label={t("chat.closeSidebar")}
           tabIndex={sidebarOpen ? 0 : -1}
           onClick={() => setSidebarOpen(false)}
         />
@@ -584,21 +587,21 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
             </>
           ) : (
             <div className={styles.center}>
-              <p className={styles.muted}>{subjectMissing ? "这个学习空间已不存在。" : "正在读取学习空间…"}</p>
+              <p className={styles.muted}>{subjectMissing ? t("chat.spaceMissing") : t("chat.spaceLoading")}</p>
             </div>
           )
         ) : chat.activeId ? (
           <>
               <header className={styles.topbar}>
                 {!sidebarOpen && (
-                  <button className={styles.iconButton} onClick={() => setSidebarOpen(true)} aria-label="展开侧栏" title="展开侧栏">
+                  <button className={styles.iconButton} onClick={() => setSidebarOpen(true)} aria-label={t("sidebar.expand")} title={t("sidebar.expand")}>
                     <PanelLeftOpen size={16} />
                   </button>
                 )}
                 <h1 className={styles.title}>
                   {contextSubjectId && contextSubjectName && (
                     <>
-                      <button className={styles.crumb} onClick={() => openSpace(contextSubjectId)} title="打开学习空间">
+                      <button className={styles.crumb} onClick={() => openSpace(contextSubjectId)} title={t("chat.openSpace")}>
                         <Folder size={13} aria-hidden />
                         {contextSubjectName}
                       </button>
@@ -612,8 +615,8 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
                     className={cx(styles.iconButton, memoryOpen && styles.iconButtonOn)}
                     onClick={() => (memoryOpen ? setMemoryOpen(false) : openMemories())}
                     aria-expanded={memoryOpen}
-                    aria-label="学习记忆"
-                    title="学习记忆"
+                    aria-label={t("chat.memories")}
+                    title={t("chat.memories")}
                   >
                     <Brain size={16} aria-hidden />
                   </button>
@@ -622,15 +625,15 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
             {thread && (thread.messages.length > 0 || !thread.loading) ? (
               thread.error && thread.messages.length === 0 ? (
                 <div className={styles.center}>
-                  <p className={styles.loadError}>{thread.error.message}</p>
+                  <p className={styles.loadError}>{errorText(thread.error, t, lang)}</p>
                   <button className={styles.textButton} onClick={() => void chat.loadConversation(chat.activeId!)}>
                     <RotateCcw size={13} aria-hidden />
-                    重新加载
+                    {t("common.reload")}
                   </button>
                 </div>
               ) : thread.messages.length === 0 ? (
                 <div className={styles.center}>
-                  <p className={styles.muted}>这个对话还没有消息，在下面输入第一句吧。</p>
+                  <p className={styles.muted}>{t("chat.emptyConversation")}</p>
                 </div>
               ) : (
                 <MessageList
@@ -659,7 +662,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
               )
             ) : (
               <div className={styles.center}>
-                <p className={styles.muted}>正在读取对话…</p>
+                <p className={styles.muted}>{t("chat.loadingConversation")}</p>
               </div>
             )}
 
@@ -681,13 +684,13 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
                     modelKey={chat.modelKeyFor(chat.activeId)}
                     onModelKeyChange={(key) => chat.setConversationModel(chat.activeId, key)}
                   />
-                  <p className={styles.disclaimer}>回答由模型生成，可能出错，重要内容请自行核实。</p>
+                  <p className={styles.disclaimer}>{t("chat.disclaimer")}</p>
             </div>
           </>
         ) : (
           <div className={cx(styles.home, todayStyles.homeViewport)}>
             {!sidebarOpen && (
-              <button className={cx(styles.iconButton, styles.floatingToggle)} onClick={() => setSidebarOpen(true)} aria-label="展开侧栏" title="展开侧栏">
+              <button className={cx(styles.iconButton, styles.floatingToggle)} onClick={() => setSidebarOpen(true)} aria-label={t("sidebar.expand")} title={t("sidebar.expand")}>
                 <PanelLeftOpen size={16} />
               </button>
             )}
@@ -696,8 +699,8 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
                 type="button"
                 className={cx(styles.iconButton, memoryOpen && styles.iconButtonOn)}
                 onClick={() => (memoryOpen ? setMemoryOpen(false) : openMemories())}
-                aria-label="学习记忆"
-                title="学习记忆"
+                aria-label={t("chat.memories")}
+                title={t("chat.memories")}
               >
                 <Brain size={15} aria-hidden />
               </button>
@@ -710,7 +713,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
                   <span>KnowGap AI</span>
                 </div>
                 <h2 className={styles.greeting}>
-                  <span>{greeting(user.displayName)}。</span>
+                  <span>{greeting(t, user.displayName)}</span>
                 </h2>
               </div>
 
@@ -739,7 +742,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
                   if (ok && spaceId) setView({ type: "subject", id: spaceId });
                 }}
                 autoFocusKey="new"
-                placeholder={contextSubjectName ? `在「${contextSubjectName}」里提问、演练或启动任务` : "提问、创建学习空间或启动自测任务"}
+                placeholder={contextSubjectName ? t("chat.homePlaceholderInSpace", { name: contextSubjectName }) : t("chat.homePlaceholder")}
               />
 
               {/* 开始输入后收起下方内容，问候与输入框随之回到视口中央 */}
@@ -748,7 +751,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
               {/* LobeHub 风格：输入框正下方的细长水平快捷条 */}
               <div className={styles.lobeStrip}>
                 <div className={styles.stripLeft}>
-                  <span className={styles.stripLabel}>快捷</span>
+                  <span className={styles.stripLabel}>{t("chat.quick")}</span>
                   {STARTERS.map(({ icon: Icon, label, color, text }) => (
                     <button
                       key={label}
@@ -846,7 +849,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
 
       {memoryOpen && (
         <>
-          {narrow && <button className={cx(styles.backdrop, styles.backdropOpen)} aria-label="关闭学习记忆" onClick={() => setMemoryOpen(false)} />}
+          {narrow && <button className={cx(styles.backdrop, styles.backdropOpen)} aria-label={t("chat.closeMemories")} onClick={() => setMemoryOpen(false)} />}
           <aside className={styles.drawer}>
             <MemoryDrawer
               memories={chat.memories}
@@ -948,7 +951,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
                 try {
                   await client.upload(file, subject.id);
                 } catch {
-                  push({ tone: "error", title: `${file.name} 没有传上` });
+                  push({ tone: "error", title: t("chat.uploadFailed", { name: file.name }) });
                 }
               }
               void chat.loadSubjects();
@@ -967,10 +970,11 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
 }
 
 export function ChatApp() {
+  const { t } = useI18n();
   const auth = useAuth();
   if (DATA_SOURCE === "api" && auth.status !== "ready") {
     if (auth.status === "loading") {
-      return <div className={authStyles.canvas}><p className={authStyles.loading}>正在确认登录状态</p></div>;
+      return <div className={authStyles.canvas}><p className={authStyles.loading}>{t("chat.loading")}</p></div>;
     }
     return (
       <AuthView

@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { CircleCheck, Info, TriangleAlert, X } from "lucide-react";
+import { useI18n } from "@/components/LanguageProvider";
 import { cx } from "@/lib/cx";
 import styles from "./Toaster.module.css";
 
@@ -40,6 +41,7 @@ export function useToasts() {
 }
 
 export function Toaster({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: number) => void }) {
+  const { t } = useI18n();
   return (
     <div className={styles.region} role="status" aria-live="polite">
       {toasts.map((toast) => {
@@ -60,7 +62,7 @@ export function Toaster({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id
                 {toast.action.label}
               </button>
             )}
-            <button className={styles.close} onClick={() => onDismiss(toast.id)} aria-label="关闭通知">
+            <button className={styles.close} onClick={() => onDismiss(toast.id)} aria-label={t("common.close")}>
               <X size={14} />
             </button>
           </div>

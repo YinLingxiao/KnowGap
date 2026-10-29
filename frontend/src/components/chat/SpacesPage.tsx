@@ -7,15 +7,17 @@ import {
 } from "lucide-react";
 import { levelLabel, studiedLabel } from "@/lib/chat/space";
 import type { Subject } from "@/lib/chat/types";
+import { useI18n } from "@/components/LanguageProvider";
+import { localeOf, type MessageKey } from "@/lib/i18n";
 import { cx } from "@/lib/cx";
 import styles from "./SpacesPage.module.css";
 
 type SortKey = "studied" | "created" | "name";
 
-const SORT_LABELS: Record<SortKey, string> = {
-  studied: "最近学习",
-  created: "创建时间",
-  name: "按名称",
+const SORT_KEYS: Record<SortKey, MessageKey> = {
+  studied: "spaces.sortStudied",
+  created: "spaces.sortCreated",
+  name: "spaces.sortName",
 };
 
 interface SpacesPageProps {
@@ -29,6 +31,7 @@ interface SpacesPageProps {
 }
 
 export function SpacesPage(props: SpacesPageProps) {
+  const { lang, t } = useI18n();
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [sort, setSort] = useState<SortKey>("studied");
@@ -67,17 +70,17 @@ export function SpacesPage(props: SpacesPageProps) {
     );
     const stamp = (subject: Subject) => subject.progress.lastStudiedAt ?? subject.updatedAt;
     items.sort((a, b) => {
-      if (sort === "name") return a.name.localeCompare(b.name, "zh");
+      if (sort === "name") return a.name.localeCompare(b.name, localeOf(lang));
       if (sort === "created") return b.createdAt.localeCompare(a.createdAt);
       return stamp(b).localeCompare(stamp(a));
     });
     return items;
-  }, [keyword, props.subjects, sort]);
+  }, [keyword, lang, props.subjects, sort]);
 
   return (
     <div className={styles.page}>
       {!props.sidebarOpen && (
-        <button className={styles.floatingToggle} onClick={props.onOpenSidebar} aria-label="展开侧栏" title="展开侧栏">
+        <button className={styles.floatingToggle} onClick={props.onOpenSidebar} aria-label={t("sidebar.expand")} title={t("sidebar.expand")}>
           <PanelLeftOpen size={16} />
         </button>
       )}
@@ -85,20 +88,20 @@ export function SpacesPage(props: SpacesPageProps) {
       <div className={styles.container}>
         <header className={styles.header}>
           <div className={styles.titleGroup}>
-            <h1>学习空间</h1>
+            <h1>{t("spaces.title")}</h1>
             <span className={styles.summaryBadge}>
-              {props.subjects.length} 空间 · {totalOpenThreads} 进行中支线 · {totalReview} 待巩固
+              {t("spaces.summary", { spaces: props.subjects.length, threads: totalOpenThreads, review: totalReview })}
             </span>
           </div>
 
           <div className={styles.actions}>
-            <div className={styles.layoutSwitch} role="group" aria-label="视图切换">
+            <div className={styles.layoutSwitch} role="group" aria-label={t("spaces.sortAria")}>
               <button
                 type="button"
                 className={cx(styles.layoutBtn, layout === "grid" && styles.layoutBtnOn)}
                 onClick={() => setLayout("grid")}
-                aria-label="卡片网格视图"
-                title="卡片网格视图"
+                aria-label={t("spaces.layoutGrid")}
+                title={t("spaces.layoutGrid")}
               >
                 <LayoutGrid size={14} />
               </button>
@@ -106,8 +109,8 @@ export function SpacesPage(props: SpacesPageProps) {
                 type="button"
                 className={cx(styles.layoutBtn, layout === "list" && styles.layoutBtnOn)}
                 onClick={() => setLayout("list")}
-                aria-label="Linear 紧凑列表视图"
-                title="Linear 紧凑列表视图"
+                aria-label={t("spaces.layoutList")}
+                title={t("spaces.layoutList")}
               >
                 <List size={14} />
               </button>
@@ -124,8 +127,8 @@ export function SpacesPage(props: SpacesPageProps) {
                     searchInputRef.current?.focus();
                   }
                 }}
-                aria-label="搜索学习空间"
-                title="搜索"
+                aria-label={t("spaces.searchAria")}
+                title={t("common.search")}
               >
                 <Search size={15} aria-hidden />
               </button>
@@ -144,8 +147,8 @@ export function SpacesPage(props: SpacesPageProps) {
                     searchInputRef.current?.blur();
                   }
                 }}
-                placeholder="搜索学习空间…"
-                aria-label="搜索学习空间"
+                placeholder={t("spaces.searchPlaceholder")}
+                aria-label={t("spaces.searchAria")}
               />
               <button
                 type="button"
@@ -156,7 +159,7 @@ export function SpacesPage(props: SpacesPageProps) {
                   setQuery("");
                   setSearchOpen(false);
                 }}
-                aria-label="关闭搜索"
+                aria-label={t("spaces.closeSearch")}
               >
                 <X size={13} />
               </button>
@@ -167,8 +170,8 @@ export function SpacesPage(props: SpacesPageProps) {
                 type="button"
                 className={styles.iconBtn}
                 onClick={() => setSortMenuOpen((v) => !v)}
-                aria-label={`排序：${SORT_LABELS[sort]}`}
-                title={`排序：${SORT_LABELS[sort]}`}
+                aria-label={`${t("spaces.sortAria")}: ${t(SORT_KEYS[sort])}`}
+                title={`${t("spaces.sortAria")}: ${t(SORT_KEYS[sort])}`}
               >
                 <ArrowUpDown size={16} />
               </button>
@@ -184,7 +187,7 @@ export function SpacesPage(props: SpacesPageProps) {
                         setSortMenuOpen(false);
                       }}
                     >
-                      {SORT_LABELS[key]}
+                      {t(SORT_KEYS[key])}
                     </button>
                   ))}
                 </div>
@@ -192,7 +195,7 @@ export function SpacesPage(props: SpacesPageProps) {
             </div>
 
             <button className={styles.createBtn} onClick={props.onCreate}>
-              <span>新建空间</span>
+              <span>{t("spaces.new")}</span>
               <span className={styles.createDivider} aria-hidden />
               <Plus size={14} aria-hidden />
             </button>
@@ -204,15 +207,15 @@ export function SpacesPage(props: SpacesPageProps) {
             <div className={styles.emptyIcon}>
               <GraduationCap size={20} aria-hidden />
             </div>
-            <h2>一门课一个空间</h2>
-            <p>对话、笔记和复习都会出现在这里。</p>
+            <h2>{t("spaces.emptyTitle")}</h2>
+            <p>{t("spaces.emptyBody")}</p>
             <button className={styles.createBtn} onClick={props.onCreate}>
               <Plus size={14} aria-hidden />
-              <span>新建学习空间</span>
+              <span>{t("spaces.new")}</span>
             </button>
           </div>
         ) : shown.length === 0 ? (
-          <p className={styles.muted}>没有匹配的学习空间。</p>
+          <p className={styles.muted}>{t("spaces.noMatches")}</p>
         ) : (
           <div className={cx(styles.grid, layout === "list" && styles.listMode)} data-stagger>
             {shown.map((subject) => (
@@ -233,34 +236,34 @@ export function SpacesPage(props: SpacesPageProps) {
                   <div className={styles.cardBody}>
                     <div className={styles.nameRow}>
                       <span className={styles.name}>{subject.name}</span>
-                      {levelLabel(subject.level) && <span className={styles.tag}>{levelLabel(subject.level)}</span>}
+                      {levelLabel(subject.level, lang) && <span className={styles.tag}>{levelLabel(subject.level, lang)}</span>}
                     </div>
                     {subject.goal && <p className={styles.goal}>{subject.goal}</p>}
                   </div>
                   <span className={styles.meta}>
-                    {studiedLabel(subject.progress.lastStudiedAt)}
-                    {subject.progress.openThreads > 0 && ` · ${subject.progress.openThreads} 个支线进行中`}
-                    {subject.progress.toReview > 0 && ` · ${subject.progress.toReview} 个待巩固`}
+                    {studiedLabel(subject.progress.lastStudiedAt, lang)}
+                    {subject.progress.openThreads > 0 && t("spaces.cardOpenThreads", { count: subject.progress.openThreads })}
+                    {subject.progress.toReview > 0 && t("spaces.cardReview", { count: subject.progress.toReview })}
                   </span>
                 </button>
                 <button
                   className={styles.more}
-                  aria-label={`${subject.name}的更多操作`}
+                  aria-label={t("spaces.moreActions", { name: subject.name })}
                   onClick={() => setMenuId(menuId === subject.id ? null : subject.id)}
                 >
                   <MoreHorizontal size={15} />
                 </button>
                 {menuId === subject.id && confirmId !== subject.id && (
                   <div className={styles.menu}>
-                    <button onClick={() => { setMenuId(null); props.onEdit(subject.id); }}>编辑</button>
-                    <button className={styles.danger} onClick={() => setConfirmId(subject.id)}>删除</button>
+                    <button onClick={() => { setMenuId(null); props.onEdit(subject.id); }}>{t("common.edit")}</button>
+                    <button className={styles.danger} onClick={() => setConfirmId(subject.id)}>{t("common.delete")}</button>
                   </div>
                 )}
                 {confirmId === subject.id && (
                   <div className={cx(styles.menu, styles.confirm)}>
-                    <span>删除后，主线和支线会变成普通对话。</span>
+                    <span>{t("spaces.deleteWarning")}</span>
                     <div className={styles.confirmBtns}>
-                      <button onClick={() => { setConfirmId(null); setMenuId(null); }}>取消</button>
+                      <button onClick={() => { setConfirmId(null); setMenuId(null); }}>{t("common.cancel")}</button>
                       <button
                         className={styles.danger}
                         onClick={async () => {
@@ -270,7 +273,7 @@ export function SpacesPage(props: SpacesPageProps) {
                           }
                         }}
                       >
-                        删除
+                        {t("common.delete")}
                       </button>
                     </div>
                   </div>

@@ -2,6 +2,8 @@
 
 import { useEffect, useState, type MouseEvent } from "react";
 import { Monitor, Moon, Sun } from "lucide-react";
+import { useI18n } from "@/components/LanguageProvider";
+import type { MessageKey } from "@/lib/i18n";
 import styles from "./ThemeToggle.module.css";
 
 export type ThemeChoice = "system" | "light" | "dark";
@@ -18,7 +20,11 @@ type DocumentWithVT = Document & {
 
 const STORAGE_KEY = "knowgap.theme";
 const CHANGE_EVENT = "knowgap:theme";
-export const THEME_LABEL: Record<ThemeChoice, string> = { system: "跟随系统", light: "浅色", dark: "深色" };
+export const THEME_KEY: Record<ThemeChoice, MessageKey> = {
+  system: "theme.system",
+  light: "theme.light",
+  dark: "theme.dark",
+};
 export const THEME_ICON = { system: Monitor, light: Sun, dark: Moon } as const;
 
 function readChoice(): ThemeChoice {
@@ -221,6 +227,9 @@ export function ThemeToggle() {
   const Icon = THEME_ICON[choice];
   const effectiveDark = choice === "dark" || (choice === "system" && systemDark);
   const next: ThemeChoice = effectiveDark ? "light" : "dark";
+  const { t } = useI18n();
+  const currentLabel = t(THEME_KEY[choice]);
+  const nextLabel = t(THEME_KEY[next]);
 
   const handleClick = (event: MouseEvent<HTMLButtonElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -236,8 +245,8 @@ export function ThemeToggle() {
       data-theme-toggle-btn="true"
       className={styles.toggle}
       onClick={handleClick}
-      aria-label={`主题：${THEME_LABEL[choice]}，点击切换为${THEME_LABEL[next]}`}
-      title={`主题：${THEME_LABEL[choice]}（点击切换为${THEME_LABEL[next]}）`}
+      aria-label={t("theme.aria", { current: currentLabel, next: nextLabel })}
+      title={t("theme.title", { current: currentLabel, next: nextLabel })}
     >
       <Icon key={choice} size={15} className={styles.icon} aria-hidden />
     </button>

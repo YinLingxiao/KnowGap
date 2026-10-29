@@ -1,3 +1,4 @@
+import { localeOf, translate, type Language } from "@/lib/i18n";
 import type { MemoryStatus } from "@/lib/types";
 
 export interface StatusMeta {
@@ -32,24 +33,25 @@ export function formatConfidence(value: number | null | undefined): string {
   return value == null ? "—" : value.toFixed(2);
 }
 
-export function formatRelativeTime(iso: string, now: number = Date.now()): string {
+export function formatRelativeTime(iso: string, lang: Language = "zh", now: number = Date.now()): string {
   const time = new Date(iso).getTime();
   if (Number.isNaN(time)) return "";
   const diff = Math.max(0, now - time);
   const minute = 60_000;
-  if (diff < minute) return "刚刚";
-  if (diff < 60 * minute) return `${Math.floor(diff / minute)} 分钟前`;
+  if (diff < minute) return translate(lang, "time.justNow");
+  if (diff < 60 * minute) return translate(lang, "time.minutesAgo", { count: Math.floor(diff / minute) });
   const date = new Date(time);
   const sameDay = new Date(now).toDateString() === date.toDateString();
-  const hhmm = date.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
-  if (sameDay) return `今天 ${hhmm}`;
-  return `${date.getMonth() + 1}月${date.getDate()}日 ${hhmm}`;
+  const hhmm = date.toLocaleTimeString(localeOf(lang), { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+  if (sameDay) return translate(lang, "time.today", { time: hhmm });
+  const day = new Intl.DateTimeFormat(localeOf(lang), { month: "short", day: "numeric" }).format(date);
+  return translate(lang, "time.dateTime", { date: day, time: hhmm });
 }
 
-export function formatClock(iso: string): string {
+export function formatClock(iso: string, lang: Language = "zh"): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
+  return date.toLocaleTimeString(localeOf(lang), { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 }
 
 export function shortId(id: string): string {
