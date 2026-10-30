@@ -144,11 +144,10 @@ class ThreadSummary(BaseModel):
     memory_ids: list[str] = Field(default_factory=list)
 
 
-class ThreadUpdate(BaseModel):
+class DispatchedThread(BaseModel):
+    """A Thread dispatched from this user message; title and live state come from the Thread itself."""
+
     thread_id: str
-    title: str
-    status: ExecutionStatus
-    summary: str
 
 
 class MessageAnchor(BaseModel):
@@ -265,7 +264,8 @@ class ChatMessage(BaseModel):
     files: list[dict] = Field(default_factory=list)
     tool_calls: list[ToolCallRecord] = Field(default_factory=list)
     thread_summary: ThreadSummary | None = None
-    thread_update: ThreadUpdate | None = None
+    # Only main-line user messages carry these: each dispatch renders one card under that message.
+    dispatched_threads: list[DispatchedThread] = Field(default_factory=list)
     thread_proposals: list[ThreadProposal] = Field(default_factory=list)
     pending_approval: dict | None = None
     preference_prompt: PreferencePrompt | None = None
