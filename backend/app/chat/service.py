@@ -529,12 +529,12 @@ class ChatService:
 
     def _rollback_wake(self, event_id: str, reply_id: str | None, report_ids: list[str],
                        *, preempted: bool = False) -> None:
-        if not report_ids:
-            return
-        if preempted:
-            self.store.requeue_reports(report_ids)
-        else:
-            self.store.rollback_reports(report_ids, WAKE_RETRY_SECONDS, WAKE_MAX_ATTEMPTS)
+        # Even with no report ids to restore, the hidden event and its reply must not stay behind.
+        if report_ids:
+            if preempted:
+                self.store.requeue_reports(report_ids)
+            else:
+                self.store.rollback_reports(report_ids, WAKE_RETRY_SECONDS, WAKE_MAX_ATTEMPTS)
         self.store.discard_system_event(event_id, reply_id)
 
     def _settle_wake(self, generation: Generation) -> None:

@@ -749,7 +749,7 @@ export function MessageList({
               </div>
             );
           })}
-          {last?.role === "user" && phase === null && (
+          {last?.role === "user" && !last.systemEvent && phase === null && (
             <div className={cx(styles.row, styles.assistantRow)}>
               <div className={styles.failure}>
                 <CircleAlert size={14} aria-hidden />
