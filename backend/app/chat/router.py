@@ -256,6 +256,8 @@ def chat_router(store: ChatStore, service: ChatService) -> APIRouter:
         existing = store.find_request(conversation_id, body.client_request_id)
         if existing and service.is_generating(conversation_id):
             raise HTTPException(409, "这条消息正在生成回复，请稍候；刷新会话可查看最新状态。")
+        # 学习者优先：后台唤醒回合可以直接被这条消息打断，而不是回 409
+        await service.preempt_system_turn(conversation_id)
         require_idle(conversation_id)
         if existing:
             # Same request id again (timeout, double click, reconnect): never store the message twice.

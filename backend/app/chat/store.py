@@ -10,10 +10,11 @@ import logging
 import re
 import sqlite3
 import unicodedata
+from datetime import datetime, timedelta, timezone
 
 from app.chat.schemas import (
     ChatMessage, Conversation, ConversationSummary, DispatchedThread, ExerciseAttempt, LearnerMemory, MemoryChange,
-    MemoryEvidence, ToolCallRecord, PreferencePrompt,
+    MemoryEvidence, SystemEvent, ToolCallRecord, PreferencePrompt,
     MessageAnchor, SpaceProgress, Subject, ThreadSummary,
 )
 from app.chat.skills import ONBOARDING_FIRST_MESSAGE, ONBOARDING_TITLE
@@ -96,6 +97,16 @@ def _next_actions(raw) -> list[str]:
     if not isinstance(raw, list):
         return []
     return [item for item in raw if item in _NEXT_ACTIONS][:2]
+
+
+def _system_event(raw) -> SystemEvent | None:
+    if not isinstance(raw, dict) or not isinstance(raw.get("type"), str) or not raw["type"]:
+        return None
+    return SystemEvent(
+        type=raw["type"],
+        report_ids=[item for item in raw.get("report_ids") or [] if isinstance(item, str)],
+        thread_ids=[item for item in raw.get("thread_ids") or [] if isinstance(item, str)],
+    )
 
 
 class ChatStore:
@@ -187,6 +198,20 @@ class ChatStore:
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS thread_reports (
+                    id TEXT PRIMARY KEY,
+                    main_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+                    thread_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+                    reply_id TEXT NOT NULL REFERENCES conversation_messages(id) ON DELETE CASCADE,
+                    outcome TEXT NOT NULL CHECK(outcome IN ('completed', 'failed')),
+                    summary TEXT NOT NULL,
+                    state TEXT NOT NULL DEFAULT 'pending' CHECK(state IN ('pending', 'delivered', 'skipped')),
+                    delivered_event_id TEXT, delivered_at TEXT,
+                    attempts INTEGER NOT NULL DEFAULT 0, not_before TEXT,
+                    created_at TEXT NOT NULL
+                );
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_thread_reports_pending
+                    ON thread_reports(thread_id) WHERE state = 'pending';
             """)
             # NULL subject_id: conversation outside any Subject / general memory that applies everywhere.
             ensure_column(db, "conversations", "subject_id", "TEXT")
@@ -809,6 +834,170 @@ class ChatStore:
         ).fetchall()
         return {row["conversation_id"]: clip(row["error"], 200) for row in rows}
 
+    # ---------------------------------------------------------- thread reports
+
+    def record_thread_report(self, main_id: str, thread_id: str, reply_id: str, outcome: str, summary: str,
+                             not_before: str | None = None) -> str:
+        """One pending report per Thread: another completion before delivery replaces the older summary."""
+        report_id = new_id("report")
+        with self.connection() as db:
+            db.execute("BEGIN IMMEDIATE")
+            db.execute("DELETE FROM thread_reports WHERE thread_id = ? AND state = 'pending'", (thread_id,))
+            db.execute(
+                "INSERT INTO thread_reports(id, main_id, thread_id, reply_id, outcome, summary, state, "
+                "delivered_event_id, delivered_at, attempts, not_before, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, 'pending', NULL, NULL, 0, ?, ?)",
+                (report_id, main_id, thread_id, reply_id, outcome, clip(summary, 600), not_before, now()),
+            )
+        return report_id
+
+    def pending_thread_reports(self, main_id: str | None = None) -> list[dict]:
+        with self.connection() as db:
+            rows = db.execute(
+                "SELECT r.*, c.title AS thread_title FROM thread_reports r "
+                "JOIN conversations c ON c.id = r.thread_id "
+                "WHERE r.state = 'pending' AND (? IS NULL OR r.main_id = ?) ORDER BY r.created_at, r.id",
+                (main_id, main_id),
+            ).fetchall()
+            return [dict(row) for row in rows]
+
+    def pending_report_mains(self) -> list[str]:
+        with self.connection() as db:
+            return [row["main_id"] for row in db.execute(
+                "SELECT DISTINCT main_id FROM thread_reports WHERE state = 'pending'",
+            )]
+
+    def deliver_pending_reports(self, main_id: str, limit: int, build) -> tuple[str, list[sqlite3.Row]] | None:
+        """Take the oldest deliverable reports and insert the hidden event that carries them.
+
+        Selection, the event message and the delivery marks commit together, so a replay cannot
+        deliver the same report twice. `build(rows)` returns the model-facing text and its meta.
+        """
+        with self.connection() as db:
+            db.execute("BEGIN IMMEDIATE")
+            rows = db.execute(
+                "SELECT r.*, c.title AS thread_title FROM thread_reports r "
+                "JOIN conversations c ON c.id = r.thread_id "
+                "WHERE r.main_id = ? AND r.state = 'pending' AND (r.not_before IS NULL OR r.not_before <= ?) "
+                "ORDER BY r.created_at, r.id LIMIT ?",
+                (main_id, now(), limit),
+            ).fetchall()
+            if not rows:
+                return None
+            content, meta = build(rows)
+            event_id = self._insert(db, main_id, role="user", kind="text", content=content, status="complete",
+                                    meta=meta)
+            timestamp = now()
+            db.executemany(
+                "UPDATE thread_reports SET state = 'delivered', delivered_event_id = ?, delivered_at = ? WHERE id = ?",
+                [(event_id, timestamp, row["id"]) for row in rows],
+            )
+            return event_id, rows
+
+    def delivered_event_count(self, main_id: str, since: str) -> int:
+        # Delivered ids are kept even when a silent turn deletes its event message, so the cap still counts it.
+        with self.connection() as db:
+            return db.execute(
+                "SELECT COUNT(DISTINCT delivered_event_id) FROM thread_reports "
+                "WHERE main_id = ? AND state = 'delivered' AND delivered_at >= ?", (main_id, since),
+            ).fetchone()[0]
+
+    def requeue_reports(self, report_ids: list[str]) -> None:
+        """User priority: the wake turn was preempted, so deliver the same reports again (no attempt cost)."""
+        if not report_ids:
+            return
+        with self.connection() as db:
+            db.execute("BEGIN IMMEDIATE")
+            db.executemany(
+                "UPDATE thread_reports SET state = 'pending', delivered_event_id = NULL, delivered_at = NULL, "
+                "not_before = NULL WHERE id = ? AND state = 'delivered'", [(item,) for item in report_ids],
+            )
+
+    def rollback_reports(self, report_ids: list[str], base_delay: int, max_attempts: int) -> None:
+        """The wake turn failed or was interrupted: retry later with backoff, or give up."""
+        if not report_ids:
+            return
+        with self.connection() as db:
+            db.execute("BEGIN IMMEDIATE")
+            for report_id in report_ids:
+                row = db.execute("SELECT attempts FROM thread_reports WHERE id = ?", (report_id,)).fetchone()
+                if row is None:
+                    continue
+                attempts = int(row["attempts"]) + 1
+                if attempts >= max_attempts:
+                    db.execute("UPDATE thread_reports SET state = 'skipped', delivered_event_id = NULL, "
+                               "delivered_at = NULL, attempts = ? WHERE id = ?", (attempts, report_id))
+                else:
+                    delay = base_delay * 2 ** attempts
+                    db.execute(
+                        "UPDATE thread_reports SET state = 'pending', delivered_event_id = NULL, delivered_at = NULL, "
+                        "attempts = ?, not_before = ? WHERE id = ?",
+                        (attempts, (datetime.now(timezone.utc) + timedelta(seconds=delay)).isoformat(), report_id),
+                    )
+
+    def skip_pending_reports(self, main_id: str) -> int:
+        with self.connection() as db:
+            cursor = db.execute(
+                "UPDATE thread_reports SET state = 'skipped', delivered_event_id = NULL, delivered_at = NULL "
+                "WHERE main_id = ? AND state = 'pending'", (main_id,),
+            )
+            return cursor.rowcount
+
+    def system_events(self) -> list[dict]:
+        """Every hidden event message with its reply state, for restart recovery."""
+        with self.connection() as db:
+            rows = db.execute(
+                "SELECT m.id AS event_id, m.meta_json AS meta_json, "
+                "(SELECT r.id FROM conversation_messages r WHERE r.reply_to = m.id ORDER BY r.seq DESC LIMIT 1) AS reply_id, "
+                "(SELECT r.status FROM conversation_messages r WHERE r.reply_to = m.id ORDER BY r.seq DESC LIMIT 1) AS reply_status "
+                "FROM conversation_messages m JOIN conversations c ON c.id = m.conversation_id "
+                "WHERE c.kind = 'main' AND json_extract(m.meta_json, '$.system_event') IS NOT NULL",
+            ).fetchall()
+            events = []
+            for row in rows:
+                event = json.loads(row["meta_json"]).get("system_event") or {}
+                events.append({
+                    "event_id": row["event_id"], "report_ids": event.get("report_ids") or [],
+                    "reply_id": row["reply_id"], "reply_status": row["reply_status"],
+                })
+            return events
+
+    def discard_system_event(self, event_id: str, reply_id: str | None) -> None:
+        """Remove the reply first, then the hidden event that caused it (one transaction)."""
+        with self.connection() as db:
+            db.execute("BEGIN IMMEDIATE")
+            if reply_id:
+                db.execute("DELETE FROM conversation_messages WHERE id = ?", (reply_id,))
+            db.execute("DELETE FROM conversation_messages WHERE id = ?", (event_id,))
+
+    def last_message_at(self, conversation_id: str) -> str | None:
+        with self.connection() as db:
+            row = db.execute(
+                "SELECT MAX(created_at) AS latest FROM conversation_messages WHERE conversation_id = ?",
+                (conversation_id,),
+            ).fetchone()
+            return row["latest"] if row else None
+
+    def earliest_pending_not_before(self, main_id: str) -> str | None:
+        with self.connection() as db:
+            row = db.execute(
+                "SELECT MIN(not_before) AS earliest FROM thread_reports "
+                "WHERE main_id = ? AND state = 'pending' AND not_before IS NOT NULL", (main_id,),
+            ).fetchone()
+            return row["earliest"] if row else None
+
+    def thread_resolved(self, conversation_id: str) -> bool:
+        with self.connection() as db:
+            row = db.execute(
+                "SELECT thread_status FROM conversations WHERE id = ?", (conversation_id,),
+            ).fetchone()
+            return bool(row) and row["thread_status"] == "resolved"
+
+    def conversation_student(self, conversation_id: str) -> str | None:
+        with self.connection() as db:
+            row = db.execute("SELECT student_id FROM conversations WHERE id = ?", (conversation_id,)).fetchone()
+            return row["student_id"] if row else None
+
     def resolve_thread(self, conversation_id: str, student_id: str, title: str, summary: str, takeaways: list[str]) -> dict:
         with self.connection() as db:
             db.execute("BEGIN IMMEDIATE")
@@ -951,6 +1140,8 @@ class ChatStore:
             tool_calls=[ToolCallRecord(**item) for item in meta.get("tool_calls", []) if isinstance(item, dict) and item.get("id") and item.get("name")],
             thread_summary=self._thread_summary(meta.get("thread_summary")),
             dispatched_threads=[DispatchedThread(thread_id=item) for item in dispatched or []],
+            # Set on the hidden user message that wakes the coordinator; the learner never sees it.
+            system_event=_system_event(meta.get("system_event")),
             thread_proposals=meta.get("thread_proposals", []),
             pending_approval=meta.get("pending_approval"),
             preference_prompt=_preference_prompt(meta.get("preference_prompt")),

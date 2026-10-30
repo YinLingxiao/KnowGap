@@ -150,6 +150,14 @@ class DispatchedThread(BaseModel):
     thread_id: str
 
 
+class SystemEvent(BaseModel):
+    """Hidden user message that carries a coordinator-only event, such as a batch of Thread reports."""
+
+    type: str
+    report_ids: list[str] = Field(default_factory=list)
+    thread_ids: list[str] = Field(default_factory=list)
+
+
 class MessageAnchor(BaseModel):
     message_id: str
     role: Literal["user", "assistant"]
@@ -266,6 +274,8 @@ class ChatMessage(BaseModel):
     thread_summary: ThreadSummary | None = None
     # Only main-line user messages carry these: each dispatch renders one card under that message.
     dispatched_threads: list[DispatchedThread] = Field(default_factory=list)
+    # Set on the hidden user message that wakes the coordinator; the learner never sees it.
+    system_event: SystemEvent | None = None
     thread_proposals: list[ThreadProposal] = Field(default_factory=list)
     pending_approval: dict | None = None
     preference_prompt: PreferencePrompt | None = None
