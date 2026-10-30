@@ -69,6 +69,11 @@ function mapMessage(data: Wire): ChatMessage {
     })),
     dispatchedThreads: (Array.isArray(data.dispatched_threads) ? data.dispatched_threads : [])
       .map((item: Wire) => ({ threadId: String(item.thread_id) })),
+    systemEvent: data.system_event && data.system_event.type ? {
+      type: String(data.system_event.type),
+      reportIds: Array.isArray(data.system_event.report_ids) ? data.system_event.report_ids.map(String) : [],
+      threadIds: Array.isArray(data.system_event.thread_ids) ? data.system_event.thread_ids.map(String) : [],
+    } : null,
     threadSummary: data.thread_summary ? {
       threadId: data.thread_summary.thread_id, title: data.thread_summary.title, summary: data.thread_summary.summary,
       takeaways: data.thread_summary.takeaways ?? [], memoryIds: data.thread_summary.memory_ids ?? [],

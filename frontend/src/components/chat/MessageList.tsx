@@ -341,7 +341,10 @@ export function MessageList({
   }, [followNonce, conversationId, toBottom]);
 
   const last = messages[messages.length - 1];
-  const lastUser = [...messages].reverse().find((message) => message.role === "user");
+  // 隐藏的系统事件不是学习者发言，不参与「最后一条用户消息」相关逻辑
+  const lastUser = [...messages].reverse().find((message) => message.role === "user" && !message.systemEvent);
+  const eventIds = new Set(messages.filter((message) => message.role === "user" && message.systemEvent)
+    .map((message) => message.id));
   const firstLatestTurnIdx = lastUser
     ? messages.findIndex((m, idx) => idx > messages.indexOf(lastUser) && m.role === "assistant")
     : -1;
@@ -379,6 +382,7 @@ export function MessageList({
               );
             }
             if (message.role === "user") {
+              if (message.systemEvent) return null;  // 隐藏事件：学习者看不到这条消息
               const { files, body } = parseFileMarkers(message.content);
               const attempt = message.attempt ? ASSESSMENT[message.attempt.assessment] : null;
               const userFold = foldState({ ...message, content: body });
@@ -488,6 +492,9 @@ export function MessageList({
                 </div>
               );
             }
+            // 唤醒回合的回复还没有可见内容时不渲染，避免先冒出一个空气泡
+            if (message.status === "streaming" && message.content === "" && !message.reasoning
+                && message.replyTo && eventIds.has(message.replyTo)) return null;
             const streaming = message.status === "streaming";
             const isLast = message === last && message.replyTo === lastUser?.id;
             // 计划属于整段对话，由输入框上方的计划条展示；这里只在发生变化的回复里留一行时间线标记

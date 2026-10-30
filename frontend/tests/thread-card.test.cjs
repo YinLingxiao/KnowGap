@@ -36,6 +36,10 @@ new Function('module', 'exports', 'require', js)(loaded, loaded.exports, (name) 
   if (name === './widgets/visionData') return { hasVisionMarker: () => false };
   if (name === '@/hooks/useSmoothText') return { useSmoothText: (text) => text };
   if (name === './SelectionToolbar') return { SelectionToolbar: () => null, SELECTABLE_ATTR: 'data-selectable' };
+  if (name === './WorkingIndicator') return { WorkingIndicator: () => null };
+  if (name === './ReasoningBlock') return { ReasoningBlock: () => null };
+  if (name === './GeneratedFiles') return { GeneratedFiles: () => null };
+  if (name === './ThreadProposals') return { ThreadProposals: () => null };
   return {};
 });
 
@@ -148,4 +152,61 @@ test('messages without dispatched Threads render exactly as before', () => {
   const html = renderToStaticMarkup(render(userMessage([]), STATES));
   assert.match(html, /带我复习链表/);
   assert.doesNotMatch(html, /threadPill/);
+});
+
+function systemEvent() {
+  return {
+    id: 'event-1', conversationId: 'main', seq: 2, role: 'user', kind: 'text',
+    content: '【系统事件 · 支线汇报】以下内容不是学习者说的话。\n- 支线「链表」：已完成',
+    status: 'complete', error: null, replyTo: null, problemId: null, attempt: null, memoryChanges: [],
+    usedMemoryIds: [], suggestedProblemId: null, sources: [], truncated: false, toolCalls: [],
+    pendingApproval: null, preferencePrompt: null, nextActions: [], threadSummary: null,
+    systemEvent: { type: 'thread_report', reportIds: ['report-1'], threadIds: ['thread-linked'] },
+    createdAt: '2026-10-30T00:00:00Z', updatedAt: '2026-10-30T00:00:00Z',
+  };
+}
+
+function assistantReply(replyTo, patch = {}) {
+  return {
+    id: 'reply-1', conversationId: 'main', seq: 3, role: 'assistant', kind: 'text', content: '',
+    status: 'streaming', error: null, replyTo, problemId: null, attempt: null, memoryChanges: [],
+    usedMemoryIds: [], suggestedProblemId: null, sources: [], truncated: false, toolCalls: [],
+    pendingApproval: null, preferencePrompt: null, nextActions: [], threadSummary: null,
+    createdAt: '2026-10-30T00:00:00Z', updatedAt: '2026-10-30T00:00:00Z', ...patch,
+  };
+}
+
+function renderMessages(messages) {
+  return loaded.exports.MessageList({
+    conversationId: 'main', messages, problems: {}, memoriesById: {},
+    conversationSubjectId: 'subject-one', subjectNames: {}, phase: null, followNonce: 0,
+    onRegenerate() {}, onStartExercise() {}, onOpenMemories() {},
+  });
+}
+
+test('hidden system events are not rendered and never become the last user message', () => {
+  const event = systemEvent();
+  const reply = assistantReply(event.id, { status: 'complete', content: '支线执行失败了，可以稍后重试。' });
+  const tree = renderMessages([event, reply]);
+  const html = renderToStaticMarkup(tree);
+  assert.doesNotMatch(html, /系统事件/);
+  assert.doesNotMatch(html, /不是学习者说的话/);
+  assert.ok(find(tree, (node) => node.props['data-msg-id'] === 'reply-1'));
+  assert.equal(find(tree, (node) => node.props['data-msg-id'] === 'event-1'), undefined);
+});
+
+test('an empty streaming reply to a system event stays invisible until it has content', () => {
+  const event = systemEvent();
+  const html = renderToStaticMarkup(renderMessages([event, assistantReply(event.id)]));
+  assert.doesNotMatch(html, /data-msg-id="reply-1"/);
+  const withText = renderToStaticMarkup(renderMessages([
+    event, assistantReply(event.id, { content: '这次没成功，要不要换个例子？' }),
+  ]));
+  assert.match(withText, /data-msg-id="reply-1"/);
+});
+
+test('a normal streaming placeholder still renders', () => {
+  const user = userMessage([]);
+  const html = renderToStaticMarkup(renderMessages([user, assistantReply(user.id)]));
+  assert.match(html, /data-msg-id="reply-1"/);
 });
