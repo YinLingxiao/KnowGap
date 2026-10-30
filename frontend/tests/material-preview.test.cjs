@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const ts = require('typescript');
+const { resolveI18n } = require('./i18n-support.cjs');
 
 const file = path.join(__dirname, '../src/components/MaterialPreviewPanel.tsx');
 const js = ts.transpileModule(fs.readFileSync(file, 'utf8'), {
@@ -11,6 +12,7 @@ const js = ts.transpileModule(fs.readFileSync(file, 'utf8'), {
 }).outputText;
 const mod = { exports: {} };
 new Function('module', 'exports', 'require', js)(mod, mod.exports, name => {
+  if (resolveI18n(name)) return resolveI18n(name);
   if (name.endsWith('.css')) return { default: {} };
   if (name === '@/lib/api/material-client') return { createMaterialClient: () => ({}) };
   if (name === '@/lib/api/errors') return { toApiError: error => ({ message: String(error) }) };
