@@ -62,14 +62,6 @@
   overflow-wrap: anywhere;
 }
 
-.replyCount {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--text-tertiary);
-  font-size: var(--text-xs);
-}
-
 .newLine {
   display: flex;
   align-items: center;
@@ -383,7 +375,7 @@
   font-size: var(--text-xs);
 }
 
-/* 支线进展胶囊（主线内联的单行胶囊：[ • 标题  进展摘要 ]） */
+/* 支线卡：主线里每条被交办的用户消息下最多一张，标题与状态按 id 实时渲染 */
 .threadPill {
   display: inline-flex;
   align-items: center;
@@ -447,16 +439,6 @@
   flex-shrink: 0;
   font-weight: 600;
   color: var(--text);
-}
-
-.pillSummary {
-  overflow: hidden;
-  padding: 1px 7px;
-  border-radius: var(--radius-sm);
-  background: var(--bg-hover);
-  color: var(--text-secondary);
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* 合并后仅保留完成状态与名称，总结继续保存在上下文中。 */

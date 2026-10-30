@@ -245,6 +245,7 @@ export const extraPhrases: Record<string, string> = {
   "松开即可上传": "Release to upload",
   "查看原文": "View original",
   "查看支线": "View Thread",
+  "查看支线：{title}": "View Thread: {title}",
   "标签": "Tags",
   "标记「{title}」为未完成": "Mark “{title}” incomplete",
   "标记为完成": "Mark complete",

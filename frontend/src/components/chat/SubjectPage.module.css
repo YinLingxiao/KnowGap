@@ -185,6 +185,17 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* 有支线在等你或执行失败：主线不再播报，用小圆点提示去看右侧 */
+.tabDot {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--orange);
+}
+
 .icon,
 .panelActionBtn {
   display: grid;

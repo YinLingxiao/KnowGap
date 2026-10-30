@@ -412,8 +412,18 @@ export function SubjectPage({
   );
   const weakReady = spaceMemories.filter((memory) => memory.kind === "misconception").length >= 3;
   const threadSignal = threads.length > 0 || Boolean(main?.messages.some((message) => (
-    message.threadUpdate || message.threadSummary || (message.threadProposals?.length ?? 0) > 0
+    (message.dispatchedThreads?.length ?? 0) > 0 || message.threadSummary || (message.threadProposals?.length ?? 0) > 0
   )));
+  // 主线不再播报支线进度：有支线在等你或执行失败时，在支线入口上点一个小圆点
+  const threadNeedsAttention = threads.some((item) => (
+    item.executionStatus === "waiting" || item.executionStatus === "failed"
+  ));
+  // 支线卡只带 id，标题和状态在这里按 id 实时取，所以改名与状态变化不需要重写消息
+  const threadStates = useMemo(() => Object.fromEntries(threads.map((item) => [item.id, {
+    title: item.title,
+    executionStatus: item.executionStatus ?? null,
+    threadStatus: item.threadStatus ?? null,
+  }])), [threads]);
   const conversationTitles = useMemo(
     () => Object.fromEntries(chat.conversations.map((item) => [item.id, item.title])),
     [chat.conversations],
@@ -425,10 +435,11 @@ export function SubjectPage({
   // 只有选中的标签显示名字，其余只留图标（名字放在悬停提示和无障碍标签里）
   const tabs: Array<{
     key: string; icon: LucideIcon; label: string; title: string; active: boolean; open: () => void;
-    count?: number; coachmark?: string;
+    count?: number; coachmark?: string; attention?: boolean;
   }> = [
     { key: "list", icon: MessagesSquare, label: t("space.tab.threads"), title: t("space.tab.threads"), active: panel.mode === "list",
-      open: () => setPanel({ mode: "list" }), count: openThreads.length, coachmark: threadSignal ? "thread" : undefined },
+      open: () => setPanel({ mode: "list" }), count: openThreads.length, coachmark: threadSignal ? "thread" : undefined,
+      attention: threadNeedsAttention },
     { key: "library", icon: LibraryIcon, label: t("space.tab.library"), title: t("space.tab.libraryTitle"), active: libraryOpen,
       open: () => setPanel({ mode: "info", section: "files" }) },
     { key: "graph", icon: Waypoints, label: t("space.tab.graph"), title: t("space.tab.graphTitle"), active: panel.mode === "graph",
@@ -538,6 +549,7 @@ export function SubjectPage({
             memoriesById={memoriesById}
             conversationSubjectId={subject.id}
             subjectNames={subjectNames}
+            threadStates={threadStates}
             phase={chat.streamFor(mainId)?.phase ?? null}
             followNonce={chat.followNonceFor(mainId)}
             topSlot={(
@@ -756,6 +768,7 @@ export function SubjectPage({
                     onClick={tab.open}
                   >
                     <tab.icon size={14} aria-hidden />
+                    {tab.attention && <span className={styles.tabDot} aria-hidden />}
                     {tab.active && <span className={styles.tabLabel}>{tab.label}</span>}
                     {tab.active && tab.count !== undefined && tab.count > 0 && <span className={styles.tabCount}>{tab.count}</span>}
                   </button>
