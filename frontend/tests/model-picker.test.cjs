@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const ts = require('typescript');
+const { resolveI18n } = require('./i18n-support.cjs');
 
 const root = path.resolve(__dirname, '../src');
 const cache = new Map();
@@ -26,6 +27,7 @@ function load(file) {
     },
   }).outputText;
   new Function('module', 'exports', 'require', js)(loaded, loaded.exports, (name) => {
+    if (resolveI18n(name)) return resolveI18n(name);
     if (name === 'react' || name === 'react/jsx-runtime' || name === 'react/jsx-dev-runtime') {
       const runtime = { jsx: () => null, jsxs: () => null, Fragment: Symbol.for('react.fragment') };
       return name === 'react'
@@ -100,7 +102,7 @@ test('composer wires the picker beside reasoning effort and only for the current
   assert.match(composer, /<ModelPicker/);
   assert.match(composer, /supportsReasoning\(activeModel\)/);
   assert.match(composer, /disabled=\{generating\}/);
-  assert.match(composer, /disabledReason="正在生成，请等这条回复完成后再切换模型"/);
+  assert.match(composer, /disabledReason=\{tx\("正在生成，请等这条回复完成后再切换模型"\)\}/);
   assert.doesNotMatch(composer, /effortModel/);
   assert.match(chat, /pendingModelRef/);
   assert.match(chat, /applyPendingModel/);

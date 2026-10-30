@@ -1,9 +1,14 @@
 /** 日程各视图的分组、排序与日期展示（纯函数，不依赖 React）。 */
 import { formatYmd } from "@/lib/agenda/quickAdd";
+import type { TranslatePhrase } from "@/lib/i18n";
 import {
   COMPOSE_TASK_EVENT,
   type AgendaTask, type AgendaThread, type ComposeTaskDetail, type TaskPatch, type TaskPriority,
 } from "@/lib/agenda/types";
+
+/** 没有传入翻译函数时按原文插值，保持纯函数与既有调用方的行为不变。 */
+const raw: TranslatePhrase = (text, vars) =>
+  vars ? text.replace(/\{(\w+)\}/g, (match, name: string) => (name in vars ? String(vars[name]) : match)) : text;
 
 /** 打开全局「添加任务」弹窗（约定见第 6.2 节） */
 export function dispatchCompose(detail: ComposeTaskDetail): void {
@@ -222,6 +227,7 @@ export function countViews(tasks: AgendaTask[], threads: AgendaThread[], today: 
 /** 「今天」视图：逾期 + 今天 */
 export function buildTodayGroups(
   tasks: AgendaTask[], threads: AgendaThread[], today: string, options?: { includeDone?: boolean },
+  tx: TranslatePhrase = raw,
 ): AgendaGroup[] {
   const overdue: AgendaNode[] = [];
   const todays: AgendaNode[] = [];
@@ -236,18 +242,20 @@ export function buildTodayGroups(
     else if (thread.deadlineDate === today) todays.push(threadNode(thread));
   }
   const groups: AgendaGroup[] = [];
-  if (overdue.length) groups.push({ key: "overdue", label: "逾期", tone: "overdue", nodes: sorted(overdue) });
+  if (overdue.length) groups.push({ key: "overdue", label: tx("逾期"), tone: "overdue", nodes: sorted(overdue) });
   groups.push({
-    key: "today", label: "今天", sublabel: `${monthDay(today)} · ${weekdayOf(today)}`, tone: "today",
+    key: "today", label: tx("今天"), sublabel: `${monthDay(today, tx)} · ${weekdayOf(today, tx)}`, tone: "today",
     nodes: sorted(todays), compose: { scheduledDate: today }, keepEmpty: true,
   });
   return groups;
 }
 
 /** 「收件箱」视图 */
-export function buildInboxGroups(tasks: AgendaTask[], options?: { includeDone?: boolean }): AgendaGroup[] {
+export function buildInboxGroups(
+  tasks: AgendaTask[], options?: { includeDone?: boolean }, tx: TranslatePhrase = raw,
+): AgendaGroup[] {
   const nodes = buildNodes(tasks, options).filter(isInboxNode);
-  return [{ key: "inbox", label: "待办", nodes: sorted(nodes), compose: {}, keepEmpty: true }];
+  return [{ key: "inbox", label: tx("待办"), nodes: sorted(nodes), compose: {}, keepEmpty: true }];
 }
 
 export const UPCOMING_DAYS = 14;
@@ -257,6 +265,7 @@ export const dayGroupKey = (day: string) => `day:${day}`;
 /** 「预览」视图：逾期一节 + 从今天起连续 14 天，每天一节 */
 export function buildUpcomingGroups(
   tasks: AgendaTask[], threads: AgendaThread[], today: string, options?: { includeDone?: boolean },
+  tx: TranslatePhrase = raw,
 ): AgendaGroup[] {
   const overdue: AgendaNode[] = [];
   const byDay = new Map<string, AgendaNode[]>();
@@ -274,14 +283,14 @@ export function buildUpcomingGroups(
     else push(thread.deadlineDate, threadNode(thread));
   }
   const groups: AgendaGroup[] = [];
-  if (overdue.length) groups.push({ key: "overdue", label: "逾期", tone: "overdue", nodes: sorted(overdue) });
+  if (overdue.length) groups.push({ key: "overdue", label: tx("逾期"), tone: "overdue", nodes: sorted(overdue) });
   for (let offset = 0; offset < UPCOMING_DAYS; offset += 1) {
     const day = addDays(today, offset);
-    const relative = offset === 0 ? "今天" : offset === 1 ? "明天" : offset === 2 ? "后天" : null;
+    const relative = offset === 0 ? tx("今天") : offset === 1 ? tx("明天") : offset === 2 ? tx("后天") : null;
     groups.push({
       key: dayGroupKey(day),
-      label: monthDay(day),
-      sublabel: [relative, weekdayOf(day)].filter(Boolean).join(" · "),
+      label: monthDay(day, tx),
+      sublabel: [relative, weekdayOf(day, tx)].filter(Boolean).join(" · "),
       tone: offset === 0 ? "today" : undefined,
       nodes: sorted(byDay.get(day) ?? []),
       compose: { scheduledDate: day },
@@ -294,15 +303,16 @@ export function buildUpcomingGroups(
 /** 学习空间视图：进行中支线 / 闪回复习 / 任务 */
 export function buildSpaceGroups(
   tasks: AgendaTask[], threads: AgendaThread[], subjectId: string, options?: { includeDone?: boolean },
+  tx: TranslatePhrase = raw,
 ): AgendaGroup[] {
   const nodes = buildNodes(tasks.filter((task) => task.subjectId === subjectId), options);
   const threadNodes = threads.filter((thread) => thread.subjectId === subjectId).map(threadNode);
   const reviews = nodes.filter((node) => node.kind === "review");
   const plain = nodes.filter((node) => node.kind === "task");
   const groups: AgendaGroup[] = [];
-  if (threadNodes.length) groups.push({ key: "threads", label: "进行中支线", nodes: sorted(threadNodes) });
-  if (reviews.length) groups.push({ key: "reviews", label: "闪回复习", nodes: sorted(reviews) });
-  groups.push({ key: "tasks", label: "任务", nodes: sorted(plain), compose: { subjectId }, keepEmpty: true });
+  if (threadNodes.length) groups.push({ key: "threads", label: tx("进行中支线"), nodes: sorted(threadNodes) });
+  if (reviews.length) groups.push({ key: "reviews", label: tx("闪回复习"), nodes: sorted(reviews) });
+  groups.push({ key: "tasks", label: tx("任务"), nodes: sorted(plain), compose: { subjectId }, keepEmpty: true });
   return groups;
 }
 
@@ -336,41 +346,41 @@ export function subtaskProgress(children: AgendaTask[]): { done: number; total: 
 
 const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六"];
 
-export function monthDay(ymd: string): string {
+export function monthDay(ymd: string, tx: TranslatePhrase = raw): string {
   const [, month, day] = ymd.split("-").map(Number);
-  return `${month}月${day}日`;
+  return tx("{month}月{day}日", { month, day });
 }
 
-export function weekdayOf(ymd: string): string {
-  return `周${WEEKDAYS[new Date(toUtcDay(ymd)).getUTCDay()]}`;
+export function weekdayOf(ymd: string, tx: TranslatePhrase = raw): string {
+  return tx(`周${WEEKDAYS[new Date(toUtcDay(ymd)).getUTCDay()]}`);
 }
 
-export function dateWord(ymd: string, today: string): string {
+export function dateWord(ymd: string, today: string, tx: TranslatePhrase = raw): string {
   const diff = dayDiff(today, ymd);
-  if (diff === 0) return "今天";
-  if (diff === 1) return "明天";
-  if (diff === -1) return "昨天";
-  return `${monthDay(ymd)} ${weekdayOf(ymd)}`;
+  if (diff === 0) return tx("今天");
+  if (diff === 1) return tx("明天");
+  if (diff === -1) return tx("昨天");
+  return tx("{date} {weekday}", { date: monthDay(ymd, tx), weekday: weekdayOf(ymd, tx) });
 }
 
-export function scheduleLabel(task: AgendaTask, today: string): string | null {
+export function scheduleLabel(task: AgendaTask, today: string, tx: TranslatePhrase = raw): string | null {
   if (!task.scheduledDate) return null;
   const parts: string[] = [];
-  if (task.scheduledDate !== today) parts.push(dateWord(task.scheduledDate, today));
+  if (task.scheduledDate !== today) parts.push(dateWord(task.scheduledDate, today, tx));
   if (task.scheduledStartAt) parts.push(task.scheduledStartAt.slice(11, 16));
   if (task.durationMinutes) parts.push(task.durationMinutes >= 60 && task.durationMinutes % 60 === 0
-    ? `${task.durationMinutes / 60}h` : `${task.durationMinutes}分`);
-  return parts.length ? parts.join(" ") : "今天";
+    ? tx("{hours}h", { hours: task.durationMinutes / 60 }) : tx("{minutes}分", { minutes: task.durationMinutes }));
+  return parts.length ? parts.join(" ") : tx("今天");
 }
 
 /** 截止日文案；今天起 2 天内或已逾期视为临近（标红） */
-export function deadlineInfo(deadline: string | null, today: string): { text: string; urgent: boolean } | null {
+export function deadlineInfo(deadline: string | null, today: string, tx: TranslatePhrase = raw): { text: string; urgent: boolean } | null {
   if (!deadline) return null;
   const diff = dayDiff(today, deadline);
-  if (diff < 0) return { text: `逾期 ${-diff} 天`, urgent: true };
-  if (diff === 0) return { text: "今天截止", urgent: true };
-  if (diff === 1) return { text: "明天截止", urgent: true };
-  return { text: `${monthDay(deadline)}截止`, urgent: diff <= 2 };
+  if (diff < 0) return { text: tx("逾期 {days} 天", { days: -diff }), urgent: true };
+  if (diff === 0) return { text: tx("今天"), urgent: true };
+  if (diff === 1) return { text: tx("明天"), urgent: true };
+  return { text: monthDay(deadline, tx), urgent: diff <= 2 };
 }
 
 export function priorityLabel(priority: TaskPriority): string {
@@ -415,6 +425,7 @@ export function buildTodaySuggestions(
   tasks: AgendaTask[],
   subjects: { id: string; name: string; deadline: string | null }[],
   today: string,
+  tx: TranslatePhrase = raw,
 ): TodaySuggestion[] {
   const out: TodaySuggestion[] = [];
   const nodes = buildNodes(tasks);
@@ -424,7 +435,7 @@ export function buildTodaySuggestions(
       id: `inbox:${inbox.task.id}`,
       kind: "inbox",
       title: inbox.task.title,
-      detail: "待办里还没排期",
+      detail: tx("待办里还没排期"),
       taskId: inbox.task.id,
       subjectId: null,
     });
@@ -439,7 +450,7 @@ export function buildTodaySuggestions(
       id: `pull:${future[0].node.task.id}`,
       kind: "pull",
       title: future[0].node.task.title,
-      detail: `${dateWord(future[0].day, today)}的安排`,
+      detail: tx("{date}的安排", { date: dateWord(future[0].day, today, tx) }),
       taskId: future[0].node.task.id,
       subjectId: null,
     });
@@ -454,7 +465,7 @@ export function buildTodaySuggestions(
       id: `breakdown:${subject.id}`,
       kind: "breakdown",
       title: subject.name,
-      detail: `${dateWord(subject.deadline, today)}截止，还没有任务`,
+      detail: tx("{date}截止，还没有任务", { date: dateWord(subject.deadline, today, tx) }),
       taskId: null,
       subjectId: subject.id,
     });
@@ -495,6 +506,7 @@ export function applyViewOptions(
   options: AgendaViewOptions,
   subjects: Map<string, { id: string; name: string }>,
   today: string,
+  tx: TranslatePhrase = raw,
 ): AgendaGroup[] {
   if (options.groupBy === "none" && options.sortBy === "manual") return groups;
   const pack = (list: AgendaGroup[]) => list.map((group) => ({ ...group, nodes: sortAgendaNodes(group.nodes, options.sortBy) }));
@@ -513,10 +525,10 @@ export function applyViewOptions(
   if (options.groupBy === "priority") {
     for (const node of nodes) {
       if (node.kind === "thread") {
-        ensure("threads", "进行中支线").nodes.push(node);
+        ensure("threads", tx("进行中支线")).nodes.push(node);
         continue;
       }
-      ensure(`p${node.task.priority}`, PRIORITY_GROUP[node.task.priority] ?? `P${node.task.priority}`).nodes.push(node);
+      ensure(`p${node.task.priority}`, tx(PRIORITY_GROUP[node.task.priority] ?? `P${node.task.priority}`)).nodes.push(node);
     }
     return pack(["p1", "p2", "p3", "p4", "threads"]
       .map((key) => buckets.get(key))
@@ -527,8 +539,8 @@ export function applyViewOptions(
     for (const node of nodes) {
       const subjectId = node.kind === "thread" ? node.thread.subjectId : node.task.subjectId;
       const name = subjectId
-        ? subjects.get(subjectId)?.name ?? (node.kind === "thread" ? node.thread.subjectName : "未归入空间")
-        : "未归入空间";
+        ? subjects.get(subjectId)?.name ?? (node.kind === "thread" ? node.thread.subjectName : tx("未归入空间"))
+        : tx("未归入空间");
       ensure(subjectId ? `space:${subjectId}` : "none", name, subjectId ? { compose: { subjectId } } : { compose: {} }).nodes.push(node);
     }
     const ordered: AgendaGroup[] = [];
@@ -545,11 +557,11 @@ export function applyViewOptions(
   for (const node of nodes) {
     const day = node.kind === "thread" ? node.thread.deadlineDate : (nodeDay(node) ?? node.task.deadlineDate);
     if (!day) {
-      ensure("undated", "无日期", { compose: {} }).nodes.push(node);
+      ensure("undated", tx("无日期"), { compose: {} }).nodes.push(node);
       continue;
     }
-    ensure(dayGroupKey(day), monthDay(day), {
-      sublabel: [day === today ? "今天" : day === addDays(today, 1) ? "明天" : null, weekdayOf(day)].filter(Boolean).join(" · "),
+    ensure(dayGroupKey(day), monthDay(day, tx), {
+      sublabel: [day === today ? tx("今天") : day === addDays(today, 1) ? tx("明天") : null, weekdayOf(day, tx)].filter(Boolean).join(" · "),
       tone: day < today ? "overdue" : day === today ? "today" : undefined,
       compose: { scheduledDate: day },
     }).nodes.push(node);

@@ -7,6 +7,8 @@ import {
   Search, Settings, SlidersHorizontal, Trash2, X,
 } from "lucide-react";
 import type { ApiError } from "@/lib/api/errors";
+import { useI18n } from "@/components/LanguageProvider";
+import { errorText } from "@/lib/i18n/errors";
 import { COMPOSE_TASK_EVENT } from "@/lib/agenda/types";
 import type { ConversationSummary, Subject } from "@/lib/chat/types";
 import { cx } from "@/lib/cx";
@@ -73,6 +75,7 @@ function ConversationItem({
   onRename: (title: string) => Promise<boolean>;
   onDelete: () => Promise<boolean>;
 }) {
+  const { t } = useI18n();
   const [mode, setMode] = useState<"view" | "menu" | "rename" | "confirm">("view");
   const [title, setTitle] = useState(conversation.title);
   const [working, setWorking] = useState(false);
@@ -109,7 +112,7 @@ function ConversationItem({
           value={title}
           maxLength={60}
           disabled={working}
-          aria-label="对话标题"
+          aria-label={t("sidebar.conversationTitle")}
           onChange={(event) => setTitle(event.target.value)}
           onBlur={() => void save()}
           onKeyDown={(event) => {
@@ -126,10 +129,10 @@ function ConversationItem({
 
   if (mode === "confirm") {
     return (
-      <li className={cx(styles.item, styles.panel)} role="group" aria-label="确认删除对话">
-        <span className={styles.panelTitle}>删除「{conversation.title}」？</span>
+      <li className={cx(styles.item, styles.panel)} role="group" aria-label={t("sidebar.confirmDeleteAria")}>
+        <span className={styles.panelTitle}>{t("sidebar.confirmDeleteTitle", { title: conversation.title })}</span>
         <div className={styles.confirmActions}>
-          <button onClick={() => setMode("view")} disabled={working}>取消</button>
+          <button onClick={() => setMode("view")} disabled={working}>{t("common.cancel")}</button>
           <button
             className={styles.danger}
             disabled={working}
@@ -141,7 +144,7 @@ function ConversationItem({
               }
             }}
           >
-            删除
+            {t("common.delete")}
           </button>
         </div>
       </li>
@@ -152,12 +155,12 @@ function ConversationItem({
     <li ref={menuRef} className={cx(styles.item, active && styles.active, mode === "menu" && styles.menuOpen)}>
       <button className={styles.itemButton} onClick={onOpen} aria-current={active ? "page" : undefined} title={conversation.title}>
         <span className={styles.itemTitle}>{conversation.title}</span>
-        {generating && <Loader size={12} className={styles.spin} aria-label="正在生成" />}
+        {generating && <Loader size={12} className={styles.spin} aria-label={t("sidebar.generating")} />}
       </button>
       <button
         className={styles.more}
         onClick={() => setMode(mode === "menu" ? "view" : "menu")}
-        aria-label={`「${conversation.title}」的更多操作`}
+        aria-label={t("sidebar.moreActions", { title: conversation.title })}
         aria-haspopup="menu"
         aria-expanded={mode === "menu"}
       >
@@ -167,11 +170,11 @@ function ConversationItem({
         <div className={styles.menu} role="menu">
           <button role="menuitem" onClick={() => { setTitle(conversation.title); setMode("rename"); }}>
             <Pencil size={13} aria-hidden />
-            重命名
+            {t("sidebar.rename")}
           </button>
           <button role="menuitem" className={styles.menuDanger} onClick={() => setMode("confirm")}>
             <Trash2 size={13} aria-hidden />
-            删除
+            {t("common.delete")}
           </button>
         </div>
       )}
@@ -180,6 +183,7 @@ function ConversationItem({
 }
 
 export function ConversationSidebar(props: SidebarProps) {
+  const { lang, t } = useI18n();
   const { conversations, subjects, loading, error, activeId, generatingIds } = props;
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
@@ -212,11 +216,11 @@ export function ConversationSidebar(props: SidebarProps) {
   const isNewChatActive = !activeId && !props.activeSubjectId && !props.spacesActive && !props.materialsActive && !props.agendaActive;
 
   return (
-    <nav className={styles.sidebar} aria-label="对话">
+    <nav className={styles.sidebar} aria-label={t("sidebar.label")}>
       <header className={styles.brand}>
         <Image src="/brand/knowgap-logo-v1.png" alt="KnowGap" width={22} height={22} className={styles.logo} />
-        <span className={styles.brandName} aria-hidden>KnowGap</span>
-        <button className={styles.iconButton} onClick={props.onCollapse} aria-label="收起侧栏" title="收起侧栏">
+        <span className={styles.brandName} aria-hidden>{t("sidebar.brand")}</span>
+        <button className={styles.iconButton} onClick={props.onCollapse} aria-label={t("sidebar.collapse")} title={t("sidebar.collapse")}>
           <PanelLeftClose size={16} />
         </button>
       </header>
@@ -239,11 +243,11 @@ export function ConversationSidebar(props: SidebarProps) {
                     setSearchOpen(false);
                   }
                 }}
-                placeholder="筛选对话与空间…"
-                aria-label="搜索对话和学习空间"
+                placeholder={t("sidebar.searchPlaceholder")}
+                aria-label={t("sidebar.searchAria")}
               />
               {query && (
-                <button type="button" className={styles.searchClear} onClick={() => setQuery("")} aria-label="清空搜索">
+                <button type="button" className={styles.searchClear} onClick={() => setQuery("")} aria-label={t("sidebar.clearSearch")}>
                   <X size={12} />
                 </button>
               )}
@@ -253,53 +257,53 @@ export function ConversationSidebar(props: SidebarProps) {
               type="button"
               className={styles.searchField}
               onClick={() => setSearchOpen(true)}
-              aria-label="搜索对话和学习空间"
+              aria-label={t("sidebar.searchAria")}
             >
               <Search size={14} aria-hidden />
-              <span>搜索</span>
+              <span>{t("sidebar.search")}</span>
             </button>
           )}
           <button
             type="button"
             className={styles.iconButton}
             onClick={() => window.dispatchEvent(new CustomEvent(COMPOSE_TASK_EVENT))}
-            aria-label="添加任务"
-            title="添加任务"
+            aria-label={t("sidebar.addTask")}
+            title={t("sidebar.addTask")}
           >
             <ListPlus size={16} aria-hidden />
           </button>
         </div>
 
-        <div className={styles.primaryNav} role="group" aria-label="学习与安排">
+        <div className={styles.primaryNav} role="group" aria-label={t("sidebar.groupLearning")}>
           <button
             className={cx(styles.navItem, isNewChatActive && styles.navActive)}
             onClick={props.onNewChat}
           >
             <Plus size={15} aria-hidden />
-            <span>新对话</span>
+            <span>{t("sidebar.newChat")}</span>
           </button>
           <button className={cx(styles.navItem, props.agendaActive && styles.navActive)} onClick={props.onOpenAgenda}>
             <CalendarCheck size={15} aria-hidden />
-            <span>日程</span>
+            <span>{t("sidebar.agenda")}</span>
           </button>
           <div className={styles.navRow}>
             <button className={cx(styles.navItem, props.spacesActive && styles.navActive)} onClick={props.onOpenSpaces}>
               <FolderKanban size={15} aria-hidden />
-              <span>学习空间</span>
+              <span>{t("sidebar.spaces")}</span>
             </button>
-            <button className={styles.sectionAction} onClick={props.onCreateSpace} aria-label="新建学习空间" title="新建学习空间">
+            <button className={styles.sectionAction} onClick={props.onCreateSpace} aria-label={t("sidebar.newSpace")} title={t("sidebar.newSpace")}>
               <Plus size={14} />
             </button>
           </div>
         </div>
-        <div className={styles.secondaryNav} role="group" aria-label="记忆与资料">
+        <div className={styles.secondaryNav} role="group" aria-label={t("sidebar.groupMemory")}>
           <button className={styles.navItem} onClick={props.onOpenMemory}>
             <Brain size={15} aria-hidden />
-            <span>学习记忆</span>
+            <span>{t("sidebar.memories")}</span>
           </button>
           <button className={cx(styles.navItem, props.materialsActive && styles.navActive)} onClick={props.onOpenMaterials}>
             <SlidersHorizontal size={15} aria-hidden />
-            <span>通用资料</span>
+            <span>{t("sidebar.materials")}</span>
           </button>
         </div>
       </div>
@@ -308,7 +312,7 @@ export function ConversationSidebar(props: SidebarProps) {
         {filteredSpaces.length > 0 && (
           <div className={styles.group}>
             <SectionHeader
-              label="学习空间"
+              label={t("sidebar.spaces")}
               open={spacesOpen}
               onToggle={() => setSpacesOpen((value) => !value)}
             />
@@ -333,20 +337,20 @@ export function ConversationSidebar(props: SidebarProps) {
 
         <div className={styles.group}>
           <SectionHeader
-            label="最近对话"
+            label={t("sidebar.recent")}
             open={recentsOpen}
             onToggle={() => setRecentsOpen((value) => !value)}
           />
           {recentsOpen && (
             error && conversations.length === 0 ? (
               <div className={styles.listError}>
-                <p>{error.message}</p>
-                <button onClick={props.onRetry}>重新加载</button>
+                <p>{errorText(error, t, lang)}</p>
+                <button onClick={props.onRetry}>{t("common.reload")}</button>
               </div>
             ) : loading && conversations.length === 0 && subjects.length === 0 ? (
-              <p className={styles.empty}>正在加载…</p>
+              <p className={styles.empty}>{t("sidebar.loading")}</p>
             ) : recentChats.length === 0 ? (
-              <p className={styles.empty}>{keyword ? "没有匹配的内容。" : "开始的新对话会显示在这里。"}</p>
+              <p className={styles.empty}>{keyword ? t("sidebar.noMatches") : t("sidebar.empty")}</p>
             ) : (
               <ul className={styles.list} data-stagger>
                 {recentChats.map((conversation) => (
@@ -367,16 +371,16 @@ export function ConversationSidebar(props: SidebarProps) {
       </div>
 
       <footer className={styles.footer}>
-        <span className={styles.avatar} aria-hidden>{props.avatarText || "学"}</span>
+        <span className={styles.avatar} aria-hidden>{props.avatarText || t("app.avatar")}</span>
         <span className={styles.userName}>
-          {props.displayName || "演示学习者"}
-          <small className={styles.userPlan}> · 本地版</small>
+          {props.displayName || t("app.demoLearner")}
+          <small className={styles.userPlan}> · {t("app.localVersion")}</small>
         </span>
-        <button id="help-trigger" className={styles.iconButton} onClick={props.onOpenHelp} aria-label="帮助" title="帮助" aria-expanded={props.helpOpen} aria-controls={props.helpOpen ? "help-panel" : undefined} aria-haspopup="dialog">
+        <button id="help-trigger" className={styles.iconButton} onClick={props.onOpenHelp} aria-label={t("sidebar.help")} title={t("sidebar.help")} aria-expanded={props.helpOpen} aria-controls={props.helpOpen ? "help-panel" : undefined} aria-haspopup="dialog">
           <CircleHelp size={15} />
         </button>
         <UpdateIndicator onOpenSettings={props.onOpenSettings} />
-        <button className={styles.iconButton} onClick={props.onOpenSettings} aria-label="设置" title="设置">
+        <button className={styles.iconButton} onClick={props.onOpenSettings} aria-label={t("sidebar.settings")} title={t("sidebar.settings")}>
           <Settings size={15} />
           {props.modelIssue && <span className={styles.alertDot} />}
         </button>

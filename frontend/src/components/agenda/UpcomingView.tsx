@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useI18n } from "@/components/LanguageProvider";
 import { cx } from "@/lib/cx";
 import { AgendaEmpty } from "./AgendaEmpty";
 import { AgendaList, type AgendaListProps } from "./AgendaList";
@@ -20,6 +21,7 @@ const prefersReducedMotion = () =>
 
 /** 「预览」视图：顶部一周日期导航 + 按天分节的列表（逾期在最上方） */
 export function UpcomingView({ groups, today, listProps, onBreakdown }: UpcomingViewProps) {
+  const { tx } = useI18n();
   const scrollRef = useRef<HTMLDivElement>(null);
   const thisWeek = mondayOf(today);
   const lastDay = addDays(today, UPCOMING_DAYS - 1);
@@ -50,7 +52,7 @@ export function UpcomingView({ groups, today, listProps, onBreakdown }: Upcoming
   const canPrev = weekStart > thisWeek;
   const canNext = addDays(weekStart, 7) <= lastDay;
   const middle = addDays(weekStart, 3);
-  const monthLabel = `${Number(middle.slice(0, 4))}年${Number(middle.slice(5, 7))}月`;
+  const monthLabel = tx("{year}年{month}月", { year: Number(middle.slice(0, 4)), month: Number(middle.slice(5, 7)) });
 
   return (
     <div className={styles.view}>
@@ -63,27 +65,27 @@ export function UpcomingView({ groups, today, listProps, onBreakdown }: Upcoming
               className={styles.navBtn}
               onClick={() => goWeek(addDays(weekStart, -7))}
               disabled={!canPrev}
-              aria-label="上一周"
-              title="上一周"
+              aria-label={tx("上一周")}
+              title={tx("上一周")}
             >
               <ChevronLeft size={14} aria-hidden />
             </button>
             <button type="button" className={styles.todayBtn} onClick={() => { setWeekStart(thisWeek); scrollTo(today); }}>
-              今天
+              {tx("今天")}
             </button>
             <button
               type="button"
               className={styles.navBtn}
               onClick={() => goWeek(addDays(weekStart, 7))}
               disabled={!canNext}
-              aria-label="下一周"
-              title="下一周"
+              aria-label={tx("下一周")}
+              title={tx("下一周")}
             >
               <ChevronRight size={14} aria-hidden />
             </button>
           </div>
         </div>
-        <div className={styles.days} role="group" aria-label="选择日期，跳到当天">
+        <div className={styles.days} role="group" aria-label={tx("选择日期，跳到当天")}>
           {days.map((day) => {
             const inRange = day >= today && day <= lastDay;
             const isToday = day === today;
@@ -94,10 +96,10 @@ export function UpcomingView({ groups, today, listProps, onBreakdown }: Upcoming
                 className={cx(styles.day, isToday && styles.dayToday, picked === day && styles.dayPicked)}
                 disabled={!inRange}
                 aria-pressed={picked === day}
-                aria-label={`${Number(day.slice(5, 7))}月${Number(day.slice(8))}日 ${weekdayOf(day)}${isToday ? "（今天）" : ""}`}
+                aria-label={`${tx("{month}月{day}日", { month: Number(day.slice(5, 7)), day: Number(day.slice(8)) })} ${weekdayOf(day, tx)}${isToday ? tx("（今天）") : ""}`}
                 onClick={() => scrollTo(day)}
               >
-                <span className={styles.dayName}>{weekdayOf(day).slice(1)}</span>
+                <span className={styles.dayName}>{tx(weekdayOf(day, tx)).replace(/^周/, "")}</span>
                 <span className={styles.dayNum}>{Number(day.slice(8))}</span>
                 <span className={cx(styles.dayDot, busyDays.has(dayGroupKey(day)) && styles.dayDotOn)} aria-hidden />
               </button>
@@ -110,7 +112,7 @@ export function UpcomingView({ groups, today, listProps, onBreakdown }: Upcoming
         {groups.every((group) => group.nodes.length === 0) && (
           <AgendaEmpty variant="upcoming" onBreakdown={onBreakdown} />
         )}
-        <AgendaList {...listProps} groups={groups} today={today} ariaLabel="预览" />
+        <AgendaList {...listProps} groups={groups} today={today} ariaLabel={tx("预览")} />
       </div>
     </div>
   );

@@ -11,6 +11,7 @@ import {
   Type, Workflow,
 } from "lucide-react";
 import type { StreamPhase } from "@/hooks/useChat";
+import { useI18n } from "@/components/LanguageProvider";
 import { modelLibraryApi, type CatalogModel, type ModelLibraryClient } from "@/lib/api/model-library";
 import { uploadImage } from "@/lib/api/vision-client";
 import { toApiError } from "@/lib/api/errors";
@@ -253,10 +254,12 @@ function deriveInstantSuggestion(messages?: ChatMessage[]): string {
 
 export function Composer({
   value: draft, onChange: onChangeRaw, onSend, onStop, phase, busy, problems = [], onStartExercise, autoFocusKey,
-  placeholder = "继续提问，或说说你的理解…", hero = false, inputId = COMPOSER_ID,
+  placeholder, hero = false, inputId = COMPOSER_ID,
   conversationId, messages, ensureConversation, onFilesCleared,
   modelKey = null, onModelKeyChange, modelClient,
 }: ComposerProps) {
+  const { t, tx } = useI18n();
+  const resolvedPlaceholder = placeholder ?? t("composer.continue");
   // 草稿 = 开头的附件标记行 + 图片标记行 + 正文。输入框和下面所有逻辑只处理正文（value / onChange），标记由这里统一保留
   const parsedDraft = useMemo(() => parseFileMarkers(draft), [draft]);
   const draftImages = useMemo(
@@ -638,7 +641,7 @@ export function Composer({
       setWsOpen(false);
       return true;
     } catch (err) {
-      setWsNote(err instanceof Error ? err.message : "工作区路径无效");
+      setWsNote(err instanceof Error ? err.message : tx("工作区路径无效"));
       return false;
     }
   };
@@ -721,15 +724,15 @@ export function Composer({
     }
     // 旧版 Office 也交给后端返回准确的 415 中文说明，不尝试读取二进制文件。
     if (!isDocumentFile(file.name) && !/\.(doc|ppt|xls)$/i.test(file.name)) {
-      setFileHint("请选择 PDF、Word（.docx / .doc）、PPT（.pptx / .ppt）、Excel（.xlsx / .xls）、TXT、Markdown 或 CSV 文件。");
+      setFileHint(tx("请选择 PDF、Word（.docx / .doc）、PPT（.pptx / .ppt）、Excel（.xlsx / .xls）、TXT、Markdown 或 CSV 文件。"));
       return;
     }
     if (!conversationId && !ensureConversation) {
-      setFileHint("请先发一句话，再上传文件。");
+      setFileHint(tx("请先发一句话，再上传文件。"));
       return;
     }
     if (parseFileMarkers(draftRef.current).files.length + pendingRef.current.length >= MAX_FILE_MARKERS) {
-      setFileHint(`每条消息最多 ${MAX_FILE_MARKERS} 个文件附件`);
+      setFileHint(tx("每条消息最多 {count} 个文件附件", { count: MAX_FILE_MARKERS }));
       return;
     }
 
@@ -757,7 +760,7 @@ export function Composer({
         current.map((item) => (item.key === key ? { ...item, state: "error", error: message } : item)),
       );
     }
-  }, [addImageMarker, conversationId, ensureConversation, generating, locked, updatePending, writeDraft]);
+  }, [addImageMarker, conversationId, ensureConversation, generating, locked, tx, updatePending, writeDraft]);
 
   // Ctrl+V：剪贴板里的图片和文件直接当附件上传；纯文字照常粘贴
   const onPaste = useCallback((event: ClipboardEvent<HTMLTextAreaElement>) => {
@@ -893,7 +896,7 @@ export function Composer({
     });
   };
 
-  const pickSlash = (cmd: SlashCommand) => insertAtTrigger(cmd.prompt, true);
+  const pickSlash = (cmd: SlashCommand) => insertAtTrigger(tx(cmd.prompt), true);
   const pickMention = (item: MentionItem) => insertAtTrigger(`@[${item.name}] `);
   const pickActive = (index: number) => {
     if (trigger?.kind === "slash") {
@@ -1053,7 +1056,7 @@ export function Composer({
         onDragLeave={onDragLeave}
         onDrop={onDrop}
       >
-        {dragging && <div className={styles.dropOverlay} aria-hidden>将文件拖放到这里</div>}
+        {dragging && <div className={styles.dropOverlay} aria-hidden>{tx("将文件拖放到这里")}</div>}
         <input
           ref={fileInputRef}
           type="file"
@@ -1065,22 +1068,21 @@ export function Composer({
         />
         {/* LobeHub 风格：顶部 Markdown 格式工具栏（由 + 菜单中的「格式工具」开关控制） */}
         {attachNote && <p className={styles.wsError} role="status">{attachNote}</p>}
-        {imageUploads > 0 && <p className={styles.fileNote} role="status">正在上传图片…</p>}
+        {imageUploads > 0 && <p className={styles.fileNote} role="status">{tx("正在上传图片…")}</p>}
         {fileHint && (
           <p className={styles.wsError} role="alert">
             {fileHint}
             {" "}
             <button type="button" className={styles.dismissFileHint} onClick={() => setFileHint("")}>
-              知道了
-            </button>
+              知道了            </button>
           </p>
         )}
         {(pendingFiles.length > 0 || parsedDraft.files.length > 0 || draftImages.images.length > 0) && (
-          <div className={styles.pendingFiles} role="list" aria-label="待发送文件">
+          <div className={styles.pendingFiles} role="list" aria-label={tx("待发送文件")}>
             {draftImages.images.map((marker) => (
               <div key={marker} className={styles.pendingImage} role="listitem">
                 <ImageThumb imageId={marker.slice("[[kg-image:".length, -2)} />
-                <button type="button" className={styles.pendingImageRemove} aria-label="移除这张图片"
+                <button type="button" className={styles.pendingImageRemove} aria-label={tx("移除这张图片")}
                   disabled={generating || locked} onClick={() => removeImage(marker)}>×</button>
               </div>
             ))}
@@ -1102,7 +1104,7 @@ export function Composer({
           </div>
         )}
         {parsedDraft.files.length > 0 && !value.trim() && (
-          <div className={styles.fileIntents} role="group" aria-label="选择文件学习方式">
+          <div className={styles.fileIntents} role="group" aria-label={tx("选择文件学习方式")}>
             {intentsFor(recalledFile(parsedDraft.files[0].id)?.kind ?? kindFromName(parsedDraft.files[0].name), parsedDraft.files[0].name)
               .map((intent) => <button key={intent.id} type="button" disabled={locked || generating} onClick={() => {
                 onChange(intent.prompt);
@@ -1111,49 +1113,49 @@ export function Composer({
           </div>
         )}
         {formatBarOpen && (
-          <div className={styles.formatToolbar} role="toolbar" aria-label="Markdown 格式工具栏">
-            <button type="button" className={styles.formatBtn} onClick={() => applyFormat("bold")} title="加粗 (**文本**)" aria-label="加粗">
+          <div className={styles.formatToolbar} role="toolbar" aria-label={tx("Markdown 格式工具栏")}>
+            <button type="button" className={styles.formatBtn} onClick={() => applyFormat("bold")} title={tx("加粗 (**文本**)")} aria-label={tx("加粗")}>
               <Bold size={14} />
             </button>
-            <button type="button" className={styles.formatBtn} onClick={() => applyFormat("italic")} title="斜体 (*文本*)" aria-label="斜体">
+            <button type="button" className={styles.formatBtn} onClick={() => applyFormat("italic")} title={tx("斜体 (*文本*)")} aria-label={tx("斜体")}>
               <Italic size={14} />
             </button>
-            <button type="button" className={styles.formatBtn} onClick={() => applyFormat("strike")} title="删除线 (~~文本~~)" aria-label="删除线">
+            <button type="button" className={styles.formatBtn} onClick={() => applyFormat("strike")} title={tx("删除线 (~~文本~~)")} aria-label={tx("删除线")}>
               <Strikethrough size={14} />
             </button>
             <span className={styles.formatSep} aria-hidden />
-            <button type="button" className={styles.formatBtn} onClick={() => applyFormat("ul")} title="无序列表 (- )" aria-label="无序列表">
+            <button type="button" className={styles.formatBtn} onClick={() => applyFormat("ul")} title={tx("无序列表 (- )")} aria-label={tx("无序列表")}>
               <List size={14} />
             </button>
-            <button type="button" className={styles.formatBtn} onClick={() => applyFormat("ol")} title="有序列表 (1. )" aria-label="有序列表">
+            <button type="button" className={styles.formatBtn} onClick={() => applyFormat("ol")} title={tx("有序列表 (1. )")} aria-label={tx("有序列表")}>
               <ListOrdered size={14} />
             </button>
-            <button type="button" className={styles.formatBtn} onClick={() => applyFormat("task")} title="任务列表 (- [ ] )" aria-label="任务列表">
+            <button type="button" className={styles.formatBtn} onClick={() => applyFormat("task")} title={tx("任务列表 (- [ ] )")} aria-label={tx("任务列表")}>
               <ListTodo size={14} />
             </button>
             <span className={styles.formatSep} aria-hidden />
-            <button type="button" className={styles.formatBtn} onClick={() => applyFormat("quote")} title="引用块 (> )" aria-label="引用块">
+            <button type="button" className={styles.formatBtn} onClick={() => applyFormat("quote")} title={tx("引用块 (> )")} aria-label={tx("引用块")}>
               <MessageSquareQuote size={14} />
             </button>
-            <button type="button" className={styles.formatBtn} onClick={() => applyFormat("math")} title="LaTeX 数学公式 ($...$)" aria-label="数学公式">
+            <button type="button" className={styles.formatBtn} onClick={() => applyFormat("math")} title={tx("LaTeX 数学公式 ($...$)")} aria-label={tx("数学公式")}>
               <Sigma size={14} />
             </button>
-            <button type="button" className={styles.formatBtn} onClick={() => applyFormat("code")} title="行内代码 (`...`)" aria-label="行内代码">
+            <button type="button" className={styles.formatBtn} onClick={() => applyFormat("code")} title={tx("行内代码 (`...`)")} aria-label={tx("行内代码")}>
               <Code size={14} />
             </button>
-            <button type="button" className={styles.formatBtn} onClick={() => applyFormat("codeblock")} title="代码块 (```...```)" aria-label="代码块">
+            <button type="button" className={styles.formatBtn} onClick={() => applyFormat("codeblock")} title={tx("代码块 (```...```)")} aria-label={tx("代码块")}>
               <SquareCode size={14} />
             </button>
           </div>
         )}
 
         {popupOpen && trigger && (
-          <div className={styles.cmdMenu} role="listbox" id={popupId} aria-label={trigger.kind === "slash" ? "快捷指令" : "引用"}>
+          <div className={styles.cmdMenu} role="listbox" id={popupId} aria-label={trigger.kind === "slash" ? tx("快捷指令") : tx("引用")}>
             {trigger.kind === "slash" ? (
               <>
                 <p className={styles.menuLabel}>
                   <Sparkles size={12} aria-hidden />
-                  快捷指令
+                  {tx("快捷指令")}
                 </p>
                 <div className={styles.cmdScroll}>
                   {slashItems.map((cmd, idx) => (
@@ -1170,8 +1172,8 @@ export function Composer({
                     >
                       <span className={styles.cmdIcon}>{cmd.icon}</span>
                       <span className={styles.cmdBody}>
-                        <span className={styles.cmdTitle}>{cmd.label}</span>
-                        <span className={styles.cmdDesc}>{cmd.desc}</span>
+                        <span className={styles.cmdTitle}>{tx(cmd.label)}</span>
+                        <span className={styles.cmdDesc}>{tx(cmd.desc)}</span>
                       </span>
                       <code className={styles.cmdKey}>/{cmd.id}</code>
                     </button>
@@ -1182,7 +1184,7 @@ export function Composer({
               <>
                 <p className={styles.menuLabel}>
                   <AtSign size={12} aria-hidden />
-                  引用 Skill 或工作区文件
+                  {tx("引用 Skill 或工作区文件")}
                 </p>
                 <div className={styles.cmdScroll}>
                   {mentionItems.map((item, idx) => (
@@ -1204,11 +1206,11 @@ export function Composer({
                         <span className={styles.cmdTitle}>{item.name}</span>
                         <span className={styles.cmdDesc}>{item.hint}</span>
                       </span>
-                      <span className={styles.cmdTag}>{item.kind === "skill" ? "Skill" : "文件"}</span>
+                      <span className={styles.cmdTag}>{item.kind === "skill" ? "Skill" : tx("文件")}</span>
                     </button>
                   ))}
                   {popupCount === 0 && (
-                    <p className={styles.cmdEmpty}>{mentionsLoading ? "正在读取 Skills 与工作区文件…" : "没有匹配的 Skill 或文件"}</p>
+                    <p className={styles.cmdEmpty}>{mentionsLoading ? tx("正在读取 Skills 与工作区文件…") : tx("没有匹配的 Skill 或文件")}</p>
                   )}
                 </div>
               </>
@@ -1218,7 +1220,7 @@ export function Composer({
 
         <div className={styles.inputRow}>
           <label htmlFor={inputId} className="sr-only">
-            发送消息
+            {t("composer.sendMessage")}
           </label>
           <div className={styles.inputStack}>
             <textarea
@@ -1244,7 +1246,7 @@ export function Composer({
               }}
               onKeyDown={handleKeyDown}
               onPaste={onPaste}
-              placeholder={activeGhost ? "" : placeholder}
+              placeholder={activeGhost ? "" : resolvedPlaceholder}
             />
             {!value && !parsedDraft.files.length && activeGhost && (
               <div className={styles.ghostOverlay} aria-hidden="true">
@@ -1272,8 +1274,8 @@ export function Composer({
                 }}
                 aria-expanded={menuOpen}
                 aria-haspopup="menu"
-                aria-label="更多：附件、技能、工作区与对话设置"
-                title="添加附件、选择技能，或调整工作区与对话设置"
+                aria-label={t("composer.addMore")}
+                title={t("composer.addMoreTitle")}
                 disabled={generating || locked}
               >
                 <Plus size={16} aria-hidden />
@@ -1293,7 +1295,7 @@ export function Composer({
                       >
                         <span className={styles.lobeMenuLeft}>
                           <Paperclip size={15} aria-hidden />
-                          <span>附件</span>
+                          <span>{t("composer.attach")}</span>
                         </span>
                         <ChevronRight size={14} className={styles.lobeMenuArrow} aria-hidden />
                       </button>
@@ -1306,8 +1308,8 @@ export function Composer({
                       >
                         <span className={styles.lobeMenuLeft}>
                           <Layers size={15} aria-hidden />
-                          <span>技能</span>
-                          <span className={styles.lobeMenuPill}>自动 | {skillItems.totalCount}</span>
+                          <span>{t("composer.skills")}</span>
+                          <span className={styles.lobeMenuPill}>{t("composer.auto")} | {skillItems.totalCount}</span>
                         </span>
                         <ChevronRight size={14} className={styles.lobeMenuArrow} aria-hidden />
                       </button>
@@ -1321,7 +1323,7 @@ export function Composer({
                         >
                           <span className={styles.lobeMenuLeft}>
                             <Dumbbell size={15} aria-hidden />
-                            <span>练习题</span>
+                            <span>{t("composer.exercises")}</span>
                             <span className={styles.lobeMenuPill}>{problems.length}</span>
                           </span>
                           <ChevronRight size={14} className={styles.lobeMenuArrow} aria-hidden />
@@ -1334,19 +1336,19 @@ export function Composer({
                         className={styles.lobeMenuItem}
                         onClick={() => {
                           setMenuOpen(false);
-                          onChange(FEYNMAN_PROMPT);
+                          onChange(tx(FEYNMAN_PROMPT));
                           textareaRef.current?.focus();
                         }}
-                        title="切换为费曼反转自测：由你讲给 AI 听，AI 负责挑刺追问"
+                        title={tx("切换为费曼反转自测：由你讲给 AI 听，AI 负责挑刺追问")}
                       >
                         <span className={styles.lobeMenuLeft}>
                           <Mic size={15} aria-hidden />
-                          <span>费曼自测</span>
+                          <span>{t("composer.feynman")}</span>
                         </span>
                       </button>
 
                       <div className={styles.lobeMenuDivider} role="separator" />
-                      <p className={styles.lobeMenuSection}>对话设置</p>
+                      <p className={styles.lobeMenuSection}>{t("composer.conversationSettings")}</p>
 
                       {devTools && (
                       <button
@@ -1362,16 +1364,16 @@ export function Composer({
                         title={
                           hasFolderPicker
                             ? workspace
-                              ? `当前工作区：${workspace}（点击重新选择文件夹，右键手动输入）`
-                              : "点击选择本地工作区文件夹"
+                              ? t("composer.workspaceCurrent", { path: workspace })
+                              : t("composer.chooseWorkspace")
                             : workspace
-                              ? `当前工作区：${workspace}`
-                              : "绑定本地工作区文件夹"
+                              ? t("composer.workspaceCurrentSimple", { path: workspace })
+                              : t("composer.bindWorkspace")
                         }
                       >
                         <span className={styles.lobeMenuLeft}>
                           <Target size={15} aria-hidden />
-                          <span>目标与工作区</span>
+                          <span>{t("composer.workspace")}</span>
                           <span className={styles.lobeMenuPill}>{wsShortName}</span>
                         </span>
                       </button>
@@ -1386,7 +1388,7 @@ export function Composer({
                       >
                         <span className={styles.lobeMenuLeft}>
                           <Type size={15} aria-hidden />
-                          <span>格式工具</span>
+                          <span>{t("composer.formatTools")}</span>
                         </span>
                         <span className={cx(styles.lobeSwitch, formatBarOpen && styles.lobeSwitchOn)} aria-hidden>
                           <i />
@@ -1400,11 +1402,11 @@ export function Composer({
                         aria-checked={autoApprove}
                         className={styles.lobeMenuItem}
                         onClick={() => void saveEnv(workspace, !autoApprove)}
-                        title="开启后 Agent 写入工作区文件无需逐次弹窗确认（终端命令仍需确认）"
+                        title={t("composer.approveWritesTitle")}
                       >
                         <span className={styles.lobeMenuLeft}>
                           <ShieldCheck size={15} aria-hidden />
-                          <span>帮我批准</span>
+                          <span>{t("composer.approveWrites")}</span>
                         </span>
                         <span className={cx(styles.lobeSwitch, autoApprove && styles.lobeSwitchOn)} aria-hidden>
                           <i />
@@ -1421,9 +1423,9 @@ export function Composer({
                           onClick={() => setPlusPane("root")}
                         >
                           <ChevronLeft size={14} aria-hidden />
-                          <span>返回</span>
+                          <span>{t("composer.back")}</span>
                         </button>
-                        <span className={styles.lobeSubheadHint}>带入一道人工校验的练习题</span>
+                        <span className={styles.lobeSubheadHint}>{t("composer.exercisesHint")}</span>
                       </div>
                       <div className={styles.cmdScroll}>
                         {problems.map((problem) => (
@@ -1460,9 +1462,9 @@ export function Composer({
                           onClick={() => setPlusPane("root")}
                         >
                           <ChevronLeft size={14} aria-hidden />
-                          <span>返回</span>
+                          <span>{tx("返回")}</span>
                         </button>
-                        <span className={styles.lobeSubheadHint}>输入 / 也可快速唤出</span>
+                        <span className={styles.lobeSubheadHint}>{tx("输入 / 也可快速唤出")}</span>
                       </div>
                       <div className={styles.cmdScroll}>
                         {skillItems.builtin.map((cmd) => (
@@ -1511,7 +1513,7 @@ export function Composer({
                               <span className={styles.cmdTitle}>{sk.name}</span>
                               <span className={styles.cmdDesc}>{sk.hint}</span>
                             </span>
-                            <span className={styles.cmdTag}>自定义</span>
+                            <span className={styles.cmdTag}>{tx("自定义")}</span>
                           </button>
                         ))}
                       </div>
@@ -1541,8 +1543,8 @@ export function Composer({
                       className={styles.statusBadge}
                       onClick={openPlusMenu}
                       disabled={generating || locked}
-                      aria-label="帮我批准已开启"
-                      title="帮我批准已开启：Agent 写入工作区文件无需逐次确认（终端命令仍需确认）。点击调整"
+                      aria-label={tx("帮我批准已开启")}
+                      title={tx("帮我批准已开启：Agent 写入工作区文件无需逐次确认（终端命令仍需确认）。点击调整")}
                     >
                       <ShieldCheck size={13} aria-hidden />
                     </button>
@@ -1554,8 +1556,8 @@ export function Composer({
                       onClick={openPlusMenu}
                       onContextMenu={openWsManual}
                       disabled={generating || locked}
-                      aria-label={`当前工作区：${wsShortName}`}
-                      title={`当前工作区：${workspace}（点击调整${hasFolderPicker ? "，右键手动输入" : ""}）`}
+                      aria-label={tx("当前工作区：{name}", { name: wsShortName })}
+                      title={tx("当前工作区：{path}（点击调整{suffix}）", { path: workspace, suffix: hasFolderPicker ? tx("，右键手动输入") : "" })}
                     >
                       <FolderOpen size={13} aria-hidden />
                     </button>
@@ -1564,15 +1566,15 @@ export function Composer({
               )}
 
               {wsOpen && (
-                <div className={styles.wsPopover} role="dialog" aria-label="工作区文件夹">
-                  <p className={styles.menuLabel}>工作区文件夹（Agent 读写目录）</p>
+                <div className={styles.wsPopover} role="dialog" aria-label={tx("工作区文件夹")}>
+                  <p className={styles.menuLabel}>{tx("工作区文件夹（Agent 读写目录）")}</p>
                   {!hasFolderPicker && (
-                    <p className={styles.wsHint}>浏览器内无法读取本地绝对路径，请粘贴文件夹路径；桌面版点击即可直接选择文件夹。</p>
+                    <p className={styles.wsHint}>{tx("浏览器内无法读取本地绝对路径，请粘贴文件夹路径；桌面版点击即可直接选择文件夹。")}</p>
                   )}
                   <input
                     className={styles.wsInput}
                     value={wsDraft}
-                    placeholder="粘贴本地已存在的文件夹路径…"
+                    placeholder={tx("粘贴本地已存在的文件夹路径…")}
                     onChange={(e) => setWsDraft(e.target.value)}
                   />
                   {wsNote && <p className={styles.wsError}>{wsNote}</p>}
@@ -1587,7 +1589,7 @@ export function Composer({
                           });
                         }}
                       >
-                        浏览…
+                        {tx("浏览…")}
                       </button>
                     )}
                     {workspace && (
@@ -1596,7 +1598,7 @@ export function Composer({
                         className={styles.wsBtn}
                         onClick={() => void saveEnv("", autoApprove)}
                       >
-                        解绑
+                        {tx("解绑")}
                       </button>
                     )}
                     <button
@@ -1604,7 +1606,7 @@ export function Composer({
                       className={styles.wsBtnPrimary}
                       onClick={() => void saveEnv(wsDraft.trim(), autoApprove)}
                     >
-                      保存
+                      {tx("保存")}
                     </button>
                   </div>
                 </div>
@@ -1618,7 +1620,7 @@ export function Composer({
               modelKey={shownModelKey}
               client={modelClient}
               disabled={generating}
-              disabledReason="正在生成，请等这条回复完成后再切换模型"
+              disabledReason={tx("正在生成，请等这条回复完成后再切换模型")}
               suspended={effortOpen}
               error={modelError}
               onOpenChange={(open) => { if (open) setEffortOpen(false); }}
@@ -1632,15 +1634,15 @@ export function Composer({
                 onClick={() => setEffortOpen((v) => !v)}
                 aria-expanded={effortOpen}
                 aria-haspopup="menu"
-                title={`模型思考深度：${activeEffort.label}`}
+                title={tx("模型思考深度：{label}", { label: tx(activeEffort.label) })}
               >
-                <span className={styles.effortLevel}>{activeEffort.shortLabel}</span>
+                <span className={styles.effortLevel}>{tx(activeEffort.shortLabel)}</span>
                 <ChevronDown size={12} aria-hidden />
               </button>
 
               {effortOpen && (
-                <div className={styles.effortMenu} role="menu" aria-label="思考深度">
-                  <p className={styles.menuLabel}>思考深度（Reasoning Effort）</p>
+                <div className={styles.effortMenu} role="menu" aria-label={tx("思考深度")}>
+                  <p className={styles.menuLabel}>{tx("思考深度（Reasoning Effort）")}</p>
                   {EFFORT_OPTIONS.map((item) => (
                     <button
                       key={item.id}
@@ -1652,8 +1654,8 @@ export function Composer({
                     >
                       <ThinkingGauge segments={item.segments} />
                       <div className={styles.effortOptionBody}>
-                        <span className={styles.effortOptionTitle}>{item.label}</span>
-                        <span className={styles.effortOptionDesc}>{item.desc}</span>
+                        <span className={styles.effortOptionTitle}>{tx(item.label)}</span>
+                        <span className={styles.effortOptionDesc}>{tx(item.desc)}</span>
                       </div>
                       {effort === item.id && <Check size={13} className={styles.effortCheck} aria-hidden />}
                     </button>
@@ -1663,11 +1665,11 @@ export function Composer({
             </div>}
 
             {generating ? (
-              <button className={cx(styles.send, styles.stop)} onClick={onStop} aria-label="停止生成" title="停止生成">
+              <button className={cx(styles.send, styles.stop)} onClick={onStop} aria-label={tx("停止生成")} title={tx("停止生成")}>
                 <Square size={11} fill="currentColor" aria-hidden />
               </button>
             ) : (
-              <button className={styles.send} onClick={onSend} disabled={!canSend} aria-label="发送" title="发送 (Enter)">
+              <button className={styles.send} onClick={onSend} disabled={!canSend} aria-label={tx("发送")} title={tx("发送 (Enter)")}>
                 <ArrowUp size={15} aria-hidden />
               </button>
             )}

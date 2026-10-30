@@ -7,10 +7,13 @@ import {
   Mic, PanelLeftOpen, RotateCcw, X,
 } from "lucide-react";
 import { useChat } from "@/hooks/useChat";
+import { useI18n } from "@/components/LanguageProvider";
 import type { HealthState } from "@/hooks/useWorkbench";
 import { getAIConfig, testAIConfig, type AIConfigStatus } from "@/lib/api/ai-config";
 import { API_BASE_URL, DATA_SOURCE } from "@/lib/config";
 import { cx } from "@/lib/cx";
+import { errorText } from "@/lib/i18n/errors";
+import type { Translate } from "@/lib/i18n";
 import type { Problem } from "@/lib/types";
 import { createMaterialClient } from "@/lib/api/material-client";
 import { chatApi } from "@/lib/chat/api";
@@ -75,12 +78,12 @@ function readView(userId: string): View {
   return { type: "chat" };
 }
 
-function greeting(name: string, hour = new Date().getHours()): string {
-  if (hour < 5) return `夜深了，${name}`;
-  if (hour < 11) return `早上好，${name}`;
-  if (hour < 13) return `中午好，${name}`;
-  if (hour < 18) return `下午好，${name}`;
-  return `晚上好，${name}`;
+function greeting(t: Translate, name: string, hour = new Date().getHours()): string {
+  if (hour < 5) return t("chat.greeting.late", { name });
+  if (hour < 11) return t("chat.greeting.morning", { name });
+  if (hour < 13) return t("chat.greeting.noon", { name });
+  if (hour < 18) return t("chat.greeting.afternoon", { name });
+  return t("chat.greeting.evening", { name });
 }
 
 function isTyping(target: EventTarget | null) {
@@ -96,6 +99,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
   onLogout: () => void;
   onRename: (name: string) => Promise<void>;
 }) {
+  const { lang, t, tx } = useI18n();
   const { toasts, push, dismiss } = useToasts();
   const chat = useChat(push, user.id);
   const [narrow, setNarrow] = useState(false);
@@ -163,7 +167,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
       if (!config.configured) {
         needsModelTest.current = true;
         setModelConfigured(false);
-        if (fromSave) setModelError("默认模型还不可用。请确认服务商已启用，并且密钥或 ChatGPT 套餐已授权。");
+        if (fromSave) setModelError(tx("默认模型还不可用。请确认服务商已启用，并且密钥或 ChatGPT 套餐已授权。"));
         return;
       }
       if (needsModelTest.current) {
@@ -176,11 +180,11 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
       }
       setModelConfigured(true);
     } catch (error: unknown) {
-      setModelError(error instanceof Error && error.message ? error.message : "无法确认模型连接，请检查后端是否启动、模型配置是否可用，然后重试。");
+      setModelError(error instanceof Error && error.message ? error.message : tx("无法确认模型连接，请检查后端是否启动、模型配置是否可用，然后重试。"));
     } finally {
       setModelChecking(false);
     }
-  }, []);
+  }, [tx]);
 
   useEffect(() => {
     void checkHealth();
@@ -221,9 +225,9 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
       const status = await chatApi.onboardingStatus();
       setGate(status.status === "not_started" ? "welcome" : "app");
     } catch {
-      setWelcomeError("无法读取学习进度，请检查后端是否启动，然后重试。");
+      setWelcomeError(tx("无法读取学习进度，请检查后端是否启动，然后重试。"));
     }
-  }, [user.id]);
+  }, [tx, user.id]);
 
   useEffect(() => {
     if (DATA_SOURCE === "api") void checkOnboarding();
@@ -246,11 +250,11 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
       const result = await chatApi.welcome(text);
       await enterSpace(result.subjectId, result.conversationId, result.opener);
     } catch (error) {
-      setWelcomeError(error instanceof Error ? error.message : "没能建好空间，请重试。");
+      setWelcomeError(error instanceof Error ? error.message : tx("没能建好空间，请重试。"));
     } finally {
       setWelcomeBusy(false);
     }
-  }, [enterSpace, welcomeBusy]);
+  }, [enterSpace, tx, welcomeBusy]);
 
   const browseDemo = useCallback(async () => {
     if (welcomeBusy) return;
@@ -261,11 +265,11 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
       await chatApi.ackOnboarding();
       await enterSpace(seeded.subjectId, seeded.conversationId);
     } catch (error) {
-      setWelcomeError(error instanceof Error ? error.message : "演示空间没能打开，请重试。");
+      setWelcomeError(error instanceof Error ? error.message : tx("演示空间没能打开，请重试。"));
     } finally {
       setWelcomeBusy(false);
     }
-  }, [enterSpace, welcomeBusy]);
+  }, [enterSpace, tx, welcomeBusy]);
 
   const skipWelcome = useCallback(async () => {
     if (welcomeBusy) return;
@@ -276,11 +280,11 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
       setGate("app");
       if (!narrow) setSidebarOpen(true);
     } catch (error) {
-      setWelcomeError(error instanceof Error ? error.message : "跳过失败，请重试。");
+      setWelcomeError(error instanceof Error ? error.message : tx("跳过失败，请重试。"));
     } finally {
       setWelcomeBusy(false);
     }
-  }, [narrow, welcomeBusy]);
+  }, [narrow, tx, welcomeBusy]);
 
   const subjectMissing = view.type === "subject" && viewRestored && !chat.listLoading
     && !chat.subjects.some((subject) => subject.id === view.id);
@@ -385,10 +389,9 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
   if (DATA_SOURCE !== "api") {
     return (
       <div className={styles.mockNotice}>
-        <h1>自由对话需要连接后端</h1>
+        <h1>{t("chat.mockTitle")}</h1>
         <p>
-          在 <code>frontend/.env.local</code> 中设置 <code>NEXT_PUBLIC_DATA_SOURCE=api</code>，启动 FastAPI 后端后重启前端。
-          聊天不会使用模拟数据伪造回复。
+          {t("chat.mockBefore")}<code>frontend/.env.local</code>{t("chat.mockMiddle")}<code>NEXT_PUBLIC_DATA_SOURCE=api</code>{t("chat.mockAfter")}
         </p>
       </div>
     );
@@ -403,7 +406,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
   const contextSubjectName = contextSubjectId ? subjectNames[contextSubjectId] ?? null : null;
   // 首页开始输入后只留问候和输入框
   const composing = chat.draft.length > 0;
-  const title = chat.activeConversation?.title ?? (chat.activeId ? "加载中…" : "新对话");
+  const title = chat.activeConversation?.title ?? (chat.activeId ? t("chat.loading") : t("chat.newChat"));
   const thread = chat.activeThread;
   const spaceMainId = pageSubject?.mainConversationId ?? null;
   const spaceMessages = spaceMainId ? chat.messagesFor(spaceMainId)?.messages ?? [] : [];
@@ -416,31 +419,31 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
   const failedReply = latestAssistant?.status === "failed" && modelNotReady(latestAssistant.error)
     && hiddenModelFail !== latestAssistant.id ? latestAssistant : null;
   const replyGap = !shownFailure ? failedReply : null;
-  const failureMessage = shownFailure?.error.message ?? replyGap?.error ?? "";
+  const failureMessage = shownFailure ? errorText(shownFailure.error, t, lang) : replyGap?.error ?? "";
   const offerSettings = modelNotReady(failureMessage);
   const modelBanner = modelConfigured === false ? (
     <div className={styles.modelBanner} role="status">
-      <span>还没连上 AI 模型，回复会失败</span>
-      <button type="button" onClick={() => openSettings("models")}>去设置</button>
+      <span>{t("chat.modelMissing")}</span>
+      <button type="button" onClick={() => openSettings("models")}>{t("chat.goSettings")}</button>
     </div>
   ) : null;
   const failureBar = (shownFailure || replyGap) && (
     <div className={styles.sendFailure} role="alert">
       <CircleAlert size={14} aria-hidden />
       <span className={styles.sendFailureText}>
-        发送失败：{failureMessage}
-        {shownFailure && shownFailure.error.kind !== "conflict" && "（输入还在）"}
+        {t("chat.sendFailed")}{failureMessage}
+        {shownFailure && shownFailure.error.kind !== "conflict" && t("chat.sendInputKept")}
       </span>
       {offerSettings && (
-        <button type="button" onClick={() => openSettings("models")}>去设置</button>
+        <button type="button" onClick={() => openSettings("models")}>{t("chat.goSettings")}</button>
       )}
       {shownFailure?.error.kind === "conflict" && chat.activeId ? (
-        <button onClick={() => { chat.dismissSendFailure(); void chat.loadConversation(chat.activeId!); }}>刷新对话</button>
+        <button onClick={() => { chat.dismissSendFailure(); void chat.loadConversation(chat.activeId!); }}>{t("chat.refreshConversation")}</button>
       ) : (
         <button onClick={() => {
           if (replyGap) void chat.regenerate(replyGap.conversationId);
           else void chat.sendMessage();
-        }}>重试</button>
+        }}>{t("common.retry")}</button>
       )}
       <button
         className={styles.dismiss}
@@ -448,7 +451,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
           if (replyGap) setHiddenModelFail(replyGap.id);
           chat.dismissSendFailure();
         }}
-        aria-label="关闭提示"
+        aria-label={t("chat.dismissNotice")}
       >
         <X size={13} />
       </button>
@@ -466,7 +469,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
       {narrow && (
         <button
           className={cx(styles.backdrop, sidebarOpen && styles.backdropOpen)}
-          aria-label="关闭侧栏"
+          aria-label={t("chat.closeSidebar")}
           tabIndex={sidebarOpen ? 0 : -1}
           onClick={() => setSidebarOpen(false)}
         />
@@ -584,21 +587,21 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
             </>
           ) : (
             <div className={styles.center}>
-              <p className={styles.muted}>{subjectMissing ? "这个学习空间已不存在。" : "正在读取学习空间…"}</p>
+              <p className={styles.muted}>{subjectMissing ? t("chat.spaceMissing") : t("chat.spaceLoading")}</p>
             </div>
           )
         ) : chat.activeId ? (
           <>
               <header className={styles.topbar}>
                 {!sidebarOpen && (
-                  <button className={styles.iconButton} onClick={() => setSidebarOpen(true)} aria-label="展开侧栏" title="展开侧栏">
+                  <button className={styles.iconButton} onClick={() => setSidebarOpen(true)} aria-label={t("sidebar.expand")} title={t("sidebar.expand")}>
                     <PanelLeftOpen size={16} />
                   </button>
                 )}
                 <h1 className={styles.title}>
                   {contextSubjectId && contextSubjectName && (
                     <>
-                      <button className={styles.crumb} onClick={() => openSpace(contextSubjectId)} title="打开学习空间">
+                      <button className={styles.crumb} onClick={() => openSpace(contextSubjectId)} title={t("chat.openSpace")}>
                         <Folder size={13} aria-hidden />
                         {contextSubjectName}
                       </button>
@@ -612,8 +615,8 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
                     className={cx(styles.iconButton, memoryOpen && styles.iconButtonOn)}
                     onClick={() => (memoryOpen ? setMemoryOpen(false) : openMemories())}
                     aria-expanded={memoryOpen}
-                    aria-label="学习记忆"
-                    title="学习记忆"
+                    aria-label={t("chat.memories")}
+                    title={t("chat.memories")}
                   >
                     <Brain size={16} aria-hidden />
                   </button>
@@ -622,15 +625,15 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
             {thread && (thread.messages.length > 0 || !thread.loading) ? (
               thread.error && thread.messages.length === 0 ? (
                 <div className={styles.center}>
-                  <p className={styles.loadError}>{thread.error.message}</p>
+                  <p className={styles.loadError}>{errorText(thread.error, t, lang)}</p>
                   <button className={styles.textButton} onClick={() => void chat.loadConversation(chat.activeId!)}>
                     <RotateCcw size={13} aria-hidden />
-                    重新加载
+                    {t("common.reload")}
                   </button>
                 </div>
               ) : thread.messages.length === 0 ? (
                 <div className={styles.center}>
-                  <p className={styles.muted}>这个对话还没有消息，在下面输入第一句吧。</p>
+                  <p className={styles.muted}>{t("chat.emptyConversation")}</p>
                 </div>
               ) : (
                 <MessageList
@@ -659,7 +662,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
               )
             ) : (
               <div className={styles.center}>
-                <p className={styles.muted}>正在读取对话…</p>
+                <p className={styles.muted}>{t("chat.loadingConversation")}</p>
               </div>
             )}
 
@@ -681,13 +684,13 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
                     modelKey={chat.modelKeyFor(chat.activeId)}
                     onModelKeyChange={(key) => chat.setConversationModel(chat.activeId, key)}
                   />
-                  <p className={styles.disclaimer}>回答由模型生成，可能出错，重要内容请自行核实。</p>
+                  <p className={styles.disclaimer}>{t("chat.disclaimer")}</p>
             </div>
           </>
         ) : (
           <div className={cx(styles.home, todayStyles.homeViewport)}>
             {!sidebarOpen && (
-              <button className={cx(styles.iconButton, styles.floatingToggle)} onClick={() => setSidebarOpen(true)} aria-label="展开侧栏" title="展开侧栏">
+              <button className={cx(styles.iconButton, styles.floatingToggle)} onClick={() => setSidebarOpen(true)} aria-label={t("sidebar.expand")} title={t("sidebar.expand")}>
                 <PanelLeftOpen size={16} />
               </button>
             )}
@@ -696,8 +699,8 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
                 type="button"
                 className={cx(styles.iconButton, memoryOpen && styles.iconButtonOn)}
                 onClick={() => (memoryOpen ? setMemoryOpen(false) : openMemories())}
-                aria-label="学习记忆"
-                title="学习记忆"
+                aria-label={t("chat.memories")}
+                title={t("chat.memories")}
               >
                 <Brain size={15} aria-hidden />
               </button>
@@ -710,7 +713,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
                   <span>KnowGap AI</span>
                 </div>
                 <h2 className={styles.greeting}>
-                  <span>{greeting(user.displayName)}。</span>
+                  <span>{greeting(t, user.displayName)}</span>
                 </h2>
               </div>
 
@@ -739,7 +742,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
                   if (ok && spaceId) setView({ type: "subject", id: spaceId });
                 }}
                 autoFocusKey="new"
-                placeholder={contextSubjectName ? `在「${contextSubjectName}」里提问、演练或启动任务` : "提问、创建学习空间或启动自测任务"}
+                placeholder={contextSubjectName ? t("chat.homePlaceholderInSpace", { name: contextSubjectName }) : t("chat.homePlaceholder")}
               />
 
               {/* 开始输入后收起下方内容，问候与输入框随之回到视口中央 */}
@@ -748,21 +751,21 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
               {/* LobeHub 风格：输入框正下方的细长水平快捷条 */}
               <div className={styles.lobeStrip}>
                 <div className={styles.stripLeft}>
-                  <span className={styles.stripLabel}>快捷</span>
+                  <span className={styles.stripLabel}>{t("chat.quick")}</span>
                   {STARTERS.map(({ icon: Icon, label, color, text }) => (
                     <button
                       key={label}
                       type="button"
                       className={styles.stripItem}
                       onClick={() => {
-                        chat.setDraft(text);
+                        chat.setDraft(tx(text));
                         document.getElementById(COMPOSER_ID)?.focus();
                       }}
                     >
                       <span className={styles.stripIconBadge} style={{ background: color }} aria-hidden>
                         <Icon size={10} />
                       </span>
-                      <span>{label}</span>
+                      <span>{tx(label)}</span>
                     </button>
                   ))}
                 </div>
@@ -784,21 +787,21 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
                   const space = recentSpaces[0];
                   if (space?.mainConversationId) {
                     setView({ type: "subject", id: space.id });
-                    void chat.sendTo(space.mainConversationId, "用一个具体例子讲清一个核心概念");
+                    void chat.sendTo(space.mainConversationId, tx("用一个具体例子讲清一个核心概念"));
                     return;
                   }
                   setView({ type: "chat" });
-                  chat.setDraft("用一个具体例子讲清一个核心概念");
+                  chat.setDraft(tx("用一个具体例子讲清一个核心概念"));
                   document.getElementById(COMPOSER_ID)?.focus();
                 }}
                 onQuiz={() => {
                   const space = recentSpaces[0];
                   if (space?.mainConversationId) {
                     setView({ type: "subject", id: space.id });
-                    void chat.sendTo(space.mainConversationId, "考考我");
+                    void chat.sendTo(space.mainConversationId, tx("考考我"));
                     return;
                   }
-                  chat.setDraft("考考我");
+                  chat.setDraft(tx("考考我"));
                   document.getElementById(COMPOSER_ID)?.focus();
                 }}
                 onSchedule={() => setView({ type: "agenda" })}
@@ -825,12 +828,12 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
                 onReview={() => {
                   if (!reviewTarget) return;
                   chat.setDraft(
-                    `针对我之前在「${reviewTarget.topic}」上的易错点（${reviewTarget.summary}），请出 1 道简短的随堂微测题检验我是否已经想通。`,
+                    tx("针对我之前在「{topic}」上的易错点（{summary}），请出 1 道简短的随堂微测题检验我是否已经想通。", { topic: reviewTarget.topic, summary: reviewTarget.summary }),
                   );
                   document.getElementById(COMPOSER_ID)?.focus();
                 }}
                 onPlanReview={() => {
-                  chat.setDraft("让 AI 帮我排这周的复习");
+                  chat.setDraft(tx("让 AI 帮我排这周的复习"));
                   document.getElementById(COMPOSER_ID)?.focus();
                 }}
                 onOpenConversation={showConversation}
@@ -846,7 +849,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
 
       {memoryOpen && (
         <>
-          {narrow && <button className={cx(styles.backdrop, styles.backdropOpen)} aria-label="关闭学习记忆" onClick={() => setMemoryOpen(false)} />}
+          {narrow && <button className={cx(styles.backdrop, styles.backdropOpen)} aria-label={t("chat.closeMemories")} onClick={() => setMemoryOpen(false)} />}
           <aside className={styles.drawer}>
             <MemoryDrawer
               memories={chat.memories}
@@ -870,10 +873,10 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
                 const space = recentSpaces[0];
                 if (space?.mainConversationId) {
                   setView({ type: "subject", id: space.id });
-                  void chat.sendTo(space.mainConversationId, "用一个具体例子讲清一个核心概念");
+                  void chat.sendTo(space.mainConversationId, tx("用一个具体例子讲清一个核心概念"));
                   return;
                 }
-                chat.setDraft("用一个具体例子讲清一个核心概念");
+                chat.setDraft(tx("用一个具体例子讲清一个核心概念"));
                 document.getElementById(COMPOSER_ID)?.focus();
               }}
             />
@@ -899,10 +902,10 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
               chat.setDraft(text);
               window.setTimeout(() => document.getElementById(COMPOSER_ID)?.focus(), 0);
             };
-            if (action === "explain") openMain("用一个具体例子讲清一个核心概念");
-            else if (action === "quiz" || action === "select") openMain(action === "quiz" ? "考考我" : "选中我回复里的一句话，再追问");
+            if (action === "explain") openMain(tx("用一个具体例子讲清一个核心概念"));
+            else if (action === "quiz" || action === "select") openMain(action === "quiz" ? tx("考考我") : tx("选中我回复里的一句话，再追问"));
             else if (action === "viva") openMain("/viva ");
-            else if (action === "plan") openMain("先列一个学习计划，再讲第一个概念");
+            else if (action === "plan") openMain(tx("先列一个学习计划，再讲第一个概念"));
             else if (action === "review" || action === "agenda" || action === "schedule") setView({ type: "agenda" });
             else if (action === "graph" || action === "sheet") {
               if (!space) { setView({ type: "spaces" }); return; }
@@ -913,7 +916,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
                 }));
               }, 60);
             } else if (action === "spotlight") {
-              push({ tone: "info", title: "按 Alt+Space 随时快问" });
+              push({ tone: "info", title: tx("按 Alt+Space 随时快问") });
             }
           }}
         />
@@ -948,7 +951,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
                 try {
                   await client.upload(file, subject.id);
                 } catch {
-                  push({ tone: "error", title: `${file.name} 没有传上` });
+                  push({ tone: "error", title: t("chat.uploadFailed", { name: file.name }) });
                 }
               }
               void chat.loadSubjects();
@@ -967,10 +970,11 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
 }
 
 export function ChatApp() {
+  const { t } = useI18n();
   const auth = useAuth();
   if (DATA_SOURCE === "api" && auth.status !== "ready") {
     if (auth.status === "loading") {
-      return <div className={authStyles.canvas}><p className={authStyles.loading}>正在确认登录状态</p></div>;
+      return <div className={authStyles.canvas}><p className={authStyles.loading}>{t("chat.loading")}</p></div>;
     }
     return (
       <AuthView

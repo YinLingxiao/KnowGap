@@ -5,6 +5,7 @@ const path = require('node:path');
 const ts = require('typescript');
 const React = require('react');
 const { renderToStaticMarkup } = require('react-dom/server');
+const { resolveI18n } = require('./i18n-support.cjs');
 
 function loadComponent(name) {
   const source = fs.readFileSync(path.join(__dirname, '../src/components/onboarding', name + '.tsx'), 'utf8');
@@ -13,6 +14,7 @@ function loadComponent(name) {
   } }).outputText;
   const module = { exports: {} };
   const localRequire = (id) => {
+    if (resolveI18n(id)) return resolveI18n(id);
     if (id.endsWith('.css')) return new Proxy({}, { get: (_, key) => key });
     if (id === 'next/image') return { __esModule: true, default: (props) => React.createElement('img', props) };
     if (id === '@/lib/chat/api') return { chatApi: {} };

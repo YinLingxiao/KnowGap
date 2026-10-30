@@ -1,16 +1,18 @@
+import { translate, type Language, type MessageKey } from "@/lib/i18n";
 import type { Level, SpaceProgress } from "./types";
 
 export const SPACE_COLORS = ["#3d6fdb", "#2e8a5c", "#0f766e", "#c2650a", "#a16207", "#c93535", "#be185d", "#7c5cbf"];
 
-export const LEVELS: Array<{ id: Level; label: string }> = [
-  { id: "beginner", label: "零基础" },
-  { id: "some", label: "学过一些" },
-  { id: "fluent", label: "比较熟练" },
-  { id: "exam", label: "冲刺备考" },
+export const LEVELS: Array<{ id: Level; labelKey: MessageKey }> = [
+  { id: "beginner", labelKey: "level.beginner" },
+  { id: "some", labelKey: "level.some" },
+  { id: "fluent", labelKey: "level.fluent" },
+  { id: "exam", labelKey: "level.exam" },
 ];
 
-export function levelLabel(level: Level | null): string | null {
-  return LEVELS.find((item) => item.id === level)?.label ?? null;
+export function levelLabel(level: Level | null, lang: Language): string | null {
+  const item = LEVELS.find((entry) => entry.id === level);
+  return item ? translate(lang, item.labelKey) : null;
 }
 
 /** 摘录只用于一两行预览，去掉 Markdown 记号后直接显示文字 */
@@ -23,24 +25,24 @@ export function plainText(markdown: string): string {
     .trim();
 }
 
-export function studiedLabel(iso: string | null, now = Date.now()): string {
-  if (!iso) return "还没开始";
+export function studiedLabel(iso: string | null, lang: Language, now = Date.now()): string {
+  if (!iso) return translate(lang, "space.studied.notStarted");
   const time = new Date(iso).getTime();
-  if (Number.isNaN(time)) return "还没开始";
+  if (Number.isNaN(time)) return translate(lang, "space.studied.notStarted");
   const days = Math.floor(Math.max(0, now - time) / 86_400_000);
-  if (days <= 0) return "今天学习";
-  if (days === 1) return "昨天学习";
-  return `${days} 天前学习`;
+  if (days <= 0) return translate(lang, "space.studied.today");
+  if (days === 1) return translate(lang, "space.studied.yesterday");
+  return translate(lang, "space.studied.daysAgo", { count: days });
 }
 
-export function progressLine(progress: SpaceProgress): string {
+export function progressLine(progress: SpaceProgress, lang: Language): string {
   const parts: string[] = [];
-  if (progress.toReview) parts.push(`${progress.toReview} 个待巩固`);
-  if (progress.mastered) parts.push(`${progress.mastered} 个已掌握`);
-  if (progress.improving) parts.push(`${progress.improving} 个改善中`);
-  if (progress.openThreads) parts.push(`${progress.openThreads} 个支线未解决`);
-  else if (progress.resolvedThreads) parts.push(`${progress.resolvedThreads} 个支线已解决`);
-  if (parts.length === 0) parts.push("还没有进度");
-  parts.push(studiedLabel(progress.lastStudiedAt));
+  if (progress.toReview) parts.push(translate(lang, "space.progress.toReview", { count: progress.toReview }));
+  if (progress.mastered) parts.push(translate(lang, "space.progress.mastered", { count: progress.mastered }));
+  if (progress.improving) parts.push(translate(lang, "space.progress.improving", { count: progress.improving }));
+  if (progress.openThreads) parts.push(translate(lang, "space.progress.openThreads", { count: progress.openThreads }));
+  else if (progress.resolvedThreads) parts.push(translate(lang, "space.progress.resolvedThreads", { count: progress.resolvedThreads }));
+  if (parts.length === 0) parts.push(translate(lang, "space.progress.none"));
+  parts.push(studiedLabel(progress.lastStudiedAt, lang));
   return parts.join(" · ");
 }

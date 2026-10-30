@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent, type Keyboard
 import { ArrowUp, CornerDownLeft, ExternalLink, Loader2, Plus, X } from "lucide-react";
 import { useAuth } from "@/components/auth/useAuth";
 import { Markdown } from "@/components/chat/Markdown";
+import { useI18n } from "@/components/LanguageProvider";
 import { MODE_KEY } from "@/lib/api/auth";
 import { ApiError } from "@/lib/api/errors";
 import { AUTH_TOKEN_KEY } from "@/lib/api/http-client";
@@ -47,6 +48,7 @@ function rememberActive(userId: string, conversationId: string) {
 /** 全局快捷键呼出的快问浮窗；浏览器里直接访问 /quick 也可使用 */
 export function QuickAsk() {
   const auth = useAuth();
+  const { tx } = useI18n();
   const [desktop, setDesktop] = useState<QuickBridge | null>(null);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [space, setSpace] = useState<string>(NONE);
@@ -157,7 +159,7 @@ export function QuickAsk() {
     abortRef.current?.abort();
     abortRef.current = null;
     setTool("");
-    setError(conversationId ? "已停止等待，回复会在后台继续生成。" : "已取消发送。");
+    setError(conversationId ? tx("已停止等待，回复会在后台继续生成。") : tx("已取消发送。"));
     setPhase("error");
   };
 
@@ -189,7 +191,7 @@ export function QuickAsk() {
           setAnswer((current) => current + streamEvent.text);
         } else if (streamEvent.type === "tool_start") setTool(streamEvent.name);
         else if (streamEvent.type === "tool_end") setTool("");
-        else if (streamEvent.type === "tool_approval") setTool(`${streamEvent.name}（需在主窗口批准）`);
+        else if (streamEvent.type === "tool_approval") setTool(tx("{name}（需在主窗口批准）", { name: streamEvent.name }));
         else if (streamEvent.type === "done" && streamEvent.message?.content) setAnswer(streamEvent.message.content);
         else if (streamEvent.type === "error") failed = streamEvent.detail;
       }, controller.signal);
@@ -198,14 +200,14 @@ export function QuickAsk() {
         setError(failed);
         setPhase("error");
       } else if (outcome === "interrupted") {
-        setError("连接中断，回复可能仍在后台生成，可在主窗口查看。");
+        setError(tx("连接中断，回复可能仍在后台生成，可在主窗口查看。"));
         setPhase("error");
       } else {
         setPhase("done");
       }
     } catch (caught) {
       if (controller.signal.aborted) return;
-      setError(caught instanceof ApiError ? caught.message : "发送失败，请确认后端已启动。");
+      setError(caught instanceof ApiError ? caught.message : tx("发送失败，请确认后端已启动。"));
       setPhase("error");
     } finally {
       if (abortRef.current === controller) abortRef.current = null;
@@ -232,14 +234,14 @@ export function QuickAsk() {
 
   return (
     <main className={styles.stage} onKeyDown={onKeyDown}>
-      <div ref={panelRef} className={styles.panel} role="dialog" aria-label="快问">
+      <div ref={panelRef} className={styles.panel} role="dialog" aria-label={tx("快问")}>
         {auth.status === "loading" ? (
-          <p className={styles.notice}>正在确认登录状态…</p>
+          <p className={styles.notice}>{tx("正在确认登录状态…")}</p>
         ) : !user ? (
           <div className={styles.notice}>
-            <span>{auth.error || "请先在主窗口登录，或使用本机演示身份进入。"}</span>
+            <span>{auth.error || tx("请先在主窗口登录，或使用本机演示身份进入。")}</span>
             <button type="button" className={styles.ghost} onClick={openInMain}>
-              <ExternalLink size={14} aria-hidden /> 打开主窗口
+              <ExternalLink size={14} aria-hidden /> {tx("打开主窗口")}
             </button>
           </div>
         ) : (
@@ -250,55 +252,55 @@ export function QuickAsk() {
                 className={styles.input}
                 value={question}
                 onChange={(event) => setQuestion(event.target.value)}
-                placeholder={busy ? "正在回答…" : "问点什么，回车发送"}
-                aria-label="问题"
+                placeholder={busy ? tx("正在回答…") : tx("问点什么，回车发送")}
+                aria-label={tx("问题")}
                 autoComplete="off"
                 spellCheck={false}
                 disabled={busy}
               />
-              <button type="submit" className={styles.send} disabled={busy || !question.trim()} aria-label="发送">
+              <button type="submit" className={styles.send} disabled={busy || !question.trim()} aria-label={tx("发送")}>
                 {busy ? <Loader2 size={15} className={styles.spin} aria-hidden /> : <ArrowUp size={15} aria-hidden />}
               </button>
             </form>
             <div className={styles.meta}>
               <label className={styles.space}>
-                <span>归入</span>
+                <span>{tx("归入")}</span>
                 <select value={space} onChange={(event) => pickSpace(event.target.value)} disabled={busy}>
-                  <option value={NONE}>不归入空间</option>
+                  <option value={NONE}>{tx("不归入空间")}</option>
                   {subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.name}</option>)}
                 </select>
               </label>
               <span className={styles.hint}>
-                <CornerDownLeft size={12} aria-hidden /> 发送 · Esc {desktop ? "收起" : "清空"}
-                {shortcut && <> · {shortcut.replace("CommandOrControl", "Ctrl")} 呼出</>}
+                <CornerDownLeft size={12} aria-hidden /> {tx("发送")} · Esc {desktop ? tx("收起") : tx("清空")}
+                {shortcut && <> · {tx("{shortcut} 呼出", { shortcut: shortcut.replace("CommandOrControl", "Ctrl") })}</>}
               </span>
             </div>
             {phase !== "idle" && (
               <section className={styles.result} aria-live="polite">
                 <p className={styles.asked}>{asked}</p>
-                {phase === "sending" && <p className={styles.status}>正在创建对话并发送…</p>}
+                {phase === "sending" && <p className={styles.status}>{tx("正在创建对话并发送…")}</p>}
                 {phase === "streaming" && !answer && (
-                  <p className={styles.status}>{tool ? `正在使用工具：${tool}` : "正在思考…"}</p>
+                  <p className={styles.status}>{tool ? tx("正在使用工具：{tool}", { tool }) : tx("正在思考…")}</p>
                 )}
                 {answer && <div className={styles.answer}><Markdown text={answer} /></div>}
-                {phase === "streaming" && answer && tool && <p className={styles.status}>正在使用工具：{tool}</p>}
+                {phase === "streaming" && answer && tool && <p className={styles.status}>{tx("正在使用工具：{tool}", { tool })}</p>}
                 {error && <p className={styles.error} role="alert">{error}</p>}
                 <div className={styles.actions}>
                   <span className={styles.state}>
-                    {phase === "done" ? "已保存到新对话" : phase === "error" ? (conversationId ? "对话已创建" : "未发送") : "回复中"}
+                    {phase === "done" ? tx("已保存到新对话") : phase === "error" ? (conversationId ? tx("对话已创建") : tx("未发送")) : tx("回复中")}
                   </span>
                   {busy ? (
                     <button type="button" className={styles.ghost} onClick={detach}>
-                      <X size={14} aria-hidden /> 不再等待
+                      <X size={14} aria-hidden /> {tx("不再等待")}
                     </button>
                   ) : (
                     <button type="button" className={styles.ghost} onClick={reset}>
-                      <Plus size={14} aria-hidden /> 新问题
+                      <Plus size={14} aria-hidden /> {tx("新问题")}
                     </button>
                   )}
                   {conversationId && (
                     <button type="button" className={styles.primary} onClick={openInMain}>
-                      <ExternalLink size={14} aria-hidden /> 在主窗口打开
+                      <ExternalLink size={14} aria-hidden /> {tx("在主窗口打开")}
                     </button>
                   )}
                 </div>

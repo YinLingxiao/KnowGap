@@ -116,6 +116,6 @@ test('the fixed memory drawer clears native caption buttons without shifting bro
   assert.match(globals.match(/:root \{([^}]+)\}/)[1], /--desktop-titlebar-height: 0px/);
   assert.match(globals.match(/:root\[data-desktop-platform\] \{([^}]+)\}/)[1], new RegExp(`--desktop-titlebar-height: ${TITLE_BAR_HEIGHT}px`));
   const memory = read('src/components/chat/MemoryDrawer.tsx');
-  assert.match(memory, /aria-label="刷新"/);
-  assert.match(memory, /aria-label="关闭学习记忆"/);
+  assert.match(memory, /aria-label=\{t\("memory\.refresh"\)\}/);
+  assert.match(memory, /aria-label=\{t\("memory\.close"\)\}/);
 });

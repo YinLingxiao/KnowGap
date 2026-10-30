@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { ArrowUpRight, Check, Play } from "lucide-react";
+import { useI18n } from "@/components/LanguageProvider";
 import { toApiError } from "@/lib/api/errors";
 import type { ThreadProposal } from "@/lib/chat/types";
 import styles from "./ThreadProposals.module.css";
@@ -12,6 +13,7 @@ export function ThreadProposals({ proposals, disabled, onConfirm, onOpen }: {
   onConfirm?: (proposalId: string) => Promise<string>;
   onOpen?: (threadId: string) => void;
 }) {
+  const { tx } = useI18n();
   const inFlight = useRef(new Set<string>());
   const [pending, setPending] = useState<string[]>([]);
   const [confirmed, setConfirmed] = useState<Record<string, string>>({});
@@ -33,8 +35,8 @@ export function ThreadProposals({ proposals, disabled, onConfirm, onOpen }: {
     }
   };
   return (
-    <section className={styles.proposals} aria-label="建议的学习任务">
-      <header>建议的学习任务<span>确认后开始执行</span></header>
+    <section className={styles.proposals} aria-label={tx("建议的学习任务")}>
+      <header>{tx("建议的学习任务")}<span>{tx("确认后开始执行")}</span></header>
       <ul>
         {proposals.map((p) => {
           const threadId = confirmed[p.id] ?? p.threadId;
@@ -54,7 +56,7 @@ export function ThreadProposals({ proposals, disabled, onConfirm, onOpen }: {
                 onClick={() => threadId ? onOpen?.(threadId) : void confirm(p.id)}
               >
                 {threadId ? <Check size={12} aria-hidden /> : <Play size={11} aria-hidden />}
-                {threadId ? "查看支线" : busy ? "开启中…" : errors[p.id] ? "重试" : "开启支线"}
+                {threadId ? tx("查看支线") : busy ? tx("开启中…") : errors[p.id] ? tx("重试") : tx("开启支线")}
                 {threadId && <ArrowUpRight size={12} aria-hidden />}
               </button>
             </li>

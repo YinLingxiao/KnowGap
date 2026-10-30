@@ -6,6 +6,7 @@ import {
   BetweenHorizontalEnd, BetweenHorizontalStart, Check, ChevronLeft, CircleSlash, Copy, Ellipsis, Flag,
   FolderInput, Pencil, Sofa, SquareArrowRight, Sun, Trash2,
 } from "lucide-react";
+import { useI18n } from "@/components/LanguageProvider";
 import type { AgendaTask, TaskPriority } from "@/lib/agenda/types";
 import { cx } from "@/lib/cx";
 import type { SubjectInfo } from "./AgendaList";
@@ -36,6 +37,7 @@ const PRIORITIES: { value: TaskPriority; label: string; tone: string }[] = [
 ];
 
 export function TaskMenu(props: TaskMenuProps) {
+  const { tx } = useI18n();
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ left: props.x, top: props.y });
   const [confirming, setConfirming] = useState(false);
@@ -86,7 +88,7 @@ export function TaskMenu(props: TaskMenuProps) {
       className={styles.menu}
       style={pos}
       role="menu"
-      aria-label={`「${props.task.title}」的操作`}
+      aria-label={tx("「{title}」的操作", { title: props.task.title })}
       onClick={(event) => event.stopPropagation()}
       onDoubleClick={(event) => event.stopPropagation()}
       onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); }}
@@ -95,12 +97,12 @@ export function TaskMenu(props: TaskMenuProps) {
       {moving ? (
         <>
           <button type="button" className={styles.back} onClick={() => setMoving(false)}>
-            <ChevronLeft size={15} aria-hidden />移动到……
+            <ChevronLeft size={15} aria-hidden />{tx("移动到……")}
           </button>
           <div className={styles.sep} />
           <Item
             icon={<span className={styles.dotSlot}><span className={cx(styles.dot, styles.dotNone)} /></span>}
-            label="未归入空间"
+            label={tx("未归入空间")}
             checked={!props.task.subjectId}
             onClick={() => run(() => props.onMove(null))}
           />
@@ -116,14 +118,14 @@ export function TaskMenu(props: TaskMenuProps) {
         </>
       ) : (
         <>
-          <Item icon={<BetweenHorizontalStart size={16} />} label="在上面添加任务" onClick={() => run(() => props.onInsert("above"))} />
-          <Item icon={<BetweenHorizontalEnd size={16} />} label="在下面添加任务" onClick={() => run(() => props.onInsert("below"))} />
+          <Item icon={<BetweenHorizontalStart size={16} />} label={tx("在上面添加任务")} onClick={() => run(() => props.onInsert("above"))} />
+          <Item icon={<BetweenHorizontalEnd size={16} />} label={tx("在下面添加任务")} onClick={() => run(() => props.onInsert("below"))} />
           <div className={styles.sep} />
-          <Item icon={<Pencil size={16} />} label="编辑" onClick={() => run(props.onEdit)} />
+          <Item icon={<Pencil size={16} />} label={tx("编辑")} onClick={() => run(props.onEdit)} />
           <div className={styles.sep} />
 
-          <p className={styles.label}>日期</p>
-          <div className={styles.iconRow} role="group" aria-label="日期">
+          <p className={styles.label}>{tx("日期")}</p>
+          <div className={styles.iconRow} role="group" aria-label={tx("日期")}>
             {dates.map((item) => {
               const on = (props.task.scheduledDate ?? null) === item.date;
               return (
@@ -132,8 +134,8 @@ export function TaskMenu(props: TaskMenuProps) {
                   type="button"
                   role="menuitemradio"
                   aria-checked={on}
-                  aria-label={item.label}
-                  title={item.label}
+                  aria-label={tx(item.label)}
+                  title={tx(item.label)}
                   className={cx(styles.iconBtn, item.tone, on && styles.iconOn)}
                   onClick={() => run(() => props.onSchedule(item.date))}
                 >
@@ -144,8 +146,8 @@ export function TaskMenu(props: TaskMenuProps) {
             <button
               type="button"
               role="menuitem"
-              aria-label="选择其他日期"
-              title="选择其他日期"
+              aria-label={tx("选择其他日期")}
+              title={tx("选择其他日期")}
               className={cx(styles.iconBtn, styles.muted)}
               onClick={() => run(props.onEdit)}
             >
@@ -153,8 +155,8 @@ export function TaskMenu(props: TaskMenuProps) {
             </button>
           </div>
 
-          <p className={styles.label}>优先级</p>
-          <div className={styles.iconRow} role="group" aria-label="优先级">
+          <p className={styles.label}>{tx("优先级")}</p>
+          <div className={styles.iconRow} role="group" aria-label={tx("优先级")}>
             {PRIORITIES.map((item) => {
               const on = props.task.priority === item.value;
               return (
@@ -163,8 +165,8 @@ export function TaskMenu(props: TaskMenuProps) {
                   type="button"
                   role="menuitemradio"
                   aria-checked={on}
-                  aria-label={item.label}
-                  title={item.label}
+                  aria-label={tx(item.label)}
+                  title={tx(item.label)}
                   className={cx(styles.iconBtn, item.tone, on && styles.iconOn)}
                   onClick={() => run(() => props.onPriority(item.value))}
                 >
@@ -175,12 +177,12 @@ export function TaskMenu(props: TaskMenuProps) {
           </div>
           <div className={styles.sep} />
 
-          <Item icon={<FolderInput size={16} />} label="移动到……" onClick={() => setMoving(true)} />
-          <Item icon={<Copy size={16} />} label="复制" onClick={() => run(props.onDuplicate)} />
+          <Item icon={<FolderInput size={16} />} label={tx("移动到……")} onClick={() => setMoving(true)} />
+          <Item icon={<Copy size={16} />} label={tx("复制")} onClick={() => run(props.onDuplicate)} />
           <div className={styles.sep} />
           <Item
             icon={<Trash2 size={16} />}
-            label={confirming ? "再点一次确认删除" : "删除"}
+            label={confirming ? tx("再点一次确认删除") : tx("删除")}
             danger
             onClick={() => {
               if (!confirming) { setConfirming(true); return; }

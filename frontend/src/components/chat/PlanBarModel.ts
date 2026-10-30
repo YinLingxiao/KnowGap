@@ -4,6 +4,10 @@ import type { LearningPlan, PlanChange, PlanStep, PlanStepStatus } from "@/lib/c
 export const QUIZ_PROMPT = "请就我们刚完成的这几个步骤出一道随堂测验";
 export const AGENDA_PROMPT = "请把这次学的内容按第 1/3/7 天排进日程复习";
 
+/** Optional translator so the pure helpers stay renderer-free; defaults to the Chinese source text. */
+export type PhraseTranslator = (text: string, vars?: Record<string, string | number>) => string;
+const sourceText: PhraseTranslator = (text) => text;
+
 export function isFinished(status: PlanStepStatus): boolean {
   return status === "done" || status === "skipped";
 }
@@ -42,9 +46,9 @@ export function currentStep(plan: LearningPlan): CurrentStep | null {
   return next ? { step: next, kind: "next" } : null;
 }
 
-export function currentLabel(current: CurrentStep): string {
-  if (current.kind === "awaiting") return `等你回答：${current.step.note || current.step.title}`;
-  if (current.kind === "next") return `下一步：${current.step.title}`;
+export function currentLabel(current: CurrentStep, tr: PhraseTranslator = sourceText): string {
+  if (current.kind === "awaiting") return tr("等你回答：{title}", { title: current.step.note || current.step.title });
+  if (current.kind === "next") return tr("下一步：{title}", { title: current.step.title });
   return current.step.title;
 }
 
@@ -79,43 +83,43 @@ export interface PlanMark {
 }
 
 /** 助手消息顶部的时间线标记；新增步骤（pending）不产生标记，避免首次列计划时刷屏 */
-export function describeChange(change: PlanChange): PlanMark | null {
+export function describeChange(change: PlanChange, tr: PhraseTranslator = sourceText): PlanMark | null {
   const title = change.title.trim();
   if (!title) return null;
   switch (change.to) {
-    case "done": return { kind: "done", glyph: "✓", verb: "完成", title };
-    case "in_progress": return { kind: "start", glyph: "→", verb: "开始", title };
-    case "awaiting_learner": return { kind: "await", glyph: "?", verb: "等你回答", title };
-    case "skipped": return { kind: "skip", glyph: "–", verb: "跳过", title };
-    case "pending": return change.from && change.from !== "pending" ? { kind: "restore", glyph: "↺", verb: "恢复", title } : null;
+    case "done": return { kind: "done", glyph: "✓", verb: tr("完成"), title };
+    case "in_progress": return { kind: "start", glyph: "→", verb: tr("开始"), title };
+    case "awaiting_learner": return { kind: "await", glyph: "?", verb: tr("等你回答"), title };
+    case "skipped": return { kind: "skip", glyph: "–", verb: tr("跳过"), title };
+    case "pending": return change.from && change.from !== "pending" ? { kind: "restore", glyph: "↺", verb: tr("恢复"), title } : null;
     default: return null;
   }
 }
 
 /** 同一步在一条消息里多次变化时只保留最后一次（开始 → 完成 只显示「完成」） */
-export function describeChanges(changes: PlanChange[] | undefined): PlanMark[] {
+export function describeChanges(changes: PlanChange[] | undefined, tr: PhraseTranslator = sourceText): PlanMark[] {
   const last = new Map<string, PlanChange>();
   (changes ?? []).forEach((change, index) => last.set(change.stepId || `#${index}`, change));
-  return [...last.values()].map(describeChange).filter((mark): mark is PlanMark => mark !== null);
+  return [...last.values()].map((change) => describeChange(change, tr)).filter((mark): mark is PlanMark => mark !== null);
 }
 
-export function summaryTitle(plan: LearningPlan): string {
+export function summaryTitle(plan: LearningPlan, tr: PhraseTranslator = sourceText): string {
   const { total } = progressOf(plan);
   const skipped = plan.steps.filter((step) => step.status === "skipped").length;
   return skipped > 0
-    ? `这段学习的 ${total} 个步骤都走完了（跳过 ${skipped} 步）`
-    : `这段学习的 ${total} 个步骤都完成了`;
+    ? tr("这段学习的 {total} 个步骤都走完了（跳过 {skipped} 步）", { total, skipped })
+    : tr("这段学习的 {total} 个步骤都完成了", { total });
 }
 
-export function summaryMarkdown(plan: LearningPlan, now: Date = new Date()): string {
+export function summaryMarkdown(plan: LearningPlan, now: Date = new Date(), tr: PhraseTranslator = sourceText): string {
   const pad = (value: number) => String(value).padStart(2, "0");
   const date = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
   const lines = plan.steps.map((step) => {
     if (step.status === "done") return `- [x] ${step.title}`;
-    if (step.status === "skipped") return `- [ ] ~~${step.title}~~（已跳过）`;
+    if (step.status === "skipped") return tr("- [ ] ~~{title}~~（已跳过）", { title: step.title });
     return `- [ ] ${step.title}`;
   });
-  return ["## 学习小结", "", `${date} · 共 ${plan.steps.length} 步`, "", ...lines].join("\n");
+  return [tr("## 学习小结"), "", tr("{date} · 共 {count} 步", { date, count: plan.steps.length }), "", ...lines].join("\n");
 }
 
 export function dismissKey(conversationId: string, version: number): string {

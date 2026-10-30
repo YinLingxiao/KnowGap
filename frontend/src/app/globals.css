@@ -113,6 +113,16 @@
   --desktop-titlebar-height: 0px;
 }
 
+/* 英文界面使用本地打包的 Source Serif 4；中文仍回退到 Noto Sans SC。 */
+html[data-lang="en"] {
+  --font-sans: "Source Serif 4 Variable", "Source Serif 4", Georgia, "Times New Roman", "Noto Sans SC Variable",
+    "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, serif;
+}
+
+html[data-lang="en"] body {
+  font-feature-settings: normal;
+}
+
 :root[data-text-size="small"] { --text-read: 14px; }
 :root[data-text-size="large"] { --text-read: 16.5px; }
 :root[data-chat-width="narrow"] { --chat-w: 620px; --chat-bubble-w: 580px; }

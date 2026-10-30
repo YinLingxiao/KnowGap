@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { X } from "lucide-react";
+import { useI18n } from "@/components/LanguageProvider";
 import { toApiError } from "@/lib/api/errors";
 import { conceptGraphApi, type ConceptGraphResult, type FogConcept } from "@/lib/chat/conceptGraph";
 import { insightsApi, type InsightThread, type SubjectInsights } from "@/lib/chat/insights";
 import { cx } from "@/lib/cx";
+import { localeOf, type Language } from "@/lib/i18n";
 import styles from "./ConceptGraph.module.css";
 
 const VB = 860;
@@ -48,12 +50,12 @@ function truncate(text: string, limit: number) {
   return chars.length <= limit ? text : `${chars.slice(0, limit).join("")}…`;
 }
 
-function formatTime(iso: string) {
+function formatTime(iso: string, lang: Language) {
   if (!iso) return "";
   const date = new Date(iso);
   return Number.isNaN(date.getTime())
     ? ""
-    : date.toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+    : date.toLocaleString(localeOf(lang), { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
 function nodeRadius(count: number, radius: number) {
@@ -180,6 +182,7 @@ export function ConceptGraph({
   onOpenThread: (threadId: string) => void;
   onStart?: () => void;
 }) {
+  const { tx, lang } = useI18n();
   const [insights, setInsights] = useState<SubjectInsights | null>(null);
   const [fog, setFog] = useState<ConceptGraphResult | null>(null);
   const [insightsError, setInsightsError] = useState<string | null>(null);
@@ -317,30 +320,30 @@ export function ConceptGraph({
   return (
     <div className={styles.root}>
       <div className={styles.toolbar}>
-        <span className={styles.muted}>{fogLoading ? "正在推演外环" : fog?.degraded ? "外环未生成" : "三环拓扑"}</span>
+        <span className={styles.muted}>{fogLoading ? tx("正在推演外环") : fog?.degraded ? tx("外环未生成") : tx("三环拓扑")}</span>
         <span className={styles.toolbarSpacer} />
-        <button type="button" className={styles.toolBtn} onClick={() => void reload(true)} disabled={fogLoading}>刷新</button>
-        <button type="button" className={styles.toolBtn} onClick={() => setCam(IDENTITY)}>重置视图</button>
+        <button type="button" className={styles.toolBtn} onClick={() => void reload(true)} disabled={fogLoading}>{tx("刷新")}</button>
+        <button type="button" className={styles.toolBtn} onClick={() => setCam(IDENTITY)}>{tx("重置视图")}</button>
       </div>
       {fog?.notice && <p className={styles.notice} role="status">{fog.notice}</p>}
       {insightsError && !insights ? (
         <div className={styles.message} role="alert">
           <p>{insightsError}</p>
-          <button type="button" className={styles.toolBtn} onClick={() => void reload(false)}>重试</button>
+          <button type="button" className={styles.toolBtn} onClick={() => void reload(false)}>{tx("重试")}</button>
         </div>
       ) : !insights || !graph ? (
-        <p className={styles.empty}>正在整理这个空间的知识…</p>
+        <p className={styles.empty}>{tx("正在整理这个空间的知识…")}</p>
       ) : !showGraph ? (
         <div className={styles.empty}>
-          <strong>讲过的概念会画在这里。</strong>
-          {onStart && <button type="button" className={styles.toolBtn} onClick={onStart}>去主线讲一讲</button>}
-          {fogLoading && <p className={styles.muted}>正在根据空间目标推演外环…</p>}
+          <strong>{tx("讲过的概念会画在这里。")}</strong>
+          {onStart && <button type="button" className={styles.toolBtn} onClick={onStart}>{tx("去主线讲一讲")}</button>}
+          {fogLoading && <p className={styles.muted}>{tx("正在根据空间目标推演外环…")}</p>}
         </div>
       ) : (
         <>
           {settled + pending === 0 && (
             <p className={styles.guide}>
-              掌握和误区会落到环上。先在主线里讲一讲你的理解。
+              {tx("掌握和误区会落到环上。先在主线里讲一讲你的理解。")}
             </p>
           )}
           <div className={styles.stage} ref={stageRef}>
@@ -349,7 +352,9 @@ export function ConceptGraph({
               viewBox={`0 0 ${VB} ${VB}`}
               style={{ "--ink": ink } as CSSProperties}
               role="application"
-              aria-label={`${name}的知识迷雾拓扑图，已掌握 ${settled}，待攻克 ${pending}，待解锁 ${locked}`}
+              aria-label={tx("{name}的知识迷雾拓扑图，已掌握 {settled}，待攻克 {pending}，待解锁 {locked}", {
+                name, settled, pending, locked,
+              })}
               onPointerDown={(event) => {
                 if (event.button !== 0) return;
                 const target = event.target as Element;
@@ -403,7 +408,7 @@ export function ConceptGraph({
                 )}
                 <text x={CX} y={CY - 8 * hubScale} className={styles.centerName}>{truncate(name, 6)}</text>
                 <text x={CX} y={CY + 14 * hubScale} className={styles.centerPct}>{total ? `${pct}%` : "—"}</text>
-                <text x={CX} y={CY + 32 * hubScale} className={styles.centerHint}>{total ? `已掌握 ${settled}/${total}` : "待开始"}</text>
+                <text x={CX} y={CY + 32 * hubScale} className={styles.centerHint}>{total ? tx("已掌握 {settled}/{total}", { settled, total }) : tx("待开始")}</text>
                 <title>{name}</title>
                 {graph.nodes.map((node) => {
                   const count = graph.nodes.filter((item) => item.ring === node.ring).length;
@@ -416,7 +421,7 @@ export function ConceptGraph({
                       className={styles.node}
                       tabIndex={0}
                       role="button"
-                      aria-label={`${TYPE_LABEL[node.kind]} ${node.label}`}
+                      aria-label={`${tx(TYPE_LABEL[node.kind])} ${node.label}`}
                       aria-pressed={on}
                       onClick={(event) => {
                         event.stopPropagation();
@@ -467,20 +472,20 @@ export function ConceptGraph({
             </svg>
             {tip && <div className={styles.tip} style={{ left: tip.x, top: tip.y }}>{tip.text}</div>}
             {selectedNode && insights && (
-              <aside className={styles.drawer} aria-label="节点详情" onClick={(event) => event.stopPropagation()}>
+              <aside className={styles.drawer} aria-label={tx("节点详情")} onClick={(event) => event.stopPropagation()}>
                 <header className={styles.drawerHead}>
                   <h2>{selectedNode.label}</h2>
-                  <button type="button" className={styles.close} aria-label="关闭详情" onClick={() => setSelected(null)}>
+                  <button type="button" className={styles.close} aria-label={tx("关闭详情")} onClick={() => setSelected(null)}>
                     <X size={14} />
                   </button>
                 </header>
                 <div className={styles.body}>
-                  <span className={cx(styles.badge, badgeClass(selectedNode.kind))}>{TYPE_LABEL[selectedNode.kind]}</span>
-                  <p className={styles.summary}>{selectedNode.summary || "还没有摘要。"}</p>
+                  <span className={cx(styles.badge, badgeClass(selectedNode.kind))}>{tx(TYPE_LABEL[selectedNode.kind])}</span>
+                  <p className={styles.summary}>{selectedNode.summary || tx("还没有摘要。")}</p>
                   {selectedNode.kind === "misconception" && selectedNode.quotes.length > 0 && (
                     <section>
-                      <h3 className={styles.blockTitle}>原话证据</h3>
-                      {selectedNode.quotes.map((quote) => <blockquote key={quote} className={styles.quote}>「{quote}」</blockquote>)}
+                      <h3 className={styles.blockTitle}>{tx("原话证据")}</h3>
+                      {selectedNode.quotes.map((quote) => <blockquote key={quote} className={styles.quote}>{tx("「{quote}」", { quote })}</blockquote>)}
                     </section>
                   )}
                   <ThreadList
@@ -489,11 +494,13 @@ export function ConceptGraph({
                     onOpenThread={onOpenThread}
                   />
                   <RelatedNodes node={selectedNode} nodes={graph.nodes} edges={graph.edges} onSelect={setSelected} />
-                  {formatTime(selectedNode.updatedAt) && <p className={styles.meta}>更新于 {formatTime(selectedNode.updatedAt)}</p>}
+                  {formatTime(selectedNode.updatedAt, lang) && (
+                    <p className={styles.meta}>{tx("更新于 {time}", { time: formatTime(selectedNode.updatedAt, lang) })}</p>
+                  )}
                   {(selectedNode.kind === "misconception" || selectedNode.kind === "fog") && (
                     <>
                       <button type="button" className={styles.attack} disabled={attacking} onClick={() => void attack(selectedNode)}>
-                        {attacking ? "正在开启…" : "🎯 开启支线攻克此节点 →"}
+                        {attacking ? tx("正在开启…") : tx("🎯 开启支线攻克此节点 →")}
                       </button>
                       {attackError && <p className={styles.attackError}>{attackError}</p>}
                     </>
@@ -503,10 +510,10 @@ export function ConceptGraph({
             )}
           </div>
           <div className={styles.legend}>
-            <span className={styles.legendItem}><Mark kind="mastery" />已掌握 {counts.mastery}</span>
-            <span className={styles.legendItem}><Mark kind="misconception" />误区 {counts.misconception}</span>
-            <span className={styles.legendItem}><Mark kind="open-thread" />进行中 {counts["open-thread"]}</span>
-            <span className={styles.legendItem}><Mark kind="fog" />待解锁 {counts.fog}</span>
+            <span className={styles.legendItem}><Mark kind="mastery" />{tx("已掌握 {count}", { count: counts.mastery })}</span>
+            <span className={styles.legendItem}><Mark kind="misconception" />{tx("误区 {count}", { count: counts.misconception })}</span>
+            <span className={styles.legendItem}><Mark kind="open-thread" />{tx("进行中 {count}", { count: counts["open-thread"] })}</span>
+            <span className={styles.legendItem}><Mark kind="fog" />{tx("待解锁 {count}", { count: counts.fog })}</span>
           </div>
         </>
       )}
@@ -528,18 +535,19 @@ function ThreadList({
   threads: InsightThread[];
   onOpenThread: (threadId: string) => void;
 }) {
+  const { tx } = useI18n();
   const items = threads.filter((thread) => thread.id !== node.id);
   const self = node.kind === "open-thread" || node.kind === "resolved-thread";
   if (!self && items.length === 0) return null;
   return (
     <section>
-      <h3 className={styles.blockTitle}>关联支线</h3>
+      <h3 className={styles.blockTitle}>{tx("关联支线")}</h3>
       {self && (
-        <button type="button" className={styles.threadBtn} onClick={() => onOpenThread(node.id)}>打开此支线</button>
+        <button type="button" className={styles.threadBtn} onClick={() => onOpenThread(node.id)}>{tx("打开此支线")}</button>
       )}
       {items.map((thread) => (
         <button key={thread.id} type="button" className={styles.threadBtn} onClick={() => onOpenThread(thread.id)}>
-          {thread.status === "resolved" ? "已解决" : "进行中"} · {thread.title}
+          {thread.status === "resolved" ? tx("已解决") : tx("进行中")} · {thread.title}
         </button>
       ))}
     </section>
@@ -554,6 +562,7 @@ function RelatedNodes({
   edges: Array<[string, string]>;
   onSelect: (id: string) => void;
 }) {
+  const { tx } = useI18n();
   const ids = new Set<string>();
   for (const [a, b] of edges) {
     if (a === node.id) ids.add(b);
@@ -563,11 +572,11 @@ function RelatedNodes({
   if (related.length === 0) return null;
   return (
     <section>
-      <h3 className={styles.blockTitle}>关联节点</h3>
+      <h3 className={styles.blockTitle}>{tx("关联节点")}</h3>
       <ul className={styles.related}>
         {related.map((item) => (
           <li key={item.id}>
-            <button type="button" onClick={() => onSelect(item.id)}>{TYPE_LABEL[item.kind]} · {item.label}</button>
+            <button type="button" onClick={() => onSelect(item.id)}>{tx(TYPE_LABEL[item.kind])} · {item.label}</button>
           </li>
         ))}
       </ul>

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Bell, Check, Plus, Repeat, Trash2, X } from "lucide-react";
+import { useI18n } from "@/components/LanguageProvider";
 import type { AgendaTask, TaskPatch, TaskPriority } from "@/lib/agenda/types";
 import { cx } from "@/lib/cx";
 import { formatYmd } from "@/lib/agenda/quickAdd";
@@ -42,6 +43,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 export function TaskInspector(props: TaskInspectorProps) {
+  const { tx } = useI18n();
   const { task, subtasks } = props;
   const [title, setTitle] = useState(task.title);
   const [notes, setNotes] = useState(task.notes);
@@ -117,13 +119,13 @@ export function TaskInspector(props: TaskInspectorProps) {
   };
 
   return (
-    <aside ref={panelRef} className={styles.panel} aria-label="任务详情">
+    <aside ref={panelRef} className={styles.panel} aria-label={tx("任务详情")}>
       <header className={styles.head}>
         <button
           type="button"
           role="checkbox"
           aria-checked={done}
-          aria-label={done ? "标记为未完成" : "标记为完成"}
+          aria-label={done ? tx("标记为未完成") : tx("标记为完成")}
           className={cx(styles.check, done && styles.checked, PRIORITY_CLASS[task.priority])}
           onClick={() => patch({ status: done ? "open" : "done" })}
         >
@@ -133,12 +135,12 @@ export function TaskInspector(props: TaskInspectorProps) {
           {isReview ? (
             <span className={styles.reviewTag}>
               <Repeat size={11} aria-hidden />
-              闪回{task.reviewStep ? ` · 第 ${task.reviewStep} 轮` : ""}
+              {tx("闪回")}{task.reviewStep ? tx(" · 第 {step} 轮", { step: task.reviewStep }) : ""}
             </span>
-          ) : task.source === "ai_breakdown" ? "AI 拆解的任务" : "任务"}
+          ) : task.source === "ai_breakdown" ? tx("AI 拆解的任务") : tx("任务")}
         </span>
-        {task.reminderMinutes !== null && <Bell size={13} className={styles.reminderIcon} aria-label="已设置提醒" />}
-        <button type="button" className={styles.iconBtn} onClick={props.onClose} aria-label="关闭详情" title="关闭（Esc）">
+        {task.reminderMinutes !== null && <Bell size={13} className={styles.reminderIcon} aria-label={tx("已设置提醒")} />}
+        <button type="button" className={styles.iconBtn} onClick={props.onClose} aria-label={tx("关闭详情")} title={tx("关闭（Esc）")}>
           <X size={15} />
         </button>
       </header>
@@ -146,7 +148,7 @@ export function TaskInspector(props: TaskInspectorProps) {
       <div className={styles.body}>
         {props.parentTitle && (
           <p className={styles.parent}>
-            子任务 · 属于
+            {tx("子任务 · 属于")}
             <button type="button" onClick={() => task.parentId && props.onSelectTask(task.parentId)}>{props.parentTitle}</button>
           </p>
         )}
@@ -155,7 +157,7 @@ export function TaskInspector(props: TaskInspectorProps) {
           className={styles.titleInput}
           value={title}
           maxLength={200}
-          aria-label="任务标题"
+          aria-label={tx("任务标题")}
           onChange={(event) => setTitle(event.target.value)}
           onBlur={commitTitle}
           onKeyDown={(event) => {
@@ -164,24 +166,24 @@ export function TaskInspector(props: TaskInspectorProps) {
         />
 
         {isReview && (
-          <section className={styles.memory} aria-label="对应的学习记忆">
-            <h3>对应的学习记忆</h3>
-            {task.notes ? <Markdown text={task.notes} /> : <p className={styles.muted}>这条闪回没有附带记忆说明。</p>}
+          <section className={styles.memory} aria-label={tx("对应的学习记忆")}>
+            <h3>{tx("对应的学习记忆")}</h3>
+            {task.notes ? <Markdown text={task.notes} /> : <p className={styles.muted}>{tx("这条闪回没有附带记忆说明。")}</p>}
             <p className={styles.memoryHint}>
-              完成本轮后会自动安排下一轮复习（第 2 轮 3 天后，第 3 轮 7 天后）。
+              {tx("完成本轮后会自动安排下一轮复习（第 2 轮 3 天后，第 3 轮 7 天后）。")}
             </p>
           </section>
         )}
 
-        <Field label="优先级">
-          <div className={styles.segment} role="radiogroup" aria-label="优先级">
+        <Field label={tx("优先级")}>
+          <div className={styles.segment} role="radiogroup" aria-label={tx("优先级")}>
             {PRIORITIES.map((item) => (
               <button
                 key={item.value}
                 type="button"
                 role="radio"
                 aria-checked={task.priority === item.value}
-                title={item.name}
+                title={tx(item.name)}
                 className={cx(styles.segBtn, PRIORITY_CLASS[item.value], task.priority === item.value && styles.segOn)}
                 onClick={() => patch({ priority: item.value })}
               >
@@ -192,24 +194,24 @@ export function TaskInspector(props: TaskInspectorProps) {
           </div>
         </Field>
 
-        <Field label="所属空间">
+        <Field label={tx("所属空间")}>
           <div className={styles.row}>
           <SelectMenu
-            label="所属空间"
+            label={tx("所属空间")}
             value={task.subjectId ?? ""}
-            placeholder="未归入空间"
+            placeholder={tx("未归入空间")}
             options={props.subjects.map((item) => ({ value: item.id, label: item.name, color: item.color }))}
             onChange={(next) => patch({ subjectId: next || null })}
           />
           </div>
         </Field>
 
-        <Field label="计划">
+        <Field label={tx("计划")}>
           <div className={styles.row}>
             <DatePicker
               value={task.scheduledDate}
               today={today}
-              ariaLabel="计划日期"
+              ariaLabel={tx("计划日期")}
               onChange={setScheduledDate}
             />
             <input
@@ -217,64 +219,64 @@ export function TaskInspector(props: TaskInspectorProps) {
               className={styles.control}
               value={task.scheduledStartAt?.slice(11, 16) ?? ""}
               disabled={!task.scheduledDate}
-              aria-label="开始时间"
-              title={task.scheduledDate ? "开始时间" : "先选择计划日期"}
+              aria-label={tx("开始时间")}
+              title={task.scheduledDate ? tx("开始时间") : tx("先选择计划日期")}
               onChange={(event) => setStartTime(event.target.value)}
             />
           </div>
         </Field>
 
-        <Field label="提醒">
+        <Field label={tx("提醒")}>
           <select
             className={styles.control}
             value={task.reminderMinutes ?? ""}
-            aria-label="提醒"
+            aria-label={tx("提醒")}
             aria-describedby={!task.scheduledStartAt ? `reminder-hint-${task.id}` : undefined}
             disabled={!task.scheduledStartAt}
             onChange={(event) => patch({ reminderMinutes: event.target.value === "" ? null : Number(event.target.value) })}
           >
-            <option value="">不提醒</option>
-            <option value={0}>准时</option>
-            {[5, 10, 15, 30, 60, 120].map((minutes) => <option key={minutes} value={minutes}>{minutes} 分钟前</option>)}
-            <option value={1440}>1 天前</option>
+            <option value="">{tx("不提醒")}</option>
+            <option value={0}>{tx("准时")}</option>
+            {[5, 10, 15, 30, 60, 120].map((minutes) => <option key={minutes} value={minutes}>{tx("{minutes} 分钟前", { minutes })}</option>)}
+            <option value={1440}>{tx("1 天前")}</option>
           </select>
-          {!task.scheduledStartAt && <p id={`reminder-hint-${task.id}`} className={styles.reminderHint}>先设置开始时间</p>}
+          {!task.scheduledStartAt && <p id={`reminder-hint-${task.id}`} className={styles.reminderHint}>{tx("先设置开始时间")}</p>}
         </Field>
 
-        <Field label="时长">
+        <Field label={tx("时长")}>
           <div className={styles.row}>
             <select
               className={styles.control}
               value={task.durationMinutes !== null && DURATIONS.includes(task.durationMinutes) ? String(task.durationMinutes) : task.durationMinutes === null ? "" : "custom"}
-              aria-label="时长"
+              aria-label={tx("时长")}
               onChange={(event) => patch({ durationMinutes: event.target.value && event.target.value !== "custom" ? Number(event.target.value) : null })}
             >
-              <option value="">未设置</option>
-              {DURATIONS.map((minutes) => <option key={minutes} value={minutes}>{minutes} 分钟</option>)}
+              <option value="">{tx("未设置")}</option>
+              {DURATIONS.map((minutes) => <option key={minutes} value={minutes}>{tx("{minutes} 分钟", { minutes })}</option>)}
               {task.durationMinutes !== null && !DURATIONS.includes(task.durationMinutes) && (
-                <option value="custom">{task.durationMinutes} 分钟</option>
+                <option value="custom">{tx("{minutes} 分钟", { minutes: task.durationMinutes })}</option>
               )}
             </select>
           </div>
         </Field>
 
-        <Field label="截止日">
+        <Field label={tx("截止日")}>
           <div className={styles.row}>
             <DatePicker
               value={task.deadlineDate}
               today={today}
-              ariaLabel="截止日"
+              ariaLabel={tx("截止日")}
               onChange={(next) => patch({ deadlineDate: next })}
             />
           </div>
         </Field>
 
-        <Field label="标签">
+        <Field label={tx("标签")}>
           <div className={styles.tags}>
             {task.labels.map((label) => (
               <span key={label} className={styles.tag}>
                 #{label}
-                <button type="button" aria-label={`移除标签 ${label}`} onClick={() => patch({ labels: task.labels.filter((item) => item !== label) })}>
+                <button type="button" aria-label={tx("移除标签 {label}", { label })} onClick={() => patch({ labels: task.labels.filter((item) => item !== label) })}>
                   <X size={10} />
                 </button>
               </span>
@@ -284,8 +286,8 @@ export function TaskInspector(props: TaskInspectorProps) {
                 className={styles.tagInput}
                 value={labelDraft}
                 maxLength={20}
-                placeholder="添加标签"
-                aria-label="添加标签"
+                placeholder={tx("添加标签")}
+                aria-label={tx("添加标签")}
                 onChange={(event) => setLabelDraft(event.target.value)}
                 onBlur={addLabel}
                 onKeyDown={(event) => {
@@ -300,23 +302,23 @@ export function TaskInspector(props: TaskInspectorProps) {
         </Field>
 
         {!isReview && (
-          <section className={styles.notes} aria-label="备注">
+          <section className={styles.notes} aria-label={tx("备注")}>
             <div className={styles.notesHead}>
-              <h3>备注</h3>
-              <div className={styles.segment} role="group" aria-label="备注模式">
-                <button type="button" className={cx(styles.segBtn, !preview && styles.segOn)} onClick={() => setPreview(false)}>编辑</button>
-                <button type="button" className={cx(styles.segBtn, preview && styles.segOn)} onClick={() => { commitNotes(); setPreview(true); }}>预览</button>
+              <h3>{tx("备注")}</h3>
+              <div className={styles.segment} role="group" aria-label={tx("备注模式")}>
+                <button type="button" className={cx(styles.segBtn, !preview && styles.segOn)} onClick={() => setPreview(false)}>{tx("编辑")}</button>
+                <button type="button" className={cx(styles.segBtn, preview && styles.segOn)} onClick={() => { commitNotes(); setPreview(true); }}>{tx("预览")}</button>
               </div>
             </div>
             {preview ? (
-              notes.trim() ? <div className={styles.preview}><Markdown text={notes} /></div> : <p className={styles.muted}>还没有备注。</p>
+              notes.trim() ? <div className={styles.preview}><Markdown text={notes} /></div> : <p className={styles.muted}>{tx("还没有备注。")}</p>
             ) : (
               <textarea
                 className={styles.textarea}
                 value={notes}
                 rows={5}
-                placeholder="支持 Markdown：**加粗**、- 列表、`代码`、$公式$"
-                aria-label="备注（Markdown）"
+                placeholder={tx("支持 Markdown：**加粗**、- 列表、`代码`、$公式$")}
+                aria-label={tx("备注（Markdown）")}
                 onChange={(event) => setNotes(event.target.value)}
                 onBlur={commitNotes}
               />
@@ -325,9 +327,9 @@ export function TaskInspector(props: TaskInspectorProps) {
         )}
 
         {!task.parentId && (
-          <section className={styles.subtasks} aria-label="子任务">
+          <section className={styles.subtasks} aria-label={tx("子任务")}>
             <h3>
-              子任务
+              {tx("子任务")}
               {subtasks.length > 0 && (
                 <span className={styles.count}>{subtasks.filter((item) => item.status === "done").length}/{subtasks.length}</span>
               )}
@@ -339,7 +341,7 @@ export function TaskInspector(props: TaskInspectorProps) {
                     type="button"
                     role="checkbox"
                     aria-checked={child.status === "done"}
-                    aria-label={`${child.status === "done" ? "取消完成" : "完成"}子任务「${child.title}」`}
+                    aria-label={tx("{action}子任务「{title}」", { action: child.status === "done" ? tx("取消完成") : tx("完成"), title: child.title })}
                     className={cx(styles.check, styles.pr4, child.status === "done" && styles.checked)}
                     onClick={() => void props.onUpdate(child.id, { status: child.status === "done" ? "open" : "done" })}
                   >
@@ -349,7 +351,7 @@ export function TaskInspector(props: TaskInspectorProps) {
                   <button
                     type="button"
                     className={styles.subDelete}
-                    aria-label={`删除子任务「${child.title}」`}
+                    aria-label={tx("删除子任务「{title}」", { title: child.title })}
                     onClick={() => void props.onDelete(child.id)}
                   >
                     <X size={13} />
@@ -363,8 +365,8 @@ export function TaskInspector(props: TaskInspectorProps) {
                 value={subtaskDraft}
                 maxLength={200}
                 disabled={adding}
-                placeholder="添加子任务，回车确认"
-                aria-label="添加子任务"
+                placeholder={tx("添加子任务，回车确认")}
+                aria-label={tx("添加子任务")}
                 onChange={(event) => setSubtaskDraft(event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" && !event.nativeEvent.isComposing) {
@@ -380,17 +382,17 @@ export function TaskInspector(props: TaskInspectorProps) {
 
       <footer className={styles.foot}>
         {confirmDelete ? (
-          <div className={styles.confirm} role="group" aria-label="确认删除">
+          <div className={styles.confirm} role="group" aria-label={tx("确认删除")}>
             <span>
-              {isReview ? "删除后不再生成后续轮次。" : subtasks.length ? `连同 ${subtasks.length} 个子任务一起删除？` : "确认删除这个任务？"}
+              {isReview ? tx("删除后不再生成后续轮次。") : subtasks.length ? tx("连同 {count} 个子任务一起删除？", { count: subtasks.length }) : tx("确认删除这个任务？")}
             </span>
-            <button type="button" onClick={() => setConfirmDelete(false)}>取消</button>
-            <button type="button" className={styles.danger} onClick={() => void props.onDelete(task.id)}>删除</button>
+            <button type="button" onClick={() => setConfirmDelete(false)}>{tx("取消")}</button>
+            <button type="button" className={styles.danger} onClick={() => void props.onDelete(task.id)}>{tx("删除")}</button>
           </div>
         ) : (
           <button type="button" className={styles.deleteBtn} onClick={() => setConfirmDelete(true)}>
             <Trash2 size={13} aria-hidden />
-            删除任务
+            {tx("删除任务")}
           </button>
         )}
       </footer>

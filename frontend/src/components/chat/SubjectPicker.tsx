@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, Plus } from "lucide-react";
+import { useI18n } from "@/components/LanguageProvider";
 import type { Subject } from "@/lib/chat/types";
 import styles from "./SubjectPicker.module.css";
 
@@ -14,6 +15,7 @@ interface SubjectPickerProps {
 
 /** 首页输入框下方：选择新对话归入哪个 Subject */
 export function SubjectPicker({ subjects, value, onChange, onCreate }: SubjectPickerProps) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const current = subjects.find((subject) => subject.id === value) ?? null;
@@ -43,13 +45,13 @@ export function SubjectPicker({ subjects, value, onChange, onCreate }: SubjectPi
     <div className={styles.anchor} ref={ref}>
       <button className={styles.trigger} onClick={() => setOpen((state) => !state)} aria-haspopup="listbox" aria-expanded={open}>
         {current && <span className={styles.dot} style={{ background: current.color }} />}
-        {current ? current.name : "学习空间"}
+        {current ? current.name : t("sidebar.spaces")}
         <ChevronDown size={13} aria-hidden />
       </button>
       {open && (
-        <div className={styles.menu} role="listbox" aria-label="发送到哪个学习空间">
+        <div className={styles.menu} role="listbox" aria-label={t("subjectPicker.aria")}>
           <button role="option" aria-selected={value === null} className={styles.option} onClick={() => pick(null)}>
-            <span>不放入学习空间</span>
+            <span>{t("subjectPicker.none")}</span>
             {value === null && <Check size={14} aria-hidden />}
           </button>
           {subjects.map((subject) => (
@@ -71,7 +73,7 @@ export function SubjectPicker({ subjects, value, onChange, onCreate }: SubjectPi
           <button className={styles.option} onClick={() => { setOpen(false); onCreate(); }}>
             <span className={styles.create}>
               <Plus size={13} aria-hidden />
-              新建学习空间
+              {t("sidebar.newSpace")}
             </span>
           </button>
         </div>

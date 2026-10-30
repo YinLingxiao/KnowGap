@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { GraduationCap, Plus, X } from "lucide-react";
+import { useI18n } from "@/components/LanguageProvider";
 import { DOCUMENT_EXTENSIONS } from "@/lib/chat/attachments";
 import { SPACE_COLORS, LEVELS } from "@/lib/chat/space";
 import type { Level, SpaceInput, Subject } from "@/lib/chat/types";
@@ -15,6 +16,7 @@ interface CreateSpaceDialogProps {
 }
 
 export function CreateSpaceDialog({ subject, onClose, onCreate, onUpdate }: CreateSpaceDialogProps) {
+  const { t } = useI18n();
   const editing = Boolean(subject);
   const [name, setName] = useState(subject?.name ?? "");
   const [goal, setGoal] = useState(subject?.goal ?? "");
@@ -70,15 +72,15 @@ export function CreateSpaceDialog({ subject, onClose, onCreate, onUpdate }: Crea
         onMouseDown={(event) => event.stopPropagation()}
       >
         <header className={styles.head}>
-          <h2 id="space-dialog-title">{editing ? "编辑学习空间" : "新建学习空间"}</h2>
-          <button className={styles.close} onClick={onClose} aria-label="关闭">
+          <h2 id="space-dialog-title">{editing ? t("createSpace.editTitle") : t("createSpace.newTitle")}</h2>
+          <button className={styles.close} onClick={onClose} aria-label={t("common.close")}>
             <X size={16} />
           </button>
         </header>
 
         <div className={styles.field}>
           <label className={styles.label} htmlFor="space-name-input">
-            名称
+            {t("createSpace.nameLabel")}
           </label>
           <div className={styles.nameRow}>
             <div className={styles.colorAnchor}>
@@ -87,8 +89,8 @@ export function CreateSpaceDialog({ subject, onClose, onCreate, onUpdate }: Crea
                 className={styles.iconSwatch}
                 style={{ color }}
                 onClick={() => setColorOpen((v) => !v)}
-                aria-label="更换图标颜色"
-                title="更换颜色"
+                aria-label={t("createSpace.colorAria")}
+                title={t("createSpace.changeColor")}
               >
                 <GraduationCap size={15} />
               </button>
@@ -115,7 +117,7 @@ export function CreateSpaceDialog({ subject, onClose, onCreate, onUpdate }: Crea
               ref={nameRef}
               value={name}
               maxLength={40}
-              placeholder="例如：西班牙语学习、微积分、宏观经济学…"
+              placeholder={t("createSpace.namePlaceholder")}
               onChange={(event) => setName(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === "Enter" && !event.nativeEvent.isComposing && name.trim()) {
@@ -129,13 +131,13 @@ export function CreateSpaceDialog({ subject, onClose, onCreate, onUpdate }: Crea
 
         <label className={styles.field}>
           <span className={styles.label}>
-            目标 <small className={styles.optional}>(可选)</small>
+            {t("createSpace.goalLabel")} <small className={styles.optional}>{t("common.optional")}</small>
           </span>
           <textarea
             value={goal}
             maxLength={400}
             rows={3}
-            placeholder="描述你想在这个空间达成的学习目标，或希望重点攻克的内容…"
+            placeholder={t("createSpace.goalPlaceholder")}
             onChange={(event) => setGoal(event.target.value)}
           />
         </label>
@@ -144,14 +146,14 @@ export function CreateSpaceDialog({ subject, onClose, onCreate, onUpdate }: Crea
           <div className={styles.contextBox}>
             <div className={styles.contextHead}>
               <span className={styles.label}>
-                资料 <small className={styles.optional}>(可选)</small>
+                {t("createSpace.materials")} <small className={styles.optional}>{t("common.optional")}</small>
               </span>
               <button
                 type="button"
                 className={styles.addFileBtn}
                 onClick={() => fileRef.current?.click()}
-                aria-label="添加资料文件"
-                title="添加资料文件"
+                aria-label={t("createSpace.addFile")}
+                title={t("createSpace.addFile")}
               >
                 <Plus size={15} />
               </button>
@@ -163,7 +165,7 @@ export function CreateSpaceDialog({ subject, onClose, onCreate, onUpdate }: Crea
               onDragLeave={() => setOver(false)}
               onDrop={(event) => { event.preventDefault(); setOver(false); addFiles(event.dataTransfer.files); }}
             >
-              <span>拖入 PDF、Word、PPT、Excel 或文本文件，或点击添加</span>
+              <span>{t("createSpace.dropFiles")}</span>
               <input ref={fileRef} type="file" accept={DOCUMENT_EXTENSIONS.join(",")} multiple hidden onChange={(event) => addFiles(event.target.files)} />
             </div>
             {files.length > 0 && (
@@ -174,7 +176,7 @@ export function CreateSpaceDialog({ subject, onClose, onCreate, onUpdate }: Crea
           </div>
         ) : (
           <div className={styles.editExtra}>
-            <div className={styles.levels} role="radiogroup" aria-label="当前基础">
+            <div className={styles.levels} role="radiogroup" aria-label={t("createSpace.levelLabel")}>
               {LEVELS.map((item) => (
                 <button
                   key={item.id}
@@ -184,7 +186,7 @@ export function CreateSpaceDialog({ subject, onClose, onCreate, onUpdate }: Crea
                   className={level === item.id ? styles.levelOn : styles.level}
                   onClick={() => setLevel(level === item.id ? null : item.id)}
                 >
-                  {item.label}
+                  {t(item.labelKey)}
                 </button>
               ))}
             </div>
@@ -192,7 +194,7 @@ export function CreateSpaceDialog({ subject, onClose, onCreate, onUpdate }: Crea
               type="date"
               className={styles.dateInput}
               value={deadline}
-              aria-label="截止日期"
+              aria-label={t("createSpace.deadline")}
               onChange={(event) => setDeadline(event.target.value)}
             />
           </div>
@@ -200,7 +202,7 @@ export function CreateSpaceDialog({ subject, onClose, onCreate, onUpdate }: Crea
 
         <footer className={styles.actions}>
           <button type="button" className={styles.cancelBtn} onClick={onClose} disabled={working}>
-            取消
+            {t("common.cancel")}
           </button>
           <button
             type="button"
@@ -208,7 +210,7 @@ export function CreateSpaceDialog({ subject, onClose, onCreate, onUpdate }: Crea
             onClick={() => void submit()}
             disabled={!name.trim() || working}
           >
-            {working ? "处理中…" : editing ? "保存" : "创建空间"}
+            {working ? t("common.processing") : editing ? t("common.save") : t("common.create")}
           </button>
         </footer>
       </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useI18n } from "@/components/LanguageProvider";
 import { ApiError, toApiError } from "@/lib/api/errors";
 import { chatApi } from "@/lib/chat/api";
 import { parseFileMarkers } from "@/lib/chat/attachments";
@@ -10,6 +11,7 @@ import type {
 } from "@/lib/chat/types";
 import { MODELS_CHANGED_EVENT } from "@/lib/api/model-library";
 import { API_BASE_URL } from "@/lib/config";
+import { errorText } from "@/lib/i18n/errors";
 import type { Problem } from "@/lib/types";
 
 export interface Notify {
@@ -69,6 +71,7 @@ function sortSummaries(items: ConversationSummary[]): ConversationSummary[] {
 }
 
 export function useChat(notify: Notify, userId: string) {
+  const { lang, t } = useI18n();
   const activeKey = `${userId}:${ACTIVE_KEY_BASE}`;
   const draftsKey = `${userId}:${DRAFTS_KEY_BASE}`;
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
@@ -171,10 +174,10 @@ export function useChat(notify: Notify, userId: string) {
       setConversations((items) => items.map((item) => (item.id === id ? { ...item, modelKey: saved.modelKey } : item)));
       return true;
     } catch (error) {
-      notify({ tone: "error", title: "未能切换模型", description: toApiError(error).message });
+      notify({ tone: "error", title: t("toast.modelSwitchFailed"), description: errorText(toApiError(error), t, lang) });
       return false;
     }
-  }, [notify]);
+  }, [lang, notify, t]);
 
   const applyPendingModel = useCallback(async (id: string) => {
     const key = pendingModelRef.current;
@@ -250,12 +253,12 @@ export function useChat(notify: Notify, userId: string) {
           storage(() => localStorage.removeItem(activeKey), undefined);
           return null;
         });
-        notify({ tone: "info", title: "这个对话已不存在", description: "可能已在其他页面删除。" });
+        notify({ tone: "info", title: t("toast.conversationMissing"), description: t("toast.conversationMissingDesc") });
         return;
       }
       setThreads((all) => ({ ...all, [id]: { messages: all[id]?.messages ?? [], loading: false, error: apiError } }));
     }
-  }, [notify, putConversation, activeKey]);
+  }, [activeKey, notify, putConversation, t]);
 
   const openConversation = useCallback((id: string) => {
     setSendFailure(null);
@@ -368,7 +371,7 @@ export function useChat(notify: Notify, userId: string) {
           break;
         case "error":
           if (event.message) patchMessages(id, (messages) => upsert(messages, event.message));
-          else notify({ tone: "error", title: "生成失败", description: event.detail });
+          else notify({ tone: "error", title: t("toast.generateFailed"), description: event.detail });
           endStream(id, controller);
           break;
         case "analysis":
@@ -408,7 +411,7 @@ export function useChat(notify: Notify, userId: string) {
       endStream(id, controller);
       void refreshList();
     }
-  }, [endStream, loadConversation, loadMemories, loadSubjects, notify, patchMessages, refreshList, setPhase, upsertSummary]);
+  }, [endStream, loadConversation, loadMemories, loadSubjects, notify, patchMessages, refreshList, setPhase, t, upsertSummary]);
 
   const sendTo = useCallback(async (id: string, text: string) => {
     const trimmed = text.trim();
@@ -513,16 +516,16 @@ export function useChat(notify: Notify, userId: string) {
       await runStream(id, (onEvent, signal) => chatApi.regenerate(id, onEvent, signal));
     } catch (error) {
       const apiError = toApiError(error);
-      notify({ tone: "error", title: "无法重新生成", description: apiError.message });
+      notify({ tone: "error", title: t("toast.regenerateFailed"), description: errorText(apiError, t, lang) });
       if (apiError.kind === "conflict") void loadConversation(id);
     }
-  }, [loadConversation, notify, runStream]);
+  }, [lang, loadConversation, notify, runStream, t]);
 
   const stop = useCallback(async (id: string) => {
     const handle = streamsRef.current[id];
     if (!handle) {
       try { await chatApi.stop(id); }
-      catch (error) { notify({ tone: "error", title: "未能停止", description: toApiError(error).message }); }
+      catch (error) { notify({ tone: "error", title: t("toast.stopFailed"), description: errorText(toApiError(error), t, lang) }); }
       finally { void loadConversation(id); }
       return;
     }
@@ -537,11 +540,11 @@ export function useChat(notify: Notify, userId: string) {
       handle.controller.abort();
       void loadConversation(id);
     }
-  }, [loadConversation, notify]);
+  }, [lang, loadConversation, notify, t]);
 
   const startExerciseOn = useCallback(async (id: string | null, problemId: string) => {
     if (id && streamsRef.current[id] && streamsRef.current[id].phase !== "analyzing") {
-      notify({ tone: "info", title: "请等这条回复完成", description: "或者先停止生成，再开始练习。" });
+      notify({ tone: "info", title: t("toast.waitForReply"), description: t("toast.waitForReplyDesc") });
       return false;
     }
     try {
@@ -559,10 +562,10 @@ export function useChat(notify: Notify, userId: string) {
       setFollows((all) => ({ ...all, [conversation.id]: (all[conversation.id] ?? 0) + 1 }));
       return true;
     } catch (error) {
-      notify({ tone: "error", title: "无法开始练习", description: toApiError(error).message });
+      notify({ tone: "error", title: t("toast.exerciseFailed"), description: errorText(toApiError(error), t, lang) });
       return false;
     }
-  }, [applyPendingModel, draftSubjectId, notify, putConversation, setActiveId, subjects]);
+  }, [applyPendingModel, draftSubjectId, lang, notify, putConversation, setActiveId, subjects, t]);
 
   const startExercise = useCallback(
     (problemId: string) => startExerciseOn(activeId, problemId), [activeId, startExerciseOn],
@@ -576,10 +579,10 @@ export function useChat(notify: Notify, userId: string) {
       if (patch.subjectId !== undefined) void loadSubjects();
       return true;
     } catch (error) {
-      notify({ tone: "error", title: patch.title !== undefined ? "重命名失败" : "移动失败", description: toApiError(error).message });
+      notify({ tone: "error", title: patch.title !== undefined ? t("toast.renameFailed") : t("toast.moveFailed"), description: errorText(toApiError(error), t, lang) });
       return false;
     }
-  }, [loadSubjects, notify, upsertSummary]);
+  }, [lang, loadSubjects, notify, t, upsertSummary]);
 
   const renameConversation = useCallback(
     (id: string, title: string) => updateConversation(id, { title }), [updateConversation],
@@ -594,10 +597,10 @@ export function useChat(notify: Notify, userId: string) {
       setSubjects((items) => [...items, subject]);
       return subject;
     } catch (error) {
-      notify({ tone: "error", title: "无法创建学习空间", description: toApiError(error).message });
+      notify({ tone: "error", title: t("toast.createSpaceFailed"), description: errorText(toApiError(error), t, lang) });
       return null;
     }
-  }, [notify]);
+  }, [lang, notify, t]);
 
   const updateSubject = useCallback(async (id: string, patch: SpaceInput) => {
     try {
@@ -605,10 +608,10 @@ export function useChat(notify: Notify, userId: string) {
       setSubjects((items) => items.map((item) => (item.id === id ? subject : item)));
       return true;
     } catch (error) {
-      notify({ tone: "error", title: "保存失败", description: toApiError(error).message });
+      notify({ tone: "error", title: t("toast.saveFailed"), description: errorText(toApiError(error), t, lang) });
       return false;
     }
-  }, [notify]);
+  }, [lang, notify, t]);
 
   const deleteSubject = useCallback(async (id: string) => {
     try {
@@ -619,10 +622,10 @@ export function useChat(notify: Notify, userId: string) {
       setDraftSubjectId((current) => (current === id ? null : current));
       return true;
     } catch (error) {
-      notify({ tone: "error", title: "删除失败", description: toApiError(error).message });
+      notify({ tone: "error", title: t("toast.deleteFailed"), description: errorText(toApiError(error), t, lang) });
       return false;
     }
-  }, [notify]);
+  }, [lang, notify, t]);
 
   const deleteConversation = useCallback(async (id: string) => {
     try {
@@ -638,10 +641,10 @@ export function useChat(notify: Notify, userId: string) {
       void loadMemories();
       return true;
     } catch (error) {
-      notify({ tone: "error", title: "删除失败", description: toApiError(error).message });
+      notify({ tone: "error", title: t("toast.deleteFailed"), description: errorText(toApiError(error), t, lang) });
       return false;
     }
-  }, [activeId, loadMemories, newChat, notify]);
+  }, [activeId, lang, loadMemories, newChat, notify, t]);
 
   const updateMemory = useCallback(async (
     id: string, patch: { summary?: string; status?: LearnerMemoryStatus; subjectId?: string | null },
@@ -650,13 +653,13 @@ export function useChat(notify: Notify, userId: string) {
       const memory = await chatApi.updateMemory(id, patch);
       setMemories((items) => items.map((item) => (item.id === id ? memory : item)));
       if (patch.subjectId !== undefined) void loadSubjects();
-      notify({ tone: "success", title: "已更新这条记忆" });
+      notify({ tone: "success", title: t("toast.memoryUpdated") });
       return true;
     } catch (error) {
-      notify({ tone: "error", title: "更新失败", description: toApiError(error).message });
+      notify({ tone: "error", title: t("toast.memoryUpdateFailed"), description: errorText(toApiError(error), t, lang) });
       return false;
     }
-  }, [loadSubjects, notify]);
+  }, [lang, loadSubjects, notify, t]);
 
   const decideTool = useCallback(async (approvalId: string, allow: boolean) => {
     setThreads((all) => {
@@ -674,9 +677,9 @@ export function useChat(notify: Notify, userId: string) {
     try {
       await chatApi.decideTool(approvalId, allow);
     } catch (error) {
-      notify({ tone: "error", title: "审批失败", description: toApiError(error).message });
+      notify({ tone: "error", title: t("toast.approvalFailed"), description: errorText(toApiError(error), t, lang) });
     }
-  }, [notify]);
+  }, [lang, notify, t]);
 
   const deleteMemory = useCallback(async (id: string) => {
     try {
@@ -689,10 +692,10 @@ export function useChat(notify: Notify, userId: string) {
         setMemories((items) => items.filter((item) => item.id !== id));
         return true;
       }
-      notify({ tone: "error", title: "删除失败", description: apiError.message });
+      notify({ tone: "error", title: t("toast.deleteFailed"), description: errorText(apiError, t, lang) });
       return false;
     }
-  }, [notify]);
+  }, [lang, notify, t]);
 
   // 打开的会话里有其他页面正在生成（或刷新前中断）的回复：短轮询直到它结束
   const activeThread = activeId ? threads[activeId] : undefined;

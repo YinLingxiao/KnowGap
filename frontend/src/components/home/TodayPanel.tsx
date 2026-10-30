@@ -8,6 +8,7 @@ import {
   type AgendaFeed, type AgendaTask,
 } from "@/lib/agenda/types";
 import type { ConversationSummary, LearnerMemory, Subject } from "@/lib/chat/types";
+import { useI18n } from "@/components/LanguageProvider";
 import styles from "./TodayPanel.module.css";
 
 interface TodayPanelProps {
@@ -35,6 +36,7 @@ function dueDay(task: AgendaTask) {
 }
 
 export function TodayPanel(props: TodayPanelProps) {
+  const { tx } = useI18n();
   const [feed, setFeed] = useState<AgendaFeed | null>(null);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
@@ -90,7 +92,7 @@ export function TodayPanel(props: TodayPanelProps) {
       if (conversation.kind !== "chat" && !(conversation.kind === "thread" && conversation.threadStatus === "open")) continue;
       items.set(conversation.id, {
         id: conversation.id, title: conversation.title, updatedAt: conversation.updatedAt,
-        context: conversation.kind === "thread" ? "进行中支线" : "最近对话",
+        context: conversation.kind === "thread" ? tx("进行中支线") : tx("最近对话"),
       });
     }
     if (!failed) for (const thread of feed?.threads ?? []) {
@@ -99,7 +101,7 @@ export function TodayPanel(props: TodayPanelProps) {
       });
     }
     return [...items.values()].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 2);
-  }, [props.conversations, feed, failed]);
+  }, [props.conversations, feed, failed, tx]);
 
   const complete = async (task: AgendaTask) => {
     if (pendingIds.current.has(task.id)) return;
@@ -125,19 +127,19 @@ export function TodayPanel(props: TodayPanelProps) {
   return (
     <section className={styles.panel} aria-labelledby="today-title">
       <header className={styles.header}>
-        <h2 id="today-title">今天</h2>
+        <h2 id="today-title">{tx("今天")}</h2>
         <span className={styles.date}>{today.slice(5).replace("-", " / ")}</span>
-        <span className={styles.flow}>记住薄弱点，留给今天巩固</span>
+        <span className={styles.flow}>{tx("记住薄弱点，留给今天巩固")}</span>
       </header>
 
       {!failed && (
         <>
           <section className={styles.section} aria-labelledby="today-tasks-title" aria-busy={loading}>
             <div className={styles.sectionHead}>
-              <h3 id="today-tasks-title">今日待办 {!loading && tasks.length > 0 && <span className={styles.count}>{tasks.length}</span>}</h3>
-              <button type="button" className={styles.link} onClick={openAgenda}>查看全部 <ChevronRight size={13} aria-hidden /></button>
+              <h3 id="today-tasks-title">{tx("今日待办")} {!loading && tasks.length > 0 && <span className={styles.count}>{tasks.length}</span>}</h3>
+              <button type="button" className={styles.link} onClick={openAgenda}>{tx("查看全部")} <ChevronRight size={13} aria-hidden /></button>
             </div>
-            {loading ? <div className={styles.loading} role="status">正在整理今天的安排…</div> : tasks.length > 0 ? (
+            {loading ? <div className={styles.loading} role="status">{tx("正在整理今天的安排…")}</div> : tasks.length > 0 ? (
               <ul className={styles.tasks}>
                 {tasks.slice(0, 5).map((task) => (
                   <li key={task.id} className={styles.task}>
@@ -146,47 +148,47 @@ export function TodayPanel(props: TodayPanelProps) {
                       className={styles.checkbox}
                       checked={pending.has(task.id)}
                       disabled={pending.has(task.id)}
-                      aria-label={`完成：${task.title}`}
+                      aria-label={tx("完成：{title}", { title: task.title })}
                       onChange={() => void complete(task)}
                     />
                     <div className={styles.taskBody}>
                       <span className={styles.taskTitle}>{task.title}</span>
                       <span className={styles.taskMeta}>
-                        {task.source === "review" && <span className={styles.reviewTag}>闪回复习</span>}
-                        {dueDay(task)! < today ? <span className={styles.overdue}>逾期 · {dueDay(task)?.slice(5)}</span>
-                          : <span>{task.scheduledStartAt?.slice(11, 16) || "今天"}</span>}
-                        {task.durationMinutes != null && <span>{task.durationMinutes} 分钟</span>}
+                        {task.source === "review" && <span className={styles.reviewTag}>{tx("闪回复习")}</span>}
+                        {dueDay(task)! < today ? <span className={styles.overdue}>{tx("逾期 · {date}", { date: dueDay(task)?.slice(5) ?? "" })}</span>
+                          : <span>{task.scheduledStartAt?.slice(11, 16) || tx("今天")}</span>}
+                        {task.durationMinutes != null && <span>{tx("{minutes} 分钟", { minutes: task.durationMinutes })}</span>}
                       </span>
                     </div>
                   </li>
                 ))}
               </ul>
-            ) : props.reviewTarget ? <p className={styles.hint}>今天没有待办，先巩固一个易错点。</p> : null}
-            {completionError && <p role="alert" className={styles.error}>{completionError}</p>}
+            ) : props.reviewTarget ? <p className={styles.hint}>{tx("今天没有待办，先巩固一个易错点。")}</p> : null}
+            {completionError && <p role="alert" className={styles.error}>{tx(completionError)}</p>}
           </section>
 
           {props.reviewTarget && props.showReview && (
-            <section className={styles.review} aria-label="到期复习">
+            <section className={styles.review} aria-label={tx("到期复习")}>
               <RotateCcw size={15} aria-hidden />
               <div className={styles.reviewBody}>
-                <span className={styles.reviewLabel}>到期复习 · 待巩固闪回</span>
-                <p title={props.reviewTarget.summary}><strong>{props.reviewTarget.topic}</strong>：{props.reviewTarget.summary}</p>
+                <span className={styles.reviewLabel}>{tx("到期复习 · 待巩固闪回")}</span>
+                <p title={props.reviewTarget.summary}><strong>{tx("{topic}：", { topic: props.reviewTarget.topic })}</strong>{props.reviewTarget.summary}</p>
               </div>
-              <button type="button" className={styles.reviewAction} onClick={props.onReview}>1 分钟靶向自测 <ArrowRight size={13} aria-hidden /></button>
+              <button type="button" className={styles.reviewAction} onClick={props.onReview}>{tx("1 分钟靶向自测")} <ArrowRight size={13} aria-hidden /></button>
             </section>
           )}
 
           {!loading && tasks.length === 0 && !props.reviewTarget && (
             <div className={styles.empty}>
-              <p>今天还没有待办或到期复习，把薄弱点安排进这周吧。</p>
-              <button type="button" className={styles.plan} onClick={props.onPlanReview}>让 AI 帮我排这周的复习 <ArrowRight size={14} aria-hidden /></button>
+              <p>{tx("今天还没有待办或到期复习，把薄弱点安排进这周吧。")}</p>
+              <button type="button" className={styles.plan} onClick={props.onPlanReview}>{tx("让 AI 帮我排这周的复习")} <ArrowRight size={14} aria-hidden /></button>
             </div>
           )}
         </>
       )}
 
       <section className={styles.section} aria-labelledby="today-continue-title">
-        <div className={styles.sectionHead}><h3 id="today-continue-title">继续学习</h3></div>
+        <div className={styles.sectionHead}><h3 id="today-continue-title">{tx("继续学习")}</h3></div>
         {continuing.length > 0 ? (
           <ul className={styles.continuing}>
             {continuing.map((item) => (
@@ -200,14 +202,14 @@ export function TodayPanel(props: TodayPanelProps) {
               </li>
             ))}
           </ul>
-        ) : <button type="button" className={styles.link} onClick={props.onOpenSpaces}>从学习空间开始 <ChevronRight size={13} aria-hidden /></button>}
+        ) : <button type="button" className={styles.link} onClick={props.onOpenSpaces}>{tx("从学习空间开始")} <ChevronRight size={13} aria-hidden /></button>}
       </section>
 
-      <footer className={styles.resume} aria-label="继续上次">
-        <span>继续上次</span>
-        {props.recentTopics[0] && <button type="button" onClick={() => props.onOpenConversation(props.recentTopics[0].id)} title={props.recentTopics[0].title}>最近话题 <ChevronRight size={12} aria-hidden /></button>}
+      <footer className={styles.resume} aria-label={tx("继续上次")}>
+        <span>{tx("继续上次")}</span>
+        {props.recentTopics[0] && <button type="button" onClick={() => props.onOpenConversation(props.recentTopics[0].id)} title={props.recentTopics[0].title}>{tx("最近话题")} <ChevronRight size={12} aria-hidden /></button>}
         {props.recentSpaces[0] && <button type="button" onClick={() => props.onOpenSpace(props.recentSpaces[0].id)} title={props.recentSpaces[0].name}>{props.recentSpaces[0].name} <ChevronRight size={12} aria-hidden /></button>}
-        <button type="button" onClick={props.onOpenSpaces}>全部学习空间 <ChevronRight size={12} aria-hidden /></button>
+        <button type="button" onClick={props.onOpenSpaces}>{tx("全部学习空间")} <ChevronRight size={12} aria-hidden /></button>
       </footer>
     </section>
   );

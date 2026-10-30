@@ -1,4 +1,9 @@
 import type { AgendaTask } from "./types";
+import type { TranslatePhrase } from "@/lib/i18n";
+
+/** 没有传入翻译函数时按原文插值，保持既有调用方的行为不变。 */
+const raw: TranslatePhrase = (text, vars) =>
+  vars ? text.replace(/\{(\w+)\}/g, (match, name: string) => (name in vars ? String(vars[name]) : match)) : text;
 
 export const REMINDER_HORIZON_MS = 24 * 60 * 60 * 1000;
 export const REMINDER_CATCHUP_MS = 10 * 60 * 1000;
@@ -22,8 +27,15 @@ export function reminderDelay(task: ReminderTask, now: number, delivered: Readon
   return delay < -REMINDER_CATCHUP_MS || delay > REMINDER_HORIZON_MS ? null : Math.max(0, delay);
 }
 
-export function reminderBody(task: Pick<AgendaTask, "scheduledStartAt" | "durationMinutes">, subjectName?: string): string {
-  return [task.scheduledStartAt?.slice(11, 16) + " 开始",
-    task.durationMinutes == null ? null : `${task.durationMinutes} 分钟`, subjectName || "未归入空间"]
+export function reminderBody(
+  task: Pick<AgendaTask, "scheduledStartAt" | "durationMinutes">,
+  subjectName?: string,
+  tx: TranslatePhrase = raw,
+): string {
+  return [
+    tx("{time} 开始", { time: task.scheduledStartAt?.slice(11, 16) ?? "" }),
+    task.durationMinutes == null ? null : tx("{minutes} 分钟", { minutes: task.durationMinutes }),
+    subjectName || tx("未归入空间"),
+  ]
     .filter(Boolean).join(" · ");
 }

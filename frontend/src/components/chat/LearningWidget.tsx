@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { cx } from "@/lib/cx";
 import { parseWidgetJson } from "@/lib/chat/widgetJson";
+import { useI18n } from "@/components/LanguageProvider";
 import styles from "./LearningWidget.module.css";
 import { MathText } from "./math";
 import { CircuitNetlistWidget } from "./widgets/CircuitNetlistWidget";
@@ -15,9 +16,14 @@ import { ImageAnnotatorWidget } from "./widgets/ImageAnnotatorWidget";
 import { ProblemSourceBadge, type ProblemSource } from "./widgets/ProblemSourceBadge";
 import { VivaRadarWidget } from "./widgets/VivaRadarWidget";
 
+function CodeEditorLoading() {
+  const { tx } = useI18n();
+  return <div className={styles.skeletonCard} role="status">{tx("正在加载代码编辑器…")}</div>;
+}
+
 const CodePlaygroundWidget = dynamic(
   () => import("./widgets/CodePlaygroundWidget").then((m) => m.CodePlaygroundWidget),
-  { ssr: false, loading: () => <div className={styles.skeletonCard} role="status">正在加载代码编辑器…</div> },
+  { ssr: false, loading: () => <CodeEditorLoading /> },
 );
 
 export const WIDGET_ASK_EVENT = "knowgap:widget-ask";
@@ -55,13 +61,14 @@ interface LabParam {
 }
 
 export function LearningWidget({ rawCode }: { rawCode: string }) {
+  const { tx } = useI18n();
   const parsed = useMemo(() => parseWidgetJson(rawCode), [rawCode]);
 
   if (!parsed) {
     return (
       <div className={styles.skeletonCard} role="status">
         <Sparkles size={14} className={styles.skeletonIcon} aria-hidden />
-        <span>正在流式构建可交互学习微件…</span>
+        <span>{tx("正在流式构建可交互学习微件…")}</span>
       </div>
     );
   }
@@ -96,7 +103,8 @@ export function LearningWidget({ rawCode }: { rawCode: string }) {
 }
 
 function StepSimulatorWidget({ data }: { data: Record<string, unknown> }) {
-  const title = String(data.title || "过程步进推演");
+  const { tx } = useI18n();
+  const title = String(data.title || tx("过程步进推演"));
   const steps = Array.isArray(data.steps) ? (data.steps as SimulatorStep[]) : [];
   const [index, setIndex] = useState(0);
 
@@ -111,12 +119,12 @@ function StepSimulatorWidget({ data }: { data: Record<string, unknown> }) {
         <div className={styles.widgetTitleWrap}>
           <span className={styles.widgetBadge}>
             <Layers size={12} aria-hidden />
-            交互推演
+            {tx("交互推演")}
           </span>
           <strong className={styles.widgetTitle}><MathText text={title} /></strong>
         </div>
         <span className={styles.stepCounter}>
-          步骤 {safeIdx + 1} / {steps.length}
+          {tx("步骤 {current} / {total}", { current: safeIdx + 1, total: steps.length })}
         </span>
       </header>
 
@@ -145,9 +153,9 @@ function StepSimulatorWidget({ data }: { data: Record<string, unknown> }) {
             onClick={() => setIndex((v) => Math.max(0, v - 1))}
           >
             <ChevronLeft size={14} aria-hidden />
-            <span>上一步</span>
+            <span>{tx("上一步")}</span>
           </button>
-          <div className={styles.stepDots} role="tablist" aria-label="步骤切换">
+          <div className={styles.stepDots} role="tablist" aria-label={tx("步骤切换")}>
             {steps.map((s, idx) => (
               <button
                 key={`${s.label}-${idx}`}
@@ -156,7 +164,7 @@ function StepSimulatorWidget({ data }: { data: Record<string, unknown> }) {
                 aria-selected={idx === safeIdx}
                 className={cx(styles.stepDot, idx === safeIdx && styles.stepDotOn)}
                 onClick={() => setIndex(idx)}
-                title={`第 ${idx + 1} 步：${s.label}`}
+                title={tx("第 {index} 步：{label}", { index: idx + 1, label: s.label })}
               />
             ))}
           </div>
@@ -166,7 +174,7 @@ function StepSimulatorWidget({ data }: { data: Record<string, unknown> }) {
             disabled={safeIdx >= steps.length - 1}
             onClick={() => setIndex((v) => Math.min(steps.length - 1, v + 1))}
           >
-            <span>下一步</span>
+            <span>{tx("下一步")}</span>
             <ChevronRight size={14} aria-hidden />
           </button>
         </div>
@@ -176,12 +184,16 @@ function StepSimulatorWidget({ data }: { data: Record<string, unknown> }) {
           className={styles.askAiBtn}
           onClick={() =>
             emitWidgetQuestion(
-              `在「${title}」的第 ${safeIdx + 1} 步（${current?.label}）中，为什么会是这个状态？请帮我再展开讲讲。`,
+              tx("在「{title}」的第 {step} 步（{label}）中，为什么会是这个状态？请帮我再展开讲讲。", {
+                title,
+                step: safeIdx + 1,
+                label: current?.label ?? "",
+              }),
             )
           }
         >
           <MessageSquarePlus size={12} aria-hidden />
-          <span>追问第 {safeIdx + 1} 步</span>
+          <span>{tx("追问第 {step} 步", { step: safeIdx + 1 })}</span>
         </button>
       </footer>
     </section>
@@ -189,7 +201,8 @@ function StepSimulatorWidget({ data }: { data: Record<string, unknown> }) {
 }
 
 function ComparisonMatrixWidget({ data }: { data: Record<string, unknown> }) {
-  const title = String(data.title || "核心差异对比");
+  const { tx, lang } = useI18n();
+  const title = String(data.title || tx("核心差异对比"));
   const columns = Array.isArray(data.columns) ? data.columns.map(String) : [];
   const rows = Array.isArray(data.rows) ? (data.rows as CompareRow[]) : [];
   const [activeDim, setActiveDim] = useState<string>("all");
@@ -205,20 +218,20 @@ function ComparisonMatrixWidget({ data }: { data: Record<string, unknown> }) {
         <div className={styles.widgetTitleWrap}>
           <span className={styles.widgetBadge}>
             <Sparkles size={12} aria-hidden />
-            交互对比
+            {tx("交互对比")}
           </span>
           <strong className={styles.widgetTitle}><MathText text={title} /></strong>
         </div>
       </header>
 
-      <div className={styles.dimFilterRow} role="group" aria-label="聚焦维度">
+      <div className={styles.dimFilterRow} role="group" aria-label={tx("聚焦维度")}>
         <button
           type="button"
           aria-pressed={activeDim === "all"}
           className={cx(styles.dimPill, activeDim === "all" && styles.dimPillOn)}
           onClick={() => setActiveDim("all")}
         >
-          全部维度
+          {tx("全部维度")}
         </button>
         {rows.map((r) => (
           <button
@@ -238,7 +251,7 @@ function ComparisonMatrixWidget({ data }: { data: Record<string, unknown> }) {
         <table className={styles.matrixTable} role="table">
           <thead role="rowgroup">
             <tr role="row">
-              <th role="columnheader">对比维度</th>
+              <th role="columnheader">{tx("对比维度")}</th>
               {columns.map((col) => (
                 <th key={col} role="columnheader"><MathText text={col} /></th>
               ))}
@@ -265,7 +278,7 @@ function ComparisonMatrixWidget({ data }: { data: Record<string, unknown> }) {
           <div className={styles.takeawayList}>
             {takeaways.map((row) => (
               <div key={row.dimension}>
-                {shownRows.length > 1 && <strong><MathText text={row.dimension} />：</strong>}
+                {shownRows.length > 1 && <strong><MathText text={row.dimension} />{lang === "en" ? ": " : "："}</strong>}
                 <MathText text={String(row.takeaway)} />
               </div>
             ))}
@@ -274,18 +287,21 @@ function ComparisonMatrixWidget({ data }: { data: Record<string, unknown> }) {
       )}
 
       <footer className={styles.widgetFoot}>
-        <span className={styles.footHint}>点击上方维度胶囊可单独聚焦对比</span>
+        <span className={styles.footHint}>{tx("点击上方维度胶囊可单独聚焦对比")}</span>
         <button
           type="button"
           className={styles.askAiBtn}
           onClick={() =>
             emitWidgetQuestion(
-              `关于「${title}」中的「${activeDim === "all" ? rows[0]?.dimension : activeDim}」，能给我举一个最容易混淆的具体例子吗？`,
+              tx("关于「{title}」中的「{dimension}」，能给我举一个最容易混淆的具体例子吗？", {
+                title,
+                dimension: activeDim === "all" ? rows[0]?.dimension ?? "" : activeDim,
+              }),
             )
           }
         >
           <MessageSquarePlus size={12} aria-hidden />
-          <span>举例辨析</span>
+          <span>{tx("举例辨析")}</span>
         </button>
       </footer>
     </section>
@@ -293,7 +309,8 @@ function ComparisonMatrixWidget({ data }: { data: Record<string, unknown> }) {
 }
 
 function ParameterLabWidget({ data }: { data: Record<string, unknown> }) {
-  const title = String(data.title || "参数实验室");
+  const { tx, lang } = useI18n();
+  const title = String(data.title || tx("参数实验室"));
   const formula = String(data.formula || "");
   const insight = String(data.insight || "");
   const params = useMemo(
@@ -312,7 +329,7 @@ function ParameterLabWidget({ data }: { data: Record<string, unknown> }) {
         <div className={styles.widgetTitleWrap}>
           <span className={styles.widgetBadge}>
             <Sliders size={12} aria-hidden />
-            参数实验
+            {tx("参数实验")}
           </span>
           <strong className={styles.widgetTitle}><MathText text={title} /></strong>
         </div>
@@ -358,17 +375,21 @@ function ParameterLabWidget({ data }: { data: Record<string, unknown> }) {
       )}
 
       <footer className={styles.widgetFoot}>
-        <span className={styles.footHint}>拖动滑块调整参数，或将当前参数发送给 AI 推演</span>
+        <span className={styles.footHint}>{tx("拖动滑块调整参数，或将当前参数发送给 AI 推演")}</span>
         <button
           type="button"
           className={styles.askAiBtn}
           onClick={() => {
-            const summary = params.map((p) => `${p.label}=${values[p.id] ?? p.default}${p.unit ?? ""}`).join("，");
-            emitWidgetQuestion(`当「${title}」的参数设定为（${summary}）时，结果会怎样变化？请帮我分析一下。`);
+            const summary = params
+              .map((p) => `${p.label}=${values[p.id] ?? p.default}${p.unit ?? ""}`)
+              .join(lang === "en" ? ", " : "，");
+            emitWidgetQuestion(
+              tx("当「{title}」的参数设定为（{summary}）时，结果会怎样变化？请帮我分析一下。", { title, summary }),
+            );
           }}
         >
           <MessageSquarePlus size={12} aria-hidden />
-          <span>以此参数请 AI 分析</span>
+          <span>{tx("以此参数请 AI 分析")}</span>
         </button>
       </footer>
     </section>
@@ -376,6 +397,7 @@ function ParameterLabWidget({ data }: { data: Record<string, unknown> }) {
 }
 
 function MicroQuizWidget({ data }: { data: Record<string, unknown> }) {
+  const { tx } = useI18n();
   const question = String(data.question || "");
   const options = Array.isArray(data.options) ? data.options.map(String) : [];
   const answerIndex = typeof data.answerIndex === "number" ? data.answerIndex : 0;
@@ -390,12 +412,12 @@ function MicroQuizWidget({ data }: { data: Record<string, unknown> }) {
   const isCorrect = selected === answerIndex;
 
   return (
-    <section className={styles.widgetCard} aria-label="随堂即时自测">
+    <section className={styles.widgetCard} aria-label={tx("随堂即时自测")}>
       <header className={styles.widgetHead}>
         <div className={styles.widgetTitleWrap}>
           <span className={styles.widgetBadge}>
             <HelpCircle size={12} aria-hidden />
-            随堂微测
+            {tx("随堂微测")}
           </span>
           <div className={cx(styles.widgetTitle, styles.quizQuestion)}>
             <MathText text={question} />
@@ -440,7 +462,7 @@ function MicroQuizWidget({ data }: { data: Record<string, unknown> }) {
 
       {answered && (
         <div className={cx(styles.quizFeedback, isCorrect ? styles.feedbackRight : styles.feedbackWrong)}>
-          <strong>{isCorrect ? "回答正确！" : `这道题选 ${String.fromCharCode(65 + answerIndex)}`}</strong>
+          <strong>{isCorrect ? tx("回答正确！") : tx("这道题选 {letter}", { letter: String.fromCharCode(65 + answerIndex) })}</strong>
           {explanation && (
             <p>
               <MathText text={explanation} />
@@ -452,14 +474,16 @@ function MicroQuizWidget({ data }: { data: Record<string, unknown> }) {
               className={styles.askAiBtn}
               onClick={() =>
                 emitWidgetQuestion(
-                  `针对刚才这道题「${question}」，我选了「${options[selected]}」，${
-                    isCorrect ? "请再考我一道稍微进阶一点的变式题！" : "我对这个选项为什么不对还有点疑问，能再讲讲吗？"
-                  }`,
+                  tx("针对刚才这道题「{question}」，我选了「{option}」，{followUp}", {
+                    question,
+                    option: options[selected],
+                    followUp: isCorrect ? tx("请再考我一道稍微进阶一点的变式题！") : tx("我对这个选项为什么不对还有点疑问，能再讲讲吗？"),
+                  }),
                 )
               }
             >
               <MessageSquarePlus size={12} aria-hidden />
-              <span>{isCorrect ? "再来一道进阶变式" : "请 AI 详解我的错因"}</span>
+              <span>{isCorrect ? tx("再来一道进阶变式") : tx("请 AI 详解我的错因")}</span>
             </button>
           </div>
         </div>

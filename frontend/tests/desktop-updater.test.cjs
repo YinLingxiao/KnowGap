@@ -6,6 +6,7 @@ const vm = require('node:vm');
 const ts = require('typescript');
 const { renderToStaticMarkup } = require('react-dom/server');
 const React = require('react');
+const { resolveI18n } = require('./i18n-support.cjs');
 const read = file => fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
 
 function preload() {
@@ -50,6 +51,7 @@ function renderRows(state, prefs = settings) {
   const values = [prefs, prefs?.updateUrl || '', '', false, false];
   const css = new Proxy({}, { get: (_target, key) => String(key) });
   const localRequire = id => {
+    if (resolveI18n(id)) return resolveI18n(id);
     if (id === 'react') return { ...React, useEffect() {}, useState: () => [values.shift(), () => {}] };
     if (id === '@/lib/desktop-updater') return { useUpdaterState: () => state, desktopUpdateApi: () => null };
     if (id.endsWith('.css')) return { default: css };
