@@ -9,10 +9,23 @@ export const LANGUAGE_STORAGE_KEY = "knowgap.language";
 export type Translate = (key: MessageKey, vars?: Record<string, string | number>) => string;
 export type TranslatePhrase = (text: string, vars?: Record<string, string | number>) => string;
 
-/** Shared labels can also be translated from their Chinese source text. */
-const phraseFromCatalog = new Map<string, string>(
-  (Object.keys(zh) as MessageKey[]).map((key) => [zh[key], en[key]]),
-);
+/**
+ * Shared labels can also be translated from their Chinese source text. Only
+ * values with a single English translation are safe to use this way: a source
+ * string such as `记忆` can mean "Memory" or "Memories" depending on the key, so
+ * ambiguous values must have an explicit entry in `phrases.ts` instead.
+ */
+const catalogTranslations = new Map<string, Set<string>>();
+for (const key of Object.keys(zh) as MessageKey[]) {
+  const source = zh[key];
+  const translations = catalogTranslations.get(source) ?? new Set<string>();
+  translations.add(en[key]);
+  catalogTranslations.set(source, translations);
+}
+const phraseFromCatalog = new Map<string, string>();
+for (const [source, translations] of catalogTranslations) {
+  if (translations.size === 1) phraseFromCatalog.set(source, [...translations][0]);
+}
 
 export function isLanguage(value: unknown): value is Language {
   return value === "zh" || value === "en";

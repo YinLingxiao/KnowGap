@@ -523,6 +523,10 @@ const basePhrases: Record<string, string> = {
   "针对我之前在「{label}」上的薄弱点（{summary}），请开启一个巩固支线，带我彻底搞懂并做一道题验证。": "I have a weak point in “{label}” ({summary}). Open a consolidation Thread, help me understand it fully and verify with one question.",
   "请围绕待解锁概念「{label}」（{summary}）开启专项学习，从我已经掌握的内容往前推进一步，并做一道题验证。": "Open a focused lesson on the locked concept “{label}” ({summary}), move one step beyond what I know and verify with one question.",
   "针对我之前在「{topic}」上的薄弱点（{summary}），请开启一个巩固支线，带我彻底搞懂并做一道题验证。": "I have a weak point in “{topic}” ({summary}). Open a consolidation Thread, help me understand it fully and verify with one question.",
+  "资料": "Materials",
+  "取消置顶": "Unpin",
+  "拒绝": "Deny",
+  "练习题": "Exercises",
 };
 
 export const enPhrases: Record<string, string> = {

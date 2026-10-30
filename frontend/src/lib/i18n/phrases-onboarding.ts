@@ -156,7 +156,7 @@ export const onboardingPhrases: Record<string, string> = {
   "1 分钟靶向自测": "1-minute targeted self-test",
   "今天还没有待办或到期复习，把薄弱点安排进这周吧。":
     "No tasks or reviews due today. Plan your weak spots into this week.",
-  "让 AI 帮我排这周的复习": "Have the AI plan this week's review",
+  "让 AI 帮我排这周的复习": "Have the AI plan this week's revision",
   "继续学习": "Continue learning",
   "从学习空间开始": "Start from a learning space",
   "继续上次": "Pick up where you left off",
@@ -179,7 +179,7 @@ export const onboardingPhrases: Record<string, string> = {
   "收起": "Hide",
   "清空": "Clear",
   "{shortcut} 呼出": "{shortcut} to open",
-  "{name}（需在主窗口批准）": "{name} (approve in the main window)",
+  "{name}（需在主窗口批准）": "{name} (requires approval in the main window)",
   "已停止等待，回复会在后台继续生成。":
     "Stopped waiting; the reply keeps generating in the background.",
   "已取消发送。": "Cancelled sending.",
