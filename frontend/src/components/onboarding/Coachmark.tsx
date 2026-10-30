@@ -12,9 +12,9 @@ import styles from "./Coachmark.module.css";
 const LEGACY = new Set<CoachId>(LEGACY_COACH_IDS);
 
 function anchorFor(id: CoachId): HTMLElement | null {
-  if (id === "plan") return document.querySelector<HTMLElement>('[aria-label="学习计划"]');
-  if (id === "slash") return document.getElementById("chat-input");
-  return document.querySelector<HTMLElement>(`[data-coachmark="${id}"]`);
+  const selector = id === "plan" ? '[aria-label="学习计划"]' : id === "slash" ? "#chat-input" : `[data-coachmark="${id}"]`;
+  // 面板全屏时主线是 inert 的：气泡不能指向被盖住的控件，退出全屏后再出现
+  return [...document.querySelectorAll<HTMLElement>(selector)].find((node) => !node.closest("[inert]")) ?? null;
 }
 
 function sessionIds(userId: string) {

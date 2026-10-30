@@ -12,8 +12,17 @@
   grid-template-columns: minmax(0, 1fr);
 }
 
+/* 放大即全屏：面板盖住主线，主线继续渲染，滚动位置和输入草稿都不丢 */
 .pageExpanded {
-  grid-template-columns: minmax(0, 1fr) minmax(440px, 50%);
+  position: relative;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.pageExpanded > .panel:not(.overlay) {
+  position: absolute;
+  z-index: 20;
+  inset: 0;
+  margin: 8px;
 }
 
 .main,

@@ -445,7 +445,7 @@ export function SubjectPage({
 
   return (
     <div className={cx(styles.page, !panelVisible && styles.pageSingle, panelVisible && panelExpanded && styles.pageExpanded)}>
-      <section className={styles.main}>
+      <section className={styles.main} inert={panelVisible && panelExpanded}>
         <header className={styles.header}>
           {!sidebarOpen && (
             <button className={styles.icon} onClick={onOpenSidebar} aria-label={t("sidebar.expand")} title={t("sidebar.expand")}>
@@ -801,8 +801,8 @@ export function SubjectPage({
                   type="button"
                   className={styles.panelActionBtn}
                   onClick={() => setPanelExpanded((v) => !v)}
-                  aria-label={panelExpanded ? tx("恢复默认宽度") : tx("加宽面板")}
-                  title={panelExpanded ? tx("恢复默认宽度") : tx("加宽面板")}
+                  aria-label={panelExpanded ? tx("退出全屏") : tx("全屏")}
+                  title={panelExpanded ? tx("退出全屏") : tx("全屏")}
                 >
                   {panelExpanded ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
                 </button>
@@ -813,6 +813,7 @@ export function SubjectPage({
                 onClick={() => {
                   setOverlay(false);
                   setPanelCollapsed(true);
+                  setPanelExpanded(false);
                 }}
                 aria-label={tx("关闭右侧面板")}
                 title={tx("关闭面板")}
