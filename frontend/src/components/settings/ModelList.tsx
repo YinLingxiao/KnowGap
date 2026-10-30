@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Search, Trash2 } from "lucide-react";
+import { useI18n } from "@/components/LanguageProvider";
 import type { LibraryModel, ModelLabel, ModelTags, ReasoningLevel } from "@/lib/api/model-library";
 import { EMPTY_TAGS } from "@/lib/api/model-library";
 import { cx } from "@/lib/cx";
@@ -27,6 +28,7 @@ interface ModelListProps {
 }
 
 export function ModelList({ models, busy, onToggle, onDelete, onTags }: ModelListProps) {
+  const { tx } = useI18n();
   const [query, setQuery] = useState("");
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [editing, setEditing] = useState<LibraryModel | null>(null);
@@ -47,13 +49,13 @@ export function ModelList({ models, busy, onToggle, onDelete, onTags }: ModelLis
       <div className={styles.toolbar}>
         <label className={styles.search}>
           <Search size={13} aria-hidden />
-          <input value={query} onChange={(event) => setQuery(event.target.value)} aria-label="搜索模型" placeholder="搜索模型" />
+          <input value={query} onChange={(event) => setQuery(event.target.value)} aria-label={tx("搜索模型")} placeholder={tx("搜索模型")} />
         </label>
       </div>
       {models.length === 0 ? (
-        <p className={styles.note}>还没有模型。可以获取列表，或手动添加。</p>
+        <p className={styles.note}>{tx("还没有模型。可以获取列表，或手动添加。")}</p>
       ) : visible.length === 0 ? (
-        <p className={styles.note}>没有匹配的模型。</p>
+        <p className={styles.note}>{tx("没有匹配的模型。")}</p>
       ) : (
         <div className={styles.models}>
           {visible.map((model) => (
@@ -64,7 +66,7 @@ export function ModelList({ models, busy, onToggle, onDelete, onTags }: ModelLis
                   role="switch"
                   checked={model.enabled}
                   disabled={busy}
-                  aria-label={`启用模型 ${model.name}`}
+                  aria-label={tx("启用模型 {name}", { name: model.name })}
                   onChange={(event) => onToggle(model, event.target.checked)}
                 />
                 <span aria-hidden />
@@ -75,22 +77,22 @@ export function ModelList({ models, busy, onToggle, onDelete, onTags }: ModelLis
               </div>
               <div className={styles.modelSide}>
                 <button type="button" className={cx(styles.tag, model.tags.reasoning !== "none" && styles.tagOn)} disabled={busy} onClick={() => openTags(model)}>
-                  推理 {REASONING_LABEL[model.tags.reasoning]}
+                  {tx("推理 {level}", { level: tx(REASONING_LABEL[model.tags.reasoning]) })}
                 </button>
                 <button type="button" className={cx(styles.tag, model.tags.vision && styles.tagOn)} aria-pressed={model.tags.vision} disabled={busy} onClick={() => openTags(model)}>
-                  视觉
+                  {tx("视觉")}
                 </button>
                 <button type="button" className={cx(styles.tag, model.tags.tools && styles.tagOn)} aria-pressed={model.tags.tools} disabled={busy} onClick={() => openTags(model)}>
-                  工具
+                  {tx("工具")}
                 </button>
                 <button type="button" className={cx(styles.tag, model.tags.label && styles.tagOn)} disabled={busy} onClick={() => openTags(model)}>
-                  {model.tags.label ?? "无角标"}
+                  {model.tags.label ? tx(model.tags.label) : tx("无角标")}
                 </button>
                 <button
                   type="button"
                   className={cx(styles.textButton, styles.textButtonDanger)}
                   disabled={busy}
-                  aria-label={pendingId === model.id ? `确认删除模型 ${model.name}` : `删除模型 ${model.name}`}
+                  aria-label={pendingId === model.id ? tx("确认删除模型 {name}", { name: model.name }) : tx("删除模型 {name}", { name: model.name })}
                   onClick={() => {
                     if (pendingId !== model.id) {
                       setPendingId(model.id);
@@ -102,39 +104,39 @@ export function ModelList({ models, busy, onToggle, onDelete, onTags }: ModelLis
                   onBlur={() => setPendingId((current) => (current === model.id ? null : current))}
                 >
                   <Trash2 size={12} aria-hidden />
-                  {pendingId === model.id ? "确认删除" : "删除"}
+                  {pendingId === model.id ? tx("确认删除") : tx("删除")}
                 </button>
               </div>
             </div>
           ))}
         </div>
       )}
-      <EditorDialog open={editing !== null} title={editing ? `编辑 ${editing.name} 的标签` : "编辑标签"} description="推理强度、视觉、工具和角标都可以改。" onClose={() => setEditing(null)}>
+      <EditorDialog open={editing !== null} title={editing ? tx("编辑 {name} 的标签", { name: editing.name }) : tx("编辑标签")} description={tx("推理强度、视觉、工具和角标都可以改。")} onClose={() => setEditing(null)}>
         <div className={styles.fields}>
           <label className={styles.field}>
-            <span className={styles.label}>推理强度</span>
+            <span className={styles.label}>{tx("推理强度")}</span>
             <select
               className={styles.select}
-              aria-label="推理强度"
+              aria-label={tx("推理强度")}
               value={tags.reasoning}
               onChange={(event) => setTags((current) => ({ ...current, reasoning: event.target.value as ReasoningLevel }))}
             >
-              {REASONING.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+              {REASONING.map((item) => <option key={item.id} value={item.id}>{tx(item.label)}</option>)}
             </select>
           </label>
           <label className={styles.checkRow}>
-            <input type="checkbox" checked={tags.vision} aria-label="支持视觉" onChange={(event) => setTags((current) => ({ ...current, vision: event.target.checked }))} />
-            支持视觉
+            <input type="checkbox" checked={tags.vision} aria-label={tx("支持视觉")} onChange={(event) => setTags((current) => ({ ...current, vision: event.target.checked }))} />
+            {tx("支持视觉")}
           </label>
           <label className={styles.checkRow}>
-            <input type="checkbox" checked={tags.tools} aria-label="支持工具" onChange={(event) => setTags((current) => ({ ...current, tools: event.target.checked }))} />
-            支持工具
+            <input type="checkbox" checked={tags.tools} aria-label={tx("支持工具")} onChange={(event) => setTags((current) => ({ ...current, tools: event.target.checked }))} />
+            {tx("支持工具")}
           </label>
           <label className={styles.field}>
-            <span className={styles.label}>角标</span>
+            <span className={styles.label}>{tx("角标")}</span>
             <select
               className={styles.select}
-              aria-label="角标"
+              aria-label={tx("角标")}
               value={tags.label ?? ""}
               onChange={(event) => {
                 const value = event.target.value;
@@ -142,13 +144,13 @@ export function ModelList({ models, busy, onToggle, onDelete, onTags }: ModelLis
                 setTags((current) => ({ ...current, label }));
               }}
             >
-              <option value="">无</option>
-              <option value="新">新</option>
+              <option value="">{tx("无")}</option>
+              <option value="新">{tx("新")}</option>
               <option value="Pro">Pro</option>
             </select>
           </label>
           <div className={styles.actions}>
-            <Button size="sm" onClick={() => setEditing(null)}>关闭</Button>
+            <Button size="sm" onClick={() => setEditing(null)}>{tx("关闭")}</Button>
             <Button
               size="sm"
               variant="primary"
@@ -159,7 +161,7 @@ export function ModelList({ models, busy, onToggle, onDelete, onTags }: ModelLis
                 setEditing(null);
               }}
             >
-              保存标签
+              {tx("保存标签")}
             </Button>
           </div>
         </div>

@@ -3,6 +3,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { GUIDES_RESET_EVENT, checklistDismissKey, checklistDoneKey, resetCoachmarks } from "./coach";
+import { useI18n } from "@/components/LanguageProvider";
 import styles from "./HelpCenter.module.css";
 
 export type HelpAction =
@@ -56,6 +57,7 @@ const KEYS = [
 ];
 
 export function HelpCenter({ desktop, userId, onClose, onTry }: HelpCenterProps) {
+  const { tx } = useI18n();
   const panel = useRef<HTMLDivElement>(null);
   const close = useRef(onClose);
   close.current = onClose;
@@ -104,22 +106,22 @@ export function HelpCenter({ desktop, userId, onClose, onTry }: HelpCenterProps)
   return createPortal(
       <div ref={panel} id="help-panel" className={styles.panel} style={{ left: position.left, bottom: position.bottom, maxHeight: position.maxHeight }} role="dialog" aria-labelledby="help-title" tabIndex={-1}>
         <header>
-          <h2 id="help-title">帮助</h2>
-          <button type="button" onClick={onClose} aria-label="关闭帮助">关闭</button>
+          <h2 id="help-title">{tx("帮助")}</h2>
+          <button type="button" onClick={onClose} aria-label={tx("关闭帮助")}>{tx("关闭")}</button>
         </header>
         <div className={styles.body}>
           {GROUPS.map((group) => (
             <section key={group.title}>
-              <h3>{group.title}</h3>
+              <h3>{tx(group.title)}</h3>
               <ul>
                 {group.items.map((item) => (
                   <li key={item.action}>
                     <div>
-                      <strong>{item.title}</strong>
-                      <p>{item.body}</p>
-                      <span>{item.how}</span>
+                      <strong>{tx(item.title)}</strong>
+                      <p>{tx(item.body)}</p>
+                      <span>{tx(item.how)}</span>
                     </div>
-                    <button type="button" onClick={() => onTry(item.action)}>试一试</button>
+                    <button type="button" onClick={() => onTry(item.action)}>{tx("试一试")}</button>
                   </li>
                 ))}
               </ul>
@@ -127,27 +129,27 @@ export function HelpCenter({ desktop, userId, onClose, onTry }: HelpCenterProps)
           ))}
           {desktop && (
             <section>
-              <h3>桌面端</h3>
+              <h3>{tx("桌面端")}</h3>
               <ul>
                 <li>
                   <div>
-                    <strong>随时快问</strong>
-                    <p>不离开当前页面，问一句就收起。</p>
-                    <span>按 Alt+Space</span>
+                    <strong>{tx("随时快问")}</strong>
+                    <p>{tx("不离开当前页面，问一句就收起。")}</p>
+                    <span>{tx("按 Alt+Space")}</span>
                   </div>
-                  <button type="button" onClick={() => onTry("spotlight")}>试一试</button>
+                  <button type="button" onClick={() => onTry("spotlight")}>{tx("试一试")}</button>
                 </li>
               </ul>
             </section>
           )}
           <section>
-            <h3>快捷键</h3>
+            <h3>{tx("快捷键")}</h3>
             <table className={styles.keys}>
               <tbody>
                 {KEYS.map(([key, label]) => (
                   <tr key={key}>
                     <th scope="row"><kbd>{key}</kbd></th>
-                    <td>{label}</td>
+                    <td>{tx(label)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -165,7 +167,7 @@ export function HelpCenter({ desktop, userId, onClose, onTry }: HelpCenterProps)
               onClose();
             }}
           >
-            重新显示上手清单和提示
+            {tx("重新显示上手清单和提示")}
           </button>
         </footer>
       </div>,

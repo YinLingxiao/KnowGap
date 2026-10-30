@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Check, ChevronRight, Ellipsis, MessagesSquare, Plus, Repeat } from "lucide-react";
+import { useI18n } from "@/components/LanguageProvider";
 import type { AgendaTask, AgendaThread, TaskPriority } from "@/lib/agenda/types";
 import { cx } from "@/lib/cx";
 import {
@@ -78,6 +79,7 @@ export function useListState() {
 }
 
 export function AgendaList(props: AgendaListProps) {
+  const { tx } = useI18n();
   const { groups, collapsedGroups, collapsedParents, selectedKey } = props;
   const listRef = useRef<HTMLDivElement>(null);
   const rows = useMemo(
@@ -133,7 +135,7 @@ export function AgendaList(props: AgendaListProps) {
       className={cx(styles.list, props.taskActions && styles.withActions)}
       role="listbox"
       tabIndex={0}
-      aria-label={`${props.ariaLabel ?? "日程列表"}，上下键选择，空格完成，回车打开详情`}
+      aria-label={tx("{label}，上下键选择，空格完成，回车打开详情", { label: props.ariaLabel ?? tx("日程列表") })}
       aria-activedescendant={selectedKey ? `agenda-row-${selectedKey}` : undefined}
       onKeyDown={onKeyDown}
     >
@@ -172,7 +174,7 @@ export function AgendaList(props: AgendaListProps) {
                 </button>
                 {showReschedule && (
                   <button type="button" className={styles.reschedule} onClick={props.onRescheduleOverdue}>
-                    重新安排
+                    {tx("重新安排")}
                   </button>
                 )}
               </h2>
@@ -188,10 +190,10 @@ export function AgendaList(props: AgendaListProps) {
                     type="button"
                     className={styles.addRow}
                     onClick={() => props.onCompose?.(group.compose!, group.key)}
-                    aria-label={`添加任务到「${heading}」`}
+                    aria-label={tx("添加任务到「{heading}」", { heading })}
                   >
                     <Plus size={13} aria-hidden />
-                    添加任务
+                    {tx("添加任务")}
                   </button>
                 )}
               </>
@@ -224,9 +226,10 @@ function NodeRows(props: AgendaListProps & { node: AgendaNode; collapsedParent: 
 }
 
 function SubjectTag({ info }: { info: SubjectInfo | undefined }) {
+  const { tx } = useI18n();
   if (!info) return null;
   return (
-    <span className={styles.subject} title={`空间：${info.name}`}>
+    <span className={styles.subject} title={tx("空间：{name}", { name: info.name })}>
       <span className={styles.subjectDot} style={{ background: info.color }} aria-hidden />
       <span className={styles.subjectName}>{info.name}</span>
     </span>
@@ -234,23 +237,25 @@ function SubjectTag({ info }: { info: SubjectInfo | undefined }) {
 }
 
 function DeadlineTag({ deadline, today }: { deadline: string | null; today: string }) {
-  const info = deadlineInfo(deadline, today);
+  const { tx } = useI18n();
+  const info = deadlineInfo(deadline, today, tx);
   if (!info) return null;
   return (
-    <span className={cx(styles.deadline, info.urgent && styles.urgent)} title={`截止日 ${deadline}`}>
-      截止 · {info.text.replace("截止", "").trim() || info.text}
+    <span className={cx(styles.deadline, info.urgent && styles.urgent)} title={tx("截止日 {date}", { date: deadline ?? "" })}>
+      {tx("截止 · {text}", { text: info.text })}
     </span>
   );
 }
 
 function TaskRow(props: AgendaListProps & { node: TaskNode; task: AgendaTask; child: boolean; collapsedParent?: boolean }) {
+  const { tx } = useI18n();
   const { task, node, child, today } = props;
   const key = taskKey(task.id);
   const done = task.status === "done";
   const leaving = props.leavingIds?.has(task.id) ?? false;
   const review = node.kind === "review" && !child;
   const progress = !child && node.children.length ? subtaskProgress(node.children) : null;
-  const schedule = scheduleLabel(task, today);
+  const schedule = scheduleLabel(task, today, tx);
   const overdueSchedule = Boolean(task.scheduledDate && task.scheduledDate < today && !done);
   const selected = props.selectedKey === key;
   const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null);
@@ -275,7 +280,7 @@ function TaskRow(props: AgendaListProps & { node: TaskNode; task: AgendaTask; ch
           <button
             type="button"
             className={styles.expandBtn}
-            aria-label={props.collapsedParent ? "展开子任务" : "折叠子任务"}
+            aria-label={props.collapsedParent ? tx("展开子任务") : tx("折叠子任务")}
             aria-expanded={!props.collapsedParent}
             onClick={(event) => { event.stopPropagation(); props.onToggleParent(task.id); }}
           >
@@ -288,7 +293,7 @@ function TaskRow(props: AgendaListProps & { node: TaskNode; task: AgendaTask; ch
         type="button"
         role="checkbox"
         aria-checked={done || leaving}
-        aria-label={done ? `标记「${task.title}」为未完成` : `完成「${task.title}」`}
+        aria-label={done ? tx("标记「{title}」为未完成", { title: task.title }) : tx("完成「{title}」", { title: task.title })}
         className={cx(styles.check, (done || leaving) && styles.checked)}
         onClick={(event) => { event.stopPropagation(); props.onToggleDone(task); }}
       >
@@ -297,9 +302,9 @@ function TaskRow(props: AgendaListProps & { node: TaskNode; task: AgendaTask; ch
 
       <button type="button" className={styles.main} tabIndex={-1} onClick={() => { props.onSelect(key); props.onOpenTask(task); }}>
         {review && (
-          <span className={cx(styles.badge, styles.badgeReview)} title="艾宾浩斯闪回">
+          <span className={cx(styles.badge, styles.badgeReview)} title={tx("艾宾浩斯闪回")}>
             <Repeat size={11} aria-hidden />
-            闪回{task.reviewStep ? ` · 第 ${task.reviewStep} 轮` : ""}
+            {tx("闪回")}{task.reviewStep ? tx(" · 第 {step} 轮", { step: task.reviewStep }) : ""}
           </span>
         )}
         <span className={styles.title}>{task.title}</span>
@@ -308,7 +313,7 @@ function TaskRow(props: AgendaListProps & { node: TaskNode; task: AgendaTask; ch
 
       <span className={styles.meta}>
         {progress && (
-          <span className={styles.progress} title={`子任务 ${progress.done}/${progress.total}`}>
+          <span className={styles.progress} title={tx("子任务 {done}/{total}", { done: progress.done, total: progress.total })}>
             <span className={styles.bar} aria-hidden>
               <span style={{ width: `${(progress.done / progress.total) * 100}%` }} />
             </span>
@@ -317,8 +322,8 @@ function TaskRow(props: AgendaListProps & { node: TaskNode; task: AgendaTask; ch
         )}
         {!child && <SubjectTag info={task.subjectId ? props.subjects.get(task.subjectId) : undefined} />}
         {schedule && (
-          <span className={cx(styles.schedule, overdueSchedule && styles.urgent)} title={`计划 ${task.scheduledStartAt ?? task.scheduledDate}`}>
-            计划 · {schedule}
+          <span className={cx(styles.schedule, overdueSchedule && styles.urgent)} title={tx("计划 {time}", { time: task.scheduledStartAt ?? task.scheduledDate ?? "" })}>
+            {tx("计划 · {schedule}", { schedule: schedule ?? "" })}
           </span>
         )}
         {!done && <DeadlineTag deadline={task.deadlineDate} today={today} />}
@@ -327,7 +332,7 @@ function TaskRow(props: AgendaListProps & { node: TaskNode; task: AgendaTask; ch
         <button
           type="button"
           className={cx(styles.menuBtn, menuAt && styles.menuOn)}
-          aria-label={`「${task.title}」的更多操作`}
+          aria-label={tx("「{title}」的更多操作", { title: task.title })}
           aria-haspopup="menu"
           aria-expanded={Boolean(menuAt)}
           onClick={(event) => {
@@ -361,6 +366,7 @@ function TaskRow(props: AgendaListProps & { node: TaskNode; task: AgendaTask; ch
 }
 
 function ThreadRow(props: AgendaListProps & { node: Extract<AgendaNode, { kind: "thread" }> }) {
+  const { tx } = useI18n();
   const { thread } = props.node;
   const key = threadKey(thread.threadId);
   const selected = props.selectedKey === key;
@@ -378,13 +384,13 @@ function ThreadRow(props: AgendaListProps & { node: Extract<AgendaNode, { kind: 
       <span className={styles.expand} />
       <span className={styles.threadIcon} aria-hidden><MessagesSquare size={13} /></span>
       <button type="button" className={styles.main} tabIndex={-1} onClick={() => { props.onSelect(key); props.onOpenThread(thread); }}>
-        <span className={cx(styles.badge, styles.badgeThread)} title="空间里进行中的支线，点击打开">
-          进行中支线
+        <span className={cx(styles.badge, styles.badgeThread)} title={tx("空间里进行中的支线，点击打开")}>
+          {tx("进行中支线")}
         </span>
         <span className={styles.title}>{thread.title}</span>
       </button>
       <span className={styles.meta}>
-        <span className={styles.subject} title={`空间：${thread.subjectName}`}>
+        <span className={styles.subject} title={tx("空间：{name}", { name: thread.subjectName })}>
           <span className={styles.subjectDot} style={{ background: thread.subjectColor }} aria-hidden />
           <span className={styles.subjectName}>{thread.subjectName}</span>
         </span>

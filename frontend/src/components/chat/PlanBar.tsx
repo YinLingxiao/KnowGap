@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { toApiError } from "@/lib/api/errors";
 import { chatApi } from "@/lib/chat/api";
+import { useI18n } from "@/components/LanguageProvider";
 import {
   PLAN_EVENT, planApi, type LearningPlan, type PlanEventDetail, type PlanStep, type PlanStepStatus,
 } from "@/lib/chat/plan";
@@ -43,6 +44,7 @@ function readDismissed(key: string): boolean {
 }
 
 function StatusIcon({ status, fresh }: { status: PlanStepStatus; fresh: boolean }) {
+  const { tx, lang } = useI18n();
   return (
     <span className={styles.iconSlot}>
       {status === "pending" && <span className={cx(styles.ico, styles.icoPending)} aria-hidden />}
@@ -56,7 +58,7 @@ function StatusIcon({ status, fresh }: { status: PlanStepStatus; fresh: boolean 
         </span>
       )}
       {status === "skipped" && <Minus size={13} className={styles.icoSkipped} aria-hidden />}
-      <span className="sr-only">{STATUS_LABEL[status]}：</span>
+      <span className="sr-only">{tx(STATUS_LABEL[status])}{lang === "en" ? ": " : "："}</span>
     </span>
   );
 }
@@ -72,6 +74,7 @@ interface StepRowProps {
 }
 
 function StepRow({ step, fresh, editing, onStartEdit, onCancelEdit, onRename, onStatus }: StepRowProps) {
+  const { tx } = useI18n();
   const [draft, setDraft] = useState(step.title);
   const settled = useRef(false);
   const finished = step.status === "done" || step.status === "skipped";
@@ -113,7 +116,7 @@ function StepRow({ step, fresh, editing, onStartEdit, onCancelEdit, onRename, on
             className={styles.edit}
             value={draft}
             maxLength={TITLE_MAX}
-            aria-label="步骤标题"
+            aria-label={tx("步骤标题")}
             autoFocus
             onFocus={(event) => event.currentTarget.select()}
             onChange={(event) => setDraft(event.target.value)}
@@ -124,34 +127,34 @@ function StepRow({ step, fresh, editing, onStartEdit, onCancelEdit, onRename, on
           <span
             className={cx(styles.title, step.status === "done" && styles.titleDone, step.status === "skipped" && styles.titleSkipped)}
             onDoubleClick={onStartEdit}
-            title="双击重命名"
+            title={tx("双击重命名")}
           >
             {step.title}
             {step.threadId && (
-              <span className={styles.thread} title="这一步交给了支线执行">
-                <GitBranch size={10} aria-hidden />支线
+              <span className={styles.thread} title={tx("这一步交给了支线执行")}>
+                <GitBranch size={10} aria-hidden />{tx("支线")}
               </span>
             )}
           </span>
         )}
         {step.status === "awaiting_learner" && step.note && <span className={styles.note}>{step.note}</span>}
         {!editing && (
-          <div className={styles.actions} role="group" aria-label={`操作：${step.title}`}>
+          <div className={styles.actions} role="group" aria-label={tx("操作：{title}", { title: step.title })}>
             {finished ? (
               <button type="button" className={styles.act} onClick={() => onStatus("pending")}>
-                <Undo2 size={12} aria-hidden />恢复
+                <Undo2 size={12} aria-hidden />{tx("恢复")}
               </button>
             ) : (
               <>
                 <button type="button" className={cx(styles.act, styles.actPrimary)} onClick={() => onStatus("done")}>
-                  <Check size={12} aria-hidden />完成
+                  <Check size={12} aria-hidden />{tx("完成")}
                 </button>
                 <button type="button" className={styles.act} onClick={() => onStatus("skipped")}>
-                  <SkipForward size={12} aria-hidden />跳过
+                  <SkipForward size={12} aria-hidden />{tx("跳过")}
                 </button>
               </>
             )}
-            <button type="button" className={cx(styles.act, styles.actIcon)} onClick={onStartEdit} aria-label="重命名" title="重命名（也可双击标题）">
+            <button type="button" className={cx(styles.act, styles.actIcon)} onClick={onStartEdit} aria-label={tx("重命名")} title={tx("重命名（也可双击标题）")}>
               <Pencil size={12} aria-hidden />
             </button>
           </div>
@@ -162,6 +165,7 @@ function StepRow({ step, fresh, editing, onStartEdit, onCancelEdit, onRename, on
 }
 
 function PlanBarInner({ conversationId, busy = false, canSaveToPage }: PlanBarProps & { conversationId: string }) {
+  const { tx, lang } = useI18n();
   const listId = useId();
   const [plan, setPlan] = useState<LearningPlan | null>(null);
   const planRef = useRef<LearningPlan | null>(null);
@@ -192,11 +196,11 @@ function PlanBarInner({ conversationId, busy = false, canSaveToPage }: PlanBarPr
     const done = changed.filter((step) => step.status === "done").map((step) => step.title);
     const awaiting = changed.find((step) => step.status === "awaiting_learner");
     const parts = [
-      done.length ? `已完成：${done.join("、")}` : "",
-      awaiting ? `等你回答：${awaiting.note || awaiting.title}` : "",
+      done.length ? tx("已完成：{titles}", { titles: done.join(lang === "en" ? ", " : "、") }) : "",
+      awaiting ? tx("等你回答：{title}", { title: awaiting.note || awaiting.title }) : "",
     ].filter(Boolean);
-    if (parts.length) setAnnouncement(parts.join("；"));
-  }, []);
+    if (parts.length) setAnnouncement(parts.join(lang === "en" ? "; " : "；"));
+  }, [tx, lang]);
 
   useEffect(() => {
     let cancelled = false;
@@ -272,7 +276,7 @@ function PlanBarInner({ conversationId, busy = false, canSaveToPage }: PlanBarPr
       }
     } catch (error) {
       if (planRef.current === optimistic) commit(snapshot);
-      flashNotice(`${failure}，已恢复：${toApiError(error).message}`);
+      flashNotice(tx("{failure}，已恢复：{message}", { failure: tx(failure), message: toApiError(error).message }));
     }
   };
 
@@ -332,7 +336,7 @@ function PlanBarInner({ conversationId, busy = false, canSaveToPage }: PlanBarPr
   };
   const saveToPage = () => {
     if (!plan) return;
-    window.dispatchEvent(new CustomEvent(SAVE_TO_PAGE_EVENT, { detail: { content: summaryMarkdown(plan) } }));
+    window.dispatchEvent(new CustomEvent(SAVE_TO_PAGE_EVENT, { detail: { content: summaryMarkdown(plan, undefined, tx) } }));
     markSent("page");
   };
   const dismissSummary = () => {
@@ -346,31 +350,31 @@ function PlanBarInner({ conversationId, busy = false, canSaveToPage }: PlanBarPr
 
   const { label, ratio } = progressOf(plan);
   const current = currentStep(plan);
-  const currentText = current ? currentLabel(current) : "所有步骤都处理完了";
+  const currentText = current ? currentLabel(current, tx) : tx("所有步骤都处理完了");
   const canSave = canSaveToPage ?? Boolean(subjectId);
 
   if (showSummary) {
     return (
-      <section className={styles.summary} aria-label="学习小结">
+      <section className={styles.summary} aria-label={tx("学习小结")}>
         {live}
         <header className={styles.summaryHead}>
           <span className={styles.summaryMark} aria-hidden><Check size={12} strokeWidth={3} /></span>
-          <strong className={styles.summaryTitle}>{summaryTitle(plan)}</strong>
-          <button type="button" className={styles.iconBtn} onClick={dismissSummary} aria-label="关闭小结" title="关闭">
+          <strong className={styles.summaryTitle}>{summaryTitle(plan, tx)}</strong>
+          <button type="button" className={styles.iconBtn} onClick={dismissSummary} aria-label={tx("关闭小结")} title={tx("关闭")}>
             <X size={14} aria-hidden />
           </button>
         </header>
         <div className={styles.summaryActions}>
           {canSave && (
             <button type="button" className={styles.sumBtn} onClick={saveToPage}>
-              <NotebookPen size={13} aria-hidden />{sent === "page" ? "已存入 Pages" : "存进 Pages"}
+              <NotebookPen size={13} aria-hidden />{sent === "page" ? tx("已存入 Pages") : tx("存进 Pages")}
             </button>
           )}
-          <button type="button" className={styles.sumBtn} disabled={busy} onClick={() => sendToComposer(QUIZ_PROMPT, "quiz")}>
-            <ListChecks size={13} aria-hidden />{sent === "quiz" ? "已发送" : "生成随堂测验"}
+          <button type="button" className={styles.sumBtn} disabled={busy} onClick={() => sendToComposer(tx(QUIZ_PROMPT), "quiz")}>
+            <ListChecks size={13} aria-hidden />{sent === "quiz" ? tx("已发送") : tx("生成随堂测验")}
           </button>
-          <button type="button" className={styles.sumBtn} disabled={busy} onClick={() => sendToComposer(AGENDA_PROMPT, "agenda")}>
-            <CalendarClock size={13} aria-hidden />{sent === "agenda" ? "已发送" : "把复习排进日程"}
+          <button type="button" className={styles.sumBtn} disabled={busy} onClick={() => sendToComposer(tx(AGENDA_PROMPT), "agenda")}>
+            <CalendarClock size={13} aria-hidden />{sent === "agenda" ? tx("已发送") : tx("把复习排进日程")}
           </button>
         </div>
       </section>
@@ -378,7 +382,7 @@ function PlanBarInner({ conversationId, busy = false, canSaveToPage }: PlanBarPr
   }
 
   return (
-    <section className={cx(styles.bar, expanded && styles.barOpen)} aria-label="学习计划">
+    <section className={cx(styles.bar, expanded && styles.barOpen)} aria-label={tx("学习计划")}>
       {live}
       <div className={styles.head}>
         <button
@@ -412,8 +416,8 @@ function PlanBarInner({ conversationId, busy = false, canSaveToPage }: PlanBarPr
             onClick={() => { setMenuOpen((open) => !open); setConfirmClear(false); }}
             aria-haspopup="menu"
             aria-expanded={menuOpen}
-            aria-label="计划菜单"
-            title="计划菜单"
+            aria-label={tx("计划菜单")}
+            title={tx("计划菜单")}
           >
             <Ellipsis size={15} aria-hidden />
           </button>
@@ -425,7 +429,7 @@ function PlanBarInner({ conversationId, busy = false, canSaveToPage }: PlanBarPr
                 className={cx(styles.menuItem, confirmClear && styles.menuDanger)}
                 onClick={() => (confirmClear ? clearPlan() : setConfirmClear(true))}
               >
-                {confirmClear ? "再点一次确认清空" : "清空计划"}
+                {confirmClear ? tx("再点一次确认清空") : tx("清空计划")}
               </button>
             </div>
           )}
@@ -455,8 +459,8 @@ function PlanBarInner({ conversationId, busy = false, canSaveToPage }: PlanBarPr
               className={cx(styles.edit, styles.addInput)}
               value={addDraft}
               maxLength={TITLE_MAX}
-              placeholder="新步骤，回车添加"
-              aria-label="新步骤标题"
+              placeholder={tx("新步骤，回车添加")}
+              aria-label={tx("新步骤标题")}
               autoFocus
               onChange={(event) => setAddDraft(event.target.value)}
               onKeyDown={(event) => {
@@ -474,7 +478,7 @@ function PlanBarInner({ conversationId, busy = false, canSaveToPage }: PlanBarPr
             />
           ) : (
             <button type="button" className={styles.addBtn} onClick={() => setAdding(true)}>
-              <Plus size={13} aria-hidden />添加一步
+              <Plus size={13} aria-hidden />{tx("添加一步")}
             </button>
           )}
         </div>

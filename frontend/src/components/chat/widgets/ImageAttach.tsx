@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { ImagePlus, Loader2, X } from "lucide-react";
+import { useI18n } from "@/components/LanguageProvider";
 import { toApiError } from "@/lib/api/errors";
 import { ACCEPTED_IMAGE_TYPES, MAX_IMAGE_BYTES, uploadImage, type UploadedImage } from "@/lib/api/vision-client";
 import styles from "./VisionWidgets.module.css";
@@ -14,6 +15,7 @@ interface ImageAttachProps {
 
 /** Composer toolbar button: pick an image, upload it, hand back the [[kg-image:...]] marker. */
 export function ImageAttach({ onUploaded, disabled = false }: ImageAttachProps) {
+  const { tx } = useI18n();
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -23,11 +25,11 @@ export function ImageAttach({ onUploaded, disabled = false }: ImageAttachProps) 
     setError("");
     // The backend re-checks the bytes; this only saves a pointless upload.
     if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
-      setError("只支持 PNG、JPEG 或 WebP 图片。");
+      setError(tx("只支持 PNG、JPEG 或 WebP 图片。"));
       return;
     }
     if (file.size > MAX_IMAGE_BYTES) {
-      setError("图片不能超过 10 MB，请压缩或裁剪后再上传。");
+      setError(tx("图片不能超过 10 MB，请压缩或裁剪后再上传。"));
       return;
     }
     setBusy(true);
@@ -56,8 +58,8 @@ export function ImageAttach({ onUploaded, disabled = false }: ImageAttachProps) 
         type="button"
         className={styles.attachBtn}
         disabled={disabled || busy}
-        aria-label={busy ? "正在上传图片" : "上传图片（错题、电路图或题目截图）"}
-        title="上传图片：手写错题、电路图或题目截图"
+        aria-label={busy ? tx("正在上传图片") : tx("上传图片（错题、电路图或题目截图）")}
+        title={tx("上传图片：手写错题、电路图或题目截图")}
         onClick={() => input.current?.click()}
       >
         {busy ? <Loader2 size={16} className={styles.spin} aria-hidden /> : <ImagePlus size={16} aria-hidden />}
@@ -65,7 +67,7 @@ export function ImageAttach({ onUploaded, disabled = false }: ImageAttachProps) 
       {error && (
         <span className={styles.attachError} role="alert">
           <span>{error}</span>
-          <button type="button" aria-label="关闭提示" onClick={() => setError("")}>
+          <button type="button" aria-label={tx("关闭提示")} onClick={() => setError("")}>
             <X size={12} aria-hidden />
           </button>
         </span>

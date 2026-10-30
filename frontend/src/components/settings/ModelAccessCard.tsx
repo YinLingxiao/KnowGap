@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useId, useState } from "react";
 import { CircleCheck, Cpu, RefreshCw, TriangleAlert } from "lucide-react";
+import { useI18n } from "@/components/LanguageProvider";
 import type { HealthState } from "@/hooks/useWorkbench";
 import type { AIConfigStatus } from "@/lib/api/ai-config";
 import { toApiError } from "@/lib/api/errors";
@@ -77,6 +78,7 @@ function statusOf(providers: ProviderPublic[], key: string | null): AIConfigStat
 export function ModelAccessCard({
   source, health, signal, onCheckHealth, onConfigChange, plain = false, client, setupError = "",
 }: ModelAccessCardProps) {
+  const { tx } = useI18n();
   const fieldId = useId();
   const library = client ?? modelLibraryApi;
   const active = Boolean(client) || source === "api";
@@ -149,9 +151,11 @@ export function ModelAccessCard({
     const status = await reload(true);
     window.dispatchEvent(new Event(MODELS_CHANGED_EVENT));
     setNotice(status.configured
-      ? { tone: "ok", text: "正在测试连接，通过后会离开此页。" }
-      : { tone: "error", text: "默认模型还不可用。请确认服务商已启用，并且密钥或 ChatGPT 套餐已授权。" });
+      ? { tone: "ok", text: tx("正在测试连接，通过后会离开此页。") }
+      : { tone: "error", text: tx("默认模型还不可用。请确认服务商已启用，并且密钥或 ChatGPT 套餐已授权。") });
   });
+
+  const envHint = tx("在 {path} 设置 {flag} 并重启前端后，可在这里管理模型库。", { path: "\u0000", flag: "\u0001" });
 
   return (
     <section className={plain ? settings.embed : cx(settings.card, settings.cardWide)} aria-labelledby={plain ? undefined : `${fieldId}-title`} aria-busy={loading || undefined}>
@@ -159,24 +163,24 @@ export function ModelAccessCard({
         <header className={settings.cardHead}>
           <span className={settings.cardIcon} aria-hidden><Cpu size={16} /></span>
           <div className={settings.cardTitleBlock}>
-            <h3 id={`${fieldId}-title`} className={settings.cardTitle}>模型接入</h3>
-            <p className={settings.cardDesc}>服务商保存地址和密钥，下面挂多个模型。新对话使用默认模型。</p>
+            <h3 id={`${fieldId}-title`} className={settings.cardTitle}>{tx("模型接入")}</h3>
+            <p className={settings.cardDesc}>{tx("服务商保存地址和密钥，下面挂多个模型。新对话使用默认模型。")}</p>
           </div>
         </header>
       )}
 
       <dl className={settings.statusGrid}>
         <div className={settings.statusRow}>
-          <dt>后端服务</dt>
+          <dt>{tx("后端服务")}</dt>
           <dd>
-            {source === "mock" && !client ? <span className={settings.muted}>未使用</span> : (
+            {source === "mock" && !client ? <span className={settings.muted}>{tx("未使用")}</span> : (
               <>
                 <span className={cx(settings.dot, settings[`dot_${health}`])} aria-hidden />
-                {HEALTH_TEXT[health]}
+                {tx(HEALTH_TEXT[health])}
                 <code className={settings.inlineCode}>{hostOf(API_BASE_URL) || API_BASE_URL}</code>
                 <button type="button" className={settings.rowAction} onClick={onCheckHealth} disabled={health === "checking"}>
                   <RefreshCw size={12} aria-hidden />
-                  检测
+                  {tx("检测")}
                 </button>
               </>
             )}
@@ -186,27 +190,31 @@ export function ModelAccessCard({
 
       {!active ? (
         <p className={settings.stepNote}>
-          在 <code>frontend/.env.local</code> 设置 <code>NEXT_PUBLIC_DATA_SOURCE=api</code> 并重启前端后，可在这里管理模型库。
+          {envHint.split(/(\u0000|\u0001)/).map((part, index) => {
+            if (part === "\u0000") return <code key={index}>frontend/.env.local</code>;
+            if (part === "\u0001") return <code key={index}>NEXT_PUBLIC_DATA_SOURCE=api</code>;
+            return part;
+          })}
         </p>
       ) : loadError ? (
         <div className={styles.wrap}>
-          <p className={cx(styles.outcome, styles.bad)} role="alert"><TriangleAlert size={14} aria-hidden />{loadError}</p>
-          <Button size="sm" icon={<RefreshCw size={13} />} loading={loading} onClick={() => void run(async () => { setLoadError(""); await reload(); })}>重新读取</Button>
+          <p className={cx(styles.outcome, styles.bad)} role="alert"><TriangleAlert size={14} aria-hidden />{tx(loadError)}</p>
+          <Button size="sm" icon={<RefreshCw size={13} />} loading={loading} onClick={() => void run(async () => { setLoadError(""); await reload(); })}>{tx("重新读取")}</Button>
         </div>
       ) : loading && providers.length === 0 ? (
-        <p className={styles.note}>正在读取模型库…</p>
+        <p className={styles.note}>{tx("正在读取模型库…")}</p>
       ) : (
         <div className={styles.wrap}>
           {providers.length === 0 ? (
             <div className={styles.empty}>
-              <strong>添加你的第一个模型</strong>
-              <p>先添加一个服务商，填写一次地址和密钥，再挂上它提供的模型。</p>
-              <Button size="sm" variant="primary" onClick={() => setEditor(null)}>添加你的第一个模型</Button>
+              <strong>{tx("添加你的第一个模型")}</strong>
+              <p>{tx("先添加一个服务商，填写一次地址和密钥，再挂上它提供的模型。")}</p>
+              <Button size="sm" variant="primary" onClick={() => setEditor(null)}>{tx("添加你的第一个模型")}</Button>
             </div>
           ) : (
             <>
               <label className={styles.defaultRow}>
-                <span className={styles.label} id={`${fieldId}-default`}>默认模型</span>
+                <span className={styles.label} id={`${fieldId}-default`}>{tx("默认模型")}</span>
                 <select
                   className={styles.select}
                   aria-labelledby={`${fieldId}-default`}
@@ -222,9 +230,9 @@ export function ModelAccessCard({
                     });
                   }}
                 >
-                  {!defaultKey && <option value="">{catalog.length === 0 ? "还没有启用的模型" : "选择默认模型"}</option>}
-                  {catalog.length === 0 && defaultMissing && <option value="">还没有启用的模型</option>}
-                  {defaultMissing && defaultKey && <option value={defaultKey}>当前默认模型未启用</option>}
+                  {!defaultKey && <option value="">{catalog.length === 0 ? tx("还没有启用的模型") : tx("选择默认模型")}</option>}
+                  {catalog.length === 0 && defaultMissing && <option value="">{tx("还没有启用的模型")}</option>}
+                  {defaultMissing && defaultKey && <option value={defaultKey}>{tx("当前默认模型未启用")}</option>}
                   {groups.map((group) => (
                     <optgroup key={group.id} label={group.name}>
                       {group.models.map((model) => <option key={model.key} value={model.key}>{model.name}</option>)}
@@ -232,9 +240,9 @@ export function ModelAccessCard({
                   ))}
                 </select>
               </label>
-              <p className={styles.note}>新对话使用默认模型。选好后点保存并测试，通过才会离开此页。</p>
+              <p className={styles.note}>{tx("新对话使用默认模型。选好后点保存并测试，通过才会离开此页。")}</p>
               <Button size="sm" variant="primary" disabled={busy || catalog.length === 0} onClick={saveAndTest}>
-                保存并测试
+                {tx("保存并测试")}
               </Button>
               <ProviderList
                 providers={providers}
@@ -251,7 +259,7 @@ export function ModelAccessCard({
           {signal.state === "unavailable" && (
             <p className={cx(styles.outcome, styles.bad)} role="status">
               <TriangleAlert size={14} aria-hidden />
-              {signal.detail || "诊断时后端没有拿到有效的模型结果。"}
+              {signal.detail || tx("诊断时后端没有拿到有效的模型结果。")}
             </p>
           )}
           {(notice || setupError) && (
@@ -265,8 +273,8 @@ export function ModelAccessCard({
 
       <EditorDialog
         open={editor !== undefined}
-        title={editing ? `${editing.name} 接入` : "添加服务商"}
-        description={editing ? "地址、认证和密钥保存在这个服务商下，模型是它的子项。" : "先保存服务商，再添加模型。密钥只留在本机后端。"}
+        title={editing ? tx("{name} 接入", { name: editing.name }) : tx("添加服务商")}
+        description={editing ? tx("地址、认证和密钥保存在这个服务商下，模型是它的子项。") : tx("先保存服务商，再添加模型。密钥只留在本机后端。")}
         onClose={() => setEditor(undefined)}
       >
         {editor !== undefined && (

@@ -11,6 +11,7 @@
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { BookMarked, ExternalLink, Loader2, RefreshCw, X } from "lucide-react";
+import { useI18n } from "@/components/LanguageProvider";
 import { WIDGET_ASK_EVENT } from "../LearningWidget";
 import styles from "./ProblemSourceBadge.module.css";
 
@@ -68,16 +69,20 @@ export function buildMoreRequest(knowledgePoint?: string | null, patternId?: str
 }
 
 /** 标签文案：真题显示出处，改编题显示「改编自 …」，讲义题显示「讲义例题 · …」。 */
-export function badgeText(source: ProblemSource): string {
+export function badgeText(
+  source: ProblemSource,
+  tr: (text: string, vars?: Record<string, string | number>) => string = (text) => text,
+): string {
   const label = clean(source.label, 60);
   if (label) return label;
-  const base = clean(source.origin_type, 20) || "经典母题";
-  return source.kind === "adapted" ? `改编自 ${base}` : base;
+  const base = clean(source.origin_type, 20) || tr("经典母题");
+  return source.kind === "adapted" ? tr("改编自 {base}", { base }) : base;
 }
 
 export function ProblemSourceBadge({
   source, patternId, knowledgePoint, fingerprint, onRequestMore, disabled = false,
 }: ProblemSourceBadgeProps) {
+  const { tx } = useI18n();
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const [filled, setFilled] = useState(false);
@@ -86,7 +91,7 @@ export function ProblemSourceBadge({
   const panelId = useId();
 
   const href = safeHref(source.url);
-  const text = badgeText(source);
+  const text = badgeText(source, tx);
   const adapted = source.kind === "adapted";
 
   const close = useCallback((restoreFocus: boolean) => {
@@ -142,12 +147,12 @@ export function ProblemSourceBadge({
         className={adapted ? `${styles.badge} ${styles.badgeAdapted}` : styles.badge}
         aria-expanded={open}
         aria-controls={panelId}
-        aria-label={`题目来源：${text}，点击查看详情`}
+        aria-label={tx("题目来源：{text}，点击查看详情", { text })}
         title={text}
         onClick={() => setOpen((value) => !value)}
       >
         <BookMarked size={12} aria-hidden />
-        <span className={styles.badgePrefix}>真题母题溯源</span>
+        <span className={styles.badgePrefix}>{tx("真题母题溯源")}</span>
         <span className={styles.badgeText}>{text}</span>
       </button>
 
@@ -157,37 +162,37 @@ export function ProblemSourceBadge({
         onClick={() => void requestMore()}
         disabled={busy}
         aria-busy={pending}
-        aria-label="再来一道同型好题"
-        title={filled ? "已填入输入框，按发送即可" : "再来一道同型好题"}
+        aria-label={tx("再来一道同型好题")}
+        title={filled ? tx("已填入输入框，按发送即可") : tx("再来一道同型好题")}
       >
         {pending ? <Loader2 size={12} className={styles.spin} aria-hidden /> : <RefreshCw size={12} aria-hidden />}
-        <span className={styles.moreText}>{filled ? "已填入输入框" : "再来一道同型好题"}</span>
+        <span className={styles.moreText}>{filled ? tx("已填入输入框") : tx("再来一道同型好题")}</span>
       </button>
 
       {open && (
-        <div id={panelId} role="dialog" aria-label="题目来源详情" className={styles.panel}>
+        <div id={panelId} role="dialog" aria-label={tx("题目来源详情")} className={styles.panel}>
           <div className={styles.panelHead}>
-            <strong>{adapted ? "改编题来源" : "原题来源"}</strong>
-            <button type="button" className={styles.closeBtn} onClick={() => close(true)} aria-label="关闭来源详情">
+            <strong>{adapted ? tx("改编题来源") : tx("原题来源")}</strong>
+            <button type="button" className={styles.closeBtn} onClick={() => close(true)} aria-label={tx("关闭来源详情")}>
               <X size={14} aria-hidden />
             </button>
           </div>
           <dl className={styles.fields}>
-            <dt>来源类型</dt>
-            <dd>{clean(source.origin_type, 20) || "经典母题"}{adapted ? "（已改编）" : ""}</dd>
-            {source.title && (<><dt>出处</dt><dd>{clean(source.title, 120)}</dd></>)}
-            {source.site && (<><dt>站点</dt><dd>{clean(source.site, 60)}</dd></>)}
-            {source.retrieved_at && (<><dt>检索时间</dt><dd>{clean(source.retrieved_at, 20)}</dd></>)}
-            {adapted && source.adaptation_note && (<><dt>改编说明</dt><dd>{clean(source.adaptation_note, 200)}</dd></>)}
+            <dt>{tx("来源类型")}</dt>
+            <dd>{clean(source.origin_type, 20) || tx("经典母题")}{adapted ? tx("（已改编）") : ""}</dd>
+            {source.title && (<><dt>{tx("出处")}</dt><dd>{clean(source.title, 120)}</dd></>)}
+            {source.site && (<><dt>{tx("站点")}</dt><dd>{clean(source.site, 60)}</dd></>)}
+            {source.retrieved_at && (<><dt>{tx("检索时间")}</dt><dd>{clean(source.retrieved_at, 20)}</dd></>)}
+            {adapted && source.adaptation_note && (<><dt>{tx("改编说明")}</dt><dd>{clean(source.adaptation_note, 200)}</dd></>)}
           </dl>
           {href ? (
             <a className={styles.link} href={href} target="_blank" rel="noopener noreferrer nofollow">
               <ExternalLink size={12} aria-hidden />
-              <span>查看原文</span>
-              <span className={styles.srOnly}>（在新窗口打开）</span>
+              <span>{tx("查看原文")}</span>
+              <span className={styles.srOnly}>{tx("（在新窗口打开）")}</span>
             </a>
           ) : (
-            <p className={styles.noLink}>{source.origin_type === "讲义例题" ? "来自你上传的课程讲义" : "原文链接不可用"}</p>
+            <p className={styles.noLink}>{source.origin_type === "讲义例题" ? tx("来自你上传的课程讲义") : tx("原文链接不可用")}</p>
           )}
         </div>
       )}

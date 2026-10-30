@@ -2,6 +2,7 @@
 
 import { forwardRef, useEffect, useMemo, useState } from "react";
 import { Plus } from "lucide-react";
+import { useI18n } from "@/components/LanguageProvider";
 import { parseQuickAdd, quickAddToInput, type QuickAddToken } from "@/lib/agenda/quickAdd";
 import type { TaskInput } from "@/lib/agenda/types";
 import { cx } from "@/lib/cx";
@@ -34,6 +35,7 @@ const KIND_NAME: Record<QuickAddToken["kind"], string> = {
 export const QuickAdd = forwardRef<HTMLInputElement, QuickAddProps>(function QuickAdd(
   { subjects, defaultSubjectId, initialText = "", autoFocus = false, onCancel, onCreate }, ref,
 ) {
+  const { tx } = useI18n();
   const [text, setText] = useState(initialText);
   const [ignored, setIgnored] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
@@ -46,8 +48,8 @@ export const QuickAdd = forwardRef<HTMLInputElement, QuickAddProps>(function Qui
 
   // now 每次输入时重新取，跨午夜也不会算错
   const parsed = useMemo(
-    () => parseQuickAdd(text, new Date(), subjects, ignored),
-    [text, subjects, ignored],
+    () => parseQuickAdd(text, new Date(), subjects, ignored, tx),
+    [text, subjects, ignored, tx],
   );
   const canSubmit = parsed.title.length > 0 && !busy;
 
@@ -74,8 +76,8 @@ export const QuickAdd = forwardRef<HTMLInputElement, QuickAddProps>(function Qui
           value={text}
           disabled={busy}
           maxLength={400}
-          placeholder="添加任务，如：明天下午3点 复习戴维南定理 #电路原理 p1 45分钟"
-          aria-label="快速添加任务"
+          placeholder={tx("添加任务，如：明天下午3点 复习戴维南定理 #电路原理 p1 45分钟")}
+          aria-label={tx("快速添加任务")}
           onChange={(event) => {
             setText(event.target.value);
             if (!event.target.value) setIgnored([]);
@@ -92,11 +94,11 @@ export const QuickAdd = forwardRef<HTMLInputElement, QuickAddProps>(function Qui
             }
           }}
         />
-        {text && <kbd className={styles.enterHint}>回车</kbd>}
+        {text && <kbd className={styles.enterHint}>{tx("回车")}</kbd>}
       </div>
 
       {parsed.tokens.length > 0 && (
-        <div className={styles.chips} aria-label="已识别的内容，点击可取消">
+        <div className={styles.chips} aria-label={tx("已识别的内容，点击可取消")}>
           {parsed.tokens.map((token) => (
             <button
               key={`${token.key}:${token.start}`}
@@ -105,7 +107,7 @@ export const QuickAdd = forwardRef<HTMLInputElement, QuickAddProps>(function Qui
               style={token.kind === "subject"
                 ? { "--chip-dot": subjects.find((item) => item.id === token.subjectId)?.color } as React.CSSProperties
                 : undefined}
-              title={`${KIND_NAME[token.kind]}：${token.raw}（点击取消，文字会回到标题）`}
+              title={tx("{kind}：{raw}（点击取消，文字会回到标题）", { kind: tx(KIND_NAME[token.kind]), raw: token.raw })}
               onClick={() => setIgnored((items) => [...items, token.key])}
             >
               {token.kind === "subject" && <span className={styles.dot} aria-hidden />}
@@ -114,13 +116,13 @@ export const QuickAdd = forwardRef<HTMLInputElement, QuickAddProps>(function Qui
             </button>
           ))}
           <span className={styles.titlePreview} title={parsed.title}>
-            标题：{parsed.title || "（空）"}
+            {tx("标题：{title}", { title: parsed.title || tx("（空）") })}
           </span>
         </div>
       )}
       {ignored.length > 0 && (
         <button type="button" className={styles.restore} onClick={() => setIgnored([])}>
-          恢复已取消的识别（{ignored.length}）
+          {tx("恢复已取消的识别（{count}）", { count: ignored.length })}
         </button>
       )}
     </div>

@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Gauge, MessageSquarePlus, RotateCcw } from "lucide-react";
 import { cx } from "@/lib/cx";
+import { useI18n } from "@/components/LanguageProvider";
 import base from "../LearningWidget.module.css";
 import { askInComposer } from "./widgetEvents";
 import styles from "./VivaRadarWidget.module.css";
@@ -76,7 +77,8 @@ function tier(score: number | null): string {
 }
 
 export function VivaRadarWidget({ data }: { data: Record<string, unknown> }) {
-  const title = text(data.title) || "模拟复试 · 五维评估";
+  const { tx } = useI18n();
+  const title = text(data.title) || tx("模拟复试 · 五维评估");
   const topic = text(data.topic);
   const verdict = text(data.verdict);
   const suggestions = useMemo(
@@ -103,14 +105,14 @@ export function VivaRadarWidget({ data }: { data: Record<string, unknown> }) {
         <div className={base.widgetTitleWrap}>
           <span className={base.widgetBadge}>
             <Gauge size={12} aria-hidden />
-            模拟复试
+            {tx("模拟复试")}
           </span>
           <strong className={base.widgetTitle}>{title}</strong>
           {topic && <span className={styles.topic}>{topic}</span>}
         </div>
         {overall !== null && (
-          <span className={cx(styles.overall, tier(overall))} title="五个维度的平均分">
-            综合 <strong>{overall}</strong>
+          <span className={cx(styles.overall, tier(overall))} title={tx("五个维度的平均分")}>
+            {tx("综合")} <strong>{overall}</strong>
           </span>
         )}
       </header>
@@ -120,7 +122,7 @@ export function VivaRadarWidget({ data }: { data: Record<string, unknown> }) {
           className={styles.chart}
           viewBox={`0 0 ${W} ${H}`}
           role="img"
-          aria-label={`五维雷达图：${dims.map((d) => `${d.label} ${d.score ?? "未评估"}`).join("，")}`}
+          aria-label={tx("五维雷达图：{items}", { items: dims.map((d) => `${tx(d.label)} ${d.score ?? tx("未评估")}`).join(tx("，")) })}
         >
           {RINGS.map((r) => (
             <polygon key={r} points={polygon(DIMENSIONS.map(() => r))} className={r === 1 ? styles.ringOuter : styles.ring} />
@@ -195,7 +197,7 @@ export function VivaRadarWidget({ data }: { data: Record<string, unknown> }) {
             onMouseLeave={() => setActive(null)}
           >
             <div className={styles.dimHead}>
-              <span className={styles.dimLabel}>{d.label}</span>
+              <span className={styles.dimLabel}>{tx(d.label)}</span>
               <span className={styles.bar} aria-hidden>
                 <span className={tier(d.score)} style={{ width: `${d.score ?? 0}%` }} />
               </span>
@@ -207,7 +209,7 @@ export function VivaRadarWidget({ data }: { data: Record<string, unknown> }) {
                 {d.reason && <span>{d.reason}</span>}
               </p>
             )}
-            {d.score === null && <p className={styles.dimBody}>本场回答未覆盖该维度，未评分。</p>}
+            {d.score === null && <p className={styles.dimBody}>{tx("本场回答未覆盖该维度，未评分。")}</p>}
           </div>
         ))}
       </div>
@@ -216,13 +218,13 @@ export function VivaRadarWidget({ data }: { data: Record<string, unknown> }) {
         <div className={styles.summary}>
           {verdict && (
             <p className={styles.verdict}>
-              <span className={styles.summaryLabel}>面试官总评</span>
+              <span className={styles.summaryLabel}>{tx("面试官总评")}</span>
               {verdict}
             </p>
           )}
           {suggestions.length > 0 && (
             <div>
-              <span className={styles.summaryLabel}>改进建议</span>
+              <span className={styles.summaryLabel}>{tx("改进建议")}</span>
               <ul className={styles.suggestions}>
                 {suggestions.map((s, i) => (
                   <li key={`${i}-${s}`}>{s}</li>
@@ -234,15 +236,15 @@ export function VivaRadarWidget({ data }: { data: Record<string, unknown> }) {
       )}
 
       <footer className={base.widgetFoot}>
-        <span className={base.footHint}>悬停雷达图顶点查看评分依据</span>
+        <span className={base.footHint}>{tx("悬停雷达图顶点查看评分依据")}</span>
         <div className={styles.actions}>
           <button
             type="button"
             className={base.askAiBtn}
-            onClick={() => askInComposer(`再来一场模拟复试${topic ? `，这次换一个比「${topic}」更难的知识点` : ""}`)}
+            onClick={() => askInComposer(tx("再来一场模拟复试{topic}", { topic: topic ? tx("，这次换一个比「{topic}」更难的知识点", { topic }) : "" }))}
           >
             <RotateCcw size={12} aria-hidden />
-            <span>再来一场</span>
+            <span>{tx("再来一场")}</span>
           </button>
           {weakest && (
             <button
@@ -250,12 +252,12 @@ export function VivaRadarWidget({ data }: { data: Record<string, unknown> }) {
               className={base.askAiBtn}
               onClick={() =>
                 askInComposer(
-                  `刚才的复试里我最弱的是「${weakest.label}」（${weakest.score} 分）。请具体讲讲我该补什么，并给一个能马上练的例子。`,
+                  tx("刚才的复试里我最弱的是「{label}」（{score} 分）。请具体讲讲我该补什么，并给一个能马上练的例子。", { label: tx(weakest.label), score: weakest.score ?? "" }),
                 )
               }
             >
               <MessageSquarePlus size={12} aria-hidden />
-              <span>补强{weakest.label}</span>
+              <span>{tx("补强{label}", { label: tx(weakest.label) })}</span>
             </button>
           )}
         </div>

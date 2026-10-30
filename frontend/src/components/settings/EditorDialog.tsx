@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, type ReactNode } from "react";
 import { X } from "lucide-react";
+import { useI18n } from "@/components/LanguageProvider";
 import styles from "./EditorDialog.module.css";
 
 interface EditorDialogProps {
@@ -17,6 +18,7 @@ interface EditorDialogProps {
  * 页面本身只留一排服务商卡片和当前状态，不再把一长串输入框铺在页面上。
  */
 export function EditorDialog({ open, title, description, onClose, children }: EditorDialogProps) {
+  const { tx } = useI18n();
   const dialog = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
@@ -43,7 +45,7 @@ export function EditorDialog({ open, title, description, onClose, children }: Ed
             <h4>{title}</h4>
             {description && <p>{description}</p>}
           </div>
-          <button type="button" className={styles.close} onClick={onClose} aria-label="关闭">
+          <button type="button" className={styles.close} onClick={onClose} aria-label={tx("关闭")}>
             <X size={16} aria-hidden />
           </button>
         </header>

@@ -174,7 +174,7 @@ export function SettingsDialog({
   const [tab, setTab] = useState<Tab>(initialTab);
   const [query, setQuery] = useState("");
   const userId = user?.id || studentId;
-  const { t } = useI18n();
+  const { t, tx } = useI18n();
 
   useEffect(() => {
     setTab(initialTab);
@@ -266,7 +266,7 @@ export function SettingsDialog({
                 {tab === "reflect" && <ReflectPane />}
                 {tab === "models" && (
                   <section>
-                    <h2 className={styles.sectionTitle}>模型接入与服务模型分工</h2>
+                    <h2 className={styles.sectionTitle}>{tx("模型接入与服务模型分工")}</h2>
                     <EffortRow />
                     <ModelAccessCard
                       plain
@@ -451,15 +451,16 @@ function GeneralPane({ userId }: { userId: string }) {
 }
 
 function PreferencesPane() {
+  const { tx } = useI18n();
   const [entries, setEntries] = useState({ background: "", explanation: "", interaction: "" });
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     let live = true;
-    chatApi.learningPreferences().then((next) => { if (live) setEntries(next); }).catch(() => { if (live) setNote("读不到已保存的偏好。"); });
+    chatApi.learningPreferences().then((next) => { if (live) setEntries(next); }).catch(() => { if (live) setNote(tx("读不到已保存的偏好。")); });
     return () => { live = false; };
-  }, []);
+  }, [tx]);
 
   const fields = [
     ["background", "学习背景", "最近在学什么，学到哪了"],
@@ -469,8 +470,8 @@ function PreferencesPane() {
 
   return (
     <section>
-      <h2 className={styles.sectionTitle}>学习偏好</h2>
-      <p className={styles.settingRowDesc}>可选。写完才会记住，不填也能直接学。</p>
+      <h2 className={styles.sectionTitle}>{tx("学习偏好")}</h2>
+      <p className={styles.settingRowDesc}>{tx("可选。写完才会记住，不填也能直接学。")}</p>
       <form
         className={styles.fields}
         onSubmit={(event) => {
@@ -478,27 +479,27 @@ function PreferencesPane() {
           setBusy(true);
           setNote("");
           void chatApi.saveLearningPreferences(entries)
-            .then((saved) => { setEntries(saved); setNote("已记住"); })
-            .catch((error: unknown) => setNote(error instanceof Error ? error.message : "没能保存"))
+            .then((saved) => { setEntries(saved); setNote(tx("已记住")); })
+            .catch((error: unknown) => setNote(error instanceof Error ? error.message : tx("没能保存")))
             .finally(() => setBusy(false));
         }}
       >
         {fields.map(([key, label, placeholder]) => (
           <label key={key} className={styles.fieldFull}>
-            <span className={styles.fieldLabel}>{label}</span>
+            <span className={styles.fieldLabel}>{tx(label)}</span>
             <input
               className={styles.input}
               maxLength={220}
-              aria-label={label}
-              placeholder={placeholder}
+              aria-label={tx(label)}
+              placeholder={tx(placeholder)}
               value={entries[key]}
               onChange={(event) => setEntries((current) => ({ ...current, [key]: event.target.value }))}
             />
           </label>
         ))}
-        <button className={styles.rowBtnPrimary} type="submit" disabled={busy}>记住这些偏好</button>
+        <button className={styles.rowBtnPrimary} type="submit" disabled={busy}>{tx("记住这些偏好")}</button>
       </form>
-      <SettingRow title="演示数据" desc="删掉本账号里导入的演示空间和日程。">
+      <SettingRow title={tx("演示数据")} desc={tx("删掉本账号里导入的演示空间和日程。")}>
         <button
           className={styles.rowBtn}
           type="button"
@@ -507,12 +508,12 @@ function PreferencesPane() {
             setBusy(true);
             setNote("");
             void chatApi.resetDemo()
-              .then(() => setNote("演示数据已清除"))
-              .catch((error: unknown) => setNote(error instanceof Error ? error.message : "没能清除"))
+              .then(() => setNote(tx("演示数据已清除")))
+              .catch((error: unknown) => setNote(error instanceof Error ? error.message : tx("没能清除")))
               .finally(() => setBusy(false));
           }}
         >
-          清除演示数据
+          {tx("清除演示数据")}
         </button>
       </SettingRow>
       {note && <p className={styles.fieldHint}>{note}</p>}
@@ -530,13 +531,14 @@ function AccountPane({
   onOpenPreferences?: () => void;
   onClose: () => void;
 }) {
+  const { tx } = useI18n();
   const [name, setName] = useState(user?.displayName || "演示学习者");
   const [curPw, setCurPw] = useState("");
   const [newPw, setNewPw] = useState("");
   const [domains, setDomains] = useState<string[]>([]);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
-  const providerLabel = user?.provider === "email" ? "邮箱账号" : "本机演示身份";
+  const providerLabel = user?.provider === "email" ? tx("邮箱账号") : tx("本机演示身份");
 
   useEffect(() => {
     void chatApi
@@ -564,25 +566,25 @@ function AccountPane({
       const updated = next.length > 0 ? [...kept, `常学领域：${next.join("、")}`] : kept;
       await chatApi.saveAgentNote("user", updated.join("\n§\n"));
     } catch {
-      setNote("保存常学领域失败");
+      setNote(tx("保存常学领域失败"));
     }
   };
 
   return (
     <section>
-      <h2 className={styles.sectionTitle}>个人资料与账户</h2>
+      <h2 className={styles.sectionTitle}>{tx("个人资料与账户")}</h2>
       <div className={styles.groupCard}>
-        <div className={styles.groupCardHead}>账户信息</div>
+        <div className={styles.groupCardHead}>{tx("账户信息")}</div>
         <div className={styles.groupCardBody}>
           <div className={styles.accountHead}>
-            <span className={styles.accountAvatar}>{user?.avatarText || name.slice(0, 1) || "学"}</span>
+            <span className={styles.accountAvatar}>{user?.avatarText || name.slice(0, 1) || tx("学")}</span>
             <div>
               <p className={styles.settingRowTitle}>{user?.displayName || name}</p>
               <p className={styles.settingRowDesc}>{user?.username || studentId} · {providerLabel}</p>
             </div>
           </div>
 
-          <SettingRow title="显示昵称" desc="用于侧栏底部头像与首页问候语。">
+          <SettingRow title={tx("显示昵称")} desc={tx("用于侧栏底部头像与首页问候语。")}>
             <form
               className={styles.nameForm}
               onSubmit={(event) => {
@@ -590,16 +592,16 @@ function AccountPane({
                 if (!onRename) return;
                 setBusy(true);
                 void onRename(name)
-                  .then(() => setNote("昵称已保存"))
+                  .then(() => setNote(tx("昵称已保存")))
                   .catch((error: unknown) => {
-                    setNote(error instanceof Error ? error.message : "保存失败");
+                    setNote(error instanceof Error ? error.message : tx("保存失败"));
                   })
                   .finally(() => setBusy(false));
               }}
             >
-              <input value={name} maxLength={30} onChange={(event) => setName(event.target.value)} aria-label="昵称" />
+              <input value={name} maxLength={30} onChange={(event) => setName(event.target.value)} aria-label={tx("昵称")} />
               <button className={styles.rowBtn} type="submit" disabled={busy || !name.trim()}>
-                保存
+                {tx("保存")}
               </button>
             </form>
           </SettingRow>
@@ -607,10 +609,10 @@ function AccountPane({
           {/* 参照 LobeHub 图 4「兴趣/常学领域」多选胶囊墙 */}
           <div className={styles.domainRow}>
             <div className={styles.settingRowInfo}>
-              <p className={styles.settingRowTitle}>常学与关注领域</p>
-              <p className={styles.settingRowDesc}>点选后自动同步至 USER 画像，AI 举例时会优先贴合你的领域背景。</p>
+              <p className={styles.settingRowTitle}>{tx("常学与关注领域")}</p>
+              <p className={styles.settingRowDesc}>{tx("点选后自动同步至 USER 画像，AI 举例时会优先贴合你的领域背景。")}</p>
             </div>
-            <div className={styles.domainGrid} role="group" aria-label="常学领域">
+            <div className={styles.domainGrid} role="group" aria-label={tx("常学领域")}>
               {INTEREST_DOMAINS.map((domain) => {
                 const active = domains.includes(domain);
                 return (
@@ -621,7 +623,7 @@ function AccountPane({
                     className={cx(styles.domainTag, active && styles.domainTagActive)}
                     onClick={() => void toggleDomain(domain)}
                   >
-                    <span>{domain}</span>
+                    <span>{tx(domain)}</span>
                   </button>
                 );
               })}
@@ -629,7 +631,7 @@ function AccountPane({
           </div>
 
           {user?.provider === "email" && (
-            <SettingRow title="修改密码" desc="输入当前密码与新密码（至少 6 位）。">
+            <SettingRow title={tx("修改密码")} desc={tx("输入当前密码与新密码（至少 6 位）。")}>
               <form
                 className={styles.nameForm}
                 onSubmit={(event) => {
@@ -640,10 +642,10 @@ function AccountPane({
                     .then(() => {
                       setCurPw("");
                       setNewPw("");
-                      setNote("密码已更新");
+                      setNote(tx("密码已更新"));
                     })
                     .catch((error: unknown) => {
-                      setNote(error instanceof Error ? error.message : "密码修改失败");
+                      setNote(error instanceof Error ? error.message : tx("密码修改失败"));
                     })
                     .finally(() => setBusy(false));
                 }}
@@ -651,31 +653,31 @@ function AccountPane({
                 <input
                   type="password"
                   value={curPw}
-                  placeholder="当前密码"
-                  aria-label="当前密码"
+                  placeholder={tx("当前密码")}
+                  aria-label={tx("当前密码")}
                   onChange={(event) => setCurPw(event.target.value)}
                 />
                 <input
                   type="password"
                   value={newPw}
-                  placeholder="新密码（6位+）"
-                  aria-label="新密码"
+                  placeholder={tx("新密码（6位+）")}
+                  aria-label={tx("新密码")}
                   onChange={(event) => setNewPw(event.target.value)}
                 />
                 <button className={styles.rowBtn} type="submit" disabled={busy || !curPw || newPw.length < 6}>
-                  更新密码
+                  {tx("更新密码")}
                 </button>
               </form>
             </SettingRow>
           )}
 
-          <SettingRow title="学习偏好" desc="可选。写下背景和讲法，之后的讲解会按这个来。">
+          <SettingRow title={tx("学习偏好")} desc={tx("可选。写下背景和讲法，之后的讲解会按这个来。")}>
             <button className={styles.rowBtn} type="button" onClick={() => onOpenPreferences?.()}>
-              去填写
+              {tx("去填写")}
             </button>
           </SettingRow>
 
-          <SettingRow title="退出登录" desc="清除本机登录会话并返回认证界面。">
+          <SettingRow title={tx("退出登录")} desc={tx("清除本机登录会话并返回认证界面。")}>
             <button
               className={cx(styles.rowBtn, styles.textBtnDanger)}
               type="button"
@@ -684,7 +686,7 @@ function AccountPane({
                 void onLogout?.();
               }}
             >
-              退出当前账号
+              {tx("退出当前账号")}
             </button>
           </SettingRow>
         </div>
@@ -695,6 +697,7 @@ function AccountPane({
 }
 
 function UsagePane() {
+  const { tx } = useI18n();
   const [total, setTotal] = useState<TokenUsage | null>(null);
   const [spaces, setSpaces] = useState<Array<TokenUsage & { id: string; name: string }>>([]);
   const [note, setNote] = useState("");
@@ -705,32 +708,40 @@ function UsagePane() {
         setTotal(data.total);
         setSpaces(data.spaces);
       })
-      .catch(() => setNote("读不到用量"));
-  }, []);
+      .catch(() => setNote(tx("读不到用量")));
+  }, [tx]);
   return (
     <section>
-      <h2 className={styles.sectionTitle}>用量</h2>
+      <h2 className={styles.sectionTitle}>{tx("用量")}</h2>
       {total && (
         <SettingRow
-          title="当前账号总计"
-          desc={`共 ${total.requests} 次请求 · 输入 ${total.inputTokens.toLocaleString()} Tokens · 输出 ${total.outputTokens.toLocaleString()} Tokens`}
+          title={tx("当前账号总计")}
+          desc={tx("共 {requests} 次请求 · 输入 {input} Tokens · 输出 {output} Tokens", {
+            requests: total.requests,
+            input: total.inputTokens.toLocaleString(),
+            output: total.outputTokens.toLocaleString(),
+          })}
         >
-          <span className={styles.skillMeta}>缓存命中 {(total.cachedTokens ?? 0).toLocaleString()}</span>
+          <span className={styles.skillMeta}>{tx("缓存命中 {count}", { count: (total.cachedTokens ?? 0).toLocaleString() })}</span>
         </SettingRow>
       )}
-      {spaces.length > 0 && <p className={styles.sectionLabel}>按学习空间拆分</p>}
+      {spaces.length > 0 && <p className={styles.sectionLabel}>{tx("按学习空间拆分")}</p>}
       {spaces.map((space) => (
         <SettingRow
           key={space.id}
           title={space.name}
-          desc={`${space.requests} 次请求 · 输入 ${space.inputTokens.toLocaleString()} · 输出 ${space.outputTokens.toLocaleString()}`}
+          desc={tx("{requests} 次请求 · 输入 {input} · 输出 {output}", {
+            requests: space.requests,
+            input: space.inputTokens.toLocaleString(),
+            output: space.outputTokens.toLocaleString(),
+          })}
         >
-          <span className={styles.skillMeta}>缓存 {(space.cachedTokens ?? 0).toLocaleString()}</span>
+          <span className={styles.skillMeta}>{tx("缓存 {count}", { count: (space.cachedTokens ?? 0).toLocaleString() })}</span>
         </SettingRow>
       ))}
-      {!total && !note && <p className={styles.emptyLine}>正在读取用量…</p>}
+      {!total && !note && <p className={styles.emptyLine}>{tx("正在读取用量…")}</p>}
       {note && <p className={styles.emptyLine}>{note}</p>}
-      {total && spaces.length === 0 && <p className={styles.emptyLine}>还没有按学习空间拆分的用量。</p>}
+      {total && spaces.length === 0 && <p className={styles.emptyLine}>{tx("还没有按学习空间拆分的用量。")}</p>}
     </section>
   );
 }
@@ -777,6 +788,7 @@ function parsePriorSkills(notes: string[]) {
 }
 
 function MemoryPane() {
+  const { tx } = useI18n();
   const [approval, setApproval] = useState(false);
   const [workspace, setWorkspace] = useState("");
   const [autoApprove, setAutoApprove] = useState(false);
@@ -797,7 +809,7 @@ function MemoryPane() {
         setWorkspace(settings.workspace);
         setAutoApprove(settings.autoApprove);
       })
-      .catch(() => setNote("读不到记忆设置"));
+      .catch(() => setNote(tx("读不到记忆设置")));
     void chatApi
       .agentNotes()
       .then((notes) => {
@@ -805,8 +817,8 @@ function MemoryPane() {
         setMemoryNotes(splitEntries(notes.memory));
         setLimits(notes.limits);
       })
-      .catch(() => setNote("读不到画像"));
-  }, []);
+      .catch(() => setNote(tx("读不到画像")));
+  }, [tx]);
 
   async function saveApproval(next: boolean) {
     setApproval(next);
@@ -814,7 +826,7 @@ function MemoryPane() {
       await chatApi.saveAgentSettings({ workspace, autoApprove, memoryWriteApproval: next });
     } catch (error) {
       setApproval(!next);
-      setNote(error instanceof Error ? error.message : "保存失败");
+      setNote(error instanceof Error ? error.message : tx("保存失败"));
     }
   }
 
@@ -836,7 +848,7 @@ function MemoryPane() {
     try {
       await save("user", updated);
     } catch (error) {
-      setNote(error instanceof Error ? error.message : "保存先验技能失败");
+      setNote(error instanceof Error ? error.message : tx("保存先验技能失败"));
     }
   }
 
@@ -850,21 +862,21 @@ function MemoryPane() {
 
   return (
     <section>
-      <h2 className={styles.sectionTitle}>记忆</h2>
-      <SettingRow title="记忆写入需确认" desc="开启后，Agent 修改长期笔记前会先进入待确认列表。">
-        <Toggle checked={approval} label="记忆写入需确认" onChange={(value) => void saveApproval(value)} />
+      <h2 className={styles.sectionTitle}>{tx("记忆")}</h2>
+      <SettingRow title={tx("记忆写入需确认")} desc={tx("开启后，Agent 修改长期笔记前会先进入待确认列表。")}>
+        <Toggle checked={approval} label={tx("记忆写入需确认")} onChange={(value) => void saveApproval(value)} />
       </SettingRow>
       <div className={styles.sectionHeaderRow}>
-        <p className={styles.sectionLabel}>五层白盒记忆 USER（5-Layer White-Box Memory）</p>
-        <span className={styles.capacityTag}>{userChars} / {limits.user} 字</span>
+        <p className={styles.sectionLabel}>{tx("五层白盒记忆 USER（5-Layer White-Box Memory）")}</p>
+        <span className={styles.capacityTag}>{tx("{used} / {limit} 字", { used: userChars, limit: limits.user })}</span>
       </div>
 
       <div className={styles.anchorBox}>
         <div className={styles.settingRowInfo}>
-          <p className={styles.settingRowTitle}>Identity · 先验技能锚点（我已掌握的旧知）</p>
-          <p className={styles.settingRowDesc}>点选后同步到 USER 的「先验技能：」条目，AI 会用你熟悉的旧知做类比迁移。</p>
+          <p className={styles.settingRowTitle}>{tx("Identity · 先验技能锚点（我已掌握的旧知）")}</p>
+          <p className={styles.settingRowDesc}>{tx("点选后同步到 USER 的「先验技能：」条目，AI 会用你熟悉的旧知做类比迁移。")}</p>
         </div>
-        <div className={styles.domainGrid} role="group" aria-label="先验技能锚点">
+        <div className={styles.domainGrid} role="group" aria-label={tx("先验技能锚点")}>
           {skillOptions.map((skill) => (
             <button
               key={skill}
@@ -891,20 +903,20 @@ function MemoryPane() {
             className={styles.noteInput}
             value={customSkill}
             maxLength={30}
-            aria-label="自定义先验技能"
-            placeholder="自定义已掌握的技能或课程，如「离散数学」"
+            aria-label={tx("自定义先验技能")}
+            placeholder={tx("自定义已掌握的技能或课程，如「离散数学」")}
             onChange={(event) => setCustomSkill(event.target.value)}
           />
           <button className={styles.rowBtn} type="submit" disabled={!customSkill.trim()}>
-            添加锚点
+            {tx("添加锚点")}
           </button>
         </form>
       </div>
 
-      <div className={styles.layerLegend} aria-label="五层白盒记忆分布">
+      <div className={styles.layerLegend} aria-label={tx("五层白盒记忆分布")}>
         {layerCounts.map((item) => (
-          <span key={item.id} className={cx(styles.layerBadge, styles[`layer_${item.id}`])} title={item.hint}>
-            [{item.tag} {item.label}] {item.count}
+          <span key={item.id} className={cx(styles.layerBadge, styles[`layer_${item.id}`])} title={tx(item.hint)}>
+            [{item.tag} {tx(item.label)}] {item.count}
           </span>
         ))}
       </div>
@@ -912,19 +924,19 @@ function MemoryPane() {
         items={userNotes}
         onDelete={(index) =>
           void save("user", userNotes.filter((_, item) => item !== index)).catch((error: unknown) =>
-            setNote(error instanceof Error ? error.message : "删除失败"),
+            setNote(error instanceof Error ? error.message : tx("删除失败")),
           )
         }
       />
       <div className={styles.sectionHeaderRow}>
-        <p className={styles.sectionLabel}>环境笔记 MEMORY（路径、资料约定与环境事实）</p>
-        <span className={styles.capacityTag}>{memChars} / {limits.memory} 字</span>
+        <p className={styles.sectionLabel}>{tx("环境笔记 MEMORY（路径、资料约定与环境事实）")}</p>
+        <span className={styles.capacityTag}>{tx("{used} / {limit} 字", { used: memChars, limit: limits.memory })}</span>
       </div>
       <Entries
         items={memoryNotes}
         onDelete={(index) =>
           void save("memory", memoryNotes.filter((_, item) => item !== index)).catch((error: unknown) =>
-            setNote(error instanceof Error ? error.message : "删除失败"),
+            setNote(error instanceof Error ? error.message : tx("删除失败")),
           )
         }
       />
@@ -939,11 +951,11 @@ function MemoryPane() {
           const items = target === "user" ? [...userNotes, userText] : [...memoryNotes, text];
           void save(target, items)
             .then(() => setDraft(""))
-            .catch((error: unknown) => setNote(error instanceof Error ? error.message : "保存失败"));
+            .catch((error: unknown) => setNote(error instanceof Error ? error.message : tx("保存失败")));
         }}
       >
         <Pills
-          label="写入位置"
+          label={tx("写入位置")}
           value={target}
           options={[
             { id: "user", label: "USER" },
@@ -955,12 +967,12 @@ function MemoryPane() {
           <select
             className={styles.layerSelect}
             value={layer}
-            aria-label="所属白盒层级"
+            aria-label={tx("所属白盒层级")}
             onChange={(event) => setLayer(event.target.value as LayerId)}
           >
             {MEMORY_LAYERS.map((item) => (
               <option key={item.id} value={item.id}>
-                {item.tag} · {item.label}
+                {item.tag} · {tx(item.label)}
               </option>
             ))}
           </select>
@@ -969,10 +981,10 @@ function MemoryPane() {
           className={styles.noteInput}
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
-          placeholder={target === "user" ? "新增用户画像条目（将带上所选层级前缀）…" : "新增环境事实条目…"}
+          placeholder={target === "user" ? tx("新增用户画像条目（将带上所选层级前缀）…") : tx("新增环境事实条目…")}
         />
         <button className={styles.rowBtn} type="submit" disabled={!draft.trim()}>
-          添加
+          {tx("添加")}
         </button>
       </form>
       {note && <p className={styles.emptyLine}>{note}</p>}
@@ -981,14 +993,15 @@ function MemoryPane() {
 }
 
 function Entries({ items, onDelete }: { items: string[]; onDelete: (index: number) => void }) {
-  if (!items.length) return <p className={styles.emptyLine}>还没有条目。</p>;
+  const { tx } = useI18n();
+  if (!items.length) return <p className={styles.emptyLine}>{tx("还没有条目。")}</p>;
   return (
     <div className={styles.entryList}>
       {items.map((item, index) => (
         <div key={`${item}-${index}`} className={styles.entry}>
           <span>{item}</span>
           <button type="button" className={styles.textBtn} onClick={() => onDelete(index)}>
-            删除
+            {tx("删除")}
           </button>
         </div>
       ))}
@@ -997,7 +1010,8 @@ function Entries({ items, onDelete }: { items: string[]; onDelete: (index: numbe
 }
 
 function UserEntries({ items, onDelete }: { items: string[]; onDelete: (index: number) => void }) {
-  if (!items.length) return <p className={styles.emptyLine}>还没有条目。</p>;
+  const { tx } = useI18n();
+  if (!items.length) return <p className={styles.emptyLine}>{tx("还没有条目。")}</p>;
   return (
     <div className={styles.entryList}>
       {items.map((item, index) => {
@@ -1007,12 +1021,12 @@ function UserEntries({ items, onDelete }: { items: string[]; onDelete: (index: n
           <div key={`${item}-${index}`} className={styles.entry}>
             <span className={styles.entryBody}>
               <span className={cx(styles.layerBadge, styles[`layer_${id}`])}>
-                [{meta.tag} {meta.label}]
+                [{meta.tag} {tx(meta.label)}]
               </span>
               <span>{stripLayer(item)}</span>
             </span>
             <button type="button" className={styles.textBtn} onClick={() => onDelete(index)}>
-              删除
+              {tx("删除")}
             </button>
           </div>
         );
@@ -1026,12 +1040,13 @@ function evolved(memory: LearnerMemory) {
 }
 
 function ReflectPane() {
+  const { tx } = useI18n();
   const [items, setItems] = useState<LearnerMemory[]>([]);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   useEffect(() => {
-    void chatApi.listMemories().then(setItems).catch(() => setNote("读不到学习记忆"));
-  }, []);
+    void chatApi.listMemories().then(setItems).catch(() => setNote(tx("读不到学习记忆")));
+  }, [tx]);
 
   const toReview = items.filter((m) => m.kind === "misconception" && (m.status === "suspected" || m.status === "needs_review"));
   const improving = items.filter((m) => m.status === "improving");
@@ -1040,23 +1055,23 @@ function ReflectPane() {
 
   return (
     <section>
-      <h2 className={styles.sectionTitle}>复盘 (Reflect)</h2>
+      <h2 className={styles.sectionTitle}>{tx("复盘 (Reflect)")}</h2>
       <div className={styles.reflectStats}>
         <div className={styles.reflectStatCard}>
           <span className={styles.reflectStatValue}>{toReview.length}</span>
-          <span className={styles.reflectStatLabel}>待巩固卡点</span>
+          <span className={styles.reflectStatLabel}>{tx("待巩固卡点")}</span>
         </div>
         <div className={styles.reflectStatCard}>
           <span className={styles.reflectStatValue}>{improving.length}</span>
-          <span className={styles.reflectStatLabel}>改善演进中</span>
+          <span className={styles.reflectStatLabel}>{tx("改善演进中")}</span>
         </div>
         <div className={styles.reflectStatCard}>
           <span className={styles.reflectStatValue}>{mastered.length}</span>
-          <span className={styles.reflectStatLabel}>已攻克掌握</span>
+          <span className={styles.reflectStatLabel}>{tx("已攻克掌握")}</span>
         </div>
       </div>
 
-      <p className={styles.sectionLabel}>认知蜕变记录（Before vs. After 原话对比）</p>
+      <p className={styles.sectionLabel}>{tx("认知蜕变记录（Before vs. After 原话对比）")}</p>
       {evolvedRows.map((memory) => {
         const first = memory.evidence[0]?.quote;
         const latest = memory.evidence[memory.evidence.length - 1]?.quote;
@@ -1066,38 +1081,38 @@ function ReflectPane() {
               <p className={styles.settingRowTitle}>
                 {memory.topic}
                 <span className={styles.reflectBadge}>
-                  {memory.status === "improving" ? "改善中" : "已掌握"}
+                  {memory.status === "improving" ? tx("改善中") : tx("已掌握")}
                 </span>
               </p>
               <p className={styles.settingRowDesc}>{memory.summary}</p>
-              {first && <p className={styles.quote}>最初原话：“{first}”</p>}
-              {latest && latest !== first && <p className={styles.quoteAfter}>最新原话：“{latest}”</p>}
+              {first && <p className={styles.quote}>{tx("最初原话：“{quote}”", { quote: first })}</p>}
+              {latest && latest !== first && <p className={styles.quoteAfter}>{tx("最新原话：“{quote}”", { quote: latest })}</p>}
             </div>
           </div>
         );
       })}
       {!evolvedRows.length && (
         <p className={styles.emptyLine}>
-          当你在对话中攻克曾记录的误区或独立讲清概念时，这里会自动生成前后原话对比。
+          {tx("当你在对话中攻克曾记录的误区或独立讲清概念时，这里会自动生成前后原话对比。")}
         </p>
       )}
 
       {toReview.length > 0 && (
         <>
-          <p className={styles.sectionLabel}>当前待巩固盲区</p>
+          <p className={styles.sectionLabel}>{tx("当前待巩固盲区")}</p>
           {toReview.map((memory) => (
             <div key={memory.id} className={styles.settingRow}>
               <div className={styles.settingRowInfo}>
                 <p className={styles.settingRowTitle}>{memory.topic}</p>
                 <p className={styles.settingRowDesc}>{memory.summary}</p>
-                {memory.evidence[0]?.quote && <p className={styles.quote}>原话依据：“{memory.evidence[0].quote}”</p>}
+                {memory.evidence[0]?.quote && <p className={styles.quote}>{tx("原话依据：“{quote}”", { quote: memory.evidence[0].quote })}</p>}
               </div>
             </div>
           ))}
         </>
       )}
 
-      <SettingRow title="同步阶段复盘到用户画像" desc="将当前待巩固重点与已掌握进展浓缩同步至 USER 画像。">
+      <SettingRow title={tx("同步阶段复盘到用户画像")} desc={tx("将当前待巩固重点与已掌握进展浓缩同步至 USER 画像。")}>
         <button
           className={styles.rowBtn}
           type="button"
@@ -1118,12 +1133,12 @@ function ReflectPane() {
                 const kept = splitEntries(notes.user).filter((entry) => !entry.startsWith("阶段复盘："));
                 return chatApi.saveAgentNote("user", [...kept, line].join("\n§\n"));
               })
-              .then(() => setNote("已将阶段复盘同步至 USER 画像"))
-              .catch((error: unknown) => setNote(error instanceof Error ? error.message : "复盘同步失败"))
+              .then(() => setNote(tx("已将阶段复盘同步至 USER 画像")))
+              .catch((error: unknown) => setNote(error instanceof Error ? error.message : tx("复盘同步失败")))
               .finally(() => setBusy(false));
           }}
         >
-          同步复盘至画像
+          {tx("同步复盘至画像")}
         </button>
       </SettingRow>
       {note && <p className={styles.emptyLine}>{note}</p>}
@@ -1132,16 +1147,17 @@ function ReflectPane() {
 }
 
 function EffortRow() {
+  const { tx } = useI18n();
   const [effort, setEffort] = useState<Effort>("medium");
   useEffect(() => {
     void chatApi.agentSettings().then((settings) => setEffort(settings.reasoningEffort)).catch(() => undefined);
   }, []);
   return (
-    <SettingRow title="默认思考深度" desc="控制模型在每轮回复前的推演深度，与聊天框右下角实时同步。">
+    <SettingRow title={tx("默认思考深度")} desc={tx("控制模型在每轮回复前的推演深度，与聊天框右下角实时同步。")}>
       <Pills
-        label="默认思考深度"
+        label={tx("默认思考深度")}
         value={effort}
-        options={EFFORTS}
+        options={EFFORTS.map((item) => ({ ...item, label: tx(item.label) }))}
         onChange={(next) => {
           setEffort(next);
           try {
@@ -1156,6 +1172,7 @@ function EffortRow() {
 }
 
 function WorkspacePane() {
+  const { tx } = useI18n();
   const [workspace, setWorkspace] = useState("");
   const [autoApprove, setAutoApprove] = useState(false);
   const [memoryApproval, setMemoryApproval] = useState(false);
@@ -1170,8 +1187,8 @@ function WorkspacePane() {
         setAutoApprove(settings.autoApprove);
         setMemoryApproval(settings.memoryWriteApproval);
       })
-      .catch(() => setNote("读不到工作区设置"));
-  }, []);
+      .catch(() => setNote(tx("读不到工作区设置")));
+  }, [tx]);
   async function save(next = { workspace, autoApprove, memoryWriteApproval: memoryApproval }) {
     setSaving(true);
     try {
@@ -1179,23 +1196,23 @@ function WorkspacePane() {
       setWorkspace(saved.workspace);
       setAutoApprove(saved.autoApprove);
       setMemoryApproval(saved.memoryWriteApproval);
-      setNote("已保存");
+      setNote(tx("已保存"));
     } catch (error) {
-      setNote(error instanceof Error ? error.message : "保存失败");
+      setNote(error instanceof Error ? error.message : tx("保存失败"));
     } finally {
       setSaving(false);
     }
   }
   return (
     <section>
-      <h2 className={styles.sectionTitle}>开发者工具</h2>
+      <h2 className={styles.sectionTitle}>{tx("开发者工具")}</h2>
       <SettingRow
-        title="开发者模式"
-        desc="让 AI 读写你指定文件夹里的文件、执行终端命令，适合做编程项目。学习用不到，默认关闭；关闭时会解除工作区绑定和自动批准。"
+        title={tx("开发者模式")}
+        desc={tx("让 AI 读写你指定文件夹里的文件、执行终端命令，适合做编程项目。学习用不到，默认关闭；关闭时会解除工作区绑定和自动批准。")}
       >
         <Toggle
           checked={devMode || Boolean(workspace) || autoApprove}
-          label="开发者模式"
+          label={tx("开发者模式")}
           onChange={(value) => {
             writeDevMode(value);
             if (!value && (workspace || autoApprove)) {
@@ -1207,13 +1224,13 @@ function WorkspacePane() {
         />
       </SettingRow>
       {(devMode || Boolean(workspace) || autoApprove) && (<>
-      <SettingRow title="信任的工作区文件夹" desc="Agent 的文件读写工具仅限在此目录内操作。">
+      <SettingRow title={tx("信任的工作区文件夹")} desc={tx("Agent 的文件读写工具仅限在此目录内操作。")}>
         <div className={styles.pathRow}>
           <input
             className={styles.pathInput}
             value={workspace}
             onChange={(event) => setWorkspace(event.target.value)}
-            placeholder="选择或粘贴本地文件夹路径"
+            placeholder={tx("选择或粘贴本地文件夹路径")}
           />
           <button
             className={styles.rowBtn}
@@ -1224,17 +1241,17 @@ function WorkspacePane() {
               })
             }
           >
-            选择文件夹
+            {tx("选择文件夹")}
           </button>
           <button className={styles.rowBtn} type="button" disabled={saving} onClick={() => void save()}>
-            {saving ? "保存中" : "保存"}
+            {saving ? tx("保存中") : tx("保存")}
           </button>
         </div>
       </SettingRow>
-      <SettingRow title="文件写入自动批准" desc="开启后写文件无需逐次确认；终端命令仍始终需要确认。">
+      <SettingRow title={tx("文件写入自动批准")} desc={tx("开启后写文件无需逐次确认；终端命令仍始终需要确认。")}>
         <Toggle
           checked={autoApprove}
-          label="文件写入自动批准"
+          label={tx("文件写入自动批准")}
           onChange={(value) => {
             setAutoApprove(value);
             void save({ workspace, autoApprove: value, memoryWriteApproval: memoryApproval });
@@ -1289,6 +1306,7 @@ function parseUploadedSkillFile(fileName: string, rawText: string): {
 }
 
 function SkillsPane() {
+  const { tx } = useI18n();
   const fileRef = useRef<HTMLInputElement>(null);
   const [customSkills, setCustomSkills] = useState<
     Array<{ id: string; name: string; role: "thread" | "chat" | "main"; triggerKeywords: string; content: string; enabled: boolean }>
@@ -1305,13 +1323,13 @@ function SkillsPane() {
     void chatApi
       .listCustomSkills()
       .then(setCustomSkills)
-      .catch(() => setNote("读不到自定义技能列表"));
-  }, []);
+      .catch(() => setNote(tx("读不到自定义技能列表")));
+  }, [tx]);
 
   const handleFileUpload = async (file: File) => {
     setNote("");
     if (file.size > 512 * 1024) {
-      setNote("Skill 文件大小不能超过 512 KB。");
+      setNote(tx("Skill 文件大小不能超过 512 KB。"));
       return;
     }
     try {
@@ -1322,9 +1340,9 @@ function SkillsPane() {
       setTriggerKeywords(parsed.triggerKeywords);
       setContent(parsed.content);
       setComposerOpen(true);
-      setNote(`已解析「${file.name}」，核对挂载角色后点击保存即可生效。`);
+      setNote(tx("已解析「{name}」，核对挂载角色后点击保存即可生效。", { name: file.name }));
     } catch {
-      setNote("读取 Skill 文件失败，请确认文件为 UTF-8 编码。");
+      setNote(tx("读取 Skill 文件失败，请确认文件为 UTF-8 编码。"));
     } finally {
       if (fileRef.current) fileRef.current.value = "";
     }
@@ -1346,9 +1364,9 @@ function SkillsPane() {
       setName("");
       setTriggerKeywords("");
       setContent("");
-      setNote(`已添加技能「${created.name}」，将在对应角色对话中自动注入。`);
+      setNote(tx("已添加技能「{name}」，将在对应角色对话中自动注入。", { name: created.name }));
     } catch (error) {
-      setNote(error instanceof Error ? error.message : "保存技能失败");
+      setNote(error instanceof Error ? error.message : tx("保存技能失败"));
     } finally {
       setSaving(false);
     }
@@ -1358,9 +1376,9 @@ function SkillsPane() {
     <section>
       <div className={styles.skillHeadRow}>
         <div>
-          <h2 className={styles.sectionTitle}>技能 (Skills)</h2>
+          <h2 className={styles.sectionTitle}>{tx("技能 (Skills)")}</h2>
           <p className={styles.settingRowDesc}>
-            支持上传 <code>.md</code> / <code>SKILL.md</code> / <code>.txt</code> 技能文件，按角色（支线 / 平行对话 / 主线）自动注入系统提示。
+            {tx("支持上传 .md / SKILL.md / .txt 技能文件，按角色（支线 / 平行对话 / 主线）自动注入系统提示。")}
           </p>
         </div>
         <div className={styles.skillHeadActions}>
@@ -1376,7 +1394,7 @@ function SkillsPane() {
           />
           <button type="button" className={styles.rowBtn} onClick={() => fileRef.current?.click()}>
             <Upload size={13} aria-hidden />
-            <span>上传 Skill 文件</span>
+            <span>{tx("上传 Skill 文件")}</span>
           </button>
           <button
             type="button"
@@ -1387,7 +1405,7 @@ function SkillsPane() {
             }}
           >
             <Plus size={13} aria-hidden />
-            <span>{composerOpen ? "收起表单" : "新建技能"}</span>
+            <span>{composerOpen ? tx("收起表单") : tx("新建技能")}</span>
           </button>
         </div>
       </div>
@@ -1398,47 +1416,47 @@ function SkillsPane() {
         <div className={styles.skillEditorCard}>
           <div className={styles.skillEditorGrid}>
             <label className={styles.skillField}>
-              <span>技能名称</span>
+              <span>{tx("技能名称")}</span>
               <input
                 className={styles.noteInput}
                 value={name}
                 maxLength={60}
-                placeholder="例如：费曼反转追问法、考研真题拆解器"
+                placeholder={tx("例如：费曼反转追问法、考研真题拆解器")}
                 onChange={(e) => setName(e.target.value)}
               />
             </label>
             <div className={styles.skillField}>
-              <span>挂载角色</span>
-              <Pills label="挂载角色" value={role} options={SKILL_ROLES} onChange={setRole} />
+              <span>{tx("挂载角色")}</span>
+              <Pills label={tx("挂载角色")} value={role} options={SKILL_ROLES.map((item) => ({ ...item, label: tx(item.label) }))} onChange={setRole} />
             </div>
           </div>
 
           <label className={styles.skillField}>
-            <span>触发关键词（可选，多个词用逗号分隔；留空则在该角色下始终生效）</span>
+            <span>{tx("触发关键词（可选，多个词用逗号分隔；留空则在该角色下始终生效）")}</span>
             <input
               className={styles.noteInput}
               value={triggerKeywords}
               maxLength={200}
-              placeholder="例如：费曼, 考考我, 挑刺（留空则每次该角色对话均挂载）"
+              placeholder={tx("例如：费曼, 考考我, 挑刺（留空则每次该角色对话均挂载）")}
               onChange={(e) => setTriggerKeywords(e.target.value)}
             />
           </label>
 
           <label className={styles.skillField}>
-            <span>Skill 指令内容（支持粘贴或通过上方按钮上传 SKILL.md）</span>
+            <span>{tx("Skill 指令内容（支持粘贴或通过上方按钮上传 SKILL.md）")}</span>
             <textarea
               className={styles.skillTextarea}
               rows={5}
               maxLength={8000}
               value={content}
-              placeholder="编写该 Skill 的具体步骤规范、输出格式与教学策略…"
+              placeholder={tx("编写该 Skill 的具体步骤规范、输出格式与教学策略…")}
               onChange={(e) => setContent(e.target.value)}
             />
           </label>
 
           <div className={styles.skillEditorActions}>
             <button type="button" className={styles.rowBtn} onClick={() => setComposerOpen(false)}>
-              取消
+              {tx("取消")}
             </button>
             <button
               type="button"
@@ -1446,16 +1464,16 @@ function SkillsPane() {
               disabled={!name.trim() || !content.trim() || saving}
               onClick={() => void handleSaveSkill()}
             >
-              {saving ? "保存中…" : "保存并启用技能"}
+              {saving ? tx("保存中…") : tx("保存并启用技能")}
             </button>
           </div>
         </div>
       )}
 
-      <p className={styles.sectionLabel}>我上传 / 创建的技能 ({customSkills.length})</p>
+      <p className={styles.sectionLabel}>{tx("我上传 / 创建的技能 ({count})", { count: customSkills.length })}</p>
       {customSkills.length === 0 ? (
         <p className={styles.emptyLine}>
-          还没有自定义技能。点击右上角「上传 Skill 文件」导入本地 <code>.md</code> 技能包，或点击「新建技能」。
+          {tx("还没有自定义技能。点击右上角「上传 Skill 文件」导入本地 .md 技能包，或点击「新建技能」。")}
         </p>
       ) : (
         customSkills.map((sk) => (
@@ -1463,9 +1481,9 @@ function SkillsPane() {
             <div className={styles.settingRowInfo}>
               <p className={styles.settingRowTitle}>
                 {sk.name}
-                <span className={styles.skillBadgeInline}>{ROLE_LABEL[sk.role]}</span>
+                <span className={styles.skillBadgeInline}>{tx(ROLE_LABEL[sk.role])}</span>
                 <span className={styles.skillTriggerTag}>
-                  {sk.triggerKeywords ? `触发词：${sk.triggerKeywords}` : "始终生效"}
+                  {sk.triggerKeywords ? tx("触发词：{words}", { words: sk.triggerKeywords }) : tx("始终生效")}
                 </span>
               </p>
               <p className={styles.skillContentPreview}>{sk.content}</p>
@@ -1473,7 +1491,7 @@ function SkillsPane() {
             <div className={styles.skillRowControls}>
               <Toggle
                 checked={sk.enabled}
-                label={`启用 ${sk.name}`}
+                label={tx("启用 {name}", { name: sk.name })}
                 onChange={(next) => {
                   setCustomSkills((prev) => prev.map((item) => (item.id === sk.id ? { ...item, enabled: next } : item)));
                   void chatApi.updateCustomSkill(sk.id, { enabled: next }).catch(() => {
@@ -1484,7 +1502,7 @@ function SkillsPane() {
               <button
                 type="button"
                 className={cx(styles.textBtn, styles.textBtnDanger)}
-                aria-label={`删除 ${sk.name}`}
+                aria-label={tx("删除 {name}", { name: sk.name })}
                 onClick={() => {
                   void chatApi.deleteCustomSkill(sk.id).then(() => {
                     setCustomSkills((prev) => prev.filter((item) => item.id !== sk.id));
@@ -1498,10 +1516,10 @@ function SkillsPane() {
         ))
       )}
 
-      <p className={styles.sectionLabel}>系统内置核心教学技能</p>
+      <p className={styles.sectionLabel}>{tx("系统内置核心教学技能")}</p>
       {SKILLS.map((skill) => (
-        <SettingRow key={skill.key} title={skill.name} desc={skill.desc}>
-          <span className={styles.skillBadge}>{skill.role}</span>
+        <SettingRow key={skill.key} title={tx(skill.name)} desc={tx(skill.desc)}>
+          <span className={styles.skillBadge}>{tx(skill.role)}</span>
         </SettingRow>
       ))}
     </section>

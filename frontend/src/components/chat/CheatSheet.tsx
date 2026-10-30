@@ -4,10 +4,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { AlertTriangle, Download, Printer, RefreshCw, X, Zap } from "lucide-react";
+import { useI18n } from "@/components/LanguageProvider";
 import { toApiError } from "@/lib/api/errors";
 import { insightsApi, type CheatSheet as Sheet, type SubjectInsights } from "@/lib/chat/insights";
 import type { Subject } from "@/lib/chat/types";
 import { cx } from "@/lib/cx";
+import { localeOf, type Language } from "@/lib/i18n";
 import { Button } from "../ui/Button";
 import { Markdown } from "./Markdown";
 import styles from "./CheatSheet.module.css";
@@ -40,9 +42,9 @@ function previewFrom(insights: SubjectInsights): Preview {
   };
 }
 
-function formatTime(iso: string) {
+function formatTime(iso: string, lang: Language) {
   const date = new Date(iso);
-  return Number.isNaN(date.getTime()) ? "" : date.toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  return Number.isNaN(date.getTime()) ? "" : date.toLocaleString(localeOf(lang), { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
 function Md({ text }: { text: string }) {
@@ -65,6 +67,7 @@ function Quadrant({ index, title, hint, tone, children }: {
 }
 
 export function CheatSheet({ subject, notes, onClose }: { subject: Subject; notes?: string; onClose: () => void }) {
+  const { tx, lang } = useI18n();
   const [sheet, setSheet] = useState<Sheet | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [loading, setLoading] = useState(true);
@@ -105,7 +108,7 @@ export function CheatSheet({ subject, notes, onClose }: { subject: Subject; note
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `${subject.name.replace(/[\\/:*?"<>|]/g, "_")}-考前一页纸.md`;
+    link.download = `${subject.name.replace(/[\\/:*?"<>|]/g, "_")}-${tx("考前一页纸")}.md`;
     link.click();
     URL.revokeObjectURL(url);
   };
@@ -121,28 +124,30 @@ export function CheatSheet({ subject, notes, onClose }: { subject: Subject; note
   const pending = loading && !sheet;
 
   return createPortal(
-    <div className={styles.backdrop} data-cheatsheet-root role="dialog" aria-modal="true" aria-label="考前一页纸">
+    <div className={styles.backdrop} data-cheatsheet-root role="dialog" aria-modal="true" aria-label={tx("考前一页纸")}>
       <style>{PRINT_CSS}</style>
       <div className={styles.toolbar}>
         <div className={styles.toolTitle}>
           <Zap size={14} aria-hidden />
-          <strong>考前一页纸</strong>
+          <strong>{tx("考前一页纸")}</strong>
           <span className={styles.toolMeta}>
-            {sheet ? `${sheet.cached ? "缓存 · " : ""}生成于 ${formatTime(sheet.generatedAt)}` : loading ? "生成中…" : ""}
+            {sheet
+              ? tx("{cached}生成于 {time}", { cached: sheet.cached ? tx("缓存 · ") : "", time: formatTime(sheet.generatedAt, lang) })
+              : loading ? tx("生成中…") : ""}
           </span>
         </div>
         <div className={styles.toolActions}>
           <Button size="sm" variant="ghost" icon={<RefreshCw size={13} />} loading={loading && Boolean(sheet)}
             disabled={loading} onClick={() => void load(true)}>
-            重新生成
+            {tx("重新生成")}
           </Button>
           <Button size="sm" variant="secondary" icon={<Download size={13} />} disabled={!sheet} onClick={exportMarkdown}>
-            导出 Markdown
+            {tx("导出 Markdown")}
           </Button>
           <Button size="sm" variant="primary" icon={<Printer size={13} />} disabled={!sheet} onClick={() => window.print()}>
-            打印 / 导出 PDF
+            {tx("打印 / 导出 PDF")}
           </Button>
-          <button type="button" className={styles.close} aria-label="关闭" title="关闭（Esc）" onClick={onClose}>
+          <button type="button" className={styles.close} aria-label={tx("关闭")} title={tx("关闭（Esc）")} onClick={onClose}>
             <X size={16} />
           </button>
         </div>
@@ -153,41 +158,50 @@ export function CheatSheet({ subject, notes, onClose }: { subject: Subject; note
           <p className={cx(styles.notice, error && styles.noticeError)} role="status">
             <AlertTriangle size={13} aria-hidden />
             <span>{error ?? sheet?.notice}</span>
-            {error && <button type="button" onClick={() => void load(false)}>重试</button>}
+            {error && <button type="button" onClick={() => void load(false)}>{tx("重试")}</button>}
           </p>
         )}
 
         <article className={styles.sheet}>
           <header className={styles.sheetHead}>
-            <h2>⚡ {subject.name} · 考前一页纸</h2>
+            <h2>⚡ {subject.name} · {tx("考前一页纸")}</h2>
             <div className={styles.sheetMeta}>
-              {subject.goal && <span>目标：{subject.goal}</span>}
-              {subject.deadline && <span>考试 {subject.deadline}{typeof days === "number" && days >= 0 ? `（剩 ${days} 天）` : ""}</span>}
-              {sheet && <span>待攻克 {sheet.stats.misconceptions} · 已掌握 {sheet.stats.mastered} · 已解决支线 {sheet.stats.threadsResolved}</span>}
+              {subject.goal && <span>{tx("目标：{goal}", { goal: subject.goal })}</span>}
+              {subject.deadline && (
+                <span>
+                  {tx("考试 {deadline}", { deadline: subject.deadline })}
+                  {typeof days === "number" && days >= 0 ? tx("（剩 {days} 天）", { days }) : ""}
+                </span>
+              )}
+              {sheet && (
+                <span>
+                  {tx("待攻克 {count}", { count: sheet.stats.misconceptions })} · {tx("已掌握 {count}", { count: sheet.stats.mastered })} · {tx("已解决支线 {count}", { count: sheet.stats.threadsResolved })}
+                </span>
+              )}
             </div>
           </header>
 
           <div className={styles.grid}>
-            <Quadrant index="①" title="个人易错红榜" hint="来自你的误区记忆与原话" tone="red">
+            <Quadrant index="①" title={tx("个人易错红榜")} hint={tx("来自你的误区记忆与原话")} tone="red">
               {pitfalls.length ? (
                 <ol className={styles.list}>
                   {pitfalls.map((p) => (
                     <li key={p.memoryId}>
                       <div className={styles.itemHead}>
                         <strong>{p.topic}</strong>
-                        <span className={styles.pill}>{STATUS_LABEL[p.status] ?? p.status}</span>
+                        <span className={styles.pill}>{tx(STATUS_LABEL[p.status] ?? p.status)}</span>
                       </div>
                       <Md text={p.summary} />
-                      {p.quotes.map((q) => <blockquote key={q} className={styles.quote}>「{q}」</blockquote>)}
+                      {p.quotes.map((q) => <blockquote key={q} className={styles.quote}>{tx("「{quote}」", { quote: q })}</blockquote>)}
                     </li>
                   ))}
                 </ol>
               ) : (
-                <div className={styles.empty}>{pending ? "读取中…" : <>记下的误区会出现在这里。<button type="button" onClick={onClose}>去主线讲一讲</button></>}</div>
+                <div className={styles.empty}>{pending ? tx("读取中…") : <>{tx("记下的误区会出现在这里。")}<button type="button" onClick={onClose}>{tx("去主线讲一讲")}</button></>}</div>
               )}
             </Quadrant>
 
-            <Quadrant index="②" title="支线核心结论" hint="来自已解决支线的总结" tone="green">
+            <Quadrant index="②" title={tx("支线核心结论")} hint={tx("来自已解决支线的总结")} tone="green">
               {conclusions.length ? (
                 <ul className={styles.list}>
                   {conclusions.map((c) => (
@@ -203,31 +217,31 @@ export function CheatSheet({ subject, notes, onClose }: { subject: Subject; note
                   ))}
                 </ul>
               ) : (
-                <div className={styles.empty}>{pending ? "读取中…" : <>已解决的支线结论会出现在这里。<button type="button" onClick={onClose}>去主线讲一讲</button></>}</div>
+                <div className={styles.empty}>{pending ? tx("读取中…") : <>{tx("已解决的支线结论会出现在这里。")}<button type="button" onClick={onClose}>{tx("去主线讲一讲")}</button></>}</div>
               )}
             </Quadrant>
 
-            <Quadrant index="③" title="核心公式与适用边界" hint="模型从讲义与对话中提炼" tone="accent">
+            <Quadrant index="③" title={tx("核心公式与适用边界")} hint={tx("模型从讲义与对话中提炼")} tone="accent">
               {formulas.length ? (
                 <ul className={styles.list}>
                   {formulas.map((f, i) => (
                     <li key={`${f.name}-${i}`}>
                       {f.name && <strong className={styles.itemTitle}><Md text={f.name} /></strong>}
                       <Md text={f.formula} />
-                      {f.conditions && <div className={styles.sub}><span>适用</span><Md text={f.conditions} /></div>}
-                      {f.pitfall && <div className={cx(styles.sub, styles.subWarn)}><span>易错</span><Md text={f.pitfall} /></div>}
+                      {f.conditions && <div className={styles.sub}><span>{tx("适用")}</span><Md text={f.conditions} /></div>}
+                      {f.pitfall && <div className={cx(styles.sub, styles.subWarn)}><span>{tx("易错")}</span><Md text={f.pitfall} /></div>}
                     </li>
                   ))}
                 </ul>
               ) : (
-                <p className={styles.empty}>{pending ? <span className={styles.shimmer}>正在提炼公式与适用边界…</span> : "暂未生成。"}</p>
+                <p className={styles.empty}>{pending ? <span className={styles.shimmer}>{tx("正在提炼公式与适用边界…")}</span> : tx("暂未生成。")}</p>
               )}
             </Quadrant>
 
-            <Quadrant index="④" title="易混概念对比 · 押题自测" hint="模型生成，先遮住答案自测" tone="amber">
+            <Quadrant index="④" title={tx("易混概念对比 · 押题自测")} hint={tx("模型生成，先遮住答案自测")} tone="amber">
               {contrasts.length > 0 && (
                 <table className={styles.table}>
-                  <thead><tr><th>A</th><th>B</th><th>核心区别</th></tr></thead>
+                  <thead><tr><th>A</th><th>B</th><th>{tx("核心区别")}</th></tr></thead>
                   <tbody>
                     {contrasts.map((c, i) => (
                       <tr key={`${c.a}-${c.b}-${i}`}>
@@ -244,7 +258,7 @@ export function CheatSheet({ subject, notes, onClose }: { subject: Subject; note
                     <li key={`${i}-${q.question}`}>
                       <Md text={q.question} />
                       <details className={styles.answer} open>
-                        <summary>答案</summary>
+                        <summary>{tx("答案")}</summary>
                         <Md text={q.answer} />
                       </details>
                     </li>
@@ -252,11 +266,11 @@ export function CheatSheet({ subject, notes, onClose }: { subject: Subject; note
                 </ol>
               )}
               {!contrasts.length && !quiz.length && (
-                <p className={styles.empty}>{pending ? <span className={styles.shimmer}>正在生成对比与自测题…</span> : "暂未生成。"}</p>
+                <p className={styles.empty}>{pending ? <span className={styles.shimmer}>{tx("正在生成对比与自测题…")}</span> : tx("暂未生成。")}</p>
               )}
             </Quadrant>
           </div>
-          <footer className={styles.sheetFoot}>KnowGap 知隙 · ①② 来自你的真实学习记录，③④ 由模型生成，请以课本为准</footer>
+          <footer className={styles.sheetFoot}>{tx("KnowGap 知隙 · ①② 来自你的真实学习记录，③④ 由模型生成，请以课本为准")}</footer>
         </article>
       </div>
     </div>,

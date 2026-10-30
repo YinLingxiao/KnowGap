@@ -213,7 +213,7 @@ export function MessageList({
   onRegenerate, onStartExercise, onOpenMemories, onOpenSummary, onDecideTool, onConfirmProposal, onResumeCheckpoint,
   onSendText, onOpenWeakPoints, onOpenFile, collapseLong = true, scrollTarget,
 }: MessageListProps) {
-  const { t } = useI18n();
+  const { t, tx } = useI18n();
   const summaryCard = useSummaryCard();
   const [fileNavigationError, setFileNavigationError] = useState("");
   const [, refreshFileMetadata] = useState(0);
@@ -471,7 +471,7 @@ export function MessageList({
                     title={card.summary}
                   >
                     <i className={cx(styles.pillDot, isIdle ? styles.dot_hollow : styles[`dot_${card.status}`])} aria-hidden />
-                    <span className={styles.pillId}>{EXECUTION_LABEL[card.status] ?? card.status}</span>
+                    <span className={styles.pillId}>{tx(EXECUTION_LABEL[card.status] ?? card.status)}</span>
                     <span className={styles.pillTitle}>{card.title}</span>
                     {card.summary && <span className={styles.pillSummary}>{card.summary}</span>}
                   </button>
@@ -531,7 +531,7 @@ export function MessageList({
                         {mark.tone === "done" ? <CheckCircle2 size={12} aria-hidden />
                           : mark.tone === "ask" ? <CircleAlert size={12} aria-hidden />
                             : <Circle size={12} aria-hidden />}
-                        <span>{mark.label}：{mark.title}</span>
+                        <span>{tx(mark.label)}：{mark.title}</span>
                       </span>
                     ))}
                   </div>
@@ -560,7 +560,7 @@ export function MessageList({
                             ) : (
                               <CircleDashed size={14} className={styles.toolIconSpin} aria-hidden />
                             )}
-                            <span className={styles.toolName}>{TOOL_LABELS[call.name] ?? call.name}</span>
+                            <span className={styles.toolName}>{tx(TOOL_LABELS[call.name] ?? call.name)}</span>
                             <span className={styles.toolStatus}>{done ? (call.ok ? t("messages.toolDone") : t("messages.toolStatusFailed")) : t("messages.toolRunningShort")}</span>
                           </summary>
                           {call.arguments && <pre>{call.arguments}</pre>}
@@ -572,7 +572,7 @@ export function MessageList({
                 )}
                 {message.pendingApproval && onDecideTool && (
                   <div className={styles.approval}>
-                    <p>{t("messages.allowTool", { name: TOOL_LABELS[message.pendingApproval.name] ?? message.pendingApproval.name })}</p>
+                    <p>{t("messages.allowTool", { name: tx(TOOL_LABELS[message.pendingApproval.name] ?? message.pendingApproval.name) })}</p>
                     <pre>{message.pendingApproval.arguments}</pre>
                     <div>
                       <button onClick={() => onDecideTool(message.pendingApproval!.id, false)}>{t("messages.deny")}</button>
@@ -604,7 +604,7 @@ export function MessageList({
                     )}
                   </>
                 ) : streaming && !message.reasoning ? (
-                  <WorkingIndicator label={runningTool ? t("messages.thinkingTool", { name: TOOL_LABELS[runningTool.name] ?? runningTool.name }) : t("messages.thinking")} />
+                  <WorkingIndicator label={runningTool ? t("messages.thinkingTool", { name: tx(TOOL_LABELS[runningTool.name] ?? runningTool.name) }) : t("messages.thinking")} />
                 ) : null}
 
                 {message.files && message.files.length > 0 && <GeneratedFiles files={message.files} />}
@@ -666,10 +666,10 @@ export function MessageList({
                           onClick={() => {
                             setSentActions((current) => new Set(current).add(`${message.id}:${action}`));
                             if (action === "weak_points") onOpenWeakPoints?.();
-                            else onSendText?.(NEXT_TEXT[action]);
+                            else onSendText?.(tx(NEXT_TEXT[action]));
                           }}
                         >
-                          {NEXT_LABEL[action]}
+                          {tx(NEXT_LABEL[action])}
                         </button>
                       ))}
                     </div>
@@ -681,7 +681,7 @@ export function MessageList({
                     {message.sources.map((source) => (
                       <li key={source.id} title={source.excerpt}>
                         <FileText size={12} aria-hidden />
-                        {source.label} · {source.title}
+                        {tx(source.label)} · {source.title}
                         {source.page ? t("messages.sourcePage", { page: source.page }) : ""}
                       </li>
                     ))}

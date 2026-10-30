@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { SlidersHorizontal } from "lucide-react";
+import { useI18n } from "@/components/LanguageProvider";
 import { cx } from "@/lib/cx";
 import {
   DEFAULT_VIEW_OPTIONS,
@@ -49,6 +50,7 @@ export function ViewOptions({ value, week, onChange }: {
   week?: boolean;
   onChange: (next: AgendaViewOptions) => void;
 }) {
+  const { tx } = useI18n();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -73,17 +75,17 @@ export function ViewOptions({ value, week, onChange }: {
         className={styles.btn}
         aria-haspopup="dialog"
         aria-expanded={open}
-        aria-label="布局"
-        title="布局"
+        aria-label={tx("布局")}
+        title={tx("布局")}
         onClick={() => setOpen((current) => !current)}
       >
         <SlidersHorizontal size={13} aria-hidden />
-        布局
+        {tx("布局")}
       </button>
       {open && (
-        <div className={styles.pop} role="dialog" aria-label="视图选项">
+        <div className={styles.pop} role="dialog" aria-label={tx("视图选项")}>
           <label className={styles.row}>
-            <span>显示已完成</span>
+            <span>{tx("显示已完成")}</span>
             <input
               type="checkbox"
               role="switch"
@@ -92,7 +94,7 @@ export function ViewOptions({ value, week, onChange }: {
             />
           </label>
           <fieldset className={styles.field} disabled={week}>
-            <legend>分组</legend>
+            <legend>{tx("分组")}</legend>
             <div className={styles.choices}>
               {GROUPS.map((item) => (
                 <button
@@ -102,13 +104,13 @@ export function ViewOptions({ value, week, onChange }: {
                   aria-pressed={value.groupBy === item.value}
                   onClick={() => onChange({ ...value, groupBy: item.value })}
                 >
-                  {item.label}
+                  {tx(item.label)}
                 </button>
               ))}
             </div>
           </fieldset>
           <fieldset className={styles.field} disabled={week}>
-            <legend>排序</legend>
+            <legend>{tx("排序")}</legend>
             <div className={styles.choices}>
               {SORTS.map((item) => (
                 <button
@@ -118,12 +120,12 @@ export function ViewOptions({ value, week, onChange }: {
                   aria-pressed={value.sortBy === item.value}
                   onClick={() => onChange({ ...value, sortBy: item.value })}
                 >
-                  {item.label}
+                  {tx(item.label)}
                 </button>
               ))}
             </div>
           </fieldset>
-          {week && <p className={styles.note}>周历按时间格排列，分组和排序不适用。</p>}
+          {week && <p className={styles.note}>{tx("周历按时间格排列，分组和排序不适用。")}</p>}
         </div>
       )}
     </div>

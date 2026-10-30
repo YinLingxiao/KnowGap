@@ -123,7 +123,7 @@ export function MaterialLibrary({
   sidebarOpen?: boolean;
   onOpenSidebar?: () => void;
 }) {
-  const { lang, t } = useI18n();
+  const { lang, t, tx } = useI18n();
   const client = useMemo(() => createMaterialClient(), []);
   const [documents, setDocuments] = useState<CourseMaterial[]>([]);
   const [results, setResults] = useState<SourceReference[]>([]);
@@ -202,11 +202,11 @@ export function MaterialLibrary({
     setError(null);
     setNotice(null);
     if (file.size > MAX_UPLOAD_BYTES) {
-      setError("单份资料不能超过 20 MB。");
+      setError(tx("单份资料不能超过 20 MB。"));
       return;
     }
     if (!UPLOAD_EXTENSION_RE.test(file.name)) {
-      setError("请上传 PDF、Word（.docx / .doc）、PowerPoint（.pptx / .ppt）、Excel（.xlsx / .xls）、TXT、Markdown 或 CSV 文件。");
+      setError(tx("请上传 PDF、Word（.docx / .doc）、PowerPoint（.pptx / .ppt）、Excel（.xlsx / .xls）、TXT、Markdown 或 CSV 文件。"));
       return;
     }
     pending.current = true;
@@ -216,8 +216,8 @@ export function MaterialLibrary({
       setDocuments((current) => [document, ...current]);
       const scopeName = targetSubjectId && subjectMap[targetSubjectId]
         ? `「${subjectMap[targetSubjectId].name}」`
-        : "通用资料库";
-      setNotice(`已添加 ${document.title} 至${scopeName}。`);
+        : tx("通用资料库");
+      setNotice(tx("已添加 {name} 至{scope}。", { name: document.title, scope: scopeName }));
     } catch (failure) {
       setError(errorText(toApiError(failure), t, lang));
     } finally {
@@ -262,7 +262,7 @@ export function MaterialLibrary({
       setDocuments((current) => current.filter((item) => item.id !== document.id));
       setResults((current) => current.filter((source) => source.documentId !== document.id));
       setPreviewDoc((current) => (current?.id === document.id ? null : current));
-      setNotice(`已删除 ${document.title}。`);
+      setNotice(tx("已删除 {name}。", { name: document.title }));
       setConfirmId(null);
       setMenuDocId(null);
     } catch (failure) {
@@ -370,7 +370,7 @@ export function MaterialLibrary({
       }}
     >
       {!sidebarOpen && onOpenSidebar && (
-        <button className={styles.floatingToggle} onClick={onOpenSidebar} aria-label="展开侧栏" title="展开侧栏">
+        <button className={styles.floatingToggle} onClick={onOpenSidebar} aria-label={tx("展开侧栏")} title={tx("展开侧栏")}>
           <PanelLeftOpen size={16} />
         </button>
       )}
@@ -401,14 +401,14 @@ export function MaterialLibrary({
                 className={cx(styles.iconBtn, (kindFilter !== "all" || scopeFilter !== "all" || filterOpen) && styles.iconBtnActive)}
                 onClick={() => setFilterOpen((v) => !v)}
                 aria-expanded={filterOpen}
-                aria-label="筛选资料"
-                title="筛选"
+                aria-label={tx("筛选资料")}
+                title={tx("筛选")}
               >
                 <ListFilter size={15} />
               </button>
               {filterOpen && (
-                <div className={styles.filterPopover} role="menu" aria-label="筛选条件">
-                  <p className={styles.popoverGroupTitle}>文件类型</p>
+                <div className={styles.filterPopover} role="menu" aria-label={tx("筛选条件")}>
+                  <p className={styles.popoverGroupTitle}>{tx("文件类型")}</p>
                   {([
                     ["all", "全部类型"],
                     ["pdf", "PDF 文件"],
@@ -423,12 +423,12 @@ export function MaterialLibrary({
                       className={cx(styles.popoverItem, kindFilter === k && styles.popoverItemOn)}
                       onClick={() => setKindFilter(k)}
                     >
-                      <span>{label}</span>
+                      <span>{tx(label)}</span>
                       {kindFilter === k && <Check size={13} aria-hidden />}
                     </button>
                   ))}
 
-                  <p className={styles.popoverGroupTitle}>来源归属</p>
+                  <p className={styles.popoverGroupTitle}>{tx("来源归属")}</p>
                   <button
                     type="button"
                     role="menuitemradio"
@@ -436,7 +436,7 @@ export function MaterialLibrary({
                     className={cx(styles.popoverItem, scopeFilter === "all" && styles.popoverItemOn)}
                     onClick={() => setScopeFilter("all")}
                   >
-                    <span>全部来源</span>
+                    <span>{tx("全部来源")}</span>
                     {scopeFilter === "all" && <Check size={13} aria-hidden />}
                   </button>
                   <button
@@ -446,7 +446,7 @@ export function MaterialLibrary({
                     className={cx(styles.popoverItem, scopeFilter === "general" && styles.popoverItemOn)}
                     onClick={() => setScopeFilter("general")}
                   >
-                    <span>通用资料（全局共享）</span>
+                    <span>{tx("通用资料（全局共享）")}</span>
                     {scopeFilter === "general" && <Check size={13} aria-hidden />}
                   </button>
                   {subjects.map((sub) => (
@@ -467,7 +467,7 @@ export function MaterialLibrary({
             </div>
 
             {/* 网格 / 列表视图切换器（参照图 2/3/4） */}
-            <div className={styles.viewSwitch} role="radiogroup" aria-label="视图模式">
+            <div className={styles.viewSwitch} role="radiogroup" aria-label={tx("视图模式")}>
               <button
                 type="button"
                 role="radio"
@@ -551,7 +551,7 @@ export function MaterialLibrary({
                     onClick={() => triggerUpload(undefined)}
                   >
                     <Upload size={13} aria-hidden />
-                    <span>通用资料（所有对话可检索）</span>
+                    <span>{tx("通用资料（所有对话可检索）")}</span>
                   </button>
                   {subjects.map((sub) => (
                     <button
@@ -572,7 +572,7 @@ export function MaterialLibrary({
         </header>
 
         {/* 分类胶囊行（参照图 2/3/4 的 `推荐 收藏 文件夹 图像 全部`） */}
-        <div className={styles.categoryRow} role="tablist" aria-label="资料分类">
+        <div className={styles.categoryRow} role="tablist" aria-label={tx("资料分类")}>
           {categoryPills.map((pill) => (
             <button
               key={pill.id}
@@ -582,7 +582,7 @@ export function MaterialLibrary({
               className={cx(styles.categoryPill, pill.active && styles.categoryPillActive)}
               onClick={pill.onSelect}
             >
-              {pill.label}
+              {tx(pill.label)}
             </button>
           ))}
         </div>
@@ -627,7 +627,7 @@ export function MaterialLibrary({
                 <article className={styles.resultCard} key={source.id}>
                   <div className={styles.resultMeta}>
                     <strong>{source.title}</strong>
-                    <span>{sourceLocation(source)}</span>
+                    <span>{sourceLocation(source, lang)}</span>
                   </div>
                   <blockquote>{source.excerpt}</blockquote>
                 </article>

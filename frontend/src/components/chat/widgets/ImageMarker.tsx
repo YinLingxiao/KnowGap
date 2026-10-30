@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { CircuitBoard } from "lucide-react";
+import { useI18n } from "@/components/LanguageProvider";
 import { cx } from "@/lib/cx";
 import { useImageUrl } from "./VisionBits";
 import { splitVisionMarkers } from "./visionData";
@@ -9,21 +10,22 @@ import styles from "./VisionWidgets.module.css";
 
 /** Thumbnail of an uploaded image; click to enlarge. */
 export function ImageThumb({ imageId }: { imageId: string }) {
+  const { tx } = useI18n();
   const { url, failed } = useImageUrl(imageId);
   const [open, setOpen] = useState(false);
   if (!url) {
-    return <span className={cx(styles.thumb, styles.thumbLoading)}>{failed ? "图片无法加载" : "图片加载中…"}</span>;
+    return <span className={cx(styles.thumb, styles.thumbLoading)}>{failed ? tx("图片无法加载") : tx("图片加载中…")}</span>;
   }
   return (
     <button
       type="button"
       className={cx(styles.thumb, open && styles.thumbOpen)}
       aria-expanded={open}
-      aria-label={open ? "收起上传的图片" : "放大查看上传的图片"}
+      aria-label={open ? tx("收起上传的图片") : tx("放大查看上传的图片")}
       onClick={() => setOpen((value) => !value)}
     >
       {/* eslint-disable-next-line @next/next/no-img-element -- authenticated blob: URL, not optimizable by next/image */}
-      <img src={url} alt="上传的图片" />
+      <img src={url} alt={tx("上传的图片")} />
     </button>
   );
 }
@@ -33,6 +35,7 @@ export function ImageThumb({ imageId }: { imageId: string }) {
  * Use it in place of the plain text when hasVisionMarker(content) is true.
  */
 export function VisionMarkedText({ text }: { text: string }) {
+  const { tx } = useI18n();
   const segments = useMemo(() => splitVisionMarkers(text), [text]);
   return (
     <>
@@ -42,7 +45,7 @@ export function VisionMarkedText({ text }: { text: string }) {
           return (
             <span key={i} className={styles.markerChip}>
               <CircuitBoard size={11} aria-hidden />
-              已确认的电路拓扑 · 第 {segment.version} 版
+              {tx("已确认的电路拓扑 · 第 {version} 版", { version: segment.version })}
             </span>
           );
         }

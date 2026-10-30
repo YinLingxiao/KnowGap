@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { ChevronLeft, ChevronRight, Flag, RotateCcw } from "lucide-react";
+import { useI18n } from "@/components/LanguageProvider";
 import type { AgendaTask, AgendaThread } from "@/lib/agenda/types";
 import { AgendaEmpty } from "./AgendaEmpty";
 import styles from "./WeekCalendar.module.css";
@@ -70,6 +71,7 @@ type Patch = Parameters<WeekCalendarProps["onReschedule"]>[1];
 type Drag = { task: AgendaTask; mode: "move" | "resize"; x: number; y: number; offset: number; moved: boolean; patch: Patch };
 
 export default function WeekCalendar({ weekStart, tasks, threads, today, onWeekChange, onSelectTask, onSelectThread, onReschedule, onCreateAt, showCompleted = false }: WeekCalendarProps) {
+  const { tx } = useI18n();
   const scrollRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
@@ -178,35 +180,35 @@ export default function WeekCalendar({ weekStart, tasks, threads, today, onWeekC
   });
   const nowMinutes = now ? now.getHours() * 60 + now.getMinutes() : -1;
 
-  return <section ref={rootRef} className={styles.calendar} aria-label="周历" onPointerMove={move} onPointerUp={event => finish(event)} onPointerCancel={event => finish(event, true)}>
+  return <section ref={rootRef} className={styles.calendar} aria-label={tx("周历")} onPointerMove={move} onPointerUp={event => finish(event)} onPointerCancel={event => finish(event, true)}>
     <div className={styles.toolbar}>
       <strong>{weekStart.replaceAll("-", "/")} – {days[6].slice(5).replace("-", "/")}</strong>
       <div className={styles.navigation}>
-        <button type="button" aria-label="上一周" onClick={() => onWeekChange(addDays(weekStart, -7))}><ChevronLeft size={16} /></button>
-        <button type="button" onClick={() => onWeekChange(monday(today))}>本周</button>
-        <button type="button" aria-label="下一周" onClick={() => onWeekChange(addDays(weekStart, 7))}><ChevronRight size={16} /></button>
+        <button type="button" aria-label={tx("上一周")} onClick={() => onWeekChange(addDays(weekStart, -7))}><ChevronLeft size={16} /></button>
+        <button type="button" onClick={() => onWeekChange(monday(today))}>{tx("本周")}</button>
+        <button type="button" aria-label={tx("下一周")} onClick={() => onWeekChange(addDays(weekStart, 7))}><ChevronRight size={16} /></button>
       </div>
-      <span className={styles.hint}>拖动排期 · 底边调整时长 · 15 分钟吸附</span>
+      <span className={styles.hint}>{tx("拖动排期 · 底边调整时长 · 15 分钟吸附")}</span>
     </div>
     <div className={styles.horizontal}>
       <div className={styles.sheet}>
         <div className={styles.header} style={{ paddingRight: scrollbarWidth }}>
           <span className={styles.gutter}>GMT{new Date().getTimezoneOffset() <= 0 ? "+" : "−"}{Math.abs(new Date().getTimezoneOffset() / 60)}</span>
           {days.map((day, i) => <div className={styles.dayHeader} key={day} data-today={day === today}>
-            <span>{weekdays[i]}</span><strong>{Number(day.slice(8))}</strong>
+            <span>{tx(weekdays[i])}</span><strong>{Number(day.slice(8))}</strong>
             <div className={styles.markers}>
-              {shown.filter(task => task.deadlineDate === day).map(task => <button type="button" key={task.id} className={styles.deadline} title={`截止：${task.title}`} onClick={() => onSelectTask(task.id)}><Flag size={11} />{task.title}</button>)}
+              {shown.filter(task => task.deadlineDate === day).map(task => <button type="button" key={task.id} className={styles.deadline} title={tx("截止：{title}", { title: task.title })} onClick={() => onSelectTask(task.id)}><Flag size={11} />{task.title}</button>)}
               {threads.filter(thread => thread.deadlineDate === day).map(thread => <button type="button" key={thread.threadId} className={styles.thread} disabled={!onSelectThread} title={`${thread.subjectName} · ${thread.title}`} onClick={() => onSelectThread?.(thread.threadId)}>{thread.title}</button>)}
             </div>
           </div>)}
         </div>
         <div className={styles.allDayRow} style={{ paddingRight: scrollbarWidth }}>
-          <span className={styles.gutter}>全天</span>
+          <span className={styles.gutter}>{tx("全天")}</span>
           <div className={styles.allDayGrid} ref={allDayRef}>
             {days.map(day => <div key={day} className={styles.allDayCell} onClick={event => { if (event.target === event.currentTarget) onCreateAt?.({ scheduledDate: day, scheduledStartAt: null }); }}>
               {visibleTasks.filter(task => task.scheduledDate === day && !task.scheduledStartAt).map(task => <button type="button" key={task.id} data-task-id={task.id} data-done={task.status === "done"} data-preview={preview?.id === task.id} className={styles.allDayTask}
                 onPointerDown={event => begin(event, tasks.find(original => original.id === task.id)!, "move")} onClick={() => select(task.id)} onKeyDown={event => keyboard(event, task)}>
-                {task.source === "review" && <RotateCcw size={11} aria-label="闪回" />}<span>{task.title}</span>
+                {task.source === "review" && <RotateCcw size={11} aria-label={tx("闪回")} />}<span>{task.title}</span>
               </button>)}
             </div>)}
           </div>
@@ -217,23 +219,23 @@ export default function WeekCalendar({ weekStart, tasks, threads, today, onWeekC
             {!weekBusy && <div className={styles.empty}><AgendaEmpty variant="week" /></div>}
             <div className={styles.timeGrid} ref={gridRef}>
               {days.map(day => <div key={day} className={styles.timeColumn}>
-                {Array.from({ length: 36 }, (_, slot) => <button type="button" key={slot} className={styles.slot} aria-label={`${day} ${clock(START + slot * 30)} 创建任务`}
+                {Array.from({ length: 36 }, (_, slot) => <button type="button" key={slot} className={styles.slot} aria-label={tx("{date} {time} 创建任务", { date: day, time: clock(START + slot * 30) })}
                   onClick={() => { if (!suppressClick.current) onCreateAt?.({ scheduledDate: day, scheduledStartAt: `${day}T${clock(START + slot * 30)}` }); suppressClick.current = false; }} />)}
                 {layout(visibleTasks.filter(task => task.scheduledStartAt?.slice(0, 10) === day)).filter(item => item.end > START && item.start < END).map(({ task, start, end, column, columns }) =>
                   <div key={task.id} className={styles.block} data-task-id={task.id} data-done={task.status === "done"} data-preview={preview?.id === task.id} style={{ top: (Math.max(start, START) - START) * SCALE, height: Math.max(18, (Math.min(end, END) - Math.max(start, START)) * SCALE - 2), left: `calc(${column / columns * 100}% + 3px)`, width: `calc(${100 / columns}% - 6px)` }}>
-                    <button type="button" className={styles.blockMain} onPointerDown={event => begin(event, tasks.find(original => original.id === task.id)!, "move")} onClick={() => select(task.id)} onKeyDown={event => keyboard(event, task)} title={`${task.title} · ${clock(start)}–${clock(end)}。Alt + 方向键排期，Alt + Shift + 上下调整时长`}>
-                      <span className={styles.blockTitle}>{task.source === "review" && <RotateCcw size={12} aria-label="闪回" />}{task.title}</span>
+                    <button type="button" className={styles.blockMain} onPointerDown={event => begin(event, tasks.find(original => original.id === task.id)!, "move")} onClick={() => select(task.id)} onKeyDown={event => keyboard(event, task)} title={tx("{title} · {time}。Alt + 方向键排期，Alt + Shift + 上下调整时长", { title: task.title, time: `${clock(start)}–${clock(end)}` })}>
+                      <span className={styles.blockTitle}>{task.source === "review" && <RotateCcw size={12} aria-label={tx("闪回")} />}{task.title}</span>
                       <span className={styles.blockTime}>{clock(start)}–{clock(end)}</span>
                     </button>
-                    <button type="button" className={styles.resize} aria-label={`调整时长：${task.title}`} onPointerDown={event => begin(event, tasks.find(original => original.id === task.id)!, "resize")} onClick={event => { event.stopPropagation(); suppressClick.current = false; }} onKeyDown={event => keyboard(event, task)} />
+                    <button type="button" className={styles.resize} aria-label={tx("调整时长：{title}", { title: task.title })} onPointerDown={event => begin(event, tasks.find(original => original.id === task.id)!, "resize")} onClick={event => { event.stopPropagation(); suppressClick.current = false; }} onKeyDown={event => keyboard(event, task)} />
                   </div>)}
-                {now && dateString(now) === day && nowMinutes >= START && nowMinutes < END && <div className={styles.now} style={{ top: (nowMinutes - START) * SCALE }} aria-label={`当前时间 ${clock(nowMinutes)}`} />}
+                {now && dateString(now) === day && nowMinutes >= START && nowMinutes < END && <div className={styles.now} style={{ top: (nowMinutes - START) * SCALE }} aria-label={tx("当前时间 {time}", { time: clock(nowMinutes) })} />}
               </div>)}
             </div>
           </div>
         </div>
       </div>
     </div>
-    <div className={styles.status} role="status">{preview ? `${preview.patch.scheduledDate} · ${preview.patch.scheduledStartAt ? `${preview.patch.scheduledStartAt.slice(11)} / ${preview.patch.durationMinutes} 分钟` : "全天"} · 松开保存，Esc 取消` : "点击空白创建任务；Alt + 方向键也可调整排期"}</div>
+    <div className={styles.status} role="status">{preview ? tx("{date} · {time} · 松开保存，Esc 取消", { date: preview.patch.scheduledDate, time: preview.patch.scheduledStartAt ? tx("{time} / {minutes} 分钟", { time: preview.patch.scheduledStartAt.slice(11), minutes: preview.patch.durationMinutes ?? 0 }) : tx("全天") }) : tx("点击空白创建任务；Alt + 方向键也可调整排期")}</div>
   </section>;
 }

@@ -6,6 +6,7 @@ import {
   type CoachId,
 } from "./coach";
 import { cx } from "@/lib/cx";
+import { useI18n } from "@/components/LanguageProvider";
 import styles from "./Coachmark.module.css";
 
 const LEGACY = new Set<CoachId>(LEGACY_COACH_IDS);
@@ -69,6 +70,7 @@ function place(id: CoachId, node: HTMLElement): Box | null {
 }
 
 export function CoachmarkHost({ userId, enabled }: { userId: string; enabled: boolean }) {
+  const { tx } = useI18n();
   const [current, setCurrent] = useState<CoachId | null>(null);
   const [box, setBox] = useState<Box | null>(null);
   const [paused, setPaused] = useState(false);
@@ -184,9 +186,9 @@ export function CoachmarkHost({ userId, enabled }: { userId: string; enabled: bo
       className={cx(styles.bubble, box.inline && styles.inline)}
       style={{ top: box.top, left: box.left, right: box.right }}
       role="dialog"
-      aria-label={COACH_COPY[current]}
+      aria-label={tx(COACH_COPY[current])}
     >
-      <p>{COACH_COPY[current]}</p>
+      <p>{tx(COACH_COPY[current])}</p>
       <button
         type="button"
         onClick={() => {
@@ -195,7 +197,7 @@ export function CoachmarkHost({ userId, enabled }: { userId: string; enabled: bo
           setCurrent(null);
         }}
       >
-        知道了
+        {tx("知道了")}
       </button>
     </div>
   );

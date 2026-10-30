@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useI18n } from "@/components/LanguageProvider";
 import { formatYmd } from "@/lib/agenda/quickAdd";
 import { cx } from "@/lib/cx";
 import { addDays, dateWord, monthDay, weekdayOf, weekendOf } from "./agendaModel";
@@ -17,6 +18,7 @@ interface DatePickerProps {
 }
 
 export function DatePicker({ value, onChange, ariaLabel, today, disabled }: DatePickerProps) {
+  const { tx } = useI18n();
   const day = today || formatYmd(new Date());
   const [open, setOpen] = useState(false);
   const [cursor, setCursor] = useState(() => (value ?? day).slice(0, 7));
@@ -59,10 +61,10 @@ export function DatePicker({ value, onChange, ariaLabel, today, disabled }: Date
     setOpen(false);
   };
   const shortcuts = [
-    { label: "今天", date: day },
-    { label: "明天", date: addDays(day, 1) },
-    { label: "本周末", date: weekendOf(day) },
-    { label: "下周", date: addDays(day, 7) },
+    { label: tx("今天"), date: day },
+    { label: tx("明天"), date: addDays(day, 1) },
+    { label: tx("本周末"), date: weekendOf(day) },
+    { label: tx("下周"), date: addDays(day, 7) },
   ];
 
   return (
@@ -77,7 +79,7 @@ export function DatePicker({ value, onChange, ariaLabel, today, disabled }: Date
         disabled={disabled}
         onClick={() => setOpen((current) => !current)}
       >
-        {value ? dateWord(value, day) : "选择日期"}
+        {value ? dateWord(value, day, tx) : tx("选择日期")}
       </button>
       {open && createPortal(
         <div ref={pop} className={styles.pop} style={pos} role="dialog" aria-label={ariaLabel}>
@@ -87,7 +89,7 @@ export function DatePicker({ value, onChange, ariaLabel, today, disabled }: Date
                 {item.label}
               </button>
             ))}
-            <button type="button" className={cx(styles.shortcut, !value && styles.on)} onClick={() => pick(null)}>无日期</button>
+            <button type="button" className={cx(styles.shortcut, !value && styles.on)} onClick={() => pick(null)}>{tx("无日期")}</button>
           </div>
           <Month cursor={cursor} value={value} today={day} onCursor={setCursor} onPick={pick} />
         </div>,
@@ -104,6 +106,7 @@ function Month({ cursor, value, today, onCursor, onPick }: {
   onCursor: (next: string) => void;
   onPick: (day: string) => void;
 }) {
+  const { tx } = useI18n();
   const year = Number(cursor.slice(0, 4));
   const month = Number(cursor.slice(5, 7));
   const shift = (delta: number) => {
@@ -121,12 +124,12 @@ function Month({ cursor, value, today, onCursor, onPick }: {
   return (
     <div className={styles.month}>
       <div className={styles.monthHead}>
-        <button type="button" aria-label="上个月" onClick={() => shift(-1)}><ChevronLeft size={14} /></button>
-        <strong>{year}年{month}月</strong>
-        <button type="button" aria-label="下个月" onClick={() => shift(1)}><ChevronRight size={14} /></button>
+        <button type="button" aria-label={tx("上个月")} onClick={() => shift(-1)}><ChevronLeft size={14} /></button>
+        <strong>{tx("{year}年{month}月", { year, month })}</strong>
+        <button type="button" aria-label={tx("下个月")} onClick={() => shift(1)}><ChevronRight size={14} /></button>
       </div>
       <div className={styles.week} aria-hidden>
-        {["一", "二", "三", "四", "五", "六", "日"].map((name) => <span key={name}>{name}</span>)}
+        {["一", "二", "三", "四", "五", "六", "日"].map((name) => <span key={name}>{tx(`周${name}`)}</span>)}
       </div>
       <div className={styles.grid}>
         {cells.map((day, index) => day ? (
@@ -134,7 +137,7 @@ function Month({ cursor, value, today, onCursor, onPick }: {
             key={day}
             type="button"
             className={cx(styles.day, day === today && styles.today, day === value && styles.picked)}
-            aria-label={`${monthDay(day)} ${weekdayOf(day)}`}
+            aria-label={`${monthDay(day, tx)} ${weekdayOf(day, tx)}`}
             aria-pressed={day === value}
             onClick={() => onPick(day)}
           >

@@ -1,11 +1,18 @@
-﻿import { en, zh, type Language, type MessageKey } from "./messages";
+import { en, zh, type Language, type MessageKey } from "./messages";
+import { enPhrases } from "./phrases";
 
-export { en, zh };
+export { en, zh, enPhrases };
 export type { Language, MessageKey };
 
 export const LANGUAGE_STORAGE_KEY = "knowgap.language";
 
 export type Translate = (key: MessageKey, vars?: Record<string, string | number>) => string;
+export type TranslatePhrase = (text: string, vars?: Record<string, string | number>) => string;
+
+/** Shared labels can also be translated from their Chinese source text. */
+const phraseFromCatalog = new Map<string, string>(
+  (Object.keys(zh) as MessageKey[]).map((key) => [zh[key], en[key]]),
+);
 
 export function isLanguage(value: unknown): value is Language {
   return value === "zh" || value === "en";
@@ -35,4 +42,10 @@ export function interpolate(template: string, vars?: Record<string, string | num
 
 export function translate(lang: Language, key: MessageKey, vars?: Record<string, string | number>): string {
   return interpolate((lang === "en" ? en : zh)[key] ?? zh[key], vars);
+}
+
+/** Translate a Chinese source sentence without creating a typed key first. */
+export function translatePhrase(lang: Language, text: string, vars?: Record<string, string | number>): string {
+  if (lang === "zh") return interpolate(text, vars);
+  return interpolate(enPhrases[text] ?? phraseFromCatalog.get(text) ?? text, vars);
 }

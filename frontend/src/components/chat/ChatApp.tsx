@@ -99,7 +99,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
   onLogout: () => void;
   onRename: (name: string) => Promise<void>;
 }) {
-  const { lang, t } = useI18n();
+  const { lang, t, tx } = useI18n();
   const { toasts, push, dismiss } = useToasts();
   const chat = useChat(push, user.id);
   const [narrow, setNarrow] = useState(false);
@@ -167,7 +167,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
       if (!config.configured) {
         needsModelTest.current = true;
         setModelConfigured(false);
-        if (fromSave) setModelError("默认模型还不可用。请确认服务商已启用，并且密钥或 ChatGPT 套餐已授权。");
+        if (fromSave) setModelError(tx("默认模型还不可用。请确认服务商已启用，并且密钥或 ChatGPT 套餐已授权。"));
         return;
       }
       if (needsModelTest.current) {
@@ -180,7 +180,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
       }
       setModelConfigured(true);
     } catch (error: unknown) {
-      setModelError(error instanceof Error && error.message ? error.message : "无法确认模型连接，请检查后端是否启动、模型配置是否可用，然后重试。");
+      setModelError(error instanceof Error && error.message ? error.message : tx("无法确认模型连接，请检查后端是否启动、模型配置是否可用，然后重试。"));
     } finally {
       setModelChecking(false);
     }
@@ -225,7 +225,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
       const status = await chatApi.onboardingStatus();
       setGate(status.status === "not_started" ? "welcome" : "app");
     } catch {
-      setWelcomeError("无法读取学习进度，请检查后端是否启动，然后重试。");
+      setWelcomeError(tx("无法读取学习进度，请检查后端是否启动，然后重试。"));
     }
   }, [user.id]);
 
@@ -250,7 +250,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
       const result = await chatApi.welcome(text);
       await enterSpace(result.subjectId, result.conversationId, result.opener);
     } catch (error) {
-      setWelcomeError(error instanceof Error ? error.message : "没能建好空间，请重试。");
+      setWelcomeError(error instanceof Error ? error.message : tx("没能建好空间，请重试。"));
     } finally {
       setWelcomeBusy(false);
     }
@@ -265,7 +265,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
       await chatApi.ackOnboarding();
       await enterSpace(seeded.subjectId, seeded.conversationId);
     } catch (error) {
-      setWelcomeError(error instanceof Error ? error.message : "演示空间没能打开，请重试。");
+      setWelcomeError(error instanceof Error ? error.message : tx("演示空间没能打开，请重试。"));
     } finally {
       setWelcomeBusy(false);
     }
@@ -280,7 +280,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
       setGate("app");
       if (!narrow) setSidebarOpen(true);
     } catch (error) {
-      setWelcomeError(error instanceof Error ? error.message : "跳过失败，请重试。");
+      setWelcomeError(error instanceof Error ? error.message : tx("跳过失败，请重试。"));
     } finally {
       setWelcomeBusy(false);
     }
@@ -758,14 +758,14 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
                       type="button"
                       className={styles.stripItem}
                       onClick={() => {
-                        chat.setDraft(text);
+                        chat.setDraft(tx(text));
                         document.getElementById(COMPOSER_ID)?.focus();
                       }}
                     >
                       <span className={styles.stripIconBadge} style={{ background: color }} aria-hidden>
                         <Icon size={10} />
                       </span>
-                      <span>{label}</span>
+                      <span>{tx(label)}</span>
                     </button>
                   ))}
                 </div>
@@ -787,21 +787,21 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
                   const space = recentSpaces[0];
                   if (space?.mainConversationId) {
                     setView({ type: "subject", id: space.id });
-                    void chat.sendTo(space.mainConversationId, "用一个具体例子讲清一个核心概念");
+                    void chat.sendTo(space.mainConversationId, tx("用一个具体例子讲清一个核心概念"));
                     return;
                   }
                   setView({ type: "chat" });
-                  chat.setDraft("用一个具体例子讲清一个核心概念");
+                  chat.setDraft(tx("用一个具体例子讲清一个核心概念"));
                   document.getElementById(COMPOSER_ID)?.focus();
                 }}
                 onQuiz={() => {
                   const space = recentSpaces[0];
                   if (space?.mainConversationId) {
                     setView({ type: "subject", id: space.id });
-                    void chat.sendTo(space.mainConversationId, "考考我");
+                    void chat.sendTo(space.mainConversationId, tx("考考我"));
                     return;
                   }
-                  chat.setDraft("考考我");
+                  chat.setDraft(tx("考考我"));
                   document.getElementById(COMPOSER_ID)?.focus();
                 }}
                 onSchedule={() => setView({ type: "agenda" })}
@@ -828,12 +828,12 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
                 onReview={() => {
                   if (!reviewTarget) return;
                   chat.setDraft(
-                    `针对我之前在「${reviewTarget.topic}」上的易错点（${reviewTarget.summary}），请出 1 道简短的随堂微测题检验我是否已经想通。`,
+                    tx("针对我之前在「{topic}」上的易错点（{summary}），请出 1 道简短的随堂微测题检验我是否已经想通。", { topic: reviewTarget.topic, summary: reviewTarget.summary }),
                   );
                   document.getElementById(COMPOSER_ID)?.focus();
                 }}
                 onPlanReview={() => {
-                  chat.setDraft("让 AI 帮我排这周的复习");
+                  chat.setDraft(tx("让 AI 帮我排这周的复习"));
                   document.getElementById(COMPOSER_ID)?.focus();
                 }}
                 onOpenConversation={showConversation}
@@ -873,10 +873,10 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
                 const space = recentSpaces[0];
                 if (space?.mainConversationId) {
                   setView({ type: "subject", id: space.id });
-                  void chat.sendTo(space.mainConversationId, "用一个具体例子讲清一个核心概念");
+                  void chat.sendTo(space.mainConversationId, tx("用一个具体例子讲清一个核心概念"));
                   return;
                 }
-                chat.setDraft("用一个具体例子讲清一个核心概念");
+                chat.setDraft(tx("用一个具体例子讲清一个核心概念"));
                 document.getElementById(COMPOSER_ID)?.focus();
               }}
             />
@@ -902,10 +902,10 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
               chat.setDraft(text);
               window.setTimeout(() => document.getElementById(COMPOSER_ID)?.focus(), 0);
             };
-            if (action === "explain") openMain("用一个具体例子讲清一个核心概念");
-            else if (action === "quiz" || action === "select") openMain(action === "quiz" ? "考考我" : "选中我回复里的一句话，再追问");
+            if (action === "explain") openMain(tx("用一个具体例子讲清一个核心概念"));
+            else if (action === "quiz" || action === "select") openMain(action === "quiz" ? tx("考考我") : tx("选中我回复里的一句话，再追问"));
             else if (action === "viva") openMain("/viva ");
-            else if (action === "plan") openMain("先列一个学习计划，再讲第一个概念");
+            else if (action === "plan") openMain(tx("先列一个学习计划，再讲第一个概念"));
             else if (action === "review" || action === "agenda" || action === "schedule") setView({ type: "agenda" });
             else if (action === "graph" || action === "sheet") {
               if (!space) { setView({ type: "spaces" }); return; }
@@ -916,7 +916,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
                 }));
               }, 60);
             } else if (action === "spotlight") {
-              push({ tone: "info", title: "按 Alt+Space 随时快问" });
+              push({ tone: "info", title: tx("按 Alt+Space 随时快问") });
             }
           }}
         />

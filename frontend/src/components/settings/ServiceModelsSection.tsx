@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useId, useState } from "react";
 import { BrainCircuit, CheckCircle2, Database, Eye, RefreshCw, Save, Sparkles } from "lucide-react";
+import { useI18n } from "@/components/LanguageProvider";
 import { Button } from "../ui/Button";
 import { toApiError } from "@/lib/api/errors";
 import { modelLibraryApi, type CatalogModel, type ModelLibraryClient, type ServiceModelSelection, type ServiceRole } from "@/lib/api/model-library";
@@ -104,6 +105,7 @@ function fingerprint(selection: ServiceModelSelection, prefs: VisionPrefs | null
 }
 
 export function ServiceModelsSection({ client, visionClient }: { client?: ModelLibraryClient; visionClient?: VisionPrefsClient } = {}) {
+  const { tx } = useI18n();
   const id = useId();
   const library = client ?? modelLibraryApi;
   const vision = visionClient ?? defaultVision;
@@ -177,12 +179,12 @@ export function ServiceModelsSection({ client, visionClient }: { client?: ModelL
       <section className={styles.root} aria-labelledby={`${id}-title`}>
         <div className={styles.sectionHead}>
           <div>
-            <h3 id={`${id}-title`}>服务模型分工</h3>
-            <p>逻辑、视觉、后台与记忆从模型库里选择。</p>
+            <h3 id={`${id}-title`}>{tx("服务模型分工")}</h3>
+            <p>{tx("逻辑、视觉、后台与记忆从模型库里选择。")}</p>
           </div>
         </div>
-        <div className={styles.loadError} role="alert">{libraryError}</div>
-        <Button size="sm" icon={<RefreshCw size={14} />} loading={loading} onClick={() => void load()}>重新读取</Button>
+        <div className={styles.loadError} role="alert">{tx(libraryError)}</div>
+        <Button size="sm" icon={<RefreshCw size={14} />} loading={loading} onClick={() => void load()}>{tx("重新读取")}</Button>
       </section>
     );
   }
@@ -190,7 +192,7 @@ export function ServiceModelsSection({ client, visionClient }: { client?: ModelL
   if (loading && !baseline) {
     return (
       <section className={styles.root} aria-busy="true">
-        <div className={styles.skeleton}>正在读取服务模型配置…</div>
+        <div className={styles.skeleton}>{tx("正在读取服务模型配置…")}</div>
       </section>
     );
   }
@@ -208,14 +210,14 @@ export function ServiceModelsSection({ client, visionClient }: { client?: ModelL
     <section className={styles.root} aria-labelledby={`${id}-title`} aria-busy={disabled || undefined}>
       <div className={styles.sectionHead}>
         <div>
-          <h3 id={`${id}-title`}>服务模型分工</h3>
-          <p>从已启用的模型里选择。选「沿用默认模型」时使用模型库的默认模型，这里不再填写地址和密钥。</p>
+          <h3 id={`${id}-title`}>{tx("服务模型分工")}</h3>
+          <p>{tx("从已启用的模型里选择。选「沿用默认模型」时使用模型库的默认模型，这里不再填写地址和密钥。")}</p>
         </div>
         <Button size="sm" variant="primary" icon={<Save size={14} />} loading={saving} disabled={disabled || !dirty} onClick={() => void save()}>
-          保存分工
+          {tx("保存分工")}
         </Button>
       </div>
-      {visionError && <div className={styles.loadError} role="alert">{visionError}</div>}
+      {visionError && <div className={styles.loadError} role="alert">{tx(visionError)}</div>}
       <div className={styles.modelGrid}>
         {ROLES.map((role) => {
           const Icon = role.icon;
@@ -226,21 +228,21 @@ export function ServiceModelsSection({ client, visionClient }: { client?: ModelL
               <header className={styles.cardHead}>
                 <span className={styles.cardIcon}><Icon size={16} aria-hidden /></span>
                 <div>
-                  <h5>{role.title}</h5>
-                  <p>{role.desc}</p>
+                  <h5>{tx(role.title)}</h5>
+                  <p>{tx(role.desc)}</p>
                 </div>
               </header>
               <label className={styles.field} htmlFor={`${id}-${role.key}`}>
                 <select
                   id={`${id}-${role.key}`}
                   className={styles.input}
-                  aria-label={role.title}
+                  aria-label={tx(role.title)}
                   value={current ?? ""}
                   disabled={disabled}
                   onChange={(event) => choose(role.key, event.target.value)}
                 >
-                  <option value="">沿用默认模型</option>
-                  {!known && current && <option value={current}>当前模型已停用</option>}
+                  <option value="">{tx("沿用默认模型")}</option>
+                  {!known && current && <option value={current}>{tx("当前模型已停用")}</option>}
                   {groups.map((group) => (
                     <optgroup key={group.id} label={group.name}>
                       {group.models.map((model) => <option key={model.key} value={model.key}>{model.name}</option>)}
@@ -251,25 +253,25 @@ export function ServiceModelsSection({ client, visionClient }: { client?: ModelL
               {role.key === "vision" && prefs && (
                 <>
                   <label className={styles.field} htmlFor={`${id}-bbox`}>
-                    <span className={styles.fieldLabel}>服务商坐标格式</span>
+                    <span className={styles.fieldLabel}>{tx("服务商坐标格式")}</span>
                     <select
                       id={`${id}-bbox`}
                       className={styles.input}
-                      aria-label="服务商坐标格式"
+                      aria-label={tx("服务商坐标格式")}
                       value={prefs.bboxFormat}
                       disabled={disabled || !prefs.visionEnabled}
                       onChange={(event) => setPrefs({ ...prefs, bboxFormat: event.target.value as BboxFormat })}
                     >
-                      {BBOX_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                      {BBOX_OPTIONS.map((option) => <option key={option.value} value={option.value}>{tx(option.label)}</option>)}
                     </select>
                   </label>
-                  <p className={styles.help}>当前 Qwen 接力建议使用 xyxy · 0–1000；内部会统一换算为圈画坐标。</p>
+                  <p className={styles.help}>{tx("当前 Qwen 接力建议使用 xyxy · 0–1000；内部会统一换算为圈画坐标。")}</p>
                   <Toggle
                     id={`${id}-vision-enabled`}
                     checked={prefs.visionEnabled}
                     disabled={disabled}
-                    title="启用视觉模型"
-                    description="关闭后识图不再单独调用所选视觉模型"
+                    title={tx("启用视觉模型")}
+                    description={tx("关闭后识图不再单独调用所选视觉模型")}
                     onChange={(visionEnabled) => setPrefs({ ...prefs, visionEnabled })}
                   />
                 </>
@@ -282,19 +284,19 @@ export function ServiceModelsSection({ client, visionClient }: { client?: ModelL
         <div className={styles.group}>
           <div className={styles.groupTitle}>
             <Sparkles size={16} aria-hidden />
-            <div><h4>可选功能</h4><p>控制接力方式与需要人工确认的教学节点。</p></div>
+            <div><h4>{tx("可选功能")}</h4><p>{tx("控制接力方式与需要人工确认的教学节点。")}</p></div>
           </div>
           <div className={styles.options}>
-            <Toggle id={`${id}-dual`} checked={prefs.dualModelRelay} disabled={disabled} title="双模型接力" description="视觉模型给区域 ID，逻辑模型只按 ID 判错" onChange={(dualModelRelay) => setPrefs({ ...prefs, dualModelRelay })} />
-            <Toggle id={`${id}-confirm`} checked={prefs.circuitConfirmFirst} disabled={disabled} title="电路网表先确认" description="学生核对节点和支路后，逻辑模型才列方程" onChange={(circuitConfirmFirst) => setPrefs({ ...prefs, circuitConfirmFirst })} />
-            <Toggle id={`${id}-suggest`} checked={prefs.suggestReplyEnabled} disabled={disabled} title="建议回复" description="保留给公共聊天服务的建议回复开关" onChange={(suggestReplyEnabled) => setPrefs({ ...prefs, suggestReplyEnabled })} />
+            <Toggle id={`${id}-dual`} checked={prefs.dualModelRelay} disabled={disabled} title={tx("双模型接力")} description={tx("视觉模型给区域 ID，逻辑模型只按 ID 判错")} onChange={(dualModelRelay) => setPrefs({ ...prefs, dualModelRelay })} />
+            <Toggle id={`${id}-confirm`} checked={prefs.circuitConfirmFirst} disabled={disabled} title={tx("电路网表先确认")} description={tx("学生核对节点和支路后，逻辑模型才列方程")} onChange={(circuitConfirmFirst) => setPrefs({ ...prefs, circuitConfirmFirst })} />
+            <Toggle id={`${id}-suggest`} checked={prefs.suggestReplyEnabled} disabled={disabled} title={tx("建议回复")} description={tx("保留给公共聊天服务的建议回复开关")} onChange={(suggestReplyEnabled) => setPrefs({ ...prefs, suggestReplyEnabled })} />
           </div>
         </div>
       )}
       {outcome && (
         <p className={failed ? styles.outcomeError : styles.outcomeOk} role="status">
           {!failed && <CheckCircle2 size={14} aria-hidden />}
-          {outcome}
+          {tx(outcome)}
         </p>
       )}
     </section>

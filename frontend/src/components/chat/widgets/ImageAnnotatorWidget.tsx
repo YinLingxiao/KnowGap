@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { ImageIcon, MessageSquarePlus } from "lucide-react";
+import { useI18n } from "@/components/LanguageProvider";
 import { cx } from "@/lib/cx";
 import base from "../LearningWidget.module.css";
 import { RouteBadge, useImageUrl } from "./VisionBits";
@@ -20,6 +21,7 @@ export const annotationMarker = (index: number) => CIRCLED[index] ?? String(inde
  * Legacy cards with imageUrl / aspectRatio / label are still accepted.
  */
 export function ImageAnnotatorWidget({ data }: { data: Record<string, unknown> }) {
+  const { tx } = useI18n();
   const parsed = useMemo(() => parseAnnotatorData(data), [data]);
   const { title, summary, annotations, aspect, route } = parsed;
   const image = useImageUrl(parsed.imageId);
@@ -39,23 +41,23 @@ export function ImageAnnotatorWidget({ data }: { data: Record<string, unknown> }
   const current = active === null ? null : annotations[active] ?? null;
   const toggle = (index: number) => setActive((previous) => (previous === index ? null : index));
   const stageHint = parsed.imageId && !image.url
-    ? image.failed ? "原图无法加载，可能已被删除" : "原图加载中…"
-    : src ? "" : "未提供图片，仅展示批注位置";
-  const label = `${title}，共 ${annotations.length} 处批注`;
+    ? image.failed ? tx("原图无法加载，可能已被删除") : tx("原图加载中…")
+    : src ? "" : tx("未提供图片，仅展示批注位置");
+  const label = tx("{title}，共 {count} 处批注", { title: tx(title), count: annotations.length });
 
   return (
-    <section className={base.widgetCard} aria-label={title}>
+    <section className={base.widgetCard} aria-label={tx(title)}>
       <header className={base.widgetHead}>
         <div className={base.widgetTitleWrap}>
           <span className={base.widgetBadge}>
             <ImageIcon size={12} aria-hidden />
-            图片批注
+            {tx("图片批注")}
           </span>
-          <strong className={base.widgetTitle}>{title}</strong>
+          <strong className={base.widgetTitle}>{tx(title)}</strong>
         </div>
         <div className={styles.headMeta}>
           <RouteBadge route={route} />
-          <span className={base.stepCounter}>{annotations.length ? `${annotations.length} 处批注` : "无批注"}</span>
+          <span className={base.stepCounter}>{annotations.length ? tx("{count} 处批注", { count: annotations.length }) : tx("无批注")}</span>
         </div>
       </header>
 
@@ -99,7 +101,7 @@ export function ImageAnnotatorWidget({ data }: { data: Record<string, unknown> }
             className={cx(base.annoBadge, active === i && base.annoBadgeOn)}
             style={{ left: `${anno.box[1] / 10}%`, top: `${anno.box[0] / 10}%`, background: anno.color }}
             aria-pressed={active === i}
-            aria-label={`批注 ${i + 1}：${anno.text}`}
+            aria-label={tx("批注 {index}：{text}", { index: i + 1, text: tx(anno.text) })}
             onClick={() => toggle(i)}
           >
             {annotationMarker(i)}
@@ -120,29 +122,35 @@ export function ImageAnnotatorWidget({ data }: { data: Record<string, unknown> }
                 onClick={() => toggle(i)}
               >
                 <span className={base.annoDot} style={{ background: anno.color }} aria-hidden>{annotationMarker(i)}</span>
-                <span className={styles.annoText}>{anno.text}</span>
+                <span className={styles.annoText}>{tx(anno.text)}</span>
               </button>
             </li>
           ))}
         </ul>
       ) : (
-        <p className={base.matrixTakeaway}>没有发现需要批注的地方。</p>
+        <p className={base.matrixTakeaway}>{tx("没有发现需要批注的地方。")}</p>
       )}
 
       {annotations.length > 0 && (
         <footer className={base.widgetFoot}>
-          <span className={base.footHint}>点击图上的编号或下方列表高亮对应批注，再针对这一处追问</span>
+          <span className={base.footHint}>{tx("点击图上的编号或下方列表高亮对应批注，再针对这一处追问")}</span>
           <button
             type="button"
             className={base.askAiBtn}
             disabled={!current}
             onClick={() => {
               if (!current || active === null) return;
-              askInComposer(`关于「${title}」中的批注 ${annotationMarker(active)}：「${current.text}」，请结合图中这一处详细讲讲错在哪里、应该怎么改。`);
+              askInComposer(
+                tx("关于「{title}」中的批注 {index}：「{text}」，请结合图中这一处详细讲讲错在哪里、应该怎么改。", {
+                  title: tx(title),
+                  index: annotationMarker(active),
+                  text: tx(current.text),
+                }),
+              );
             }}
           >
             <MessageSquarePlus size={12} aria-hidden />
-            <span>{current && active !== null ? `针对第 ${annotationMarker(active)} 处批注追问 AI` : "先选择一处批注"}</span>
+            <span>{current && active !== null ? tx("针对第 {index} 处批注追问 AI", { index: annotationMarker(active) }) : tx("先选择一处批注")}</span>
           </button>
         </footer>
       )}

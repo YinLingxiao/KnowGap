@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
@@ -6,14 +6,17 @@ import {
   isLanguage,
   readStoredLanguage,
   translate,
+  translatePhrase,
   type Language,
   type Translate,
+  type TranslatePhrase,
 } from "@/lib/i18n";
 
 interface I18nContextValue {
   lang: Language;
   setLang: (lang: Language) => void;
   t: Translate;
+  tx: TranslatePhrase;
 }
 
 const I18nContext = createContext<I18nContextValue | null>(null);
@@ -60,8 +63,9 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const t = useCallback<Translate>((key, vars) => translate(lang, key, vars), [lang]);
+  const tx = useCallback<TranslatePhrase>((text, vars) => translatePhrase(lang, text, vars), [lang]);
 
-  const value = useMemo(() => ({ lang, setLang, t }), [lang, setLang, t]);
+  const value = useMemo(() => ({ lang, setLang, t, tx }), [lang, setLang, t, tx]);
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }

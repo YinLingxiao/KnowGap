@@ -9,6 +9,7 @@ import {
 import type { StreamPhase } from "@/hooks/useChat";
 import type { ChatMessage } from "@/lib/chat/types";
 import { cx } from "@/lib/cx";
+import { useI18n } from "@/components/LanguageProvider";
 import styles from "./OnboardingStage.module.css";
 
 interface OnboardingStageProps {
@@ -56,6 +57,7 @@ export function OnboardingStage({
   onOpenModelSettings,
   onOpenMemories,
 }: OnboardingStageProps) {
+  const { tx } = useI18n();
   const [input, setInput] = useState("");
   const [typedCount, setTypedCount] = useState(0);
   const [sending, setSending] = useState(false);
@@ -83,8 +85,8 @@ export function OnboardingStage({
 
   const latestAssistant = useMemo(() => {
     const found = [...messages].reverse().find((m) => m.role === "assistant" && m.status === "complete" && m.content.trim());
-    return found?.content ?? "最近你最想弄明白什么？可以顺便说说现在学到哪了。";
-  }, [messages]);
+    return found?.content ?? tx("最近你最想弄明白什么？可以顺便说说现在学到哪了。");
+  }, [messages, tx]);
 
   const { leadText, mainQuestion } = useMemo(() => {
     const paragraphs = latestAssistant
@@ -93,15 +95,15 @@ export function OnboardingStage({
       .filter(Boolean);
     if (paragraphs.length >= 2) {
       return {
-        leadText: messages.length === 1 ? "先用 3 个简短问题了解你的习惯，让之后的每次讲解更贴合你的节奏。" : paragraphs.slice(0, -1).join(" "),
+        leadText: messages.length === 1 ? tx("先用 3 个简短问题了解你的习惯，让之后的每次讲解更贴合你的节奏。") : paragraphs.slice(0, -1).join(" "),
         mainQuestion: paragraphs[paragraphs.length - 1],
       };
     }
     return {
-      leadText: stepIndex === 0 ? "先用 3 个简短问题了解你的习惯，让之后的每次讲解更贴合你的节奏。" : "",
+      leadText: stepIndex === 0 ? tx("先用 3 个简短问题了解你的习惯，让之后的每次讲解更贴合你的节奏。") : "",
       mainQuestion: paragraphs[0] ?? "",
     };
-  }, [latestAssistant, stepIndex, messages.length]);
+  }, [latestAssistant, stepIndex, messages.length, tx]);
 
   const fullText = leadText ? `${leadText}\n${mainQuestion}` : mainQuestion;
   const totalChars = fullText.length;
@@ -185,11 +187,11 @@ export function OnboardingStage({
         <div className={styles.topBarLeft}>
           <span className={styles.topBadge}>
             <Sparkles size={12} className={styles.topBadgeIcon} aria-hidden />
-            {ready ? "画像就绪 · 待你确认" : `初识向导 · ${stepIndex + 1} / 3`}
+            {ready ? tx("画像就绪 · 待你确认") : tx("初识向导 · {step} / 3", { step: stepIndex + 1 })}
           </span>
         </div>
 
-        <div className={styles.progressTrack} aria-label="初识进度">
+        <div className={styles.progressTrack} aria-label={tx("初识进度")}>
           {STEP_META.map((item, idx) => {
             const done = ready || idx < stepIndex;
             const active = !ready && idx === stepIndex;
@@ -203,7 +205,7 @@ export function OnboardingStage({
                   )}
                 />
                 <span className={cx(styles.progressLabel, (done || active) && styles.progressLabelLit)}>
-                  {item.shortLabel}
+                  {tx(item.shortLabel)}
                 </span>
               </div>
             );
@@ -217,15 +219,15 @@ export function OnboardingStage({
             onClick={onOpenModelSettings}
           >
             <Settings size={13} aria-hidden />
-            <span>模型设置</span>
+            <span>{tx("模型设置")}</span>
           </button>
           <button type="button" className={styles.topBtn} onClick={onOpenMemories}>
             <Brain size={13} aria-hidden />
-            <span>画像</span>
+            <span>{tx("画像")}</span>
           </button>
           {!ready && (
             <button type="button" className={styles.skipBtn} onClick={onSkip}>
-              跳过
+              {tx("跳过")}
             </button>
           )}
         </div>
@@ -236,11 +238,11 @@ export function OnboardingStage({
         <div className={styles.stageInner}>
           {/* 已记录的画像胶囊（随着第 1、2 问完成实时浮现） */}
           {!ready && capturedList.length > 0 && (
-            <div className={styles.capturedBar} aria-label="已记录的偏好">
+            <div className={styles.capturedBar} aria-label={tx("已记录的偏好")}>
               {capturedList.map((item) => (
                 <span key={item.key} className={styles.capturedChip}>
                   <Check size={11} className={styles.capturedIcon} aria-hidden />
-                  <strong>{item.shortLabel}：</strong>
+                  <strong>{tx("{label}：", { label: tx(item.shortLabel) })}</strong>
                   <span>{profileEntries[item.key]}</span>
                 </span>
               ))}
@@ -254,13 +256,13 @@ export function OnboardingStage({
           {!ready ? (
             <>
               <span className={styles.stepEyebrow}>
-                {currentMeta.step} · {currentMeta.title}
+                {currentMeta.step} · {tx(currentMeta.title)}
               </span>
 
               {/* 居中逐字打字机提问区 */}
               <div className={styles.promptBox} onClick={() => { if (!isTypingDone) setTypedCount(totalChars); }}>
                 <div className="sr-only" role="status">
-                  {busy ? "正在整理你的回答…" : fullText}
+                  {busy ? tx("正在整理你的回答…") : fullText}
                 </div>
                 {leadText && (
                   <p className={styles.leadLine} aria-hidden="true">
@@ -273,7 +275,7 @@ export function OnboardingStage({
                     {mainQuestion}
                   </span>
                   {busy ? (
-                    <span className={styles.thinkingText}>正在整理你的回答并准备下一问…</span>
+                    <span className={styles.thinkingText}>{tx("正在整理你的回答并准备下一问…")}</span>
                   ) : (
                     <span aria-hidden="true">
                       {shownQuestion}
@@ -290,7 +292,7 @@ export function OnboardingStage({
                       setTypedCount(totalChars);
                     }}
                   >
-                    立即显示全文
+                    {tx("立即显示全文")}
                   </button>
                 )}
               </div>
@@ -304,16 +306,16 @@ export function OnboardingStage({
 
               {modelConfigured === false && (
                 <div className={styles.modelWarnBanner}>
-                  <span>当前尚未配置大模型 API Key，请先配置后再回答：</span>
+                  <span>{tx("当前尚未配置大模型 API Key，请先配置后再回答：")}</span>
                   <button type="button" onClick={onOpenModelSettings}>
-                    立即配置模型 →
+                    {tx("立即配置模型 →")}
                   </button>
                 </div>
               )}
 
               {/* 快捷回答卡片 + 独立输入框 */}
               <div className={cx(styles.optionsSection, !busy && styles.optionsVisible)}>
-                <div className={styles.optionsList} role="group" aria-label="快捷回答选项">
+                <div className={styles.optionsList} role="group" aria-label={tx("快捷回答选项")}>
                   {quickReplies.map((replyText, idx) => (
                     <button
                       key={replyText}
@@ -325,7 +327,7 @@ export function OnboardingStage({
                       <kbd className={styles.optionKey}>{idx + 1}</kbd>
                       <span className={styles.optionText}>{replyText}</span>
                       <span className={styles.optionAction}>
-                        <span>选择</span>
+                        <span>{tx("选择")}</span>
                         <ArrowRight size={13} aria-hidden />
                       </span>
                     </button>
@@ -333,41 +335,42 @@ export function OnboardingStage({
                 </div>
 
                 <div className={styles.orDivider} aria-hidden>
-                  <span>或用你自己的话描述</span>
+                  <span>{tx("或用你自己的话描述")}</span>
                 </div>
 
                 <form className={styles.customForm} onSubmit={submitCustom}>
                   <input
                     className={styles.customInput}
                     value={input}
-                    aria-label="你的回答"
+                    aria-label={tx("你的回答")}
                     disabled={busy || modelConfigured === false}
                     maxLength={500}
-                    placeholder="输入你的真实情况或偏好，按 Enter 发送…"
+                    placeholder={tx("输入你的真实情况或偏好，按 Enter 发送…")}
                     onChange={(event) => setInput(event.target.value)}
                   />
                   <button
                     type="submit"
                     className={styles.customSendBtn}
                     disabled={!input.trim() || busy || modelConfigured === false}
-                    aria-label="发送回答"
+                    aria-label={tx("发送回答")}
                   >
                     <CornerDownLeft size={14} aria-hidden />
                   </button>
                 </form>
                 <p className={styles.privacyNote}>
-                  支持按键盘 <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> 快速选择 · 候选画像仅在你最终确认后写入长期记忆
+                  {tx("支持按键盘")}{" "}<kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd>{" "}
+                  {tx("快速选择 · 候选画像仅在你最终确认后写入长期记忆")}
                 </p>
               </div>
             </>
           ) : (
             /* 核对候选画像 Bento 舞台卡片 */
             <div className={styles.reviewStage}>
-              <span className={styles.stepEyebrow}>FINAL · 专属学习画像已生成</span>
+              <span className={styles.stepEyebrow}>{tx("FINAL · 专属学习画像已生成")}</span>
               <div className={styles.reviewHead}>
-                <h2 className={styles.questionHeadline}>核对你的学习画像</h2>
+                <h2 className={styles.questionHeadline}>{tx("核对你的学习画像")}</h2>
                 <p className={styles.leadLine}>
-                  确认后将写入长期记忆（USER），后续所有主线与支线都会按此定制讲法。你可以直接点击修改或留空：
+                  {tx("确认后将写入长期记忆（USER），后续所有主线与支线都会按此定制讲法。你可以直接点击修改或留空：")}
                 </p>
               </div>
 
@@ -390,14 +393,14 @@ export function OnboardingStage({
                         <span className={styles.bentoIcon} aria-hidden>
                           <Icon size={13} />
                         </span>
-                        <span className={styles.reviewLabel}>{label}</span>
+                        <span className={styles.reviewLabel}>{tx(label)}</span>
                         <CheckCircle2 size={13} className={styles.reviewCheck} aria-hidden />
                       </div>
                       <input
                         className={styles.reviewInput}
-                        aria-label={label}
+                        aria-label={tx(label)}
                         maxLength={220}
-                        placeholder={ph}
+                        placeholder={tx(ph)}
                         value={profileEntries[key] ?? ""}
                         onChange={(event) => onChangeProfile(key, event.target.value)}
                       />
@@ -407,7 +410,7 @@ export function OnboardingStage({
 
                 <div className={styles.reviewFooter}>
                   <button type="button" className={styles.ghostBtn} onClick={onSkip}>
-                    暂不保存，直接体验
+                    {tx("暂不保存，直接体验")}
                   </button>
                   <div className={styles.reviewPrimaryGroup}>
                     <button
@@ -416,7 +419,7 @@ export function OnboardingStage({
                       disabled={profileSaving}
                       onClick={() => onConfirm(false)}
                     >
-                      确认并进入工作台
+                      {tx("确认并进入工作台")}
                     </button>
                     <button
                       type="button"
@@ -425,7 +428,7 @@ export function OnboardingStage({
                       onClick={() => onConfirm(true)}
                     >
                       <GraduationCap size={14} aria-hidden />
-                      <span>确认并创建学习空间</span>
+                      <span>{tx("确认并创建学习空间")}</span>
                     </button>
                   </div>
                 </div>

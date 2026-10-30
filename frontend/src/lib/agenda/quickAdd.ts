@@ -3,6 +3,11 @@
  * 纯函数，不依赖运行环境；日期按 `now` 的本地时区计算，周以周一为一周的第一天。
  */
 import type { TaskInput, TaskPriority } from "./types";
+import type { TranslatePhrase } from "@/lib/i18n";
+
+/** 没有传入翻译函数时按原文插值，保持纯函数与既有调用方的行为不变。 */
+const raw: TranslatePhrase = (text, vars) =>
+  vars ? text.replace(/\{(\w+)\}/g, (match, name: string) => (name in vars ? String(vars[name]) : match)) : text;
 
 export type QuickAddChipKind = "date" | "time" | "duration" | "priority" | "deadline" | "subject" | "label";
 
@@ -182,17 +187,23 @@ function resolveDuration(raw: string): number | null {
   return Number.isInteger(minutes) && minutes >= 5 && minutes <= 720 ? minutes : null;
 }
 
-function dateLabel(date: Date, today: Date): string {
+function dateLabel(date: Date, today: Date, tx: TranslatePhrase = raw): string {
   const diff = Math.round((date.getTime() - today.getTime()) / 86_400_000);
-  if (diff === 0) return "今天";
-  if (diff === 1) return "明天";
-  return `${date.getMonth() + 1}月${date.getDate()}日 周${WEEK_LABELS[date.getDay()]}`;
+  if (diff === 0) return tx("今天");
+  if (diff === 1) return tx("明天");
+  return tx("{month}月{day}日 {weekday}", {
+    month: date.getMonth() + 1,
+    day: date.getDate(),
+    weekday: tx(`周${WEEK_LABELS[date.getDay()]}`),
+  });
 }
 
-function durationLabel(minutes: number): string {
-  if (minutes < 60) return `${minutes} 分钟`;
+function durationLabel(minutes: number, tx: TranslatePhrase = raw): string {
+  if (minutes < 60) return tx("{minutes} 分钟", { minutes });
   const rest = minutes % 60;
-  return rest ? `${Math.floor(minutes / 60)} 小时 ${rest} 分钟` : `${minutes / 60} 小时`;
+  return rest
+    ? tx("{hours} 小时 {minutes} 分钟", { hours: Math.floor(minutes / 60), minutes: rest })
+    : tx("{hours} 小时", { hours: minutes / 60 });
 }
 
 interface Match {
@@ -229,6 +240,7 @@ export function parseQuickAdd(
   now: Date,
   subjects: QuickAddSubject[] = [],
   ignored: Iterable<string> = [],
+  tx: TranslatePhrase = raw,
 ): QuickAddResult {
   const skip = new Set(ignored);
   const today = startOfDay(now);
@@ -272,7 +284,7 @@ export function parseQuickAdd(
       continue;
     }
     reminderMinutes = value;
-    accept("time", match, value === 0 ? "准时提醒" : `提前 ${value} 分钟提醒`, { field: "reminderMinutes" });
+    accept("time", match, value === 0 ? tx("准时提醒") : tx("提前 {minutes} 分钟提醒", { minutes: value }), { field: "reminderMinutes" });
   }
 
   // 1. 截止日：「截止X」「ddl X」「X前」，其中可带一个时间，截止日只取日期
@@ -292,7 +304,7 @@ export function parseQuickAdd(
     if (!date) continue;
     deadlineDate = formatYmd(date);
     taken.add("deadline");
-    accept("deadline", match, `截止 ${dateLabel(date, today)}`);
+    accept("deadline", match, tx("截止 {date}", { date: dateLabel(date, today, tx) }));
   }
 
   // 2. #标签 / #空间名
@@ -336,7 +348,7 @@ export function parseQuickAdd(
     if (minutes === null) continue;
     durationMinutes = minutes;
     taken.add("duration");
-    accept("duration", match, durationLabel(minutes));
+    accept("duration", match, durationLabel(minutes, tx));
   }
 
   // 6. 计划日期
@@ -350,7 +362,7 @@ export function parseQuickAdd(
     if (!date) continue;
     scheduledDate = date;
     taken.add("date");
-    accept("date", match, dateLabel(date, today));
+    accept("date", match, dateLabel(date, today, tx));
   }
 
   tokens.sort((a, b) => a.start - b.start);

@@ -13,6 +13,7 @@ import {
   type ModelProviderId,
 } from "@/lib/modelProviders";
 import { cx } from "@/lib/cx";
+import { useI18n } from "@/components/LanguageProvider";
 import { Button } from "../ui/Button";
 import { EditorDialog } from "./EditorDialog";
 import { ModelList } from "./ModelList";
@@ -71,6 +72,7 @@ interface ProviderEditorProps {
 }
 
 export function ProviderEditor({ provider, client, onClose, onChange, onCreated, onDeleted }: ProviderEditorProps) {
+  const { tx } = useI18n();
   const fieldId = useId();
   const [draft, setDraft] = useState<Draft>(() => provider ? fromProvider(provider) : blank());
   const [showKey, setShowKey] = useState(false);
@@ -115,7 +117,7 @@ export function ProviderEditor({ provider, client, onClose, onChange, onCreated,
     ? null
     : isADC
       ? checkVertexAdc(draft.projectId, draft.location)
-      : (!draft.baseUrl.trim() ? "请填写服务地址。" : checkBaseUrl(draft.baseUrl));
+      : (!draft.baseUrl.trim() ? tx("请填写服务地址。") : checkBaseUrl(draft.baseUrl));
   const sameService = Boolean(
     provider && provider.hasApiKey && provider.authMode === "api_key" && draft.authMode === "api_key" && baseUrl === provider.baseUrl,
   );
@@ -176,7 +178,7 @@ export function ProviderEditor({ provider, client, onClose, onChange, onCreated,
       setDraft((current) => ({ ...current, apiKey: "" }));
       setShowKey(false);
       await changed();
-      setOutcome({ tone: "ok", text: "已保存。" });
+      setOutcome({ tone: "ok", text: tx("已保存。") });
       return;
     }
     const created = await client.createProvider({
@@ -209,7 +211,7 @@ export function ProviderEditor({ provider, client, onClose, onChange, onCreated,
       const tick = async () => {
         if (Date.now() > deadline) {
           setChatgptBusy(false);
-          setChatgptError("等待授权超时，请重新点击登录。");
+          setChatgptError(tx("等待授权超时，请重新点击登录。"));
           return;
         }
         try {
@@ -218,7 +220,7 @@ export function ProviderEditor({ provider, client, onClose, onChange, onCreated,
             setChatgptBusy(false);
             setOutcome({
               tone: status.planEnabled ? "ok" : "error",
-              text: status.planEnabled ? "ChatGPT 已连接。" : "ChatGPT 已登录，但未授予套餐用量权限。",
+              text: status.planEnabled ? tx("ChatGPT 已连接。") : tx("ChatGPT 已登录，但未授予套餐用量权限。"),
             });
             return;
           }
@@ -241,7 +243,7 @@ export function ProviderEditor({ provider, client, onClose, onChange, onCreated,
     try {
       await logoutChatGPT();
       setChatgpt(await refreshChatGPT());
-      setOutcome({ tone: "ok", text: "已断开 ChatGPT。" });
+      setOutcome({ tone: "ok", text: tx("已断开 ChatGPT。") });
     } catch (error: unknown) {
       setChatgptError(toApiError(error).message);
     } finally {
@@ -258,12 +260,12 @@ export function ProviderEditor({ provider, client, onClose, onChange, onCreated,
     }
     const result = await client.deleteProvider(provider.id);
     await changed();
-    const roles: Record<string, string> = { logic: "逻辑", vision: "视觉", memory: "后台与记忆" };
+    const roles: Record<string, string> = { logic: tx("逻辑"), vision: tx("视觉"), memory: tx("后台与记忆") };
     const parts = [
-      result.affected.defaultModel ? "默认模型已清空" : "",
-      result.affected.serviceModels.length ? `已改回沿用默认：${result.affected.serviceModels.map((role) => roles[role] ?? role).join("、")}` : "",
+      result.affected.defaultModel ? tx("默认模型已清空") : "",
+      result.affected.serviceModels.length ? tx("已改回沿用默认：{roles}", { roles: result.affected.serviceModels.map((role) => roles[role] ?? role).join("、") }) : "",
     ].filter(Boolean);
-    onDeleted(parts.length ? `已删除。${parts.join("，")}。` : "已删除。");
+    onDeleted(parts.length ? tx("已删除。{parts}。", { parts: parts.join("，") }) : tx("已删除。"));
   });
 
   const existing = new Set((provider?.models ?? []).map((model) => model.id));
@@ -276,24 +278,24 @@ export function ProviderEditor({ provider, client, onClose, onChange, onCreated,
     <div className={styles.fields}>
       {!provider && (
         <label className={styles.field} htmlFor={`${fieldId}-preset`}>
-          <span className={styles.label}>服务商预设</span>
-          <select id={`${fieldId}-preset`} className={styles.select} aria-label="服务商预设" value={draft.preset} disabled={busy} onChange={(event) => applyPreset(event.target.value as ModelProviderId)}>
+          <span className={styles.label}>{tx("服务商预设")}</span>
+          <select id={`${fieldId}-preset`} className={styles.select} aria-label={tx("服务商预设")} value={draft.preset} disabled={busy} onChange={(event) => applyPreset(event.target.value as ModelProviderId)}>
             {["deepseek", "qwen", "ark", "moonshot", "zhipu", "openai", "chatgpt", "vertex", "custom"].map((id) => (
-              <option key={id} value={id}>{findProvider(id).name}</option>
+              <option key={id} value={id}>{tx(findProvider(id).name)}</option>
             ))}
           </select>
         </label>
       )}
       <label className={styles.field} htmlFor={`${fieldId}-name`}>
-        <span className={styles.label}>名称</span>
-        <input id={`${fieldId}-name`} className={styles.input} aria-label="服务商名称" value={draft.name} disabled={busy} onChange={(event) => patch({ name: event.target.value })} />
+        <span className={styles.label}>{tx("名称")}</span>
+        <input id={`${fieldId}-name`} className={styles.input} aria-label={tx("服务商名称")} value={draft.name} disabled={busy} onChange={(event) => patch({ name: event.target.value })} />
       </label>
       <label className={styles.field} htmlFor={`${fieldId}-auth`}>
-        <span className={styles.label}>认证方式</span>
+        <span className={styles.label}>{tx("认证方式")}</span>
         <select
           id={`${fieldId}-auth`}
           className={styles.select}
-          aria-label="认证方式"
+          aria-label={tx("认证方式")}
           value={draft.authMode}
           disabled={busy || modes.length === 1}
           onChange={(event) => {
@@ -307,57 +309,57 @@ export function ProviderEditor({ provider, client, onClose, onChange, onCreated,
         >
           {modes.map((mode) => (
             <option key={mode} value={mode}>
-              {draft.preset === "vertex" && mode === "api_key" ? "API Key · Vertex Express" : AUTH_LABEL[mode]}
+              {draft.preset === "vertex" && mode === "api_key" ? "API Key · Vertex Express" : tx(AUTH_LABEL[mode])}
             </option>
           ))}
         </select>
-        {isADC && <span className={styles.hint}>适用于组织禁止 API Key 的项目。读取运行后端的本机 ADC，不把访问令牌返回页面。</span>}
+        {isADC && <span className={styles.hint}>{tx("适用于组织禁止 API Key 的项目。读取运行后端的本机 ADC，不把访问令牌返回页面。")}</span>}
       </label>
       {isADC && (
         <div className={styles.pair}>
           <label className={styles.field} htmlFor={`${fieldId}-project`}>
-            <span className={styles.label}>Google Cloud 项目 ID</span>
-            <input id={`${fieldId}-project`} className={styles.input} aria-label="Google Cloud 项目 ID" value={draft.projectId} disabled={busy} spellCheck={false} autoComplete="off" onChange={(event) => patch({ projectId: event.target.value })} />
+            <span className={styles.label}>{tx("Google Cloud 项目 ID")}</span>
+            <input id={`${fieldId}-project`} className={styles.input} aria-label={tx("Google Cloud 项目 ID")} value={draft.projectId} disabled={busy} spellCheck={false} autoComplete="off" onChange={(event) => patch({ projectId: event.target.value })} />
           </label>
           <label className={styles.field} htmlFor={`${fieldId}-location`}>
-            <span className={styles.label}>区域</span>
-            <input id={`${fieldId}-location`} className={styles.input} aria-label="区域" value={draft.location} disabled={busy} spellCheck={false} autoComplete="off" placeholder="global 或 us-central1" onChange={(event) => patch({ location: event.target.value })} />
+            <span className={styles.label}>{tx("区域")}</span>
+            <input id={`${fieldId}-location`} className={styles.input} aria-label={tx("区域")} value={draft.location} disabled={busy} spellCheck={false} autoComplete="off" placeholder="global 或 us-central1" onChange={(event) => patch({ location: event.target.value })} />
           </label>
         </div>
       )}
       {isChatGPT && (
         <div className={styles.field}>
-          <span className={styles.label}>ChatGPT 账号</span>
+          <span className={styles.label}>{tx("ChatGPT 账号")}</span>
           <div className={styles.account}>
             <span className={styles.accountState}>
               {chatgpt?.connected ? <CircleCheck size={14} aria-hidden /> : <LogIn size={14} aria-hidden />}
-              {chatgpt?.connected ? (chatgpt.email || "已连接") : "未连接"}
-              {chatgpt?.connected && (chatgpt.planEnabled ? " · 套餐额度已授权" : " · 未授权套餐额度")}
+              {chatgpt?.connected ? (chatgpt.email || tx("已连接")) : tx("未连接")}
+              {chatgpt?.connected && (chatgpt.planEnabled ? tx(" · 套餐额度已授权") : tx(" · 未授权套餐额度"))}
             </span>
             {chatgpt?.connected ? (
               <button type="button" className={styles.textButton} disabled={chatgptBusy} onClick={() => void disconnectChatGPT()}>
-                <LogOut size={12} aria-hidden />{chatgptBusy ? "正在断开…" : "断开"}
+                <LogOut size={12} aria-hidden />{chatgptBusy ? tx("正在断开…") : tx("断开")}
               </button>
             ) : (
               <button type="button" className={styles.textButton} disabled={chatgptBusy} onClick={() => void connectChatGPT()}>
-                <LogIn size={12} aria-hidden />{chatgptBusy ? "等待浏览器授权…" : "Continue with ChatGPT"}
+                <LogIn size={12} aria-hidden />{chatgptBusy ? tx("等待浏览器授权…") : "Continue with ChatGPT"}
               </button>
             )}
           </div>
-          <span className={styles.hint}>浏览器会打开授权页。令牌只留在后端本机，页面不接触令牌。</span>
+          <span className={styles.hint}>{tx("浏览器会打开授权页。令牌只留在后端本机，页面不接触令牌。")}</span>
           {chatgpt?.connected && !chatgpt.planEnabled && (
-            <button type="button" className={styles.textButton} disabled={chatgptBusy} onClick={() => void connectChatGPT()}>重新授权套餐</button>
+            <button type="button" className={styles.textButton} disabled={chatgptBusy} onClick={() => void connectChatGPT()}>{tx("重新授权套餐")}</button>
           )}
           {chatgptError && <span className={styles.hintError} role="alert">{chatgptError}</span>}
         </div>
       )}
       {!isChatGPT && (
         <label className={styles.field} htmlFor={`${fieldId}-url`}>
-          <span className={styles.label}>接口地址</span>
+          <span className={styles.label}>{tx("接口地址")}</span>
           <input
             id={`${fieldId}-url`}
             className={cx(styles.input, urlProblem && styles.inputInvalid)}
-            aria-label="接口地址"
+            aria-label={tx("接口地址")}
             value={isADC ? baseUrl : draft.baseUrl}
             readOnly={isADC}
             disabled={busy}
@@ -368,7 +370,7 @@ export function ProviderEditor({ provider, client, onClose, onChange, onCreated,
             onChange={(event) => patch({ baseUrl: event.target.value })}
           />
           <span className={cx(styles.hint, urlProblem && styles.hintError)}>
-            {urlProblem ?? presetInfo.urlHint ?? "包含版本前缀，不含 /chat/completions"}
+            {urlProblem ?? presetInfo.urlHint ?? tx("包含版本前缀，不含 /chat/completions")}
           </span>
         </label>
       )}
@@ -387,15 +389,15 @@ export function ProviderEditor({ provider, client, onClose, onChange, onCreated,
               autoComplete="new-password"
               data-1p-ignore
               data-lpignore="true"
-              placeholder={sameService ? "已保存，留空则保持不变" : `填写服务商提供的 ${presetInfo.keyLabel ?? "API Key"}`}
+              placeholder={sameService ? tx("已保存，留空则保持不变") : tx("填写服务商提供的 {label}", { label: presetInfo.keyLabel ?? "API Key" })}
               onChange={(event) => patch({ apiKey: event.target.value })}
             />
-            <button type="button" className={styles.reveal} aria-label={showKey ? "隐藏密钥" : "显示密钥"} disabled={!draft.apiKey} onClick={() => setShowKey((value) => !value)}>
+            <button type="button" className={styles.reveal} aria-label={showKey ? tx("隐藏密钥") : tx("显示密钥")} disabled={!draft.apiKey} onClick={() => setShowKey((value) => !value)}>
               {showKey ? <EyeOff size={14} aria-hidden /> : <Eye size={14} aria-hidden />}
             </button>
           </span>
           <span className={cx(styles.hint, urlChanged && draft.authMode === "api_key" && styles.hintError)}>
-            {urlChanged && draft.authMode === "api_key" ? "更换了接口地址，需要重新填写密钥。" : "密钥不会回显；后端只返回「是否已保存」。"}
+            {urlChanged && draft.authMode === "api_key" ? tx("更换了接口地址，需要重新填写密钥。") : tx("密钥不会回显；后端只返回「是否已保存」。")}
             {presetInfo.keyHint ? ` ${presetInfo.keyHint}` : ""}
           </span>
         </label>
@@ -405,20 +407,20 @@ export function ProviderEditor({ provider, client, onClose, onChange, onCreated,
         <>
           <div className={styles.probe}>
             <label className={cx(styles.field, styles.grow)}>
-              <span className={styles.label}>检查所用模型</span>
-              <select className={styles.select} aria-label="检查所用模型" value={probeId} disabled={busy || provider.models.length === 0} onChange={(event) => setProbeId(event.target.value)}>
-                {provider.models.length === 0 && <option value="">先添加模型</option>}
+              <span className={styles.label}>{tx("检查所用模型")}</span>
+              <select className={styles.select} aria-label={tx("检查所用模型")} value={probeId} disabled={busy || provider.models.length === 0} onChange={(event) => setProbeId(event.target.value)}>
+                {provider.models.length === 0 && <option value="">{tx("先添加模型")}</option>}
                 {provider.models.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
               </select>
             </label>
             <Button size="sm" disabled={!canTest} onClick={() => void run(async () => {
               const result = await client.testModel(provider.id, probeId);
-              setOutcome({ tone: "ok", text: result.structuredOutput ? `连接正常：${result.model} 返回了符合要求的结构化诊断。` : `连接正常：${result.model}。` });
+              setOutcome({ tone: "ok", text: result.structuredOutput ? tx("连接正常：{model} 返回了符合要求的结构化诊断。", { model: result.model }) : tx("连接正常：{model}。", { model: result.model }) });
             })}>
-              检查
+              {tx("检查")}
             </Button>
           </div>
-          {credentialDirty && <p className={styles.note}>地址或密钥有未保存的修改。先保存，再检查或获取模型列表。</p>}
+          {credentialDirty && <p className={styles.note}>{tx("地址或密钥有未保存的修改。先保存，再检查或获取模型列表。")}</p>}
           <ModelList
             models={provider.models}
             busy={busy}
@@ -443,19 +445,19 @@ export function ProviderEditor({ provider, client, onClose, onChange, onCreated,
               setPicked([]);
               setFetchQuery("");
             })}>
-              获取模型列表
+              {tx("获取模型列表")}
             </Button>
-            <Button size="sm" aria-expanded={manual} onClick={() => setManual((value) => !value)}>手动添加模型</Button>
+            <Button size="sm" aria-expanded={manual} onClick={() => setManual((value) => !value)}>{tx("手动添加模型")}</Button>
           </div>
           {manual && (
             <div className={styles.manual}>
               <label className={cx(styles.field, styles.grow)}>
-                <span className={styles.label}>模型 ID</span>
-                <input className={styles.input} aria-label="模型 ID" value={manualId} disabled={busy} spellCheck={false} placeholder={presetInfo.modelHint} onChange={(event) => setManualId(event.target.value)} />
+                <span className={styles.label}>{tx("模型 ID")}</span>
+                <input className={styles.input} aria-label={tx("模型 ID")} value={manualId} disabled={busy} spellCheck={false} placeholder={presetInfo.modelHint} onChange={(event) => setManualId(event.target.value)} />
               </label>
               <label className={cx(styles.field, styles.grow)}>
-                <span className={styles.label}>显示名称</span>
-                <input className={styles.input} aria-label="显示名称" value={manualName} disabled={busy} placeholder="留空则与模型 ID 相同" onChange={(event) => setManualName(event.target.value)} />
+                <span className={styles.label}>{tx("显示名称")}</span>
+                <input className={styles.input} aria-label={tx("显示名称")} value={manualName} disabled={busy} placeholder={tx("留空则与模型 ID 相同")} onChange={(event) => setManualName(event.target.value)} />
               </label>
               <Button size="sm" variant="primary" disabled={busy || !manualId.trim()} onClick={() => void run(async () => {
                 const id = manualId.trim();
@@ -465,7 +467,7 @@ export function ProviderEditor({ provider, client, onClose, onChange, onCreated,
                 setProbeId((current) => current || id);
                 await changed();
               })}>
-                添加
+                {tx("添加")}
               </Button>
             </div>
           )}
@@ -481,23 +483,23 @@ export function ProviderEditor({ provider, client, onClose, onChange, onCreated,
       <div className={styles.actions}>
         {provider && (
           <Button size="sm" variant={confirmDelete ? "danger" : "ghost"} disabled={busy} onClick={() => void remove()}>
-            {confirmDelete ? "确认删除" : "删除服务商"}
+            {confirmDelete ? tx("确认删除") : tx("删除服务商")}
           </Button>
         )}
-        <Button size="sm" onClick={onClose} disabled={busy}>关闭</Button>
-        <Button size="sm" variant="primary" disabled={!canSave} onClick={() => void save()}>保存</Button>
+        <Button size="sm" onClick={onClose} disabled={busy}>{tx("关闭")}</Button>
+        <Button size="sm" variant="primary" disabled={!canSave} onClick={() => void save()}>{tx("保存")}</Button>
       </div>
       <p className={styles.safety}>
         <ShieldCheck size={14} aria-hidden />
-        {isChatGPT ? "ChatGPT 授权令牌由后端保存，不返回页面。" : isADC ? "ADC 访问令牌不写入应用配置，也不返回页面。" : "密钥只发到本机后端。页面不保存、不回显已存密钥。"}
+        {isChatGPT ? tx("ChatGPT 授权令牌由后端保存，不返回页面。") : isADC ? tx("ADC 访问令牌不写入应用配置，也不返回页面。") : tx("密钥只发到本机后端。页面不保存、不回显已存密钥。")}
       </p>
 
-      <EditorDialog open={candidates !== null} title="可用模型" description="勾选后加入这个服务商，已添加的不会重复写入。" onClose={() => setCandidates(null)}>
+      <EditorDialog open={candidates !== null} title={tx("可用模型")} description={tx("勾选后加入这个服务商，已添加的不会重复写入。")} onClose={() => setCandidates(null)}>
         <label className={cx(styles.search, styles.searchBlock)}>
-          <input value={fetchQuery} aria-label="搜索可添加的模型" placeholder="搜索可添加的模型" onChange={(event) => setFetchQuery(event.target.value)} />
+          <input value={fetchQuery} aria-label={tx("搜索可添加的模型")} placeholder={tx("搜索可添加的模型")} onChange={(event) => setFetchQuery(event.target.value)} />
         </label>
         {candidates && candidates.length === 0 ? (
-          <p className={styles.note}>这个服务商没有返回模型，可以手动添加。</p>
+          <p className={styles.note}>{tx("这个服务商没有返回模型，可以手动添加。")}</p>
         ) : (
           <div>
             {fetchVisible.map((item) => {
@@ -509,17 +511,17 @@ export function ProviderEditor({ provider, client, onClose, onChange, onCreated,
                     type="checkbox"
                     checked={checked}
                     disabled={added || busy}
-                    aria-label={added ? `${item.name} 已添加` : `加入 ${item.name}`}
+                    aria-label={added ? tx("{name} 已添加", { name: item.name }) : tx("加入 {name}", { name: item.name })}
                     onChange={(event) => setPicked((current) => event.target.checked ? [...current, item.id] : current.filter((id) => id !== item.id))}
                   />
-                  <span>{item.name}{item.name !== item.id ? ` · ${item.id}` : ""}{added ? " · 已添加" : ""}</span>
+                  <span>{item.name}{item.name !== item.id ? ` · ${item.id}` : ""}{added ? tx(" · 已添加") : ""}</span>
                 </label>
               );
             })}
           </div>
         )}
         <div className={styles.actions}>
-          <Button size="sm" onClick={() => setCandidates(null)}>关闭</Button>
+          <Button size="sm" onClick={() => setCandidates(null)}>{tx("关闭")}</Button>
           <Button
             size="sm"
             variant="primary"
@@ -532,10 +534,10 @@ export function ProviderEditor({ provider, client, onClose, onChange, onCreated,
               }
               setCandidates(null);
               await changed();
-              setOutcome({ tone: "ok", text: "已加入所选模型。" });
+              setOutcome({ tone: "ok", text: tx("已加入所选模型。") });
             })}
           >
-            加入所选
+            {tx("加入所选")}
           </Button>
         </div>
       </EditorDialog>

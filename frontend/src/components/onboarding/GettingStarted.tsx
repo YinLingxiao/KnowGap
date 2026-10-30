@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Check, ChevronDown, X } from "lucide-react";
 import { chatApi } from "@/lib/chat/api";
 import { cx } from "@/lib/cx";
+import { useI18n } from "@/components/LanguageProvider";
 import {
   CHEATSHEET_OPENED_EVENT, GUIDES_RESET_EVENT, checklistDismissKey, checklistDoneKey, cheatsheetSeenKey,
 } from "./coach";
@@ -28,6 +29,7 @@ const ITEMS = [
 ] as const;
 
 export function GettingStarted(props: GettingStartedProps) {
+  const { tx } = useI18n();
   const { userId } = props;
   const [flags, setFlags] = useState({ explained: false, answered: false, scheduled: false });
   const [sheet, setSheet] = useState(false);
@@ -80,7 +82,7 @@ export function GettingStarted(props: GettingStartedProps) {
   if (celebrating) {
     return (
       <section className={styles.done} role="status">
-        <p>五件事都做完了</p>
+        <p>{tx("五件事都做完了")}</p>
         <button
           type="button"
           onClick={() => {
@@ -88,7 +90,7 @@ export function GettingStarted(props: GettingStartedProps) {
             setHidden(true);
           }}
         >
-          知道了
+          {tx("知道了")}
         </button>
       </section>
     );
@@ -107,12 +109,12 @@ export function GettingStarted(props: GettingStartedProps) {
       <header>
         <button type="button" className={styles.toggle} aria-expanded={open} onClick={() => setOpen((value) => !value)}>
           <ChevronDown size={14} className={cx(!open && styles.shut)} aria-hidden />
-          上手清单
+          {tx("上手清单")}
         </button>
         <button
           type="button"
           className={styles.close}
-          aria-label="关闭上手清单"
+          aria-label={tx("关闭上手清单")}
           onClick={() => {
             localStorage.setItem(checklistDismissKey(userId), "1");
             setHidden(true);
@@ -129,7 +131,7 @@ export function GettingStarted(props: GettingStartedProps) {
                 <span className={cx(styles.box, done[key] && styles.boxOn)} aria-hidden>
                   {done[key] && <Check size={12} />}
                 </span>
-                {label}
+                {tx(label)}
               </button>
             </li>
           ))}

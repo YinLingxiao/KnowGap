@@ -1,9 +1,12 @@
 "use client";
 
 import { Plus, Sparkles } from "lucide-react";
+import { useI18n } from "@/components/LanguageProvider";
+import type { TranslatePhrase } from "@/lib/i18n";
 import type { TodaySuggestion } from "./agendaModel";
 import styles from "./AgendaEmpty.module.css";
 
+// 快录解析器只识别中文语法；示例会原样填入输入框，因此保持中文，避免点了却解析不出来。
 const EXAMPLES = [
   "明天下午3点 复习戴维南定理 #电路原理 45分钟",
   "周五晚上 整理本章错题 p2",
@@ -22,16 +25,18 @@ export interface AgendaEmptyProps {
 }
 
 export function AgendaEmpty(props: AgendaEmptyProps) {
+  const { tx } = useI18n();
   if (props.variant === "week") {
-    return <p className={styles.weekHint}>在时间格里点击或拖动来创建任务</p>;
+    return <p className={styles.weekHint}>{tx("在时间格里点击或拖动来创建任务")}</p>;
   }
 
   const copy = COPY[props.variant];
+  const count = props.completedCount ?? 0;
   return (
     <div className={props.variant === "upcoming" ? styles.banner : styles.empty}>
       {props.variant !== "upcoming" && <Illustration variant={props.variant} />}
-      <h2 className={styles.title}>{copy.title(props.completedCount ?? 0)}</h2>
-      <p className={styles.text}>{copy.text(props.completedCount ?? 0)}</p>
+      <h2 className={styles.title}>{copy.title(count, tx)}</h2>
+      <p className={styles.text}>{copy.text(count, tx)}</p>
       {!props.hideAction && copy.action && props.variant !== "today-done" && (
         <button
           type="button"
@@ -39,12 +44,12 @@ export function AgendaEmpty(props: AgendaEmptyProps) {
           onClick={() => (props.variant === "upcoming" ? props.onBreakdown?.(null) : props.onAdd?.())}
         >
           {props.variant === "upcoming" ? <Sparkles size={14} aria-hidden /> : <Plus size={14} aria-hidden />}
-          {copy.action}
+          {tx(copy.action)}
         </button>
       )}
       {props.variant === "inbox" && props.onExample && !props.hideAction && (
         <div className={styles.examples}>
-          <span>也可以直接这样写</span>
+          <span>{tx("也可以直接这样写")}</span>
           {EXAMPLES.map((example) => (
             <button key={example} type="button" className={styles.example} onClick={() => props.onExample?.(example)}>
               {example}
@@ -65,7 +70,7 @@ export function AgendaEmpty(props: AgendaEmptyProps) {
                 className={styles.suggestBtn}
                 onClick={() => (item.kind === "breakdown" ? props.onBreakdown?.(item.subjectId) : item.taskId && props.onSchedule?.(item.taskId))}
               >
-                {item.kind === "breakdown" ? "AI 拆解排期" : item.kind === "inbox" ? "安排到今天" : "提前到今天"}
+                {item.kind === "breakdown" ? tx("AI 拆解排期") : item.kind === "inbox" ? tx("安排到今天") : tx("提前到今天")}
               </button>
             </li>
           ))}
@@ -76,27 +81,27 @@ export function AgendaEmpty(props: AgendaEmptyProps) {
 }
 
 const COPY: Record<Exclude<AgendaEmptyProps["variant"], "week">, {
-  title: (count: number) => string;
-  text: (count: number) => string;
+  title: (count: number, tx: TranslatePhrase) => string;
+  text: (count: number, tx: TranslatePhrase) => string;
   action?: string;
 }> = {
   inbox: {
-    title: () => "先记下，稍后再排",
-    text: () => "脑子里冒出的事先丢进来，有空再分到日期或学习空间。",
+    title: (_count, tx) => tx("先记下，稍后再排"),
+    text: (_count, tx) => tx("脑子里冒出的事先丢进来，有空再分到日期或学习空间。"),
     action: "添加任务",
   },
   "today-done": {
-    title: () => "今天的任务都完成了",
-    text: (count) => (count > 0 ? `已完成 ${count} 项` : "今天没有未完成的安排"),
+    title: (_count, tx) => tx("今天的任务都完成了"),
+    text: (count, tx) => (count > 0 ? tx("已完成 {count} 项", { count }) : tx("今天没有未完成的安排")),
   },
   "today-empty": {
-    title: () => "今天还没有安排",
-    text: () => "可以从待办拉一条过来，或让 AI 按截止日拆开。",
+    title: (_count, tx) => tx("今天还没有安排"),
+    text: (_count, tx) => tx("可以从待办拉一条过来，或让 AI 按截止日拆开。"),
     action: "添加任务",
   },
   upcoming: {
-    title: () => "接下来两周还没有安排",
-    text: () => "把一个目标交给 AI，按截止日拆成可以排进去的任务。",
+    title: (_count, tx) => tx("接下来两周还没有安排"),
+    text: (_count, tx) => tx("把一个目标交给 AI，按截止日拆成可以排进去的任务。"),
     action: "AI 拆解排期",
   },
 };

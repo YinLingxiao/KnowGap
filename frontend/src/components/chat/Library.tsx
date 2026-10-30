@@ -10,7 +10,9 @@ import { toApiError } from "@/lib/api/errors";
 import { chatApi } from "@/lib/chat/api";
 import { DOCUMENT_EXTENSIONS } from "@/lib/chat/attachments";
 import { cx } from "@/lib/cx";
+import { localeOf, type Language } from "@/lib/i18n";
 import type { CourseMaterial } from "@/lib/types";
+import { useI18n } from "@/components/LanguageProvider";
 import { WIDGET_ASK_EVENT } from "./LearningWidget";
 import styles from "./Library.module.css";
 
@@ -23,7 +25,7 @@ const FILTERS: Array<{ id: Category | "all"; label: string }> = [
   { id: "all", label: "全部类型" }, { id: "doc", label: "文档" }, { id: "slides", label: "课件" },
   { id: "sheet", label: "表格" }, { id: "text", label: "文本" },
 ];
-const UNIT: Record<Category, string> = { doc: "页", slides: "张", sheet: "个表", text: "页" };
+const UNIT_TEMPLATE: Record<Category, string> = { doc: "{count} 页", slides: "{count} 张", sheet: "{count} 个表", text: "{count} 页" };
 
 function categoryOf(title: string, kind: string): Category {
   const name = title.toLowerCase();
@@ -38,15 +40,23 @@ function extension(title: string): string {
   return match ? match[1].toUpperCase() : "";
 }
 
-function dateLabel(iso: string): string {
+function dateLabel(iso: string, lang: Language): string {
   const time = new Date(iso);
   if (Number.isNaN(time.getTime())) return "—";
-  const day = `${time.getMonth() + 1}月${time.getDate()}日`;
-  return time.getFullYear() === new Date().getFullYear() ? day : `${time.getFullYear()}年${day}`;
+  const sameYear = time.getFullYear() === new Date().getFullYear();
+  if (lang === "zh") {
+    const day = `${time.getMonth() + 1}月${time.getDate()}日`;
+    return sameYear ? day : `${time.getFullYear()}年${day}`;
+  }
+  return time.toLocaleDateString(localeOf(lang), { month: "short", day: "numeric", ...(sameYear ? {} : { year: "numeric" }) });
 }
 
-function sizeLabel(item: CourseMaterial, category: Category): string {
-  return item.pageCount > 0 ? `${item.pageCount} ${UNIT[category]}` : "—";
+function sizeLabel(
+  item: CourseMaterial,
+  category: Category,
+  tr: (text: string, vars?: Record<string, string | number>) => string,
+): string {
+  return item.pageCount > 0 ? tr(UNIT_TEMPLATE[category], { count: item.pageCount }) : "—";
 }
 
 interface WorkspaceEntry { name: string; path: string; kind: "dir" | "file" }
@@ -65,14 +75,21 @@ interface LibraryProps {
 }
 
 const askAbout = (text: string) => window.dispatchEvent(new CustomEvent<string>(WIDGET_ASK_EVENT, { detail: text }));
-const askWorkspaceFile = (path: string) => askAbout(`请读取工作区文件「${path}」并帮我分析其中的核心内容：`);
-const kindOfEntry = (entry: WorkspaceEntry) => (entry.kind === "dir" ? "文件夹" : extension(entry.name) || "文件");
+const askWorkspaceFile = (
+  path: string,
+  tr: (text: string, vars?: Record<string, string | number>) => string,
+) => askAbout(tr("请读取工作区文件「{path}」并帮我分析其中的核心内容：", { path }));
+const kindOfEntry = (
+  entry: WorkspaceEntry,
+  tr: (text: string, vars?: Record<string, string | number>) => string,
+) => (entry.kind === "dir" ? tr("文件夹") : extension(entry.name) || tr("文件"));
 
 /**
  * 空间资料库：上传的讲义、空间笔记和本地工作区放在同一张文件列表里，
  * 可以按类型筛选、按列排序，在列表和卡片之间切换，也可以直接把文件拖进来。
  */
 export function Library({ subjectId, notesChars, onOpenNotes, onChange }: LibraryProps) {
+  const { tx, lang } = useI18n();
   const client = useMemo(() => createMaterialClient(), []);
   const input = useRef<HTMLInputElement>(null);
   const [items, setItems] = useState<CourseMaterial[]>([]);
@@ -178,15 +195,15 @@ export function Library({ subjectId, notesChars, onOpenNotes, onChange }: Librar
   const rowActions = (item: CourseMaterial) => (
     <span className={styles.actions}>
       <button
-        type="button" aria-label={`就「${item.title}」提问`} title="就这份资料提问"
-        onClick={() => askAbout(`请基于课程资料「${item.title}」帮我梳理重点：`)}
+        type="button" aria-label={tx("就「{title}」提问", { title: item.title })} title={tx("就这份资料提问")}
+        onClick={() => askAbout(tx("请基于课程资料「{title}」帮我梳理重点：", { title: item.title }))}
       >
         <MessageSquareText size={13} aria-hidden />
       </button>
       {confirming === item.id ? (
-        <button type="button" className={styles.danger} onClick={() => void remove(item.id)}>确认删除</button>
+        <button type="button" className={styles.danger} onClick={() => void remove(item.id)}>{tx("确认删除")}</button>
       ) : (
-        <button type="button" aria-label={`删除 ${item.title}`} title="删除" onClick={() => setConfirming(item.id)}>
+        <button type="button" aria-label={tx("删除 {title}", { title: item.title })} title={tx("删除")} onClick={() => setConfirming(item.id)}>
           <Trash2 size={13} aria-hidden />
         </button>
       )}
@@ -202,21 +219,21 @@ export function Library({ subjectId, notesChars, onOpenNotes, onChange }: Librar
     >
       <div className={styles.toolbar}>
         <label className={styles.filter}>
-          <select value={filter} onChange={(event) => setFilter(event.target.value as Category | "all")} aria-label="按类型筛选">
-            {FILTERS.map(({ id, label }) => <option key={id} value={id}>{label}</option>)}
+          <select value={filter} onChange={(event) => setFilter(event.target.value as Category | "all")} aria-label={tx("按类型筛选")}>
+            {FILTERS.map(({ id, label }) => <option key={id} value={id}>{tx(label)}</option>)}
           </select>
           <ChevronDown size={12} aria-hidden />
         </label>
-        <div className={styles.views} role="group" aria-label="显示方式">
-          <button type="button" aria-pressed={view === "grid"} aria-label="卡片" title="卡片" className={cx(view === "grid" && styles.viewOn)} onClick={() => setView("grid")}>
+        <div className={styles.views} role="group" aria-label={tx("显示方式")}>
+          <button type="button" aria-pressed={view === "grid"} aria-label={tx("卡片")} title={tx("卡片")} className={cx(view === "grid" && styles.viewOn)} onClick={() => setView("grid")}>
             <LayoutGrid size={13} aria-hidden />
           </button>
-          <button type="button" aria-pressed={view === "list"} aria-label="列表" title="列表" className={cx(view === "list" && styles.viewOn)} onClick={() => setView("list")}>
+          <button type="button" aria-pressed={view === "list"} aria-label={tx("列表")} title={tx("列表")} className={cx(view === "list" && styles.viewOn)} onClick={() => setView("list")}>
             <List size={13} aria-hidden />
           </button>
         </div>
         <button type="button" className={styles.add} onClick={() => input.current?.click()}>
-          <Plus size={14} aria-hidden />添加
+          <Plus size={14} aria-hidden />{tx("添加")}
         </button>
         <input
           ref={input} hidden multiple type="file" accept={DOCUMENT_EXTENSIONS.join(",")}
@@ -229,16 +246,16 @@ export function Library({ subjectId, notesChars, onOpenNotes, onChange }: Librar
       {empty ? (
         <button type="button" className={styles.empty} onClick={() => input.current?.click()}>
           <Upload size={20} aria-hidden />
-          <strong>把讲义放进来</strong>
-          <span>拖到这里，或点击添加。支持 PDF、Word、PPT、Excel 和文本，AI 回答时会引用其中的内容。</span>
+          <strong>{tx("把讲义放进来")}</strong>
+          <span>{tx("拖到这里，或点击添加。支持 PDF、Word、PPT、Excel 和文本，AI 回答时会引用其中的内容。")}</span>
         </button>
       ) : view === "list" ? (
-        <div className={styles.table} role="table" aria-label="资料列表">
+        <div className={styles.table} role="table" aria-label={tx("资料列表")}>
           <div className={cx(styles.row, styles.head)} role="row">
-            {header("name", "名称")}
-            {header("date", "修改日期")}
-            {header("size", "规模")}
-            {header("kind", "类型")}
+            {header("name", tx("名称"))}
+            {header("date", tx("修改日期"))}
+            {header("size", tx("规模"))}
+            {header("kind", tx("类型"))}
           </div>
           {showWorkspace && (
             <>
@@ -246,12 +263,12 @@ export function Library({ subjectId, notesChars, onOpenNotes, onChange }: Librar
                 <button type="button" className={styles.name} onClick={() => setWorkspaceOpen(!workspaceOpen)} aria-expanded={workspaceOpen}>
                   {workspaceOpen ? <ChevronDown size={12} aria-hidden /> : <ChevronRight size={12} aria-hidden />}
                   <Folder size={14} className={styles.folder} aria-hidden />
-                  <span>{tree.name || "本地工作区"}</span>
+                  <span>{tree.name || tx("本地工作区")}</span>
                 </button>
-                <span className={styles.cell}>—</span><span className={styles.cell}>—</span><span className={styles.cell}>工作区</span>
+                <span className={styles.cell}>—</span><span className={styles.cell}>—</span><span className={styles.cell}>{tx("工作区")}</span>
               </div>
               {workspaceOpen && (tree.entries.length === 0 ? (
-                <p className={styles.nested}>工作区文件夹是空的。</p>
+                <p className={styles.nested}>{tx("工作区文件夹是空的。")}</p>
               ) : tree.entries.map((entry) => (
                 <div key={entry.path} role="rowgroup">
                   <div className={cx(styles.row, styles.nestedRow)} role="row">
@@ -259,8 +276,8 @@ export function Library({ subjectId, notesChars, onOpenNotes, onChange }: Librar
                       type="button" className={styles.name}
                       onClick={() => (entry.kind === "dir"
                         ? setOpenDirs((old) => ({ ...old, [entry.path]: !old[entry.path] }))
-                        : askWorkspaceFile(entry.path))}
-                      title={entry.kind === "file" ? "点击把这个文件带入输入框" : undefined}
+                        : askWorkspaceFile(entry.path, tx))}
+                      title={entry.kind === "file" ? tx("点击把这个文件带入输入框") : undefined}
                     >
                       {entry.kind === "dir"
                         ? (openDirs[entry.path] ? <ChevronDown size={12} aria-hidden /> : <ChevronRight size={12} aria-hidden />)
@@ -269,17 +286,17 @@ export function Library({ subjectId, notesChars, onOpenNotes, onChange }: Librar
                       <span>{entry.name}</span>
                     </button>
                     <span className={styles.cell}>—</span><span className={styles.cell}>—</span>
-                    <span className={styles.cell}>{kindOfEntry(entry)}</span>
+                    <span className={styles.cell}>{kindOfEntry(entry, tx)}</span>
                   </div>
                   {entry.kind === "dir" && openDirs[entry.path] && entry.children?.map((child) => (
                     <div key={child.path} className={cx(styles.row, styles.nestedRow, styles.deepRow)} role="row">
-                      <button type="button" className={styles.name} onClick={() => child.kind === "file" && askWorkspaceFile(child.path)}>
+                      <button type="button" className={styles.name} onClick={() => child.kind === "file" && askWorkspaceFile(child.path, tx)}>
                         <span className={styles.chevronSpace} />
                         {child.kind === "dir" ? <Folder size={14} className={styles.folder} aria-hidden /> : <FileText size={14} aria-hidden />}
                         <span>{child.name}</span>
                       </button>
                       <span className={styles.cell}>—</span><span className={styles.cell}>—</span>
-                      <span className={styles.cell}>{kindOfEntry(child)}</span>
+                      <span className={styles.cell}>{kindOfEntry(child, tx)}</span>
                     </div>
                   ))}
                 </div>
@@ -288,14 +305,14 @@ export function Library({ subjectId, notesChars, onOpenNotes, onChange }: Librar
           )}
           {showNotes && (
             <div className={styles.row} role="row">
-              <button type="button" className={styles.name} onClick={onOpenNotes} title="打开空间笔记">
+              <button type="button" className={styles.name} onClick={onOpenNotes} title={tx("打开空间笔记")}>
                 <span className={styles.chevronSpace} />
                 <NotebookPen size={14} aria-hidden />
                 <span>空间笔记.md</span>
               </button>
               <span className={styles.cell}>—</span>
-              <span className={styles.cell}>{notesChars} 字</span>
-              <span className={styles.cell}>笔记</span>
+              <span className={styles.cell}>{tx("{count} 字", { count: notesChars })}</span>
+              <span className={styles.cell}>{tx("笔记")}</span>
             </div>
           )}
           {rows.map(({ item, category }) => {
@@ -307,14 +324,14 @@ export function Library({ subjectId, notesChars, onOpenNotes, onChange }: Librar
                   <Icon size={14} aria-hidden />
                   <span title={item.title}>{item.title}</span>
                 </span>
-                <span className={styles.cell}>{dateLabel(item.createdAt)}</span>
-                <span className={styles.cell}>{sizeLabel(item, category)}</span>
-                <span className={styles.cell}>{extension(item.title) || CATEGORY_LABEL[category]}</span>
+                <span className={styles.cell}>{dateLabel(item.createdAt, lang)}</span>
+                <span className={styles.cell}>{sizeLabel(item, category, tx)}</span>
+                <span className={styles.cell}>{extension(item.title) || tx(CATEGORY_LABEL[category])}</span>
                 {rowActions(item)}
               </div>
             );
           })}
-          {loaded && total === 0 && !showWorkspace && <p className={styles.nested}>没有这个类型的资料。</p>}
+          {loaded && total === 0 && !showWorkspace && <p className={styles.nested}>{tx("没有这个类型的资料。")}</p>}
         </div>
       ) : (
         <div className={styles.grid}>
@@ -322,17 +339,17 @@ export function Library({ subjectId, notesChars, onOpenNotes, onChange }: Librar
             <button type="button" className={styles.card} onClick={onOpenNotes}>
               <NotebookPen size={20} aria-hidden />
               <strong>空间笔记.md</strong>
-              <span>{notesChars} 字 · 笔记</span>
+              <span>{tx("{count} 字 · 笔记", { count: notesChars })}</span>
             </button>
           )}
           {rows.map(({ item, category }) => {
             const Icon = CATEGORY_ICON[category];
-            const meta = [sizeLabel(item, category), dateLabel(item.createdAt)].filter((part) => part !== "—").join(" · ");
+            const meta = [sizeLabel(item, category, tx), dateLabel(item.createdAt, lang)].filter((part) => part !== "—").join(" · ");
             return (
               <div key={item.id} className={styles.card}>
                 <Icon size={20} aria-hidden />
                 <strong title={item.title}>{item.title}</strong>
-                <span>{meta || CATEGORY_LABEL[category]}</span>
+                <span>{meta || tx(CATEGORY_LABEL[category])}</span>
                 {rowActions(item)}
               </div>
             );
@@ -341,8 +358,8 @@ export function Library({ subjectId, notesChars, onOpenNotes, onChange }: Librar
       )}
 
       <footer className={styles.footer}>
-        <span>{uploading > 0 ? `正在上传并解析 ${uploading} 个文件…` : `${total} 个文件`}</span>
-        {dragging && <span>松开即可上传</span>}
+        <span>{uploading > 0 ? tx("正在上传并解析 {count} 个文件…", { count: uploading }) : tx("{count} 个文件", { count: total })}</span>
+        {dragging && <span>{tx("松开即可上传")}</span>}
       </footer>
     </div>
   );

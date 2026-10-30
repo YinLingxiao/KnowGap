@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Gauge } from "lucide-react";
+import { useI18n } from "@/components/LanguageProvider";
 import { loadImageUrl } from "@/lib/api/vision-client";
 import { EFFORT_LABEL, type Route } from "./visionData";
 import styles from "./VisionWidgets.module.css";
@@ -29,13 +30,14 @@ export function useImageUrl(imageId: string | null): { url: string; failed: bool
 
 /** Shows which thinking effort the router picked for this turn, and why. */
 export function RouteBadge({ route }: { route: Route | null }) {
+  const { tx } = useI18n();
   if (!route) return null;
-  const how = route.source === "user" ? "按你的思考深度设置" : "按题目复杂度自动选择";
+  const how = route.source === "user" ? tx("按你的思考深度设置") : tx("按题目复杂度自动选择");
   return (
-    <span className={styles.routeBadge} title={`${route.reason}（${how}）`}>
+    <span className={styles.routeBadge} title={tx("{reason}（{how}）", { reason: route.reason, how })}>
       <Gauge size={11} aria-hidden />
-      <span>思考 · {EFFORT_LABEL[route.effort]}</span>
-      <span className="sr-only">，{route.reason}，{how}</span>
+      <span>{tx("思考 · {effort}", { effort: tx(EFFORT_LABEL[route.effort]) })}</span>
+      <span className="sr-only">{tx("，{reason}，{how}", { reason: route.reason, how })}</span>
     </span>
   );
 }
