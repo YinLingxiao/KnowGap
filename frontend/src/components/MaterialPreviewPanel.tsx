@@ -19,9 +19,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Download, FileSpreadsheet, FileText, FileType, Presentation, TriangleAlert, X } from "lucide-react";
 import { createMaterialClient } from "@/lib/api/material-client";
 import { toApiError } from "@/lib/api/errors";
+import { cx } from "@/lib/cx";
 import type { CourseMaterial } from "@/lib/types";
 import { Markdown } from "./chat/Markdown";
-import { cx } from "@/lib/cx";
+import { useI18n } from "@/components/LanguageProvider";
 import styles from "./MaterialPreviewPanel.module.css";
 
 // 和后端 MAX_UPLOAD_BYTES（20MB）同一量级，但更保守：docx-preview / pdf.js 在大文件、
@@ -147,13 +148,14 @@ async function saveBlob(blob: Blob, filename: string): Promise<void> {
 }
 
 function DownloadButton({ material }: { material: CourseMaterial }) {
+  const { tx } = useI18n();
   const client = useMemo(() => createMaterialClient(), []);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   return (
     <div className={styles.state}>
       <FileText size={28} aria-hidden />
-      <p>{error ?? "文件较大，建议下载后用本地程序查看。"}</p>
+      <p>{error ?? tx("文件较大，建议下载后用本地程序查看。")}</p>
       <button
         type="button"
         className={styles.downloadBtn}
@@ -172,7 +174,7 @@ function DownloadButton({ material }: { material: CourseMaterial }) {
         }}
       >
         <Download size={14} aria-hidden />
-        <span>{busy ? "下载中…" : "下载查看"}</span>
+        <span>{busy ? tx("下载中…") : tx("下载查看")}</span>
       </button>
     </div>
   );
@@ -181,6 +183,7 @@ function DownloadButton({ material }: { material: CourseMaterial }) {
 // ------------------------------------------------------------------ PDF
 
 function PdfView({ bytes }: { bytes: ArrayBuffer }) {
+  const { tx } = useI18n();
   const hostRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [truncatedAt, setTruncatedAt] = useState<number | null>(null);
@@ -213,7 +216,7 @@ function PdfView({ bytes }: { bytes: ArrayBuffer }) {
           host.append(canvas);
         }
       } catch {
-        if (!cancelled) setError("PDF 无法渲染，请下载后查看。");
+        if (!cancelled) setError(tx("PDF 无法渲染，请下载后查看。"));
       }
     })();
     return () => { cancelled = true; };
@@ -225,10 +228,10 @@ function PdfView({ bytes }: { bytes: ArrayBuffer }) {
       {truncatedAt && (
         <p className={styles.outlineBanner}>
           <TriangleAlert size={14} aria-hidden />
-          共 {truncatedAt} 页，仅预览前 {MAX_PDF_PAGES} 页，完整内容请下载查看
+           {tx("共 {pages} 页，仅预览前 {max} 页，完整内容请下载查看", { pages: truncatedAt, max: MAX_PDF_PAGES })}
         </p>
       )}
-      <div ref={hostRef} className={styles.pdfPages} aria-label="PDF 预览" />
+      <div ref={hostRef} className={styles.pdfPages} aria-label={tx("PDF 预览")} />
     </>
   );
 }
@@ -281,6 +284,7 @@ async function loadDocxScripts(): Promise<string[]> {
 }
 
 function DocxView({ bytes }: { bytes: ArrayBuffer }) {
+  const { tx } = useI18n();
   const frameRef = useRef<HTMLIFrameElement>(null);
   const [error, setError] = useState(false);
 
@@ -318,7 +322,7 @@ function DocxView({ bytes }: { bytes: ArrayBuffer }) {
       {error && (
         <div className={styles.state}>
           <TriangleAlert size={24} aria-hidden />
-          <p>这份文档无法渲染（可能是旧版格式或文件已损坏），请下载后查看。</p>
+          <p>{tx("这份文档无法渲染（可能是旧版格式或文件已损坏），请下载后查看。")}</p>
         </div>
       )}
       <iframe
@@ -327,7 +331,7 @@ function DocxView({ bytes }: { bytes: ArrayBuffer }) {
         style={error ? { display: "none" } : undefined}
         sandbox="allow-scripts"
         srcDoc={DOCX_IFRAME_HTML}
-        title="Word 文档预览"
+        title={tx("Word 文档预览")}
       />
     </>
   );
@@ -336,7 +340,8 @@ function DocxView({ bytes }: { bytes: ArrayBuffer }) {
 // ------------------------------------------------------------------ XLSX / CSV（安全表格）
 
 function SheetTable({ rows }: { rows: string[][] }) {
-  if (rows.length === 0) return <p className={styles.plainText}>（空工作表）</p>;
+  const { tx } = useI18n();
+  if (rows.length === 0) return <p className={styles.plainText}>{tx("（空工作表）")}</p>;
   return (
     <div className={styles.tableWrap}>
       <table className={styles.sheetTable}>
@@ -353,6 +358,7 @@ function SheetTable({ rows }: { rows: string[][] }) {
 }
 
 function XlsxView({ bytes }: { bytes: ArrayBuffer }) {
+  const { tx } = useI18n();
   const [sheets, setSheets] = useState<{ name: string; rows: string[][] }[] | null>(null);
   const [active, setActive] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -372,18 +378,18 @@ function XlsxView({ bytes }: { bytes: ArrayBuffer }) {
             .map((row) => row.map((cell) => (cell == null ? "" : String(cell)))),
         })));
       } catch {
-        if (!cancelled) setError("表格无法解析，请下载后查看。");
+        if (!cancelled) setError(tx("表格无法解析，请下载后查看。"));
       }
     })();
     return () => { cancelled = true; };
   }, [bytes]);
 
   if (error) return <div className={styles.state}><TriangleAlert size={24} aria-hidden /><p>{error}</p></div>;
-  if (!sheets) return <p className={styles.plainText}>正在解析表格…</p>;
+  if (!sheets) return <p className={styles.plainText}>{tx("正在解析表格…")}</p>;
   return (
     <div>
       {sheets.length > 1 && (
-        <div className={styles.sheetTabs} role="tablist" aria-label="工作表">
+        <div className={styles.sheetTabs} role="tablist" aria-label={tx("工作表")}>
           {sheets.map((sheet, index) => (
             <button
               key={sheet.name}
@@ -411,6 +417,7 @@ function CsvView({ bytes }: { bytes: ArrayBuffer }) {
 // ------------------------------------------------------------------ 大纲预览（PPT / 旧版 doc·ppt）
 
 function OutlineView({ material }: { material: CourseMaterial }) {
+  const { tx } = useI18n();
   const client = useMemo(() => createMaterialClient(), []);
   const [outline, setOutline] = useState<string[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -427,14 +434,14 @@ function OutlineView({ material }: { material: CourseMaterial }) {
     <div>
       <p className={styles.outlineBanner}>
         <TriangleAlert size={14} aria-hidden />
-        仅显示大纲，完整排版请下载查看
+        {tx("仅显示大纲，完整排版请下载查看")}
       </p>
       {error ? (
         <p className={styles.plainText}>{error}</p>
       ) : !outline ? (
-        <p className={styles.plainText}>正在加载大纲…</p>
+        <p className={styles.plainText}>{tx("正在加载大纲…")}</p>
       ) : outline.length === 0 ? (
-        <p className={styles.plainText}>没有提取到标题。</p>
+        <p className={styles.plainText}>{tx("没有提取到标题。")}</p>
       ) : (
         <ol className={styles.outlineList}>
           {outline.map((heading, index) => <li key={index}>{heading}</li>)}
@@ -447,7 +454,8 @@ function OutlineView({ material }: { material: CourseMaterial }) {
 // ------------------------------------------------------------------ 分发与面板外壳
 
 function PreviewBody({ material, state }: { material: CourseMaterial; state: RenderState }) {
-  if (state.status === "loading") return <p className={styles.plainText}>正在加载…</p>;
+  const { tx } = useI18n();
+  if (state.status === "loading") return <p className={styles.plainText}>{tx("正在加载…")}</p>;
   if (state.status === "degraded" || state.status === "error") {
     return state.status === "error"
       ? <div className={styles.state}><TriangleAlert size={24} aria-hidden /><p>{state.message}</p></div>
@@ -467,18 +475,19 @@ function PreviewBody({ material, state }: { material: CourseMaterial; state: Ren
 }
 
 export function MaterialPreviewPanel({ material, onClose }: { material: CourseMaterial | null; onClose: () => void }) {
+  const { tx } = useI18n();
   const state = useMaterialBytes(material);
   if (!material) return null;
   const Icon = material.kind in TITLE_ICON ? TITLE_ICON[material.kind as keyof typeof TITLE_ICON] : FileText;
   return (
-    <aside className={styles.panel} aria-label="资料预览">
+    <aside className={styles.panel} aria-label={tx("资料预览")}>
       <header className={styles.head}>
         <span className={styles.headTitle}>
           <Icon size={15} aria-hidden />
           {material.title}
         </span>
         <div className={styles.headActions}>
-          <button type="button" className={styles.iconBtn} aria-label="关闭预览" title="关闭预览" onClick={onClose}>
+          <button type="button" className={styles.iconBtn} aria-label={tx("关闭预览")} title={tx("关闭预览")} onClick={onClose}>
             <X size={16} aria-hidden />
           </button>
         </div>

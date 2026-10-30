@@ -34,6 +34,7 @@ import {
   type SandboxStatus,
 } from "@/lib/api/sandbox-client";
 import { cx } from "@/lib/cx";
+import { useI18n } from "@/components/LanguageProvider";
 import base from "../LearningWidget.module.css";
 import { sendNow } from "./widgetEvents";
 import styles from "./CodePlaygroundWidget.module.css";
@@ -55,14 +56,22 @@ function missingTool(message: string): string | null {
   return /^找不到\s*(.+?)[，,]\s*无法/.exec(message)?.[1] ?? null;
 }
 
-function buildStaticCheckPrompt(spec: PlaygroundSpec, code: string, tool: string): string {
+function buildStaticCheckPrompt(
+  spec: PlaygroundSpec,
+  code: string,
+  tool: string,
+  tr: (text: string, vars?: Record<string, string | number>) => string,
+): string {
   const fence = "`".repeat(Math.max(3, ...(code.match(/`+/g) ?? []).map((run) => run.length + 1)));
   const lines = [
-    `我在做代码实验台「${spec.title.slice(0, 80)}」（${LANGUAGE_LABELS[spec.language]}），但本机没有 ${tool}，没法运行。` +
-    "请你直接读下面的代码做静态检查，不需要运行：指出语法或逻辑错误（带行号）、预测它会输出什么、说明怎么修。",
+    tr("我在做代码实验台「{title}」（{language}），但本机没有 {tool}，没法运行。请你直接读下面的代码做静态检查，不需要运行：指出语法或逻辑错误（带行号）、预测它会输出什么、说明怎么修。", {
+      title: spec.title.slice(0, 80),
+      language: LANGUAGE_LABELS[spec.language],
+      tool,
+    }),
   ];
-  if (spec.instructions?.trim()) lines.push("", `题目要求：${spec.instructions.trim().slice(0, 300)}`);
-  lines.push("", "我的代码：", `${fence}${spec.language}\n${code.slice(0, 6_000)}\n${fence}`);
+  if (spec.instructions?.trim()) lines.push("", tr("题目要求：{text}", { text: spec.instructions.trim().slice(0, 300) }));
+  lines.push("", tr("我的代码："), `${fence}${spec.language}\n${code.slice(0, 6_000)}\n${fence}`);
   return lines.join("\n");
 }
 
@@ -173,6 +182,7 @@ function Output({ label, text }: { label: string; text: string }) {
 }
 
 function DiagnosticList({ items, onJump }: { items: SandboxDiagnostic[]; onJump: (line: number) => void }) {
+  const { tx } = useI18n();
   if (items.length === 0) return null;
   return (
     <ul className={styles.diagList}>
@@ -181,14 +191,14 @@ function DiagnosticList({ items, onJump }: { items: SandboxDiagnostic[]; onJump:
           {item.line !== null ? (
             <button type="button" className={styles.diagItem} onClick={() => onJump(item.line as number)}>
               <span className={cx(styles.diagSeverity, item.severity === "warning" && styles.diagWarn)}>
-                {item.severity === "warning" ? "警告" : "错误"}
+                {item.severity === "warning" ? tx("警告") : tx("错误")}
               </span>
-              <span className={styles.diagLoc}>第 {item.line} 行{item.column !== null ? `:${item.column}` : ""}</span>
+              <span className={styles.diagLoc}>{tx("第 {line} 行", { line: item.line })}{item.column !== null ? `:${item.column}` : ""}</span>
               <span className={styles.diagMsg}>{item.message}</span>
             </button>
           ) : (
             <div className={styles.diagItem}>
-              <span className={styles.diagSeverity}>错误</span>
+              <span className={styles.diagSeverity}>{tx("错误")}</span>
               <span className={styles.diagMsg}>{item.message}</span>
             </div>
           )}
@@ -199,6 +209,7 @@ function DiagnosticList({ items, onJump }: { items: SandboxDiagnostic[]; onJump:
 }
 
 function CaseCard({ item, single }: { item: SandboxCaseResult; single: boolean }) {
+  const { tx } = useI18n();
   const good = isGoodCase(item.status);
   const showExpected = item.expected !== null && item.status === "failed";
   return (
@@ -206,25 +217,25 @@ function CaseCard({ item, single }: { item: SandboxCaseResult; single: boolean }
     <details className={styles.case} open={single || (!good && item.status !== "skipped")}>
       <summary>
         <span className={cx(styles.chip, good ? styles.chipGood : item.status === "skipped" ? styles.chipMuted : styles.chipBad)}>
-          {CASE_LABEL[item.status]}
+          {tx(CASE_LABEL[item.status])}
         </span>
-        <strong>{single ? "运行结果" : item.name}</strong>
+        <strong>{single ? tx("运行结果") : item.name}</strong>
         <span className={styles.caseMeta}>{item.durationMs} ms</span>
       </summary>
       <div className={styles.caseBody}>
-        {item.input && <Output label="输入" text={item.input} />}
+        {item.input && <Output label={tx("输入")} text={item.input} />}
         {showExpected && (
           <div className={styles.compare}>
-            <Output label="期望输出" text={item.expected ?? ""} />
-            <Output label="实际输出" text={item.stdout || "（没有输出）"} />
+            <Output label={tx("期望输出")} text={item.expected ?? ""} />
+            <Output label={tx("实际输出")} text={item.stdout || tx("（没有输出）")} />
           </div>
         )}
-        {!showExpected && item.stdout && <Output label="标准输出" text={item.stdout} />}
-        {!showExpected && !item.stdout && good && <p className={styles.muted}>（程序没有输出）</p>}
-        {item.stderr.trim() && <Output label="错误输出" text={item.stderr.trim()} />}
+        {!showExpected && item.stdout && <Output label={tx("标准输出")} text={item.stdout} />}
+        {!showExpected && !item.stdout && good && <p className={styles.muted}>{tx("（程序没有输出）")}</p>}
+        {item.stderr.trim() && <Output label={tx("错误输出")} text={item.stderr.trim()} />}
         {(item.exitCode !== null && item.exitCode !== 0) || item.exitNote ? (
           <p className={styles.exit}>
-            {item.exitCode !== null && <>退出码 {item.exitCode}</>}
+            {item.exitCode !== null && <>{tx("退出码 {code}", { code: item.exitCode })}</>}
             {item.exitNote && <> · {item.exitNote}</>}
           </p>
         ) : null}
@@ -236,9 +247,10 @@ function CaseCard({ item, single }: { item: SandboxCaseResult; single: boolean }
 function ResultPanel({
   result, language, onJump,
 }: { result: SandboxResult; language: PlaygroundLanguage; onJump: (line: number) => void }) {
+  const { tx } = useI18n();
   const compiled = language === "c" || language === "cpp";
   const warnings = result.compile?.ok ? result.compile.diagnostics.filter((item) => item.severity === "warning") : [];
-  const title = result.status === "compile_error" && !compiled ? "语法错误" : STATUS_TITLE[result.status];
+  const title = result.status === "compile_error" && !compiled ? tx("语法错误") : tx(STATUS_TITLE[result.status]);
   const tone = result.ok ? styles.bannerGood : result.status === "blocked" ? styles.bannerWarn : styles.bannerBad;
   const Icon = result.ok ? CircleCheck : result.status === "blocked" ? ShieldAlert : CircleAlert;
   return (
@@ -258,7 +270,7 @@ function ResultPanel({
             <li key={`${rule.ruleId}-${rule.line}`}>
               <button type="button" className={styles.diagItem} onClick={() => onJump(rule.line)}>
                 <span className={cx(styles.diagSeverity, styles.diagWarn)}>{rule.ruleId}</span>
-                <span className={styles.diagLoc}>第 {rule.line} 行</span>
+                <span className={styles.diagLoc}>{tx("第 {line} 行", { line: rule.line })}</span>
                 <span className={styles.diagMsg}>{rule.description}<code className={styles.excerpt}>{rule.excerpt}</code></span>
               </button>
             </li>
@@ -270,15 +282,15 @@ function ResultPanel({
         <>
           <DiagnosticList items={result.compile.diagnostics} onJump={onJump} />
           <Output
-            label={compiled ? "编译器输出" : "语法检查输出"}
-            text={(result.compile.stderr || result.compile.stdout).trim() || "（没有输出）"}
+            label={compiled ? tx("编译器输出") : tx("语法检查输出")}
+            text={(result.compile.stderr || result.compile.stdout).trim() || tx("（没有输出）")}
           />
         </>
       )}
 
       {warnings.length > 0 && (
         <details className={styles.warnings}>
-          <summary>{warnings.length} 条编译警告</summary>
+          <summary>{tx("{count} 条编译警告", { count: warnings.length })}</summary>
           <DiagnosticList items={warnings} onJump={onJump} />
         </details>
       )}
@@ -303,6 +315,7 @@ interface LastRun {
 }
 
 function PlaygroundPanel({ spec, onAsk }: { spec: PlaygroundSpec; onAsk?: (prompt: string) => void }) {
+  const { tx } = useI18n();
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const mountedRef = useRef(true);
@@ -348,7 +361,7 @@ function PlaygroundPanel({ spec, onAsk }: { spec: PlaygroundSpec; onAsk?: (promp
           // Esc 先让位给原有的「取消选区」；没有选区时开启 2 秒的 Tab 焦点模式，Tab 就能离开编辑器。
           keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab, { key: "Escape", run: temporarilySetTabFocusMode }]),
           EditorView.contentAttributes.of({
-            "aria-label": `${LANGUAGE_LABELS[spec.language]} 代码编辑器。按 Esc 再按 Tab 可离开编辑器。`,
+            "aria-label": tx("{language} 代码编辑器。按 Esc 再按 Tab 可离开编辑器。", { language: LANGUAGE_LABELS[spec.language] }),
           }),
           EditorView.updateListener.of((update) => {
             if (update.docChanged && mountedRef.current) setTodoCount(countTodos(update.state.doc.toString()));
@@ -361,7 +374,7 @@ function PlaygroundPanel({ spec, onAsk }: { spec: PlaygroundSpec; onAsk?: (promp
       view.destroy();
       viewRef.current = null;
     };
-  }, [spec]);
+  }, [spec, tx]);
 
   const run = useCallback(async () => {
     const view = viewRef.current;
@@ -399,7 +412,7 @@ function PlaygroundPanel({ spec, onAsk }: { spec: PlaygroundSpec; onAsk?: (promp
         setMissing({ tool, code });
         if (autoCheckedRef.current !== code) {
           autoCheckedRef.current = code;
-          sendNow(buildStaticCheckPrompt(spec, code, tool));
+          sendNow(buildStaticCheckPrompt(spec, code, tool, tx));
         }
       } else {
         setError(message);
@@ -454,7 +467,7 @@ function PlaygroundPanel({ spec, onAsk }: { spec: PlaygroundSpec; onAsk?: (promp
     const code = view.state.doc.toString();
     autoCheckedRef.current = code;
     setMissing({ tool: missing.tool, code });
-    sendNow(buildStaticCheckPrompt(spec, code, missing.tool));
+    sendNow(buildStaticCheckPrompt(spec, code, missing.tool, tx));
   };
 
   const scaffold = spec.mode === "scaffold";
@@ -468,16 +481,16 @@ function PlaygroundPanel({ spec, onAsk }: { spec: PlaygroundSpec; onAsk?: (promp
         <div className={base.widgetTitleWrap}>
           <span className={base.widgetBadge}>
             <Code size={12} aria-hidden />
-            代码实验
+            {tx("代码实验")}
           </span>
           <strong className={base.widgetTitle}>{spec.title}</strong>
         </div>
         <div className={styles.metaRow}>
           <span className={base.stepCounter}>{LANGUAGE_LABELS[spec.language]}</span>
-          <span className={base.stepCounter}>{scaffold ? "脚手架填空" : "完整编写"}</span>
+          <span className={base.stepCounter}>{scaffold ? tx("脚手架填空") : tx("完整编写")}</span>
           {scaffold && hasTodos && (
             <span className={cx(base.stepCounter, todoCount === 0 && styles.todoDone)} aria-live="polite">
-              {todoCount > 0 ? `剩余 ${todoCount} 处待补全` : "已全部补全"}
+              {todoCount > 0 ? tx("剩余 {count} 处待补全", { count: todoCount }) : tx("已全部补全")}
             </span>
           )}
         </div>
@@ -489,7 +502,7 @@ function PlaygroundPanel({ spec, onAsk }: { spec: PlaygroundSpec; onAsk?: (promp
 
       {spec.testCases.length === 0 && (
         <details className={styles.stdin}>
-          <summary>标准输入（stdin）</summary>
+          <summary>{tx("标准输入（stdin）")}</summary>
           <textarea
             className={styles.stdinInput}
             value={stdin}
@@ -497,8 +510,8 @@ function PlaygroundPanel({ spec, onAsk }: { spec: PlaygroundSpec; onAsk?: (promp
             maxLength={10_000}
             rows={3}
             spellCheck={false}
-            aria-label="程序的标准输入"
-            placeholder="程序用 input() / scanf / readline 读取的内容写在这里"
+            aria-label={tx("程序的标准输入")}
+            placeholder={tx("程序用 input() / scanf / readline 读取的内容写在这里")}
           />
         </details>
       )}
@@ -506,23 +519,23 @@ function PlaygroundPanel({ spec, onAsk }: { spec: PlaygroundSpec; onAsk?: (promp
       <div className={styles.toolbar}>
         <button type="button" className={styles.runBtn} onClick={() => void run()} disabled={running} aria-busy={running}>
           {running ? <LoaderCircle size={14} className={styles.spin} aria-hidden /> : <Play size={14} aria-hidden />}
-          <span>{running ? "运行中…" : "编译并运行"}</span>
+          <span>{running ? tx("运行中…") : tx("编译并运行")}</span>
         </button>
         <button type="button" className={base.ctrlBtn} onClick={reset} disabled={running}>
           <RotateCcw size={13} aria-hidden />
-          <span>{scaffold ? "重置脚手架" : "重置代码"}</span>
+          <span>{scaffold ? tx("重置脚手架") : tx("重置代码")}</span>
         </button>
         {failed && (
           <button type="button" className={base.askAiBtn} onClick={diagnose}>
             <Bot size={13} aria-hidden />
-            <span>让 AI 诊断报错原因</span>
+            <span>{tx("让 AI 诊断报错原因")}</span>
           </button>
         )}
       </div>
 
       {asked && (
         <p className={styles.askedNote} role="status">
-          已把代码和报错放进聊天输入框，检查后按回车发送给 AI。
+          {tx("已把代码和报错放进聊天输入框，检查后按回车发送给 AI。")}
         </p>
       )}
 
@@ -530,11 +543,11 @@ function PlaygroundPanel({ spec, onAsk }: { spec: PlaygroundSpec; onAsk?: (promp
         <div className={cx(styles.banner, styles.bannerBad)} role="status">
           <CircleAlert size={15} aria-hidden />
           <div className={styles.bannerText}>
-            <strong>本机没有 {missing.tool}，没法运行</strong>
-            <p>已请 AI 先读一遍代码，检查结果在下方对话里。</p>
+            <strong>{tx("本机没有 {tool}，没法运行", { tool: missing.tool })}</strong>
+            <p>{tx("已请 AI 先读一遍代码，检查结果在下方对话里。")}</p>
             <button type="button" className={base.askAiBtn} onClick={recheck}>
               <Bot size={13} aria-hidden />
-              <span>再让 AI 检查一次</span>
+              <span>{tx("再让 AI 检查一次")}</span>
             </button>
           </div>
         </div>
@@ -544,7 +557,7 @@ function PlaygroundPanel({ spec, onAsk }: { spec: PlaygroundSpec; onAsk?: (promp
         <div className={cx(styles.banner, styles.bannerBad)} role="alert">
           <CircleAlert size={15} aria-hidden />
           <div className={styles.bannerText}>
-            <strong>没能运行</strong>
+            <strong>{tx("没能运行")}</strong>
             <p>{error}</p>
           </div>
         </div>
@@ -554,7 +567,7 @@ function PlaygroundPanel({ spec, onAsk }: { spec: PlaygroundSpec; onAsk?: (promp
 
       <footer className={base.widgetFoot}>
         <span className={base.footHint}>
-          Ctrl/⌘ + Enter 运行 · 按 Esc 再按 Tab 离开编辑器 · 每次最多运行 {last?.result.timeLimitSeconds ?? 3} 秒
+          {tx("Ctrl/⌘ + Enter 运行 · 按 Esc 再按 Tab 离开编辑器 · 每次最多运行 {seconds} 秒", { seconds: last?.result.timeLimitSeconds ?? 3 })}
         </span>
       </footer>
     </section>
@@ -568,19 +581,20 @@ export interface CodePlaygroundWidgetProps {
 }
 
 export function CodePlaygroundWidget({ data, onAsk }: CodePlaygroundWidgetProps) {
+  const { tx } = useI18n();
   // 用序列化后的字符串当稳定 key：父组件重渲染时 data 引用可能变，但内容没变就不该重建编辑器。
   const key = JSON.stringify(data);
   const parsed = useMemo(() => parseCodePlaygroundSpec(JSON.parse(key) as Record<string, unknown>), [key]);
   if (!parsed.ok) {
     return (
-      <section className={base.widgetCard} role="alert" aria-label="代码实验台无法载入">
+      <section className={base.widgetCard} role="alert" aria-label={tx("代码实验台无法载入")}>
         <header className={base.widgetHead}>
           <div className={base.widgetTitleWrap}>
             <span className={base.widgetBadge}>
               <Code size={12} aria-hidden />
-              代码实验
+              {tx("代码实验")}
             </span>
-            <strong className={base.widgetTitle}>无法载入代码实验台</strong>
+            <strong className={base.widgetTitle}>{tx("无法载入代码实验台")}</strong>
           </div>
         </header>
         <p className={styles.instructions}>{parsed.reason}</p>
