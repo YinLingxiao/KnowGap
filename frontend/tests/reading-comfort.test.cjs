@@ -25,7 +25,7 @@ test('the conversation width setting offers four widths and keeps old choices va
   values.set('u:knowgap.appearance.v1', JSON.stringify({ width: 'huge' }));
   assert.equal(readAppearance('u').width, 'medium');
   const dialog = read('components/settings/SettingsDialog.tsx');
-  assert.match(dialog, /id: "full", label: "全宽"/);
+  assert.match(dialog, /id: "full", labelKey: "settings\.width\.full"/);
 });
 
 test('every width rewrites the column, the bubble and (only for compact) the text measure', () => {
@@ -79,8 +79,8 @@ test('the space panel tab bar is icon-only except the active tab, has a Library 
   const page = read('components/chat/SubjectPage.tsx');
   assert.match(page, /\{tab\.active && <span className=\{styles\.tabLabel\}>\{tab\.label\}<\/span>\}/);
   assert.match(page, /aria-label=\{tab\.label\}/);
-  const labels = [...page.matchAll(/key: "(\w+)", icon: \w+, label: "([^"]+)"/g)].map((m) => m[2]);
-  assert.deepEqual(labels, ['支线', '资料库', '图谱', '任务', '记忆', '概览']);
+  const labels = [...page.matchAll(/key: "(\w+)", icon: \w+, label: t\("([^"]+)"\)/g)].map((m) => m[2]);
+  assert.deepEqual(labels, ['space.tab.threads', 'space.tab.library', 'space.tab.graph', 'space.tab.tasks', 'space.tab.memory', 'space.tab.overview']);
   assert.doesNotMatch(page, /label: "Pages"/);
   assert.match(page, /const libraryOpen = panel\.mode === "pages"/);
   assert.match(page, /<Library\s[^>]*onOpenNotes=\{\(\) => setPanel\(\{ mode: "pages" \}\)\}/);
@@ -158,7 +158,7 @@ test('model settings keep provider cards on the page and credentials inside the 
   assert.match(editor, /keyLabel \?\? "API Key"/);
   assert.match(editor, /已保存，留空则保持不变/);
   assert.match(editor, /更换了接口地址，需要重新填写密钥。/);
-  assert.match(list, /aria-label="搜索模型"/);
+  assert.match(list, /aria-label=\{tx\("搜索模型"\)\}/);
   assert.doesNotMatch(service, /接口地址/);
   assert.doesNotMatch(service, /API Key/);
   assert.match(service, /沿用默认模型/);

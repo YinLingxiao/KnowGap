@@ -5,6 +5,7 @@ const path = require('node:path');
 const ts = require('typescript');
 const React = require('react');
 const { renderToStaticMarkup } = require('react-dom/server');
+const { resolveI18n } = require('./i18n-support.cjs');
 
 // Exercise the actual message branch without a browser or backend.
 const source = fs.readFileSync(path.resolve(__dirname, '../src/components/chat/MessageList.tsx'), 'utf8');
@@ -13,6 +14,7 @@ const js = ts.transpileModule(source, {
 }).outputText;
 const loaded = { exports: {} };
 new Function('module', 'exports', 'require', js)(loaded, loaded.exports, (name) => {
+  if (resolveI18n(name)) return resolveI18n(name);
   if (name === 'react') return {
     ...React,
     useState: (initial) => [typeof initial === 'function' ? initial() : initial, () => {}],

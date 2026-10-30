@@ -206,7 +206,7 @@ export function SubjectPage({
       window.removeEventListener(SAVE_TO_PAGE_EVENT, onSave);
       window.clearTimeout(timer);
     };
-  }, [subject.id]);
+  }, [subject.id, tx]);
 
   useEffect(() => {
     const onRefresh = (event: Event) => {

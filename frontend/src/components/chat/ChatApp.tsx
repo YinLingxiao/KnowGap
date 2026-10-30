@@ -184,7 +184,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
     } finally {
       setModelChecking(false);
     }
-  }, []);
+  }, [tx]);
 
   useEffect(() => {
     void checkHealth();
@@ -227,7 +227,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
     } catch {
       setWelcomeError(tx("无法读取学习进度，请检查后端是否启动，然后重试。"));
     }
-  }, [user.id]);
+  }, [tx, user.id]);
 
   useEffect(() => {
     if (DATA_SOURCE === "api") void checkOnboarding();
@@ -254,7 +254,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
     } finally {
       setWelcomeBusy(false);
     }
-  }, [enterSpace, welcomeBusy]);
+  }, [enterSpace, tx, welcomeBusy]);
 
   const browseDemo = useCallback(async () => {
     if (welcomeBusy) return;
@@ -269,7 +269,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
     } finally {
       setWelcomeBusy(false);
     }
-  }, [enterSpace, welcomeBusy]);
+  }, [enterSpace, tx, welcomeBusy]);
 
   const skipWelcome = useCallback(async () => {
     if (welcomeBusy) return;
@@ -284,7 +284,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
     } finally {
       setWelcomeBusy(false);
     }
-  }, [narrow, welcomeBusy]);
+  }, [narrow, tx, welcomeBusy]);
 
   const subjectMissing = view.type === "subject" && viewRestored && !chat.listLoading
     && !chat.subjects.some((subject) => subject.id === view.id);

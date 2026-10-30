@@ -177,7 +177,7 @@ export function useChat(notify: Notify, userId: string) {
       notify({ tone: "error", title: t("toast.modelSwitchFailed"), description: errorText(toApiError(error), t, lang) });
       return false;
     }
-  }, [notify]);
+  }, [lang, notify, t]);
 
   const applyPendingModel = useCallback(async (id: string) => {
     const key = pendingModelRef.current;
@@ -258,7 +258,7 @@ export function useChat(notify: Notify, userId: string) {
       }
       setThreads((all) => ({ ...all, [id]: { messages: all[id]?.messages ?? [], loading: false, error: apiError } }));
     }
-  }, [notify, putConversation, activeKey]);
+  }, [activeKey, notify, putConversation, t]);
 
   const openConversation = useCallback((id: string) => {
     setSendFailure(null);
@@ -411,7 +411,7 @@ export function useChat(notify: Notify, userId: string) {
       endStream(id, controller);
       void refreshList();
     }
-  }, [endStream, loadConversation, loadMemories, loadSubjects, notify, patchMessages, refreshList, setPhase, upsertSummary]);
+  }, [endStream, loadConversation, loadMemories, loadSubjects, notify, patchMessages, refreshList, setPhase, t, upsertSummary]);
 
   const sendTo = useCallback(async (id: string, text: string) => {
     const trimmed = text.trim();
@@ -519,7 +519,7 @@ export function useChat(notify: Notify, userId: string) {
       notify({ tone: "error", title: t("toast.regenerateFailed"), description: errorText(apiError, t, lang) });
       if (apiError.kind === "conflict") void loadConversation(id);
     }
-  }, [loadConversation, notify, runStream]);
+  }, [lang, loadConversation, notify, runStream, t]);
 
   const stop = useCallback(async (id: string) => {
     const handle = streamsRef.current[id];
@@ -540,7 +540,7 @@ export function useChat(notify: Notify, userId: string) {
       handle.controller.abort();
       void loadConversation(id);
     }
-  }, [loadConversation, notify]);
+  }, [lang, loadConversation, notify, t]);
 
   const startExerciseOn = useCallback(async (id: string | null, problemId: string) => {
     if (id && streamsRef.current[id] && streamsRef.current[id].phase !== "analyzing") {
@@ -565,7 +565,7 @@ export function useChat(notify: Notify, userId: string) {
       notify({ tone: "error", title: t("toast.exerciseFailed"), description: errorText(toApiError(error), t, lang) });
       return false;
     }
-  }, [applyPendingModel, draftSubjectId, notify, putConversation, setActiveId, subjects]);
+  }, [applyPendingModel, draftSubjectId, lang, notify, putConversation, setActiveId, subjects, t]);
 
   const startExercise = useCallback(
     (problemId: string) => startExerciseOn(activeId, problemId), [activeId, startExerciseOn],
@@ -582,7 +582,7 @@ export function useChat(notify: Notify, userId: string) {
       notify({ tone: "error", title: patch.title !== undefined ? t("toast.renameFailed") : t("toast.moveFailed"), description: errorText(toApiError(error), t, lang) });
       return false;
     }
-  }, [loadSubjects, notify, upsertSummary]);
+  }, [lang, loadSubjects, notify, t, upsertSummary]);
 
   const renameConversation = useCallback(
     (id: string, title: string) => updateConversation(id, { title }), [updateConversation],
@@ -600,7 +600,7 @@ export function useChat(notify: Notify, userId: string) {
       notify({ tone: "error", title: t("toast.createSpaceFailed"), description: errorText(toApiError(error), t, lang) });
       return null;
     }
-  }, [notify]);
+  }, [lang, notify, t]);
 
   const updateSubject = useCallback(async (id: string, patch: SpaceInput) => {
     try {
@@ -611,7 +611,7 @@ export function useChat(notify: Notify, userId: string) {
       notify({ tone: "error", title: t("toast.saveFailed"), description: errorText(toApiError(error), t, lang) });
       return false;
     }
-  }, [notify]);
+  }, [lang, notify, t]);
 
   const deleteSubject = useCallback(async (id: string) => {
     try {
@@ -625,7 +625,7 @@ export function useChat(notify: Notify, userId: string) {
       notify({ tone: "error", title: t("toast.deleteFailed"), description: errorText(toApiError(error), t, lang) });
       return false;
     }
-  }, [notify]);
+  }, [lang, notify, t]);
 
   const deleteConversation = useCallback(async (id: string) => {
     try {
@@ -644,7 +644,7 @@ export function useChat(notify: Notify, userId: string) {
       notify({ tone: "error", title: t("toast.deleteFailed"), description: errorText(toApiError(error), t, lang) });
       return false;
     }
-  }, [activeId, loadMemories, newChat, notify]);
+  }, [activeId, lang, loadMemories, newChat, notify, t]);
 
   const updateMemory = useCallback(async (
     id: string, patch: { summary?: string; status?: LearnerMemoryStatus; subjectId?: string | null },
@@ -659,7 +659,7 @@ export function useChat(notify: Notify, userId: string) {
       notify({ tone: "error", title: t("toast.memoryUpdateFailed"), description: errorText(toApiError(error), t, lang) });
       return false;
     }
-  }, [loadSubjects, notify]);
+  }, [lang, loadSubjects, notify, t]);
 
   const decideTool = useCallback(async (approvalId: string, allow: boolean) => {
     setThreads((all) => {
@@ -679,7 +679,7 @@ export function useChat(notify: Notify, userId: string) {
     } catch (error) {
       notify({ tone: "error", title: t("toast.approvalFailed"), description: errorText(toApiError(error), t, lang) });
     }
-  }, [notify]);
+  }, [lang, notify, t]);
 
   const deleteMemory = useCallback(async (id: string) => {
     try {
@@ -695,7 +695,7 @@ export function useChat(notify: Notify, userId: string) {
       notify({ tone: "error", title: t("toast.deleteFailed"), description: errorText(apiError, t, lang) });
       return false;
     }
-  }, [notify]);
+  }, [lang, notify, t]);
 
   // 打开的会话里有其他页面正在生成（或刷新前中断）的回复：短轮询直到它结束
   const activeThread = activeId ? threads[activeId] : undefined;

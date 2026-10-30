@@ -760,7 +760,7 @@ export function Composer({
         current.map((item) => (item.key === key ? { ...item, state: "error", error: message } : item)),
       );
     }
-  }, [addImageMarker, conversationId, ensureConversation, generating, locked, updatePending, writeDraft]);
+  }, [addImageMarker, conversationId, ensureConversation, generating, locked, tx, updatePending, writeDraft]);
 
   // Ctrl+V：剪贴板里的图片和文件直接当附件上传；纯文字照常粘贴
   const onPaste = useCallback((event: ClipboardEvent<HTMLTextAreaElement>) => {
