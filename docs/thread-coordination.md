@@ -29,9 +29,22 @@
 - 服务退出取消运行任务。重启时把中断的回复标记为失败，状态由支线自己的消息推导；尚未开始的排队消息恢复执行。已有失败回复不会自动重放，避免重复文件操作。
 - 原有 `POST /api/subjects/{id}/threads` 暂保留兼容性，产品界面移除手动创建入口。
 
+## 支线汇报与协调者唤醒
+
+阶段二补上了「支线完成后告诉协调者」的正规通道。它只写一条**隐藏的系统事件消息**，学习者看不到；协调者默认沉默。
+
+- **写汇报的条件**（`service.py::_report_wake`）：支线、由主线交办（用户消息带 `delegated_task`）、本轮状态为 `complete` 且没有等待用户，或为 `failed`；`cancelled`、等待你、已解决的支线都不写。用户自己在支线里直接聊的回合不写。
+- **存储**：`thread_reports` 表，同一支线最多一条 `pending`（部分唯一索引 + 覆盖写入），摘要取 `progress_summary` / 错误信息 / 回复节选。
+- **投递**：主线空闲且安静 20 秒后，把最多 5 条待投递汇报合并成一条隐藏事件（`role=user`、`meta.system_event`，内容以「【系统事件 · 支线汇报】」开头），并在**同一事务**内标记为已投递；随后用与派发支线相同的方式 `begin(main, 事件消息, detached=True)` 唤醒协调者。24 小时内同一学习空间最多投递 20 个事件，超出的汇报置为 `skipped`。
+- **协调者回合**：跳过记忆与讲义检索、跳过学情分析/笔记轮次/自动命名/压缩；工具白名单只有 `propose_threads`、`update_plan`、`session_search`、`stay_silent`，且不设置 `dispatch_thread`，避免「完成 → 派发 → 完成」的循环。默认调用 `stay_silent`；只有失败、计划变化或有明确下一步才发言。
+- **沉默**：`stay_silent` 或正文为空且没有计划变更/建议卡片时，删除回复与事件消息，汇报保持「已投递」，主线上看不到任何新内容。
+- **失败与抢占**：唤醒回合失败或被关闭打断时回滚为 `pending`、`attempts + 1` 并按 60×2ⁿ 秒退避，达到 3 次置 `skipped`；用户在唤醒回合中发言时由 `preempt_system_turn` 取消该回合并把汇报放回 `pending`（不计 attempts），用户消息正常处理，不再返回 409。
+- **开关**：`ai-settings.json` 的 `coordinator_wakeup`，默认开启；关闭后不写汇报、不投递，已有待投递汇报保留。
+- **重启**：`recover()` 把中断的唤醒回合回滚，并为仍有待投递汇报的主线重新排期；重复启动不会重复投递。
+
 ## 前端与接口
 
-- 消息增加 `dispatched_threads`（只出现在主线的用户消息上，值为 `[{thread_id}]`）、`pending_approval`，会话摘要增加 `execution_status`；原有 `thread_status=open/resolved` 保留。`thread_update` 字段与对应卡片已删除，历史卡片在启动时按 `meta.thread_update` 一次性清理，卡片改由派发记录重新呈现。
+- 消息增加 `dispatched_threads`（只出现在主线的用户消息上，值为 `[{thread_id}]`）、`system_event`（隐藏事件消息，前端不渲染）、`pending_approval`，会话摘要增加 `execution_status`；原有 `thread_status=open/resolved` 保留。`thread_update` 字段与对应卡片已删除，历史卡片在启动时按 `meta.thread_update` 一次性清理，卡片改由派发记录重新呈现。
 - 主线流增加 `thread_dispatched {thread_id}` 事件，用于显示执行支线。
 - 页面打开期间每 1.5 秒刷新空间任务和服务端生成的消息；本页面直接发起的流式回复不被轮询覆盖，页面隐藏时暂停轮询。
 - 主线练习入口交给 AI 分派，侧栏保留直接练习与输入能力。
