@@ -320,7 +320,7 @@ export function useChat(notify: Notify, userId: string) {
     const controller = new AbortController();
     setStreams((all) => ({ ...all, [id]: { controller, phase: "connecting" } }));
     let assistantId: string | null = null;
-    let userId: string | null = null;
+    let userMessageId: string | null = null;
     let acked = false;
     let noticed = false;
     const showModelNotice = (detail: string) => {
@@ -334,9 +334,9 @@ export function useChat(notify: Notify, userId: string) {
         case "thread_dispatched":
           setThreadDispatch((previous) => ({ mainId: id, threadId: event.threadId, nonce: (previous?.nonce ?? 0) + 1 }));
           // 卡片要在流式期间就出现；之后的轮询会用服务端的 dispatched_threads 覆盖，结果一致
-          if (userId) {
+          if (userMessageId) {
             patchMessages(id, (messages) => messages.map((message) => (
-              message.id !== userId || message.dispatchedThreads?.some((item) => item.threadId === event.threadId)
+              message.id !== userMessageId || message.dispatchedThreads?.some((item) => item.threadId === event.threadId)
                 ? message
                 : { ...message, dispatchedThreads: [...(message.dispatchedThreads ?? []), { threadId: event.threadId }] }
             )));
@@ -349,7 +349,7 @@ export function useChat(notify: Notify, userId: string) {
           onAck?.();
           upsertSummary(event.conversation);
           assistantId = event.assistantMessage?.id ?? null;
-          userId = event.userMessage?.id ?? null;
+          userMessageId = event.userMessage?.id ?? null;
           patchMessages(id, (messages) => upsert(
             upsert(messages.filter((m) => !event.discardedIds.includes(m.id)), event.userMessage),
             event.assistantMessage,

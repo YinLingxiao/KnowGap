@@ -375,14 +375,15 @@
   font-size: var(--text-xs);
 }
 
-/* 支线卡：主线里每条被交办的用户消息下最多一张，标题与状态按 id 实时渲染 */
+/* 支线卡：主线里每条被交办的用户消息下最多一张，标题与状态按 id 实时渲染。
+   卡片在用户行里，跟随该行的 align-items 贴齐用户气泡，并留出与气泡的间距。 */
 .threadPill {
   display: inline-flex;
   align-items: center;
-  align-self: flex-start;
   gap: 8px;
   max-width: 100%;
   height: 32px;
+  margin-top: 8px;
   padding: 0 12px 0 10px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius);

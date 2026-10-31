@@ -196,6 +196,14 @@
   background: var(--orange);
 }
 
+/* 面板收起时同一个提示放在「支线」胶囊按钮里 */
+.inlineDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--orange);
+}
+
 .icon,
 .panelActionBtn {
   display: grid;

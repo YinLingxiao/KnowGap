@@ -138,6 +138,12 @@ test('the main line no longer counts Thread updates next to the user message', (
   assert.doesNotMatch(css, /\.pillSummary\s*\{/);
 });
 
+test('the card sits under the user bubble: no align-self override, but a gap above', () => {
+  const css = fs.readFileSync(path.resolve(__dirname, '../src/components/chat/MessageList.module.css'), 'utf8');
+  assert.match(css, /\.threadPill\s*\{[^}]*margin-top: 8px/);
+  assert.doesNotMatch(css, /\.threadPill\s*\{[^}]*align-self:/);
+});
+
 test('messages without dispatched Threads render exactly as before', () => {
   const html = renderToStaticMarkup(render(userMessage([]), STATES));
   assert.match(html, /带我复习链表/);

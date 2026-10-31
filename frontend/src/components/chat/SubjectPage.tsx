@@ -29,6 +29,7 @@ import { MemoryItem } from "./MemoryDrawer";
 import { Library } from "./Library";
 import { MessageList } from "./MessageList";
 import { UsageStats } from "./UsageStats";
+import { hasThreadsNeedingAttention } from "@/lib/chat/threadAlerts";
 import styles from "./SubjectPage.module.css";
 
 type Panel =
@@ -414,10 +415,8 @@ export function SubjectPage({
   const threadSignal = threads.length > 0 || Boolean(main?.messages.some((message) => (
     (message.dispatchedThreads?.length ?? 0) > 0 || message.threadSummary || (message.threadProposals?.length ?? 0) > 0
   )));
-  // 主线不再播报支线进度：有支线在等你或执行失败时，在支线入口上点一个小圆点
-  const threadNeedsAttention = threads.some((item) => (
-    item.executionStatus === "waiting" || item.executionStatus === "failed"
-  ));
+  // 主线不再播报支线进度：有未解决的支线在等你或执行失败时，在支线入口上点一个小圆点
+  const threadNeedsAttention = hasThreadsNeedingAttention(threads);
   // 支线卡只带 id，标题和状态在这里按 id 实时取，所以改名与状态变化不需要重写消息
   const threadStates = useMemo(() => Object.fromEntries(threads.map((item) => [item.id, {
     title: item.title,
@@ -512,6 +511,7 @@ export function SubjectPage({
                 <MessagesSquare size={13} aria-hidden />
                 <span>{t("space.tab.threads")}</span>
                 {openThreads.length > 0 && <span className={styles.tabCount}>{openThreads.length}</span>}
+                {threadNeedsAttention && <span className={styles.inlineDot} aria-hidden />}
               </button>
             )}
             <button className={styles.icon} aria-label={t("space.settings")} title={t("space.editSpace")} onClick={onEdit}>
