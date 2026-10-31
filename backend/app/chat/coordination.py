@@ -10,8 +10,10 @@ from app.memory.store import new_id, now
 
 def dispatch(store: ChatStore, student: str, main_id: str, source_id: str,
              title: str, task: str, thread_id: str | None, *, task_key: str | None = None,
-             skill: str | None = None) -> tuple[str, str]:
+             skill: str | None = None, content: str | None = None) -> tuple[str, str]:
     # Creation and delivery are atomic. Replaying a coordinator turn cannot deliver twice.
+    # `content` overrides the copied source text: a hidden system event must never become the
+    # first "learner message" inside the Thread.
     thread_id = thread_id or None
     key = task_key or thread_id or normalize(title).casefold()
     with store.connection() as db:
@@ -52,8 +54,8 @@ def dispatch(store: ChatStore, student: str, main_id: str, source_id: str,
         if skill:
             meta["delegated_skill"] = skill
         message_id = store._insert(
-            db, thread_id, role="user", kind="text", content=source["content"], status="complete",
-            meta=meta,
+            db, thread_id, role="user", kind="text", content=source["content"] if content is None else content,
+            status="complete", meta=meta,
         )
         db.execute("INSERT INTO thread_dispatches VALUES (?, ?, ?, ?)", (source_id, key, thread_id, message_id))
         return thread_id, message_id

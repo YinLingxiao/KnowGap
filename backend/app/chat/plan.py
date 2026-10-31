@@ -114,12 +114,13 @@ class PlanStore:
             plan, _ = self._sync_threads(db, plan, events, owner)
             return self._public(plan)
 
-    def context(self, conversation_id, student_id):
+    def context(self, conversation_id, student_id, *, consume=True):
         with self.store.connection() as db:
             db.execute("BEGIN IMMEDIATE")
             plan, events, owner = self._load(db, conversation_id, student_id)
             plan, events = self._sync_threads(db, plan, events, owner)
-            if events:
+            # 唤醒回合（系统事件）只是旁听：读者的用户计划事件留到下一次真实发言，不能被它吞掉。
+            if events and consume:
                 db.execute("UPDATE conversation_plans SET plan_user_events='[]' WHERE conversation_id=?",
                            (conversation_id,))
             return brief(self._public(plan)), events
@@ -196,9 +197,13 @@ class PlanStore:
     @staticmethod
     def _user_seq(db, conversation_id, message_id):
         if message_id:
-            row = db.execute("SELECT seq FROM conversation_messages WHERE id=? AND conversation_id=? AND role='user'",
+            row = db.execute("SELECT seq, meta_json FROM conversation_messages "
+                             "WHERE id=? AND conversation_id=? AND role='user'",
                              (message_id, conversation_id)).fetchone()
-            return row["seq"] if row else 0
+            if not row:
+                return 0
+            # 隐藏的系统事件不是学习者发言，不能推进「等你回答」的进度
+            return 0 if json.loads(row["meta_json"]).get("system_event") else row["seq"]
         return db.execute("SELECT COALESCE(MAX(seq), 0) FROM conversation_messages WHERE conversation_id=? AND role='user'",
                           (conversation_id,)).fetchone()[0]
 

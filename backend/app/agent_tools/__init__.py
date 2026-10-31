@@ -75,6 +75,14 @@ DEFINITIONS = [
     {
         "type": "function",
         "function": {
+            "name": "stay_silent",
+            "description": "系统事件回合专用：本轮不打扰学习者。默认调用它；只有失败、学习计划变化或明确的下一步才发言。",
+            "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "update_plan",
             "description": "创建或整份更新本对话学习计划（1~8 步）。保留已有步骤 id；讲完不等于学会，需要作答时设 awaiting_learner 并在 note 写问题，学习者答对后才设 done。返回归一化计划及被拒绝的改动。",
             "parameters": {
@@ -316,6 +324,10 @@ async def run(name: str, arguments: dict, ctx) -> str:
             if not getattr(ctx, "report_progress", None):
                 raise ToolError("当前对话不是支线。")
             text = ctx.report_progress(arguments)
+        elif name == "stay_silent":
+            if not getattr(ctx, "stay_silent", None):
+                raise ToolError("当前回合不能保持沉默。")
+            text = ctx.stay_silent(arguments)
         elif name == "update_plan":
             from app.chat.plan import PlanStore
 
