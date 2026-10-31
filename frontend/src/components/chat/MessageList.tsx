@@ -492,8 +492,8 @@ export function MessageList({
                 </div>
               );
             }
-            // 唤醒回合的回复还没有可见内容时不渲染，避免先冒出一个空气泡
-            if (message.status === "streaming" && message.content === "" && !message.reasoning
+            // 唤醒回合的回复还没有可见内容时不渲染，避免先冒出空气泡（含只能看到思考过程的情况）
+            if (message.status === "streaming" && message.content === ""
                 && message.replyTo && eventIds.has(message.replyTo)) return null;
             const streaming = message.status === "streaming";
             const isLast = message === last && message.replyTo === lastUser?.id;

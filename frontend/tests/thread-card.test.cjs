@@ -205,6 +205,15 @@ test('an empty streaming reply to a system event stays invisible until it has co
   assert.match(withText, /data-msg-id="reply-1"/);
 });
 
+test('a streaming reply to a system event stays hidden while it only has reasoning', () => {
+  const event = systemEvent();
+  const html = renderToStaticMarkup(renderMessages([
+    event, assistantReply(event.id, { reasoning: '让我看看这条汇报要不要回复。' }),
+  ]));
+  assert.doesNotMatch(html, /data-msg-id="reply-1"/);
+  assert.doesNotMatch(html, /reasoning/);
+});
+
 test('a normal streaming placeholder still renders', () => {
   const user = userMessage([]);
   const html = renderToStaticMarkup(renderMessages([user, assistantReply(user.id)]));
