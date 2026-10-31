@@ -274,6 +274,7 @@ def search(db: sqlite3.Connection, student_id: str, query: str, limit: int, excl
             JOIN conversations c ON c.id = m.conversation_id
             WHERE message_fts MATCH ? AND c.student_id = ? AND m.status = 'complete'
               AND (? = '' OR c.id != ?)
+              AND json_extract(m.meta_json, '$.system_event') IS NULL
             LIMIT ?
         """, (match, student_id, exclude, exclude, limit)).fetchall()
     except sqlite3.OperationalError:

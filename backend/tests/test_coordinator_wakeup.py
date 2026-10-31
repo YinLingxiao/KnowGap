@@ -1,4 +1,4 @@
-"""Phase 2: a finished Thread reports back and wakes the coordinator, quietly by default."""
+"""Phase 2: a resolved or failed Thread wakes the coordinator, quietly by default."""
 
 import asyncio
 import json
@@ -8,6 +8,7 @@ import pytest
 import app.chat.service as service_module
 from app.agents.llm import ProviderError
 from app.chat.coordination import dispatch
+from app.chat.plan import PlanStore
 from app.chat.service import ChatService
 from app.chat.store import ChatStore
 from app.memory.store import Store
@@ -38,15 +39,13 @@ def setup(tmp_path, model, enabled=True, name="wake.sqlite3"):
 
 
 class WakeModel(FakeChat):
-    """Workers finish or fail; the coordinator either stays silent, speaks, plans or fails."""
+    """A worker that can fail, and a coordinator that stays silent, speaks, plans or fails."""
 
-    def __init__(self, *, needs_user=False, failed=False, wake="silent", block_worker=False):
+    def __init__(self, *, failed=False, wake="silent", block_worker=False):
         super().__init__()
-        self.needs_user = needs_user
         self.failed = failed
         self.wake_mode = wake
         self.block_worker = block_worker
-        self.summary = "已讲完链表插入。"
         self.wake_inputs: list[str] = []
         self.wake_tools: list[set] = []
         self.main_tools: list[set] = []
@@ -85,6 +84,19 @@ class WakeModel(FakeChat):
                     "arguments": json.dumps({"steps": [{"title": "再练一次删除", "status": "pending"}]},
                                             ensure_ascii=False),
                 }]
+            elif self.wake_mode == "plan_done":
+                yield "tool_calls", [{
+                    "id": "plan", "name": "update_plan",
+                    "arguments": json.dumps({"steps": [{"title": "练习", "status": "done"}]},
+                                            ensure_ascii=False),
+                }]
+            elif self.wake_mode == "propose":
+                yield "tool_calls", [{
+                    "id": "propose", "name": "propose_threads",
+                    "arguments": json.dumps({"proposals": [{
+                        "title": "下一步：链表删除", "task": "带学生练链表删除。", "reason": "刚讲完插入",
+                    }]}, ensure_ascii=False),
+                }]
             elif self.wake_mode == "dispatch":
                 yield "tool_calls", [{
                     "id": "escape", "name": "dispatch_thread",
@@ -116,7 +128,7 @@ class WakeModel(FakeChat):
         yield "text", "先看对象和类的区别。"
         yield "tool_calls", [{
             "id": "progress", "name": "report_progress",
-            "arguments": json.dumps({"summary": self.summary, "needs_user": self.needs_user}, ensure_ascii=False),
+            "arguments": json.dumps({"summary": "已讲完链表插入。", "needs_user": False}, ensure_ascii=False),
         }]
         yield "finish", "stop"
 
@@ -156,72 +168,67 @@ def event_messages(store, main):
             if message.system_event is not None]
 
 
-def delegated_turn(store, service, main, *, task="把链表讲完", title="链表", key="wake-main-0001",
-                   thread_id=None, summary=None, model=None):
-    if model is not None and summary is not None:
-        model.summary = summary
+def delegated_thread(store, service, main, *, task="把链表讲完", title="链表", key="wake-main-0001"):
     source = store.add_user_message(main, task, key)
-    thread_id, _message_id = dispatch(store, STUDENT, main, source, title, task, thread_id)
+    thread_id, _message_id = dispatch(store, STUDENT, main, source, title, task, None)
     service._start_delivery(STUDENT, thread_id)
     return source, thread_id
 
 
-def test_completed_delegated_turn_wakes_the_coordinator_and_stays_silent(tmp_path, monkeypatch):
+def resolve(store, service, thread_id, *, title="链表", summary="已经讲完插入与删除。", takeaways=("边界条件",)):
+    resolved = store.resolve_thread(thread_id, STUDENT, title, summary, list(takeaways))
+    service.thread_resolved(STUDENT, thread_id, resolved["title"], resolved["summary"],
+                            resolved["takeaways"], resolved["message_id"])
+    return resolved
+
+
+def test_resolved_thread_wakes_the_coordinator_and_stays_silent(tmp_path, monkeypatch):
     monkeypatch.setattr(service_module, "WAKE_QUIET_SECONDS", 0)
 
     async def scenario():
         model = WakeModel()
         store, service, sid, main = setup(tmp_path, model)
-        _source, _thread = delegated_turn(store, service, main)
+        _source, thread_id = delegated_thread(store, service, main)
+        await settle(service)
+        assert reports(store) == []          # 回合完成不写汇报
+        messages_before = [m.id for m in store.conversation(main, STUDENT).messages]
+
+        resolve(store, service, thread_id)
+        # resolve 本身会写一张小结（合法的可见消息）；这里只验证沉默的唤醒回合不再改排序
+        updated_before = store.conversation(main, STUDENT).updated_at
         await settle(service)
         rows = reports(store)
-        assert len(rows) == 1 and rows[0]["state"] == "delivered" and rows[0]["outcome"] == "completed"
+        assert len(rows) == 1 and rows[0]["state"] == "delivered" and rows[0]["outcome"] == "resolved"
         assert model.wake_inputs and model.wake_inputs[0].startswith(SYSTEM_PREFIX)
-        assert "已讲完链表插入。" in model.wake_inputs[0]
-        # 沉默：事件消息与空回复都删掉了，主线里只剩当初那条交办消息
-        messages = store.conversation(main, STUDENT).messages
-        assert [m.role for m in messages] == ["user"]
+        assert "已经讲完插入与删除。" in model.wake_inputs[0] and "边界条件" in model.wake_inputs[0]
+        # 沉默：事件消息与空回复都删掉了，主线消息数与会话排序都不变
+        assert [m.id for m in store.conversation(main, STUDENT).messages][:len(messages_before)] == messages_before
+        assert len(store.conversation(main, STUDENT).messages) == len(messages_before) + 1  # 小结
         assert event_messages(store, main) == []
+        assert store.conversation(main, STUDENT).updated_at == updated_before
         await service.close()
     asyncio.run(scenario())
 
 
-def test_direct_sidebar_turn_files_no_report(tmp_path, monkeypatch):
+def test_completed_waiting_direct_and_stopped_turns_file_no_report(tmp_path, monkeypatch):
     monkeypatch.setattr(service_module, "WAKE_QUIET_SECONDS", 0)
 
     async def scenario():
         model = WakeModel()
         store, service, sid, main = setup(tmp_path, model)
-        thread_id = store.create_thread(STUDENT, sid, title="侧栏直接聊", anchor_message_id=None,
-                                        client_request_id="sidebar-thread-1")
-        user = store.add_user_message(thread_id, "类是对象的模板", "sidebar-user-1")
-        _ = [e async for e in service.events(service.begin(STUDENT, thread_id, user, []))]
-        await settle(service)
-        assert reports(store) == []
-        assert model.wake_inputs == []
-        await service.close()
-    asyncio.run(scenario())
-
-
-def test_waiting_resolved_and_stopped_turns_file_no_report(tmp_path, monkeypatch):
-    monkeypatch.setattr(service_module, "WAKE_QUIET_SECONDS", 0)
-
-    async def scenario():
-        model = WakeModel(needs_user=True)
-        store, service, sid, main = setup(tmp_path, model, name="waiting.sqlite3")
-        delegated_turn(store, service, main, key="waiting-main-1")
-        await settle(service)
-        assert store.conversation(store.threads(sid, STUDENT)[0].id, STUDENT).execution_status == "waiting"
-        assert reports(store) == []
-
-        model.needs_user = False
-        _source, thread_id = delegated_turn(store, service, main, key="waiting-main-2", title="已解决支线")
-        store.resolve_thread(thread_id, STUDENT, "已解决支线", "小结", [])
+        _source, thread_id = delegated_thread(store, service, main, key="no-report-1")
         await settle(service)
         assert reports(store) == []
 
+        # 用户直接在支线里聊
+        direct = store.add_user_message(thread_id, "类是对象的模板", "no-report-direct")
+        _ = [e async for e in service.events(service.begin(STUDENT, thread_id, direct, []))]
+        await settle(service)
+        assert reports(store) == []
+
+        # 用户主动停止
         model.block_worker = True
-        _source, stopped = delegated_turn(store, service, main, key="waiting-main-3", title="被停止的支线")
+        _source, stopped = delegated_thread(store, service, main, key="no-report-2", title="被停止的支线")
         await asyncio.wait_for(model.worker_started.wait(), 3)
         assert service.stop(stopped)
         await settle(service)
@@ -230,34 +237,101 @@ def test_waiting_resolved_and_stopped_turns_file_no_report(tmp_path, monkeypatch
     asyncio.run(scenario())
 
 
-def test_reports_upsert_per_thread_and_deliver_as_one_batch(tmp_path, monkeypatch):
+def test_failed_delegated_turn_files_a_failure_report(tmp_path, monkeypatch):
+    monkeypatch.setattr(service_module, "WAKE_QUIET_SECONDS", 0)
+
+    async def scenario():
+        model = WakeModel(failed=True)
+        store, service, sid, main = setup(tmp_path, model)
+        _source, thread_id = delegated_thread(store, service, main)
+        await settle(service)
+        rows = reports(store)
+        assert len(rows) == 1 and rows[0]["outcome"] == "failed" and rows[0]["state"] == "delivered"
+        assert "上游模型不可用" in rows[0]["summary"]
+        assert model.wake_inputs and "执行失败" in model.wake_inputs[0]
+        await service.close()
+    asyncio.run(scenario())
+
+
+def test_direct_sidebar_failure_files_no_report(tmp_path, monkeypatch):
+    monkeypatch.setattr(service_module, "WAKE_QUIET_SECONDS", 0)
+
+    async def scenario():
+        model = WakeModel(failed=True)
+        store, service, sid, main = setup(tmp_path, model)
+        thread_id = store.create_thread(STUDENT, sid, title="侧栏直接聊", anchor_message_id=None,
+                                        client_request_id="direct-fail-thread")
+        user = store.add_user_message(thread_id, "讲一下", "direct-fail-user")
+        _ = [e async for e in service.events(service.begin(STUDENT, thread_id, user, []))]
+        await settle(service)
+        assert reports(store) == []
+        assert model.wake_inputs == []
+        await service.close()
+    asyncio.run(scenario())
+
+
+def test_duplicate_resolve_and_reopen_keep_reports_consistent(tmp_path, monkeypatch):
     monkeypatch.setattr(service_module, "WAKE_QUIET_SECONDS", 1000)
 
     async def scenario():
         model = WakeModel()
         store, service, sid, main = setup(tmp_path, model)
-        _source, first = delegated_turn(store, service, main, key="batch-main-1", title="链表", summary="第一版进展")
+        _source, thread_id = delegated_thread(store, service, main)
         await settle(service)
-        _source, second = delegated_turn(store, service, main, key="batch-main-2", title="递归")
-        await settle(service)
-        assert {row["thread_id"] for row in reports(store)} == {first, second}
-        assert len(reports(store)) == 2 and all(row["state"] == "pending" for row in reports(store))
+        resolve(store, service, thread_id)
+        assert len(reports(store)) == 1 and reports(store)[0]["state"] == "pending"
 
-        # 同一支线在投递前再次完成：只保留最新摘要，不新增一行
-        delegated_turn(store, service, main, key="batch-main-3", thread_id=first, summary="最新进展",
-                       model=model)
+        # 重复 resolve：同一来源只记一次
+        resolve(store, service, thread_id)
+        assert len(reports(store)) == 1
+
+        # 重新打开：待投递的「已解决」汇报作废
+        store.reopen_thread(thread_id, STUDENT)
+        service.thread_reopened(thread_id)
+        assert reports(store)[0]["state"] == "skipped"
+        await service.close()
+    asyncio.run(scenario())
+
+
+def test_later_report_replaces_the_pending_one(tmp_path, monkeypatch):
+    monkeypatch.setattr(service_module, "WAKE_QUIET_SECONDS", 1000)
+
+    async def scenario():
+        model = WakeModel(failed=True)
+        store, service, sid, main = setup(tmp_path, model)
+        _source, thread_id = delegated_thread(store, service, main)
         await settle(service)
+        assert reports(store)[0]["outcome"] == "failed"
+
+        # 同一支线随后被标记已解决：只保留最新一条待投递汇报
+        resolve(store, service, thread_id)
         rows = reports(store)
-        assert len(rows) == 2
-        latest = next(row for row in rows if row["thread_id"] == first)
-        assert latest["state"] == "pending" and latest["summary"] == "最新进展"
+        assert len(rows) == 1 and rows[0]["outcome"] == "resolved" and rows[0]["state"] == "pending"
+        assert "已经讲完插入与删除。" in rows[0]["summary"]
+        await service.close()
+    asyncio.run(scenario())
+
+
+def test_two_resolved_threads_deliver_as_one_batch(tmp_path, monkeypatch):
+    monkeypatch.setattr(service_module, "WAKE_QUIET_SECONDS", 1000)
+
+    async def scenario():
+        model = WakeModel()
+        store, service, sid, main = setup(tmp_path, model)
+        _source, first = delegated_thread(store, service, main, key="batch-1", title="链表")
+        await settle(service)
+        _source, second = delegated_thread(store, service, main, key="batch-2", title="递归")
+        await settle(service)
+        resolve(store, service, first, title="链表", summary="链表小结")
+        resolve(store, service, second, title="递归", summary="递归小结")
+        assert len(reports(store)) == 2 and all(row["state"] == "pending" for row in reports(store))
 
         monkeypatch.setattr(service_module, "WAKE_QUIET_SECONDS", 0)
         service._schedule_wake(STUDENT, main)
         await settle(service)
         assert len(model.wake_inputs) == 1
         assert model.wake_inputs[0].count("- 支线「") == 2
-        assert "最新进展" in model.wake_inputs[0] and "递归" in model.wake_inputs[0]
+        assert "链表小结" in model.wake_inputs[0] and "递归小结" in model.wake_inputs[0]
         await service.close()
     asyncio.run(scenario())
 
@@ -268,11 +342,14 @@ def test_no_delivery_while_the_main_line_is_generating(tmp_path, monkeypatch):
     async def scenario():
         model = WakeModel()
         store, service, sid, main = setup(tmp_path, model)
+        _source, thread_id = delegated_thread(store, service, main)
+        await settle(service)
         blocked = store.add_user_message(main, "主线阻塞", "main-block-1")
         service.begin(STUDENT, main, blocked, [])
         await asyncio.sleep(0.05)
         assert service.is_generating(main)
-        delegated_turn(store, service, main, key="main-block-worker")
+
+        resolve(store, service, thread_id)
         await wait_until(lambda: store.pending_thread_reports(main))
         await asyncio.sleep(0.05)
         assert model.wake_inputs == []
@@ -291,20 +368,24 @@ def test_visible_wake_reply_is_kept_and_does_not_touch_learning_state(tmp_path, 
     async def scenario():
         model = WakeModel(wake="text")
         store, service, sid, main = setup(tmp_path, model)
-        title_before = store.conversation(main, STUDENT).title
-        delegated_turn(store, service, main)
+        _source, thread_id = delegated_thread(store, service, main)
         await settle(service)
         analysis_before = len(model.analysis_calls)
+        title_before = store.conversation(main, STUDENT).title
+        resolve(store, service, thread_id)
+        await settle(service)
+
         messages = store.conversation(main, STUDENT).messages
-        assert [m.role for m in messages] == ["user", "user", "assistant"]
-        event = messages[1]
-        assert event.system_event is not None and event.system_event.type == "thread_report"
-        assert messages[2].content == "刚才那个任务没成功，我可以换个例子再试一次。"
+        event = next(m for m in messages if m.system_event is not None)
+        assert event.system_event.type == "thread_report"
+        reply = next(m for m in messages if m.role == "assistant" and m.reply_to == event.id)
+        assert reply.content == "刚才那个任务没成功，我可以换个例子再试一次。"
         assert reports(store)[0]["state"] == "delivered"
-        # 事件回合不写学情、不计笔记轮次、不改标题
+        # 事件回合不写学情、不计笔记轮次、不改标题、不产生新汇报或支线
         assert store.message_meta(event.id).get("note_counted") is None
         assert len(model.analysis_calls) == analysis_before
         assert store.conversation(main, STUDENT).title == title_before
+        assert len(reports(store)) == 1 and len(store.threads(sid, STUDENT)) == 1
 
         # 事件消息留在历史里，后续真实回合的模型输入带固定前缀
         followup = store.add_user_message(main, "继续吧", "visible-followup-1")
@@ -312,9 +393,6 @@ def test_visible_wake_reply_is_kept_and_does_not_touch_learning_state(tmp_path, 
         await settle(service)
         assert any(item.get("role") == "user" and item.get("content", "").startswith(SYSTEM_PREFIX)
                    for item in model.calls[-1])
-        # 唤醒回合没有产生新的汇报或支线
-        assert len(reports(store)) == 1
-        assert len(store.threads(sid, STUDENT)) == 1
         await service.close()
     asyncio.run(scenario())
 
@@ -325,37 +403,39 @@ def test_wake_turn_tools_are_restricted_and_stay_silent_stays_out_of_other_roles
     async def scenario():
         model = WakeModel()
         store, service, sid, main = setup(tmp_path, model)
-        # 普通主线回合：拿到的工具里没有 stay_silent
         hello = store.add_user_message(main, "你好", "tools-main-1")
         _ = [e async for e in service.events(service.begin(STUDENT, main, hello, []))]
         await settle(service)
-        delegated_turn(store, service, main, key="tools-main-2")
+        _source, thread_id = delegated_thread(store, service, main, key="tools-main-2")
         await settle(service)
+        resolve(store, service, thread_id)
+        await settle(service)
+
         wake = model.wake_tools[0]
         assert {"propose_threads", "update_plan", "session_search", "stay_silent"} <= wake
         assert not wake & {"dispatch_thread", "memory", "write", "edit", "bash",
                            "agenda_add", "create_document", "edit_document", "read_document"}
-        assert "stay_silent" not in model.main_tools[0]      # 普通主线
+        assert "stay_silent" not in model.main_tools[0]
 
         chat = store.create_conversation(STUDENT, title=None, problem=None, client_request_id=None)
         chat_user = store.add_user_message(chat, "你好", "chat-user-1")
         _ = [e async for e in service.events(service.begin(STUDENT, chat, chat_user, []))]
         await settle(service)
-        assert "stay_silent" not in model.chat_tools[-1]      # 普通会话
+        assert "stay_silent" not in model.chat_tools[-1]
 
-        thread_id = store.create_thread(STUDENT, sid, title="支线", anchor_message_id=None,
-                                        client_request_id="tool-thread-1")
-        thread_user = store.add_user_message(thread_id, "讲一下", "tool-thread-user")
-        _ = [e async for e in service.events(service.begin(STUDENT, thread_id, thread_user, []))]
+        side_thread = store.create_thread(STUDENT, sid, title="支线", anchor_message_id=None,
+                                          client_request_id="tool-thread-1")
+        thread_user = store.add_user_message(side_thread, "讲一下", "tool-thread-user")
+        _ = [e async for e in service.events(service.begin(STUDENT, side_thread, thread_user, []))]
         await settle(service)
-        assert "stay_silent" not in model.worker_tools[-1]    # 支线
+        assert "stay_silent" not in model.worker_tools[-1]
 
         # 硬调用 dispatch_thread 也会被拒绝，不产生新支线
         before = len(store.threads(sid, STUDENT))
         model.wake_mode = "dispatch"
-        delegated_turn(store, service, main, key="escape-main-1", title="另一个任务")
+        resolve(store, service, side_thread)
         await settle(service)
-        assert len(store.threads(sid, STUDENT)) == before + 1  # 只多了这次交办本身
+        assert len(store.threads(sid, STUDENT)) == before
         await service.close()
     asyncio.run(scenario())
 
@@ -366,7 +446,9 @@ def test_preempt_lets_the_learner_win_and_redelivers_later(tmp_path, monkeypatch
     async def scenario():
         model = WakeModel(wake="blocked")
         store, service, sid, main = setup(tmp_path, model)
-        delegated_turn(store, service, main)
+        _source, thread_id = delegated_thread(store, service, main)
+        await settle(service)
+        resolve(store, service, thread_id)
         await wait_until(lambda: model.wake_inputs)
         assert event_messages(store, main)
 
@@ -375,12 +457,10 @@ def test_preempt_lets_the_learner_win_and_redelivers_later(tmp_path, monkeypatch
         preempt = asyncio.create_task(service.preempt_system_turn(main))
         await wait_until(lambda: not service.is_generating(main))
         assert await preempt is True
-        assert not service.is_generating(main)
         rows = reports(store)
         assert rows[0]["state"] == "pending" and rows[0]["attempts"] == 0
         assert event_messages(store, main) == []
 
-        # 用户消息可以立即开始，不需要再等唤醒回合
         model.wake_mode = "silent"
         monkeypatch.setattr(service_module, "WAKE_QUIET_SECONDS", 0)
         service._schedule_wake(STUDENT, main)
@@ -398,7 +478,9 @@ def test_failed_wake_backs_off_and_then_gives_up(tmp_path, monkeypatch):
     async def scenario():
         model = WakeModel(wake="fail")
         store, service, sid, main = setup(tmp_path, model)
-        delegated_turn(store, service, main)
+        _source, thread_id = delegated_thread(store, service, main)
+        await settle(service)
+        resolve(store, service, thread_id)
         await settle(service)
         rows = reports(store)
         assert rows[0]["state"] == "pending" and rows[0]["attempts"] == 1
@@ -421,7 +503,9 @@ def test_daily_cap_skips_and_the_switch_disables_wake(tmp_path, monkeypatch):
         monkeypatch.setattr(service_module, "WAKE_DAILY_CAP", 0)
         model = WakeModel()
         store, service, sid, main = setup(tmp_path, model, name="cap.sqlite3")
-        delegated_turn(store, service, main, key="cap-main-1")
+        _source, thread_id = delegated_thread(store, service, main, key="cap-main-1")
+        await settle(service)
+        resolve(store, service, thread_id)
         await settle(service)
         assert reports(store)[0]["state"] == "skipped"
         assert model.wake_inputs == []
@@ -430,7 +514,9 @@ def test_daily_cap_skips_and_the_switch_disables_wake(tmp_path, monkeypatch):
         # 开关关闭：连汇报都不写，也不投递
         model = WakeModel()
         store, service, sid, main = setup(tmp_path, model, enabled=False, name="off.sqlite3")
-        delegated_turn(store, service, main, key="off-main-1")
+        _source, thread_id = delegated_thread(store, service, main, key="off-main-1")
+        await settle(service)
+        resolve(store, service, thread_id)
         await settle(service)
         assert reports(store) == []
         assert model.wake_inputs == []
@@ -444,17 +530,17 @@ def test_recover_retries_pending_reports_and_rolls_back_interrupted_wakes(tmp_pa
     async def scenario():
         model = WakeModel()
         store, service, sid, main = setup(tmp_path, model)
-        _source, thread_id = delegated_turn(store, service, main, key="recover-main-1")
+        _source, thread_id = delegated_thread(store, service, main)
         await settle(service)
+        resolve(store, service, thread_id)
         pending = reports(store)
         assert len(pending) == 1 and pending[0]["state"] == "pending"
         report_id = pending[0]["id"]
-        reply_id = pending[0]["reply_id"]
 
         # 模拟：已投递但唤醒回合中断（事件消息 + streaming 回复）
         with store.connection() as db:
             event_id = store._insert(
-                db, main, role="user", kind="text", content=f"{SYSTEM_PREFIX}\n- 支线「链表」：已完成",
+                db, main, role="user", kind="text", content=f"{SYSTEM_PREFIX}\n- 支线「链表」：已解决",
                 status="complete", meta={"system_event": {"type": "thread_report", "report_ids": [report_id],
                                                           "thread_ids": [thread_id]}},
             )
@@ -462,7 +548,6 @@ def test_recover_retries_pending_reports_and_rolls_back_interrupted_wakes(tmp_pa
                           reply_to=event_id)
             db.execute("UPDATE thread_reports SET state = 'delivered', delivered_event_id = ? WHERE id = ?",
                        (event_id, report_id))
-        assert report_id and reply_id
 
         service.recover()
         rows = reports(store)
@@ -483,3 +568,95 @@ def test_recover_retries_pending_reports_and_rolls_back_interrupted_wakes(tmp_pa
         assert len(model.wake_inputs) == 1
         await service.close()
     asyncio.run(scenario())
+
+
+def test_event_wake_cannot_complete_a_step_waiting_for_the_learner(tmp_path, monkeypatch):
+    monkeypatch.setattr(service_module, "WAKE_QUIET_SECONDS", 0)
+
+    async def scenario():
+        model = WakeModel(wake="plan_done")
+        store, service, sid, main = setup(tmp_path, model)
+        _source, thread_id = delegated_thread(store, service, main)
+        await settle(service)
+        plans = PlanStore(store)
+        source = store.add_user_message(main, "先做练习", "plan-waiting-1")
+        plans.update(main, STUDENT, [{"title": "练习", "status": "awaiting_learner"}],
+                     message_id=None, user_message_id=source)
+        resolve(store, service, thread_id)
+        await settle(service)
+        plan = plans.read(main, STUDENT)
+        assert plan["steps"][0]["status"] == "awaiting_learner"
+        await service.close()
+    asyncio.run(scenario())
+
+
+def test_event_wake_does_not_swallow_the_learners_plan_events(tmp_path, monkeypatch):
+    monkeypatch.setattr(service_module, "WAKE_QUIET_SECONDS", 0)
+
+    async def scenario():
+        model = WakeModel()
+        store, service, sid, main = setup(tmp_path, model)
+        _source, thread_id = delegated_thread(store, service, main)
+        await settle(service)
+        PlanStore(store).user_action(main, STUDENT, "add", title="学生新增的步骤")
+
+        def pending_events():
+            with store.connection() as db:
+                return json.loads(db.execute(
+                    "SELECT plan_user_events FROM conversation_plans WHERE conversation_id = ?", (main,),
+                ).fetchone()[0])
+
+        assert any("学生新增的步骤" in item for item in pending_events())
+        resolve(store, service, thread_id)
+        await settle(service)
+        assert any("学生新增的步骤" in item for item in pending_events())
+        await service.close()
+    asyncio.run(scenario())
+
+
+def test_wake_proposals_never_leak_the_hidden_event_into_the_thread(tmp_path, monkeypatch):
+    monkeypatch.setattr(service_module, "WAKE_QUIET_SECONDS", 0)
+
+    async def scenario():
+        model = WakeModel(wake="propose")
+        store, service, sid, main = setup(tmp_path, model)
+        _source, thread_id = delegated_thread(store, service, main)
+        await settle(service)
+        resolved = resolve(store, service, thread_id)
+        await settle(service)
+
+        reply = next(m for m in store.conversation(main, STUDENT).messages
+                     if m.role == "assistant" and m.thread_proposals)
+        proposal = reply.thread_proposals[0]
+        new_thread = service.confirm_proposal(STUDENT, main, reply.id, proposal.id)
+        first = store.conversation(new_thread, STUDENT).messages[0]
+        assert first.content == "带学生练链表删除。"
+        assert SYSTEM_PREFIX not in first.content
+        assert resolved["message_id"]
+        await service.close()
+    asyncio.run(scenario())
+
+
+def test_http_resolve_endpoint_files_the_report(tmp_path, monkeypatch):
+    monkeypatch.setattr(service_module, "WAKE_QUIET_SECONDS", 1000)
+    from fastapi.testclient import TestClient
+    from app.main import create_app
+    from tests.test_acceptance_support import isolated_settings
+
+    model = WakeModel()
+    with TestClient(create_app(isolated_settings(tmp_path), chat_model=model)) as client:
+        space = client.post("/api/subjects", json={"name": "汇报接口"}).json()
+        main = space["main_conversation_id"]
+        service = client.app.state.chat_service
+        store = service.store
+        source = store.add_user_message(main, "把链表讲完", "http-resolve-1")
+        thread_id, _message_id = dispatch(store, STUDENT, main, source, "链表", "把链表讲完", None)
+        response = client.post(f"/api/conversations/{thread_id}/resolve",
+                               json={"title": "链表", "summary": "讲完了。", "takeaways": []})
+        assert response.status_code == 200, response.text
+        rows = reports(store)
+        assert len(rows) == 1 and rows[0]["outcome"] == "resolved" and rows[0]["state"] == "pending"
+        # 再次提交同一份小结：不重复写
+        assert client.post(f"/api/conversations/{thread_id}/resolve",
+                           json={"title": "链表", "summary": "讲完了。", "takeaways": []}).status_code == 200
+        assert len(reports(store)) == 1

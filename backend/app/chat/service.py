@@ -28,7 +28,9 @@ from app.chat.agent import (
     compress_history_messages, deterministic_compress_fallback, dialogue, resolution_messages,
     review_messages, validate_analysis, validate_resolution,
 )
-from app.chat.store import ChatStore, INTERRUPTED, PROPOSAL_TASK_PREFIX
+from app.chat.store import (
+    ChatStore, INTERRUPTED, PROPOSAL_TASK_PREFIX, is_system_event, is_system_event_row,
+)
 from app.chat.attachments import attachment_query, prepare_attachment_history
 from app.chat.plan import PlanStore, brief
 from app.chat.checkpoints import MAX_TOOL_ROUNDS, resume_state
@@ -63,12 +65,6 @@ WAKE_MAX_BATCH = 5
 WAKE_MAX_ATTEMPTS = 3
 WAKE_DAILY_CAP = 20
 WAKE_RETRY_SECONDS = 60
-
-
-def is_system_event(meta: dict) -> bool:
-    """The one marker that separates a hidden system event from a learner's own message."""
-    event = meta.get("system_event") if isinstance(meta, dict) else None
-    return isinstance(event, dict) and bool(event.get("type"))
 
 
 def flatten_tool_history(messages: list[dict]) -> list[dict]:
@@ -203,13 +199,14 @@ class ChatService:
         for row in queued:
             self._start_delivery(row["student_id"], row["id"])
         # A wake turn that died with the process is rolled back before pending reports are retried.
-        for event in self.store.system_events():
-            if event["reply_status"] == "complete":
+        # The event message is already gone when a silent turn cleaned up, so only events that still
+        # exist and have no complete reply are undone.
+        for event in self.store.delivered_events():
+            if event["event_status"] is None or event["reply_status"] == "complete":
                 continue
-            event_meta = self.store.message_meta(event["event_id"])
-            report_ids = (event_meta.get("system_event") or {}).get("report_ids") or []
             try:
-                self._rollback_wake(event["event_id"], event["reply_id"], report_ids)
+                self.store.rollback_wake(event["event_id"], event["reply_id"], preempted=False,
+                                         base_delay=WAKE_RETRY_SECONDS, max_attempts=WAKE_MAX_ATTEMPTS)
             except Exception:
                 logger.exception("Could not roll back an interrupted coordinator wake turn")
         for main_id in self.store.pending_report_mains():
@@ -418,9 +415,11 @@ class ChatService:
             if not self.store.conversation(proposal["thread_id"], student_id):
                 raise ValueError("这个建议对应的支线已删除，请重新规划。")
             return proposal["thread_id"]
+        # 唤醒回合提出的建议：来源是隐藏事件，不能把它抄成支线的第一句「学生发言」
+        content = proposal["task"] if is_system_event(self.store.message_meta(message.reply_to)) else None
         thread_id, _ = dispatch(
             self.store, student_id, conversation_id, message.reply_to, proposal["title"], proposal["task"], None,
-            task_key=f"{PROPOSAL_TASK_PREFIX}{proposal_id}",
+            task_key=f"{PROPOSAL_TASK_PREFIX}{proposal_id}", content=content,
         )
         proposal["thread_id"] = thread_id
         self.store.merge_meta(message_id, {"thread_proposals": proposals})
@@ -439,36 +438,43 @@ class ChatService:
 
     # ------------------------------------------------------- coordinator wake-up
 
-    def _report_wake(self, student_id: str, generation: Generation, role: str) -> None:
-        """Store a report when a delegated Thread turn ends without needing the learner.
+    def thread_resolved(self, student_id: str, conversation_id: str, title: str, summary: str,
+                        takeaways: list[str], message_id: str) -> None:
+        """时机一：支线被标记已解决。重复 resolve 由 source_message_id 的唯一约束挡住。"""
+        if not self._agent_flag("coordinator_wakeup"):
+            return
+        main_id = self._thread_parent_id(student_id, conversation_id)
+        if not main_id:
+            return
+        text = summary if not takeaways else "\n".join([summary, *[f"- {item}" for item in takeaways]])
+        self.store.record_thread_report(main_id, conversation_id, message_id, "resolved", text)
+        self._schedule_wake(student_id, main_id)
 
-        Failures are logged only: releasing the slot and starting the next queued Thread must
-        never depend on this bookkeeping.
+    def thread_reopened(self, conversation_id: str) -> None:
+        """时机一的反向：重新打开支线后，还没投递的「已解决」汇报作废。"""
+        self.store.skip_pending_resolved(conversation_id)
+
+    def _report_wake(self, student_id: str, generation: Generation, role: str) -> None:
+        """时机二：主线交办的支线回合失败。完成、等待作答、停止、用户直接聊都不写。
+
+        失败只记日志：释放槽位与启动排队任务不能依赖这次记账。
         """
         if role != "thread" or not generation.parent_id:
             return
         if not self._agent_flag("coordinator_wakeup"):
             return
         if not self.store.message_meta(generation.user_message_id).get("delegated_task"):
-            return  # 用户本人在支线里直接聊的回合，不需要转告协调者
-        result = self.store.message(generation.assistant_message_id, student_id)
-        if result is None:
             return
-        meta = self.store.message_meta(generation.assistant_message_id)
-        if result.status == "complete":
-            if meta.get("needs_user"):
-                return  # 等待你：靠侧栏分组与红点感知
-            outcome = "completed"
-            summary = meta.get("progress_summary") or f"本轮回复节选：{result.content[:500]}"
-        elif result.status == "failed":
-            outcome = "failed"
-            summary = result.error or f"本轮回复节选：{result.content[:500]}"
-        else:
-            return  # 用户主动停止的回合不汇报
+        result = self.store.message(generation.assistant_message_id, student_id)
+        if result is None or result.status != "failed":
+            return
         if self.store.thread_resolved(generation.conversation_id):
             return
+        meta = self.store.message_meta(generation.assistant_message_id)
+        # 摘要顺序：错误 → 进展摘要 → 正文节选
+        summary = result.error or meta.get("progress_summary") or f"本轮回复节选：{result.content[:500]}"
         self.store.record_thread_report(generation.parent_id, generation.conversation_id,
-                                        generation.assistant_message_id, outcome, summary)
+                                        generation.assistant_message_id, "failed", summary)
         self._schedule_wake(student_id, generation.parent_id)
 
     def _schedule_wake(self, student_id: str, main_id: str, delay: float | None = None) -> None:
@@ -511,15 +517,20 @@ class ChatService:
                                 if earliest else None)
             return
         event_id, _rows = delivered
-        # 与派发支线同构：插入一条隐藏的用户消息，再由服务端发起协调者回合
-        self.begin(student_id, main_id, event_id, [], detached=True)
+        try:
+            # 与派发支线同构：插入一条隐藏的用户消息，再由服务端发起协调者回合
+            self.begin(student_id, main_id, event_id, [], detached=True)
+        except Exception:
+            logger.exception("Could not start the coordinator wake turn")
+            self.store.rollback_wake(event_id, None, preempted=False, base_delay=WAKE_RETRY_SECONDS,
+                                     max_attempts=WAKE_MAX_ATTEMPTS)
 
     def _system_event_payload(self, rows) -> tuple[str, dict]:
         lines = ["【系统事件 · 支线汇报】以下内容不是学习者说的话。"]
         for row in rows[:WAKE_MAX_BATCH]:
-            label = "已完成" if row["outcome"] == "completed" else "执行失败"
+            label = "已解决" if row["outcome"] == "resolved" else "执行失败"
             lines.append(f"- 支线「{row['thread_title']}」（id: {row['thread_id']}）：{label}")
-            lines.append(f"  摘要：{row['summary']}")
+            lines.append(f"  小结或错误：{row['summary']}")
         meta = {"system_event": {
             "type": "thread_report",
             "report_ids": [row["id"] for row in rows],
@@ -527,22 +538,12 @@ class ChatService:
         }}
         return "\n".join(lines), meta
 
-    def _rollback_wake(self, event_id: str, reply_id: str | None, report_ids: list[str],
-                       *, preempted: bool = False) -> None:
-        # Even with no report ids to restore, the hidden event and its reply must not stay behind.
-        if report_ids:
-            if preempted:
-                self.store.requeue_reports(report_ids)
-            else:
-                self.store.rollback_reports(report_ids, WAKE_RETRY_SECONDS, WAKE_MAX_ATTEMPTS)
-        self.store.discard_system_event(event_id, reply_id)
-
     def _settle_wake(self, generation: Generation) -> None:
-        event = self.store.message_meta(generation.user_message_id).get("system_event") or {}
-        report_ids = [item for item in event.get("report_ids") or [] if isinstance(item, str)]
+        """失败、停止或抢占的唤醒回合：一个事务里恢复汇报并删除回复与事件。"""
         try:
-            self._rollback_wake(generation.user_message_id, generation.assistant_message_id, report_ids,
-                                preempted=generation.preempted)
+            self.store.rollback_wake(generation.user_message_id, generation.assistant_message_id,
+                                     preempted=generation.preempted, base_delay=WAKE_RETRY_SECONDS,
+                                     max_attempts=WAKE_MAX_ATTEMPTS)
         except Exception:
             logger.exception("Could not settle the coordinator wake turn")
 
@@ -778,7 +779,8 @@ class ChatService:
         tool_messages: list[dict] = []
         last_flush = 0.0
         role_name: str | None = None
-        event_turn = False
+        # 必须最早确定：模型不可用或读历史失败时，finally 也要能回滚唤醒回合
+        event_turn = is_system_event(self.store.message_meta(generation.user_message_id))
         finished = False
         try:
             await asyncio.sleep(0)  # let the queued "start" event reach the client before any blocking work
@@ -828,8 +830,6 @@ class ChatService:
             subject_id = subject.id if subject else None
             role = self.store.role_context(generation.conversation_id)
             user_meta = self.store.message_meta(generation.user_message_id)
-            # 唤醒回合：隐藏事件不是学习者的问题，不检索记忆与讲义
-            event_turn = is_system_event(user_meta)
             role_name = role["role"]
             exercise = None if event_turn else active_exercise(history)
             memories = [] if event_turn else self.store.relevant_memories(
@@ -854,8 +854,9 @@ class ChatService:
             compressed_summary, compressed_seq = self.store.get_context_summary(generation.conversation_id)
             plans = PlanStore(self.store)
             plan_at_start = plans.read(generation.conversation_id, student_id)
-            learning_plan, plan_user_events = (plans.context(generation.conversation_id, student_id)
-                                                if not generation.checkpoint else (None, []))
+            learning_plan, plan_user_events = (
+                plans.context(generation.conversation_id, student_id, consume=not event_turn)
+                if not generation.checkpoint else (None, []))
             messages = chat_messages(
                 history, memories, exercise, sources, subject, role, snapshot, thinking_depth, conv_title,
                 custom_skills=custom_skills, compressed_summary=compressed_summary,
@@ -1023,7 +1024,9 @@ class ChatService:
                 text, tool_log, allowed_misconceptions={m.id for m, _ in memories if m.kind == "misconception"},
                 drill_active=drill_active and wants_problems(user_text),
                 # history 含本轮用户消息；只有这一条时，「你之前提到」之类的说法一定是编的
-                first_turn=sum(1 for row in history if row["role"] == "user") <= 1,
+                # 隐藏事件不是学习者发言，不参与这个计数
+                first_turn=sum(1 for row in history
+                               if row["role"] == "user" and not is_system_event_row(row)) <= 1,
             )
             if any(quiz_report.values()):  # 有任何核对、替换或清理动作就记一笔
                 # warning 级别：uvicorn 默认不输出应用自己的 info 日志
@@ -1063,10 +1066,12 @@ class ChatService:
                 if count >= 10:
                     self.store.bump_note_turns(student_id, True, generation.conversation_id)
                     # Ten counted turns from this conversation, including long messages in full.
-                    user_rows = [row for row in history if row["role"] == "user" and
-                                 self.store.message_meta(row["id"]).get("note_counted")]
+                    user_rows = [row for row in history if row["role"] == "user"
+                                 and not is_system_event_row(row)
+                                 and self.store.message_meta(row["id"]).get("note_counted")]
                     start_seq = user_rows[-10]["seq"]
-                    turns = dialogue([row for row in history if row["seq"] >= start_seq], bounded=False)
+                    turns = dialogue([row for row in history if row["seq"] >= start_seq
+                                      and not is_system_event_row(row)], bounded=False)
                     turns.append({"role": "assistant", "content": text})
                     task = asyncio.create_task(self._review(student_id, self._background_model(model), turns,
                                                             generation.conversation_id, assistant_id))
@@ -1208,7 +1213,7 @@ class ChatService:
             )
             changes += [{"action": change.action, "memory_id": change.memory.id} for change in recorded]
         self.store.merge_meta(user_id, {"analyzed": True, "attempt": result["attempt"], "memory_changes": changes})
-        user_turns = sum(1 for row in history if row["role"] == "user")
+        user_turns = sum(1 for row in history if row["role"] == "user" and not is_system_event_row(row))
         prompt = self._record_profile(
             student_id, result.get("profile_ops") or [], generation.assistant_message_id,
         ) if user_turns <= 3 else None

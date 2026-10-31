@@ -13,7 +13,7 @@ from app.chat.schemas import (
 )
 from app.models.model_library_schemas import ConversationModelUpdate
 from app.chat.service import ChatService
-from app.chat.store import UNSET, ChatStore
+from app.chat.store import UNSET, ChatStore, is_system_event_row
 from app.auth.deps import current_student
 from app.services.problems import PROBLEMS
 
@@ -129,6 +129,7 @@ def chat_router(store: ChatStore, service: ChatService) -> APIRouter:
         history = [
             row for row in store.history(conversation_id)
             if row["status"] == "complete" and (row["content"] or "").strip()
+            and not is_system_event_row(row)
         ]
         if not history or history[-1]["role"] != "assistant":
             return {"suggestion": "", "message_id": None}
@@ -516,13 +517,19 @@ def chat_router(store: ChatStore, service: ChatService) -> APIRouter:
             raise HTTPException(409 if detail.startswith("只有") else 502, detail) from None
 
     @router.post("/conversations/{conversation_id}/resolve", response_model=Resolution)
-    def resolve_thread(conversation_id: str, body: ResolveThread):
+    async def resolve_thread(conversation_id: str, body: ResolveThread):
         try:
-            return store.resolve_thread(conversation_id, current_student(), body.title, body.summary, body.takeaways)
+            resolved = store.resolve_thread(conversation_id, current_student(), body.title, body.summary,
+                                            body.takeaways)
         except LookupError as exc:
             raise HTTPException(404, str(exc)) from None
         except ValueError as exc:
             raise HTTPException(409, str(exc)) from None
+        # 支线被标记已解决是协调者汇报的时机之一；异步路由保证调度落在事件循环线程里
+        if resolved.get("message_id"):
+            service.thread_resolved(current_student(), conversation_id, resolved["title"], resolved["summary"],
+                                    resolved["takeaways"], resolved["message_id"])
+        return resolved
 
     @router.post("/conversations/{conversation_id}/reopen", response_model=Conversation)
     def reopen_thread(conversation_id: str):
@@ -532,6 +539,7 @@ def chat_router(store: ChatStore, service: ChatService) -> APIRouter:
             raise HTTPException(409, str(exc)) from None
         if not found:
             raise HTTPException(404, "会话不存在或已删除。")
+        service.thread_reopened(conversation_id)
         return require(conversation_id)
 
     @router.post("/conversations/{conversation_id}/exercises", response_model=Conversation, status_code=201)

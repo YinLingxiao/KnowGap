@@ -109,6 +109,20 @@ def _system_event(raw) -> SystemEvent | None:
     )
 
 
+def is_system_event(meta: dict) -> bool:
+    """The one marker that separates a hidden system event from a learner's own message."""
+    event = meta.get("system_event") if isinstance(meta, dict) else None
+    return isinstance(event, dict) and bool(event.get("type"))
+
+
+def is_system_event_row(row: sqlite3.Row) -> bool:
+    """Same check for a stored message row; use it wherever user rows are turned into model input."""
+    try:
+        return is_system_event(json.loads(row["meta_json"]))
+    except (TypeError, ValueError, KeyError, IndexError):
+        return False
+
+
 class ChatStore:
     def __init__(self, store: Store):
         self.store = store
@@ -202,13 +216,14 @@ class ChatStore:
                     id TEXT PRIMARY KEY,
                     main_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
                     thread_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
-                    reply_id TEXT NOT NULL REFERENCES conversation_messages(id) ON DELETE CASCADE,
-                    outcome TEXT NOT NULL CHECK(outcome IN ('completed', 'failed')),
+                    source_message_id TEXT NOT NULL REFERENCES conversation_messages(id) ON DELETE CASCADE,
+                    outcome TEXT NOT NULL CHECK(outcome IN ('resolved', 'failed')),
                     summary TEXT NOT NULL,
                     state TEXT NOT NULL DEFAULT 'pending' CHECK(state IN ('pending', 'delivered', 'skipped')),
                     delivered_event_id TEXT, delivered_at TEXT,
                     attempts INTEGER NOT NULL DEFAULT 0, not_before TEXT,
-                    created_at TEXT NOT NULL
+                    created_at TEXT NOT NULL,
+                    UNIQUE(source_message_id)
                 );
                 CREATE UNIQUE INDEX IF NOT EXISTS idx_thread_reports_pending
                     ON thread_reports(thread_id) WHERE state = 'pending';
@@ -398,10 +413,12 @@ class ChatStore:
         stats = db.execute("""
             SELECT COUNT(*) AS n,
               (SELECT content FROM conversation_messages WHERE conversation_id = ? AND kind = 'text'
-                 AND content != '' ORDER BY seq DESC LIMIT 1) AS preview,
+                 AND content != '' AND json_extract(meta_json, '$.system_event') IS NULL
+                 ORDER BY seq DESC LIMIT 1) AS preview,
               (SELECT meta_json FROM conversation_messages WHERE conversation_id = ? AND kind = 'exercise'
                  ORDER BY seq DESC LIMIT 1) AS exercise
             FROM conversation_messages WHERE conversation_id = ?
+              AND json_extract(meta_json, '$.system_event') IS NULL
         """, (row["id"], row["id"], row["id"])).fetchone()
         preview = " ".join((stats["preview"] or "").split())
         return {
@@ -788,7 +805,9 @@ class ChatStore:
             if row["parent_id"]:
                 rows = db.execute(
                     "SELECT role, content FROM conversation_messages WHERE conversation_id = ? "
-                    "AND status != 'failed' AND TRIM(content) != '' ORDER BY seq DESC LIMIT 6",
+                    "AND status != 'failed' AND TRIM(content) != '' "
+                    "AND json_extract(meta_json, '$.system_event') IS NULL "
+                    "ORDER BY seq DESC LIMIT 6",
                     (row["parent_id"],),
                 ).fetchall()
                 recent = [{"role": item["role"], "excerpt": clip(item["content"], 240)} for item in reversed(rows)]
@@ -836,20 +855,25 @@ class ChatStore:
 
     # ---------------------------------------------------------- thread reports
 
-    def record_thread_report(self, main_id: str, thread_id: str, reply_id: str, outcome: str, summary: str,
-                             not_before: str | None = None) -> str:
-        """One pending report per Thread: another completion before delivery replaces the older summary."""
+    def record_thread_report(self, main_id: str, thread_id: str, source_message_id: str, outcome: str,
+                             summary: str, not_before: str | None = None) -> str | None:
+        """One pending report per Thread, and one report per source message.
+
+        A newer report replaces the one still waiting to be delivered; repeating the same
+        source (a retried resolve) is a no-op, which keeps the endpoint idempotent.
+        """
         report_id = new_id("report")
         with self.connection() as db:
             db.execute("BEGIN IMMEDIATE")
             db.execute("DELETE FROM thread_reports WHERE thread_id = ? AND state = 'pending'", (thread_id,))
-            db.execute(
-                "INSERT INTO thread_reports(id, main_id, thread_id, reply_id, outcome, summary, state, "
+            cursor = db.execute(
+                "INSERT INTO thread_reports(id, main_id, thread_id, source_message_id, outcome, summary, state, "
                 "delivered_event_id, delivered_at, attempts, not_before, created_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, 'pending', NULL, NULL, 0, ?, ?)",
-                (report_id, main_id, thread_id, reply_id, outcome, clip(summary, 600), not_before, now()),
+                "VALUES (?, ?, ?, ?, ?, ?, 'pending', NULL, NULL, 0, ?, ?) "
+                "ON CONFLICT(source_message_id) DO NOTHING",
+                (report_id, main_id, thread_id, source_message_id, outcome, clip(summary, 600), not_before, now()),
             )
-        return report_id
+            return report_id if cursor.rowcount else None
 
     def pending_thread_reports(self, main_id: str | None = None) -> list[dict]:
         with self.connection() as db:
@@ -902,38 +926,55 @@ class ChatStore:
                 "WHERE main_id = ? AND state = 'delivered' AND delivered_at >= ?", (main_id, since),
             ).fetchone()[0]
 
-    def requeue_reports(self, report_ids: list[str]) -> None:
-        """User priority: the wake turn was preempted, so deliver the same reports again (no attempt cost)."""
-        if not report_ids:
-            return
-        with self.connection() as db:
-            db.execute("BEGIN IMMEDIATE")
-            db.executemany(
-                "UPDATE thread_reports SET state = 'pending', delivered_event_id = NULL, delivered_at = NULL, "
-                "not_before = NULL WHERE id = ? AND state = 'delivered'", [(item,) for item in report_ids],
-            )
+    def rollback_wake(self, event_id: str, reply_id: str | None, *, preempted: bool,
+                      base_delay: int, max_attempts: int) -> int:
+        """Undo one delivered wake event: restore its reports and drop the reply and event atomically.
 
-    def rollback_reports(self, report_ids: list[str], base_delay: int, max_attempts: int) -> None:
-        """The wake turn failed or was interrupted: retry later with backoff, or give up."""
-        if not report_ids:
-            return
+        Only reports still pointing at this event are touched, so a report re-delivered by a
+        newer event is never dragged back. Returns how many reports were restored.
+        """
         with self.connection() as db:
             db.execute("BEGIN IMMEDIATE")
-            for report_id in report_ids:
-                row = db.execute("SELECT attempts FROM thread_reports WHERE id = ?", (report_id,)).fetchone()
-                if row is None:
+            event = db.execute(
+                "SELECT conversation_id FROM conversation_messages WHERE id = ?", (event_id,),
+            ).fetchone()
+            rows = db.execute(
+                "SELECT id, attempts FROM thread_reports WHERE state = 'delivered' AND delivered_event_id = ?",
+                (event_id,),
+            ).fetchall()
+            for row in rows:
+                if preempted:
+                    db.execute(
+                        "UPDATE thread_reports SET state = 'pending', delivered_event_id = NULL, delivered_at = NULL, "
+                        "not_before = NULL WHERE id = ?", (row["id"],),
+                    )
                     continue
                 attempts = int(row["attempts"]) + 1
                 if attempts >= max_attempts:
                     db.execute("UPDATE thread_reports SET state = 'skipped', delivered_event_id = NULL, "
-                               "delivered_at = NULL, attempts = ? WHERE id = ?", (attempts, report_id))
+                               "delivered_at = NULL, attempts = ? WHERE id = ?", (attempts, row["id"]))
                 else:
                     delay = base_delay * 2 ** attempts
                     db.execute(
                         "UPDATE thread_reports SET state = 'pending', delivered_event_id = NULL, delivered_at = NULL, "
                         "attempts = ?, not_before = ? WHERE id = ?",
-                        (attempts, (datetime.now(timezone.utc) + timedelta(seconds=delay)).isoformat(), report_id),
+                        (attempts, (datetime.now(timezone.utc) + timedelta(seconds=delay)).isoformat(), row["id"]),
                     )
+            if reply_id:
+                db.execute("DELETE FROM conversation_messages WHERE id = ?", (reply_id,))
+            db.execute("DELETE FROM conversation_messages WHERE id = ?", (event_id,))
+            if event:
+                self._restore_updated_at(db, event["conversation_id"])
+            return len(rows)
+
+    def skip_pending_resolved(self, thread_id: str) -> int:
+        """Reopening a Thread invalidates a not-yet-delivered resolved report."""
+        with self.connection() as db:
+            cursor = db.execute(
+                "UPDATE thread_reports SET state = 'skipped' "
+                "WHERE thread_id = ? AND state = 'pending' AND outcome = 'resolved'", (thread_id,),
+            )
+            return cursor.rowcount
 
     def skip_pending_reports(self, main_id: str) -> int:
         with self.connection() as db:
@@ -943,32 +984,51 @@ class ChatStore:
             )
             return cursor.rowcount
 
-    def system_events(self) -> list[dict]:
-        """Every hidden event message with its reply state, for restart recovery."""
+    def delivered_events(self) -> list[dict]:
+        """Delivered events that may still need a rollback, grouped by event (bounded by reports)."""
         with self.connection() as db:
             rows = db.execute(
-                "SELECT m.id AS event_id, m.meta_json AS meta_json, "
-                "(SELECT r.id FROM conversation_messages r WHERE r.reply_to = m.id ORDER BY r.seq DESC LIMIT 1) AS reply_id, "
-                "(SELECT r.status FROM conversation_messages r WHERE r.reply_to = m.id ORDER BY r.seq DESC LIMIT 1) AS reply_status "
-                "FROM conversation_messages m JOIN conversations c ON c.id = m.conversation_id "
-                "WHERE c.kind = 'main' AND json_extract(m.meta_json, '$.system_event') IS NOT NULL",
+                "SELECT r.id AS report_id, r.delivered_event_id AS event_id, "
+                "  (SELECT status FROM conversation_messages WHERE id = r.delivered_event_id) AS event_status, "
+                "  (SELECT r2.id FROM conversation_messages r2 WHERE r2.reply_to = r.delivered_event_id "
+                "     ORDER BY r2.seq DESC LIMIT 1) AS reply_id, "
+                "  (SELECT r2.status FROM conversation_messages r2 WHERE r2.reply_to = r.delivered_event_id "
+                "     ORDER BY r2.seq DESC LIMIT 1) AS reply_status "
+                "FROM thread_reports r WHERE r.state = 'delivered' AND r.delivered_event_id IS NOT NULL "
+                "ORDER BY r.created_at, r.id",
             ).fetchall()
-            events = []
-            for row in rows:
-                event = json.loads(row["meta_json"]).get("system_event") or {}
-                events.append({
-                    "event_id": row["event_id"], "report_ids": event.get("report_ids") or [],
-                    "reply_id": row["reply_id"], "reply_status": row["reply_status"],
-                })
-            return events
+        events: dict[str, dict] = {}
+        for row in rows:
+            event = events.setdefault(row["event_id"], {
+                "event_id": row["event_id"], "report_ids": [], "reply_id": row["reply_id"],
+                "reply_status": row["reply_status"], "event_status": row["event_status"],
+            })
+            event["report_ids"].append(row["report_id"])
+        return list(events.values())
 
     def discard_system_event(self, event_id: str, reply_id: str | None) -> None:
-        """Remove the reply first, then the hidden event that caused it (one transaction)."""
+        """Remove the reply first, then the hidden event that caused it (one transaction).
+
+        The conversation goes back to its previous sort position: a silent wake turn must not
+        push the main line to the top for a message the learner never saw.
+        """
         with self.connection() as db:
             db.execute("BEGIN IMMEDIATE")
+            event = db.execute(
+                "SELECT conversation_id FROM conversation_messages WHERE id = ?", (event_id,),
+            ).fetchone()
             if reply_id:
                 db.execute("DELETE FROM conversation_messages WHERE id = ?", (reply_id,))
             db.execute("DELETE FROM conversation_messages WHERE id = ?", (event_id,))
+            if event:
+                self._restore_updated_at(db, event["conversation_id"])
+
+    def _restore_updated_at(self, db: sqlite3.Connection, conversation_id: str) -> None:
+        db.execute(
+            "UPDATE conversations SET updated_at = COALESCE("
+            "(SELECT MAX(created_at) FROM conversation_messages WHERE conversation_id = ?), updated_at) "
+            "WHERE id = ?", (conversation_id, conversation_id),
+        )
 
     def last_message_at(self, conversation_id: str) -> str | None:
         with self.connection() as db:
