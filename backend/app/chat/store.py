@@ -6,14 +6,15 @@ so deleting an imported item does not resurrect it on the next start.
 """
 
 import json
+import logging
 import re
 import sqlite3
 import unicodedata
 
 from app.chat.schemas import (
-    ChatMessage, Conversation, ConversationSummary, ExerciseAttempt, LearnerMemory, MemoryChange, MemoryEvidence,
-    ToolCallRecord, PreferencePrompt,
-    MessageAnchor, SpaceProgress, Subject, ThreadSummary, ThreadUpdate,
+    ChatMessage, Conversation, ConversationSummary, DispatchedThread, ExerciseAttempt, LearnerMemory, MemoryChange,
+    MemoryEvidence, ToolCallRecord, PreferencePrompt,
+    MessageAnchor, SpaceProgress, Subject, ThreadSummary,
 )
 from app.chat.skills import ONBOARDING_FIRST_MESSAGE, ONBOARDING_TITLE
 from app.memory.curated import LIMITS, apply as apply_note, bump_turns, decide, onboarding_state, pending, set_onboarding_state
@@ -40,6 +41,13 @@ STATUSES = {
     "mastery": {"observed", "uncertain"},
     "preference": {"observed", "uncertain"},
 }
+# Threads created by confirming a proposal already have a card in the proposal list.
+PROPOSAL_TASK_PREFIX = "proposal:"
+# How many Threads the coordinator's context lists with full detail, and as a bare handle.
+MAIN_CONTEXT_OPEN_THREADS = 20
+MAIN_CONTEXT_RESOLVED_THREADS = 10
+
+logger = logging.getLogger(__name__)
 
 
 def clip(text: str, limit: int) -> str:
@@ -211,7 +219,29 @@ class ChatStore:
                 "UPDATE conversation_messages SET status = 'failed', error = ?, updated_at = ? WHERE status = 'streaming'",
                 (INTERRUPTED, now()),
             )
+            self._prune_thread_update_cards(db)
         self.import_legacy()
+
+    def _prune_thread_update_cards(self, db: sqlite3.Connection) -> None:
+        """Drop the per-worker-turn progress cards that older versions appended to a main line.
+
+        Spaces can be deleted later, which turns their main line into a plain chat, so the scan
+        cannot rely on `kind = 'main'`; the `thread_update` meta key is the reliable marker.
+        A one-shot marker keeps startup from re-scanning every assistant message forever.
+        """
+        done = db.execute(
+            "SELECT 1 FROM legacy_imports WHERE kind = 'migration' AND legacy_id = 'thread_update_cards'",
+        ).fetchone()
+        if done:
+            return
+        rows = db.execute(
+            "SELECT id FROM conversation_messages WHERE role = 'assistant' AND kind = 'text' "
+            "AND json_extract(meta_json, '$.thread_update') IS NOT NULL",
+        ).fetchall()
+        if rows:
+            db.executemany("DELETE FROM conversation_messages WHERE id = ?", [(row["id"],) for row in rows])
+            logger.info("Removed %d obsolete Thread progress cards", len(rows))
+        db.execute("INSERT INTO legacy_imports VALUES ('migration', 'thread_update_cards')")
 
     def _migrate_spaces(self, db: sqlite3.Connection) -> None:
         """Spaces that predate the main conversation get one; their other chats become open threads."""
@@ -438,7 +468,10 @@ class ChatStore:
                 "SELECT * FROM conversation_messages WHERE conversation_id = ? ORDER BY seq", (conversation_id,),
             ).fetchall()
             memories = self._memories_by_id(db, student_id)
-            return Conversation(**self._summary(db, row), messages=[self._message(r, memories) for r in rows])
+            dispatched = self._dispatched_threads(db, conversation_id)
+            return Conversation(**self._summary(db, row), messages=[
+                self._message(r, memories, dispatched.get(r["id"])) for r in rows
+            ])
 
     def create_conversation(
         self, student_id: str, *, title: str | None, problem: Problem | None, client_request_id: str | None,
@@ -693,15 +726,32 @@ class ChatStore:
             if row is None or (row["kind"] or "chat") == "chat":
                 return {"role": "chat"}
             if row["kind"] == "main":
+                # Open Threads first, newest first; resolved ones stay as bare handles for follow-ups.
                 threads = db.execute(
-                    "SELECT * FROM conversations WHERE parent_id = ? AND kind = 'thread' ORDER BY updated_at DESC",
-                    (conversation_id,),
+                    "SELECT * FROM conversations WHERE parent_id = ? AND kind = 'thread' "
+                    "ORDER BY CASE WHEN COALESCE(thread_status, 'open') = 'resolved' THEN 1 ELSE 0 END, "
+                    "updated_at DESC", (conversation_id,),
                 ).fetchall()
-                return {"role": "main", "threads": [
-                    {key: value for key, value in self._summary(db, item).items()
-                     if key in {"id", "title", "preview", "thread_status", "execution_status"}}
-                    for item in threads
-                ]}
+                opened = [item for item in threads if (item["thread_status"] or "open") != "resolved"]
+                resolved = [item for item in threads if (item["thread_status"] or "open") == "resolved"]
+                opened = opened[:MAIN_CONTEXT_OPEN_THREADS]
+                progress = self._progress_summaries(db, [item["id"] for item in opened])
+                errors = self._thread_errors(db, [item["id"] for item in opened])
+                entries = []
+                for item in opened:
+                    entry = {key: value for key, value in self._summary(db, item).items()
+                             if key in {"id", "title", "preview", "thread_status", "execution_status"}}
+                    if progress.get(item["id"]):
+                        entry["progress_summary"] = progress[item["id"]]
+                    if errors.get(item["id"]):
+                        # 失败原因以前写在主线卡片里；现在由支线列表转达，协调者才答得上「为什么失败」
+                        entry["error"] = errors[item["id"]]
+                    entries.append(entry)
+                entries += [
+                    {"id": item["id"], "title": item["title"], "thread_status": item["thread_status"]}
+                    for item in resolved[:MAIN_CONTEXT_RESOLVED_THREADS]
+                ]
+                return {"role": "main", "threads": entries}
             anchor = None
             if row["anchor_message_id"]:
                 message = db.execute(
@@ -718,6 +768,46 @@ class ChatStore:
                 ).fetchall()
                 recent = [{"role": item["role"], "excerpt": clip(item["content"], 240)} for item in reversed(rows)]
             return {"role": "thread", "anchor": anchor, "main_recent": recent}
+
+    def _progress_summaries(self, db: sqlite3.Connection, thread_ids: list[str]) -> dict[str, str]:
+        """Latest progress note per Thread, in a single query.
+
+        The newest message is often a queued input, an empty streaming placeholder or a
+        stopped/failed reply, so take the newest assistant message that actually reported.
+        """
+        if not thread_ids:
+            return {}
+        marks = ", ".join("?" for _ in thread_ids)
+        rows = db.execute(
+            f"SELECT m.conversation_id AS conversation_id, m.meta_json AS meta_json "
+            f"FROM conversation_messages m WHERE m.conversation_id IN ({marks}) AND m.role = 'assistant' "
+            f"AND m.seq = (SELECT MAX(seq) FROM conversation_messages "
+            f"  WHERE conversation_id = m.conversation_id AND role = 'assistant' "
+            f"  AND TRIM(COALESCE(json_extract(meta_json, '$.progress_summary'), '')) != '')",
+            thread_ids,
+        ).fetchall()
+        found: dict[str, str] = {}
+        for row in rows:
+            summary = json.loads(row["meta_json"]).get("progress_summary")
+            if isinstance(summary, str) and summary.strip():
+                found[row["conversation_id"]] = summary
+        return found
+
+    def _thread_errors(self, db: sqlite3.Connection, thread_ids: list[str]) -> dict[str, str]:
+        """Last failure reason per Thread, in a single query, so the coordinator can explain it."""
+        if not thread_ids:
+            return {}
+        marks = ", ".join("?" for _ in thread_ids)
+        rows = db.execute(
+            f"SELECT m.conversation_id AS conversation_id, m.error AS error "
+            f"FROM conversation_messages m WHERE m.conversation_id IN ({marks}) "
+            f"AND m.status = 'failed' AND TRIM(COALESCE(m.error, '')) != '' "
+            f"AND m.seq = (SELECT MAX(seq) FROM conversation_messages "
+            f"  WHERE conversation_id = m.conversation_id AND status = 'failed' "
+            f"  AND TRIM(COALESCE(error, '')) != '')",
+            thread_ids,
+        ).fetchall()
+        return {row["conversation_id"]: clip(row["error"], 200) for row in rows}
 
     def resolve_thread(self, conversation_id: str, student_id: str, title: str, summary: str, takeaways: list[str]) -> dict:
         with self.connection() as db:
@@ -810,7 +900,34 @@ class ChatStore:
         db.execute("UPDATE conversations SET updated_at = ? WHERE id = ?", (timestamp, conversation_id))
         return message_id
 
-    def _message(self, row: sqlite3.Row, memories: dict[str, LearnerMemory]) -> ChatMessage:
+    def _dispatched_threads(self, db: sqlite3.Connection, conversation_id: str,
+                            source_message_id: str | None = None) -> dict[str, list[str]]:
+        """Cards for the Threads each main-line user message dispatched, in dispatch order.
+
+        Loaded once per conversation so the message mapper never queries per row. A Thread
+        that no longer exists (or moved out of this main line) simply stops having a card.
+        """
+        rows = db.execute(
+            "SELECT d.source_message_id AS source_id, d.thread_id AS thread_id "
+            "FROM thread_dispatches d "
+            "JOIN conversation_messages m ON m.id = d.source_message_id "
+            "JOIN conversations c ON c.id = m.conversation_id "
+            "JOIN conversations t ON t.id = d.thread_id "
+            "WHERE m.conversation_id = ? AND c.kind = 'main' AND m.role = 'user' "
+            "AND t.kind = 'thread' AND t.parent_id = c.id AND d.task_key NOT LIKE ? "
+            + ("AND m.id = ? " if source_message_id else "")
+            + "ORDER BY d.rowid",
+            (conversation_id, f"{PROPOSAL_TASK_PREFIX}%", *([source_message_id] if source_message_id else [])),
+        ).fetchall()
+        grouped: dict[str, list[str]] = {}
+        for row in rows:
+            thread_ids = grouped.setdefault(row["source_id"], [])
+            if row["thread_id"] not in thread_ids:
+                thread_ids.append(row["thread_id"])
+        return grouped
+
+    def _message(self, row: sqlite3.Row, memories: dict[str, LearnerMemory],
+                 dispatched: list[str] | None = None) -> ChatMessage:
         from app.chat.checkpoints import resume_state
         meta = json.loads(row["meta_json"])
         checkpoint_available, checkpoint_blocked_reason = resume_state(meta.get("last_checkpoint"), row["status"])
@@ -833,7 +950,7 @@ class ChatStore:
             files=[item for item in meta.get("files", []) if isinstance(item, dict) and item.get("id")],
             tool_calls=[ToolCallRecord(**item) for item in meta.get("tool_calls", []) if isinstance(item, dict) and item.get("id") and item.get("name")],
             thread_summary=self._thread_summary(meta.get("thread_summary")),
-            thread_update=ThreadUpdate(**meta["thread_update"]) if meta.get("thread_update") else None,
+            dispatched_threads=[DispatchedThread(thread_id=item) for item in dispatched or []],
             thread_proposals=meta.get("thread_proposals", []),
             pending_approval=meta.get("pending_approval"),
             preference_prompt=_preference_prompt(meta.get("preference_prompt")),
@@ -857,7 +974,13 @@ class ChatStore:
                 SELECT m.* FROM conversation_messages m JOIN conversations c ON c.id = m.conversation_id
                 WHERE m.id = ? AND c.student_id = ?
             """, (message_id, student_id)).fetchone()
-            return self._message(row, self._memories_by_id(db, student_id)) if row else None
+            if row is None:
+                return None
+            if row["role"] != "user":
+                # 只有主线用户消息会带卡片，助手消息不必再查一遍派发记录
+                return self._message(row, self._memories_by_id(db, student_id))
+            dispatched = self._dispatched_threads(db, row["conversation_id"], row["id"])
+            return self._message(row, self._memories_by_id(db, student_id), dispatched.get(row["id"]))
 
     def message_meta(self, message_id: str) -> dict:
         with self.connection() as db:

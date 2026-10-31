@@ -135,7 +135,8 @@ export interface ChatMessage {
   checkpointAvailable?: boolean;
   checkpointBlockedReason?: string | null;
   threadProposals?: ThreadProposal[];
-  threadUpdate?: { threadId: string; title: string; status: ExecutionStatus; summary: string } | null;
+  /** 主线用户消息下要展示的支线卡；标题与状态按 id 从支线列表实时取 */
+  dispatchedThreads?: Array<{ threadId: string }>;
   planChanges?: PlanChange[];
   createdAt: string;
 }

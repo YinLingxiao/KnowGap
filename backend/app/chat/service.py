@@ -27,14 +27,14 @@ from app.chat.agent import (
     compress_history_messages, deterministic_compress_fallback, dialogue, resolution_messages,
     review_messages, validate_analysis, validate_resolution,
 )
-from app.chat.store import ChatStore, INTERRUPTED
+from app.chat.store import ChatStore, INTERRUPTED, PROPOSAL_TASK_PREFIX
 from app.chat.attachments import attachment_query, prepare_attachment_history
 from app.chat.plan import PlanStore, brief
 from app.chat.checkpoints import MAX_TOOL_ROUNDS, resume_state
 from app.chat.usage import normalize_usage
 from app.chat.schemas import DispatchThread, ProposeThreads, ReportProgress
 from app.chat.skills.problem_drill_skill import SEARCH_TOOL, drill_plan, guard_reply, lesson_first, wants_problems
-from app.chat.coordination import cancel_deliveries, dispatch, next_delivery, report
+from app.chat.coordination import cancel_deliveries, dispatch, next_delivery
 from app.memory.store import new_id
 from app.services.materials import MaterialStore
 from app.vision.pipeline import analyze_image_for_relay
@@ -151,7 +151,7 @@ class ChatService:
     def recover(self) -> None:
         with self.store.connection() as db:
             interrupted = db.execute(
-                "SELECT m.id, m.reply_to, m.conversation_id, c.student_id FROM conversation_messages m "
+                "SELECT m.id FROM conversation_messages m "
                 "JOIN conversations c ON c.id = m.conversation_id WHERE c.kind = 'thread' AND m.status = 'failed' "
                 "AND m.error = ?", ("服务重启，生成被中断。可以重新生成这条回复。",),
             ).fetchall()
@@ -161,11 +161,6 @@ class ChatService:
             ).fetchall()
         for row in interrupted:
             self.store.merge_meta(row["id"], {"pending_approval": None})
-            checkpoint = self.store.message_meta(row["id"]).get("last_checkpoint")
-            available, blocked = resume_state(checkpoint, "failed")
-            detail = blocked or ("已保存断点，可在支线中点击「从断点继续」。" if available else "请检查已有进展后重试。")
-            report(self.store, row["student_id"], row["conversation_id"], row["reply_to"], "failed",
-                   f"服务重启中断了任务。{detail}")
         for row in queued:
             self._start_delivery(row["student_id"], row["id"])
 
@@ -264,7 +259,6 @@ class ChatService:
         self.approvals[approval_id] = future
         approval = {"id": approval_id, "name": name, "arguments": arguments}
         self.store.merge_meta(generation.assistant_message_id, {"pending_approval": approval})
-        self._report(generation, "waiting", "需要你在支线中确认操作后继续。")
         generation.queue.put_nowait(("tool_approval", {"id": approval_id, "name": name, "arguments": arguments}))
         try:
             return bool(await asyncio.wait_for(future, 600))
@@ -273,10 +267,6 @@ class ChatService:
         finally:
             self.approvals.pop(approval_id, None)
             self.store.merge_meta(generation.assistant_message_id, {"pending_approval": None})
-            self._report(generation, "working", "已结束本次确认，正在继续处理。")
-
-    def _report(self, generation: Generation, status: str, summary: str) -> None:
-        report(self.store, generation.student_id, generation.conversation_id, generation.user_message_id, status, summary)
 
     def _start_delivery(self, student_id: str, thread_id: str) -> None:
         if self.closing or self.is_generating(thread_id):
@@ -338,8 +328,6 @@ class ChatService:
             self.store, student_id, generation.conversation_id, generation.user_message_id,
             body.title, body.task, body.thread_id, skill=body.skill,
         )
-        if not self.store.replies(message_id):
-            report(self.store, student_id, thread_id, message_id, "queued", "已收到主线交办的任务，等待执行。")
         self._start_delivery(student_id, thread_id)
         generation.queue.put_nowait(("thread_dispatched", {"thread_id": thread_id}))
         return json.dumps({"thread_id": thread_id, "delivered": True,
@@ -377,14 +365,12 @@ class ChatService:
             if not self.store.conversation(proposal["thread_id"], student_id):
                 raise ValueError("这个建议对应的支线已删除，请重新规划。")
             return proposal["thread_id"]
-        thread_id, delivery = dispatch(
+        thread_id, _ = dispatch(
             self.store, student_id, conversation_id, message.reply_to, proposal["title"], proposal["task"], None,
-            task_key=f"proposal:{proposal_id}",
+            task_key=f"{PROPOSAL_TASK_PREFIX}{proposal_id}",
         )
         proposal["thread_id"] = thread_id
         self.store.merge_meta(message_id, {"thread_proposals": proposals})
-        if not self.store.replies(delivery):
-            report(self.store, student_id, thread_id, delivery, "queued", "你已确认这项建议，等待执行。")
         self._start_delivery(student_id, thread_id)
         return thread_id
 
@@ -392,17 +378,13 @@ class ChatService:
         body = ReportProgress(**arguments)
         self.store.merge_meta(generation.assistant_message_id, {"needs_user": body.needs_user,
                                                                "progress_summary": body.summary})
-        report(self.store, student_id, generation.conversation_id, generation.user_message_id,
-               "working", body.summary)
-        return "已将进展同步到主线。"
+        return "已记录本轮进展。"
 
     def stop(self, conversation_id: str) -> bool:
         generation = self.active.get(conversation_id)
         with self.store.connection() as db:
-            row = db.execute("SELECT student_id FROM conversations WHERE id = ?", (conversation_id,)).fetchone()
-        pending = cancel_deliveries(self.store, conversation_id) if row else []
-        for message_id in pending:
-            report(self.store, row["student_id"], conversation_id, message_id, "cancelled", "这条排队的任务已停止执行。")
+            exists = db.execute("SELECT 1 FROM conversations WHERE id = ?", (conversation_id,)).fetchone()
+        pending = cancel_deliveries(self.store, conversation_id) if exists else []
         if generation and generation.streaming and generation.task and not generation.task.done():
             generation.task.cancel()
             return True
@@ -426,7 +408,6 @@ class ChatService:
         generation.model_notice = self._fallback_notice(conversation_id)
         generation.notice_resolved = True
         self.active[conversation_id] = generation
-        self._report(generation, "working", "正在处理这项任务，详细过程可在支线中查看。")
         start = {
             "conversation": self._conversation(student_id, conversation_id),
             "user_message": self._message(student_id, user_message_id),
@@ -472,7 +453,6 @@ class ChatService:
         generation.detached = True
         generation.checkpoint = checkpoint
         self.active[conversation_id] = generation
-        self._report(generation, "working", "正在从已保存的工具断点继续。")
         generation.task = asyncio.create_task(self._run(student_id, generation))
         self.tasks.add(generation.task)
         generation.task.add_done_callback(self.tasks.discard)
@@ -918,19 +898,7 @@ class ChatService:
         finally:
             self._release(generation)
             try:
-                result = self.store.message(assistant_id, student_id)
-                if result:
-                    meta = self.store.message_meta(assistant_id)
-                    status = result.status if result.status in {"failed", "cancelled"} else (
-                        "waiting" if meta.get("needs_user") else "idle")
-                    summary = result.error if result.status == "failed" else (
-                        "任务已停止，可在支线中继续。" if result.status == "cancelled" else
-                        meta.get("progress_summary") or f"本轮回复节选：{result.content[:500]}")
-                    self._report(generation, status, summary or "请打开支线查看。")
-            except Exception:
-                logger.exception("Could not publish thread status")
-            try:
-                # A deleted worker or failed status report must still release its space's slot.
+                # A deleted worker must still release its space's slot.
                 if generation.parent_id and not self.closing:
                     self._start_next_queued_thread(student_id, generation.parent_id)
             except Exception:

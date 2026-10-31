@@ -104,8 +104,8 @@ def test_main_dispatch_starts_worker_reports_and_routes_followups(tmp_path):
         worker = store.conversation(worker_id, STUDENT)
         assert worker.messages[0].content == "带我复习第三单元"
         assert worker.messages[-1].status == "complete"
-        reports = [m.thread_update for m in store.conversation(main, STUDENT).messages if m.thread_update]
-        assert len(reports) == 1 and reports[0].status == "waiting" and "第一题" in reports[0].summary
+        main_messages = {m.id: m for m in store.conversation(main, STUDENT).messages}
+        assert [item.thread_id for item in main_messages[user].dispatched_threads] == [worker_id]
         assert any("event: thread_dispatched" in e for e in events)
         # A replay and a repeated dispatch in the same coordinator turn never deliver again.
         _ = [e async for e in service.replay(STUDENT, main, user, store.replies(user)[-1]["id"])]
@@ -118,7 +118,11 @@ def test_main_dispatch_starts_worker_reports_and_routes_followups(tmp_path):
         await settle(service)
         assert len(store.threads(sid, STUDENT)) == 1
         assert model.worker_inputs == ["带我复习第三单元", "还有第14页"]
-        assert len([m for m in store.conversation(main, STUDENT).messages if m.thread_update]) == 2
+        messages = store.conversation(main, STUDENT).messages
+        by_id = {m.id: m for m in messages}
+        assert [item.thread_id for item in by_id[followup].dispatched_threads] == [worker_id]
+        # 主线只有协调者的回复：用户在支线里又聊了一轮，主线没有多出任何消息
+        assert [m.role for m in messages] == ["user", "assistant", "user", "assistant"]
         await service.close()
     asyncio.run(scenario())
 
@@ -171,12 +175,11 @@ def test_workers_survive_observer_disconnect_and_surface_approval_and_stop(tmp_p
             pytest.fail("approval was not persisted for the sidebar")
         assert not generation.task.done()
         assert store.conversation(worker, STUDENT).execution_status == "waiting"
-        assert any(m.thread_update and m.thread_update.status == "waiting" for m in store.conversation(main, STUDENT).messages)
         assert service.stop(worker)
         await settle(service)
         assert store.message(generation.assistant_message_id, STUDENT).status == "cancelled"
         assert store.message(generation.assistant_message_id, STUDENT).pending_approval is None
-        assert store.conversation(main, STUDENT).messages[-1].thread_update.status == "cancelled"
+        assert store.conversation(worker, STUDENT).execution_status == "cancelled"
         await service.close()
     asyncio.run(scenario())
 
@@ -195,9 +198,9 @@ def test_dispatch_scope_validation_and_provider_failure(tmp_path):
         _ = [e async for e in service.events(service.begin(STUDENT, main, source, []))]
         await settle(service)
         worker = store.threads(sid, STUDENT)[0].id
-        assert store.conversation(worker, STUDENT).execution_status == "failed"
-        report = next(m.thread_update for m in store.conversation(main, STUDENT).messages if m.thread_update)
-        assert report.status == "failed" and "上游模型不可用" in report.summary
+        failed = store.conversation(worker, STUDENT)
+        assert failed.execution_status == "failed"
+        assert "上游模型不可用" in (failed.messages[-1].error or "")
         await service.close()
     asyncio.run(scenario())
 
@@ -235,11 +238,17 @@ def test_quick_question_stays_in_main_and_direct_thread_reply_reports_back(tmp_p
         worker = store.threads(sid, STUDENT)[0].id
         # Direct sidebar input has no delegated brief and goes directly to its worker.
         direct = store.add_user_message(worker, "类是对象的模板", "sidebar-user-001")
-        plain = FakeChat(["理解正确，接下来学构造方法。"])
+        main_before = [m.id for m in store.conversation(main, STUDENT).messages]
+        plain = FakeChat(["理解正确，接下来学构造方法。"], analyses=[{
+            "thread_report": {"summary": "已讲解类与对象，接着讲构造方法。", "needs_user": False},
+        }])
         service.model = lambda: plain
         _ = [e async for e in service.events(service.begin(STUDENT, worker, direct, []))]
         await settle(service)
-        assert "构造方法" in store.conversation(main, STUDENT).messages[-1].thread_update.summary
+        reply = store.conversation(worker, STUDENT).messages[-1]
+        assert "构造方法" in store.message_meta(reply.id)["progress_summary"]
+        # 支线自己聊的一轮不往主线写任何东西
+        assert [m.id for m in store.conversation(main, STUDENT).messages] == main_before
         assert len(store.threads(sid, STUDENT)) == 1
         await service.close()
     asyncio.run(scenario())
@@ -256,8 +265,9 @@ def test_analysis_supplies_concise_report_for_direct_sidebar_turn(tmp_path):
         user = store.add_user_message(worker, "类像图纸", "summary-user-001")
         _ = [e async for e in service.events(service.begin(STUDENT, worker, user, []))]
         await settle(service)
-        update = store.conversation(main, STUDENT).messages[-1].thread_update
-        assert update.status == "waiting" and update.summary == "已检查回答，等待完成下一道判断题。"
+        assert store.conversation(worker, STUDENT).execution_status == "waiting"
+        assert store.message_meta(store.conversation(worker, STUDENT).messages[-1].id)["progress_summary"] == (
+            "已检查回答，等待完成下一道判断题。")
         assert model.analysis_calls[0]["report_thread"] is True
         await service.close()
     asyncio.run(scenario())
@@ -277,7 +287,8 @@ def test_recovery_starts_queued_independent_threads_once(tmp_path):
         await settle(service)
         assert len(model.worker_inputs) == 2
         assert len(store.threads(sid, STUDENT)) == 2
-        assert len([m for m in store.conversation(main, STUDENT).messages if m.thread_update]) == 2
+        source = store.conversation(main, STUDENT).messages[0]
+        assert len(source.dispatched_threads) == 2
         await service.close()
     asyncio.run(scenario())
 
@@ -297,8 +308,9 @@ def test_stop_cancels_current_and_queued_deliveries(tmp_path):
         await settle(service)
         assert next_delivery(store, worker) is None
         assert model.worker_inputs == ["复习"]
-        updates = [m.thread_update for m in store.conversation(main, STUDENT).messages if m.thread_update]
-        assert len(updates) == 2 and all(update.status == "cancelled" for update in updates)
+        # 停止与取消都只发生在支线里，主线没有多出任何消息
+        assert [m.role for m in store.conversation(main, STUDENT).messages] == [
+            "user", "assistant", "user", "assistant"]
         service.recover()
         await settle(service)
         assert model.worker_inputs == ["复习"]
@@ -545,29 +557,24 @@ def test_delete_running_workers_via_http_fills_their_slots(tmp_path, resume_firs
                    for cid in ids[2:])
 
 
-def test_report_failure_does_not_block_queued_worker(tmp_path, monkeypatch):
+def test_failed_worker_releases_its_slot_for_the_queued_one(tmp_path):
+    """收尾不再汇报状态，但失败后的槽位释放与下一个排队任务必须照旧。"""
     async def scenario():
-        model = GatedWorkers()
+        model = GatedWorkers(fail_first=True)
         store, service, sid, main = setup(tmp_path, model)
-        source = store.add_user_message(main, "执行三项任务", "report-failure-source")
+        source = store.add_user_message(main, "执行三项任务", "failed-slot-source")
         ids = [dispatch(store, STUDENT, main, source, f"T{i}", str(i), None)[0] for i in range(3)]
-        original = service._report
-        def failing_report(generation, status, summary):
-            if not generation.streaming:
-                raise RuntimeError("测试状态回报失败")
-            return original(generation, status, summary)
-        monkeypatch.setattr(service, "_report", failing_report)
         try:
             for cid in ids:
                 service._start_delivery(STUDENT, cid)
-            assert {await model.next_started() for _ in range(2)} == {"0", "1"}
-            model.gates["0"].set()
-            assert await model.next_started() == "2"
+            # T0 立刻失败，空出的槽位让排队的 T2 启动
+            assert {await model.next_started() for _ in range(2)} == {"1", "2"}
             assert model.peak == 2
+            assert store.conversation(ids[0], STUDENT).execution_status == "failed"
             for gate in model.gates.values():
                 gate.set()
             await settle(service)
-            assert model.inputs == ["0", "1", "2"] and not service.active
+            assert model.inputs == ["1", "2"] and not service.active
         finally:
             await service.close()
     asyncio.run(scenario())
@@ -589,3 +596,215 @@ def test_shutdown_does_not_start_queued_workers(tmp_path):
         assert model.inputs == ["0", "1"]
         assert all(next_delivery(store, cid) is not None for cid in ids[2:])
     asyncio.run(scenario())
+
+
+def plain_store(tmp_path, name="thread-cards.sqlite3"):
+    base = Store(tmp_path / name)
+    base.initialize()
+    MaterialStore(base).initialize()
+    store = ChatStore(base)
+    store.initialize()
+    return store
+
+
+def test_worker_turns_never_add_messages_to_the_main_line(tmp_path):
+    """刷屏回归：同一支线连续 5 轮用户对话，主线消息数前后不变。"""
+    async def scenario():
+        store, service, sid, main = setup(tmp_path, Coordinator())
+        source = store.add_user_message(main, "带我复习第三单元", "quiet-main-0001")
+        _ = [e async for e in service.events(service.begin(STUDENT, main, source, []))]
+        await settle(service)
+        worker = store.threads(sid, STUDENT)[0].id
+        before = [m.id for m in store.conversation(main, STUDENT).messages]
+        assert len(before) == 2
+        plain = FakeChat([f"第{index}轮讲解。" for index in range(5)])
+        service.model = lambda: plain
+        for index in range(5):
+            turn = store.add_user_message(worker, f"第{index}轮追问", f"quiet-worker-{index}")
+            _ = [e async for e in service.events(service.begin(STUDENT, worker, turn, []))]
+            await settle(service)
+        assert [m.id for m in store.conversation(main, STUDENT).messages] == before
+        assert len(store.conversation(worker, STUDENT).messages) == 12
+        await service.close()
+    asyncio.run(scenario())
+
+
+def test_initialize_removes_only_legacy_thread_update_cards(tmp_path):
+    store = plain_store(tmp_path, "migration.sqlite3")
+    sid = store.create_subject(STUDENT, "Java", "", "").id
+    main = store.subject(sid, STUDENT).main_conversation_id
+    user = store.add_user_message(main, "带我复习", "migration-0001")
+    thread_id = store.create_thread(STUDENT, sid, title="旧支线", anchor_message_id=None,
+                                    client_request_id="migration-thread-01")
+    # 删掉空间后，原来的主线会变成普通对话，历史卡片同样要清理
+    old_chat = store.create_conversation(STUDENT, title="旧空间的对话", problem=None, client_request_id=None)
+    with store.connection() as db:
+        store._insert(db, thread_id, role="user", kind="text", content="旧支线的问题", status="complete")
+        card = store._insert(
+            db, main, role="assistant", kind="text", content="支线「旧支线」· 本轮完成\n\n旧进展卡片",
+            status="complete", client_request_id="report-legacy",
+            meta={"thread_update": {"thread_id": thread_id, "title": "旧支线", "status": "idle", "summary": "旧进展"}},
+        )
+        chat_card = store._insert(
+            db, old_chat, role="assistant", kind="text", content="支线「旧支线」· 本轮完成\n\n另一个旧卡片",
+            status="complete", meta={"thread_update": {"thread_id": thread_id, "title": "旧支线",
+                                                      "status": "working", "summary": "旧进展"}},
+        )
+        keeps_word = store._insert(db, main, role="assistant", kind="text",
+                                   content="工具输出里提到 thread_update 这个词，但这不是卡片。", status="complete")
+        normal = store._insert(db, main, role="assistant", kind="text", content="普通回复", status="complete")
+        summary = store._insert(
+            db, main, role="assistant", kind="text", content="支线「旧支线」已解决\n\n小结", status="complete",
+            meta={"thread_summary": {"thread_id": thread_id, "title": "旧支线", "summary": "小结",
+                                     "takeaways": [], "memory_ids": []}},
+        )
+    before = store.conversation(main, STUDENT)
+    # 模拟从旧版本升级：旧库还没有一次性迁移标记
+    with store.connection() as db:
+        db.execute("DELETE FROM legacy_imports WHERE kind = 'migration' AND legacy_id = 'thread_update_cards'")
+    store.initialize()
+    after = store.conversation(main, STUDENT)
+    ids = [m.id for m in after.messages]
+    assert card not in ids
+    assert keeps_word in ids and normal in ids and summary in ids and user in ids
+    assert chat_card not in [m.id for m in store.conversation(old_chat, STUDENT).messages]
+    # 迁移只删派生卡片，不动会话时间戳
+    assert after.updated_at == before.updated_at
+    # 幂等：再跑一次结果一样（一次性标记也写下了）
+    store.initialize()
+    assert [m.id for m in store.conversation(main, STUDENT).messages] == ids
+    with store.connection() as db:
+        marker = db.execute(
+            "SELECT 1 FROM legacy_imports WHERE kind = 'migration' AND legacy_id = 'thread_update_cards'",
+        ).fetchone()
+    assert marker
+    # 卡片已不在主线的最近消息里，支线背景自然干净了
+    recent = store.role_context(thread_id)["main_recent"]
+    assert all("旧进展卡片" not in item["excerpt"] and "本轮完成" not in item["excerpt"] for item in recent)
+
+
+def test_role_context_keeps_progress_and_failure_reasons(tmp_path):
+    store = plain_store(tmp_path, "role-notes.sqlite3")
+    sid = store.create_subject(STUDENT, "Java", "", "").id
+    main = store.subject(sid, STUDENT).main_conversation_id
+
+    def make_thread(title, request_id):
+        thread_id = store.create_thread(STUDENT, sid, title=title, anchor_message_id=None,
+                                        client_request_id=request_id)
+        with store.connection() as db:
+            # 立刻写入一条消息，避免 create_thread 把下一根空支线复用成同一个
+            store._insert(db, thread_id, role="user", kind="text", content="开始", status="complete")
+        return thread_id
+
+    queued = make_thread("排队补充", "notes-queued-1")
+    streaming = make_thread("正在生成", "notes-streaming-1")
+    failed = make_thread("执行失败", "notes-failed-1")
+    with store.connection() as db:
+        # 最新一条是排队的用户消息，但更早的回复里已经有进展
+        store._insert(db, queued, role="assistant", kind="text", content="讲解", status="complete",
+                      meta={"progress_summary": "已经讲到链表插入。"})
+        store._insert(db, queued, role="user", kind="text", content="继续讲删除", status="complete")
+        # 最新一条是空的 streaming 占位
+        store._insert(db, streaming, role="assistant", kind="text", content="讲解", status="complete",
+                      meta={"progress_summary": "上一轮的进展还在。"})
+        store._insert(db, streaming, role="assistant", kind="text", content="", status="streaming")
+        # 失败原因要能转达
+        failed_reply = store._insert(db, failed, role="assistant", kind="text", content="讲了一半", status="failed")
+        db.execute("UPDATE conversation_messages SET error = ? WHERE id = ?",
+                   ("上游模型不可用（502）", failed_reply))
+
+    entries = {item["id"]: item for item in store.role_context(main)["threads"]}
+    assert entries[queued]["execution_status"] == "queued"
+    assert entries[queued]["progress_summary"] == "已经讲到链表插入。"
+    assert entries[streaming]["execution_status"] == "working"
+    assert entries[streaming]["progress_summary"] == "上一轮的进展还在。"
+    assert entries[failed]["execution_status"] == "failed"
+    assert "上游模型不可用" in entries[failed]["error"]
+
+
+def test_role_context_carries_thread_progress_and_caps_the_list(tmp_path):
+    store = plain_store(tmp_path, "role-context.sqlite3")
+    sid = store.create_subject(STUDENT, "Java", "", "").id
+    main = store.subject(sid, STUDENT).main_conversation_id
+
+    def make_thread(title, request_id):
+        thread_id = store.create_thread(STUDENT, sid, title=title, anchor_message_id=None,
+                                        client_request_id=request_id)
+        with store.connection() as db:
+            store._insert(db, thread_id, role="user", kind="text", content=title, status="complete")
+        return thread_id
+
+    open_ids = [make_thread(f"开放{i}", f"cap-open-{i}") for i in range(21)]
+    resolved_ids = [make_thread(f"已解决{i}", f"cap-resolved-{i}") for i in range(12)]
+    for index, thread_id in enumerate(resolved_ids):
+        store.resolve_thread(thread_id, STUDENT, f"已解决{index}", "小结", [])
+    # 最新的一条支线才有进展摘要，保证它落在未解决的最近 20 个里
+    source = store.add_user_message(main, "开任务", "context-source-1")
+    progress_thread, _ = dispatch(store, STUDENT, main, source, "带进度", "任务", None)
+    with store.connection() as db:
+        store._insert(db, progress_thread, role="assistant", kind="text", content="讲解", status="complete",
+                      meta={"progress_summary": "已讲解对象与类，等待第一题。", "needs_user": True})
+
+    entries = store.role_context(main)["threads"]
+    assert len(entries) == 30
+    full, handles = entries[:20], entries[20:]
+    assert all({"id", "title", "preview", "thread_status", "execution_status"} <= set(item) for item in full)
+    assert all(set(item) == {"id", "title", "thread_status"} for item in handles)
+    assert all(item["thread_status"] == "resolved" for item in handles)
+    # 未解决按最近 20 个截断：最早建的两个不出现
+    open_present = {item["id"] for item in full}
+    assert open_ids[0] not in open_present and open_ids[1] not in open_present
+    assert open_ids[-1] in open_present
+    # 已解决只保留最近 10 个，且只有精简字段
+    resolved_present = {item["id"] for item in handles}
+    assert resolved_ids[0] not in resolved_present and resolved_ids[1] not in resolved_present
+    assert resolved_ids[-1] in resolved_present
+    entry = next(item for item in full if item["id"] == progress_thread)
+    assert entry["progress_summary"] == "已讲解对象与类，等待第一题。"
+    assert entry["execution_status"] == "waiting"
+
+
+def test_dispatched_threads_skip_proposals_and_deleted_threads(tmp_path):
+    store = plain_store(tmp_path, "dispatched.sqlite3")
+    sid = store.create_subject(STUDENT, "Java", "", "").id
+    main = store.subject(sid, STUDENT).main_conversation_id
+    source = store.add_user_message(main, "先学第三单元", "dispatch-0001")
+    thread_id, _ = dispatch(store, STUDENT, main, source, "第三单元", "任务", None)
+    proposal_source = store.add_user_message(main, "我该怎么学", "dispatch-0002")
+    proposal_thread, _ = dispatch(store, STUDENT, main, proposal_source, "建议项", "任务", None,
+                                  task_key="proposal:proposal-1")
+
+    messages = {m.id: m for m in store.conversation(main, STUDENT).messages}
+    assert [item.thread_id for item in messages[source].dispatched_threads] == [thread_id]
+    # 建议卡片确认产生的支线不重复渲染线程卡
+    assert messages[proposal_source].dispatched_threads == []
+    # 续接同一支线：两条用户消息各有一张卡
+    followup = store.add_user_message(main, "还有第14页", "dispatch-0003")
+    dispatch(store, STUDENT, main, followup, "第三单元", "继续", thread_id)
+    messages = {m.id: m for m in store.conversation(main, STUDENT).messages}
+    assert [item.thread_id for item in messages[followup].dispatched_threads] == [thread_id]
+    assert [item.thread_id for item in messages[source].dispatched_threads] == [thread_id]
+    # 支线删除后卡片随之消失，剩下不能渲染的坏卡
+    store.delete_conversation(thread_id, STUDENT)
+    messages = {m.id: m for m in store.conversation(main, STUDENT).messages}
+    assert messages[source].dispatched_threads == []
+    assert messages[followup].dispatched_threads == []
+    assert proposal_thread
+
+
+def test_conversation_api_exposes_dispatched_threads(tmp_path):
+    from fastapi.testclient import TestClient
+    from app.main import create_app
+    from tests.test_acceptance_support import isolated_settings
+
+    with TestClient(create_app(isolated_settings(tmp_path), chat_model=FakeChat())) as client:
+        space = client.post("/api/subjects", json={"name": "卡片接口"}).json()
+        main = space["main_conversation_id"]
+        store = client.app.state.chat_service.store
+        source = store.add_user_message(main, "带我复习链表", "api-card-0001")
+        thread_id, _ = dispatch(store, STUDENT, main, source, "链表", "复习", None)
+        data = client.get(f"/api/conversations/{main}").json()
+        message = next(item for item in data["messages"] if item["id"] == source)
+        assert message["dispatched_threads"] == [{"thread_id": thread_id}]
+        # 单条消息接口（SSE 的 start 事件会用到）返回同一个字段
+        assert [item.thread_id for item in store.message(source, STUDENT).dispatched_threads] == [thread_id]

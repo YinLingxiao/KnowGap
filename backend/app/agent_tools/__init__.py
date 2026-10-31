@@ -65,7 +65,7 @@ DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "report_progress",
-            "description": "支线向主线回报重要进展或本轮结果。summary 简明写明实际进展、结论或阻塞；需要用户作答、补充或决策时 needs_user=true。",
+            "description": "记录本轮重要进展或结果，只保存在这条回复里，供支线状态和协调者的支线列表使用，不写回主线。summary 简明写明实际进展、结论或阻塞；需要用户作答、补充或决策时 needs_user=true。",
             "parameters": {"type": "object", "properties": {
                 "summary": {"type": "string", "description": "600 字以内的进展或结果"},
                 "needs_user": {"type": "boolean"},

@@ -1,8 +1,10 @@
-"""Durable dispatches and concise worker reports for a learning space."""
+"""Durable dispatches for a learning space.
 
-import json
+Workers never narrate into the main line: a dispatched Thread owns exactly one card
+there, and that card's state is read live from the Thread's own messages.
+"""
 
-from app.chat.store import ChatStore, clip, normalize
+from app.chat.store import ChatStore, normalize
 from app.memory.store import new_id, now
 
 
@@ -79,33 +81,3 @@ def cancel_deliveries(store: ChatStore, thread_id: str) -> list[str]:
             store._insert(db, thread_id, role="assistant", kind="text", content="任务已停止，尚未执行这条补充。",
                           status="cancelled", reply_to=row["message_id"])
         return [row["message_id"] for row in pending]
-
-
-def report(store: ChatStore, student: str, thread_id: str, reply_id: str, status: str, summary: str) -> None:
-    # One card per worker turn, updated as it works; transcript details remain in the worker.
-    with store.connection() as db:
-        db.execute("BEGIN IMMEDIATE")
-        thread = db.execute(
-            "SELECT * FROM conversations WHERE id = ? AND student_id = ? AND kind = 'thread'", (thread_id, student),
-        ).fetchone()
-        if thread is None or not thread["parent_id"]:
-            return
-        parent = db.execute("SELECT id FROM conversations WHERE id = ? AND kind = 'main'", (thread["parent_id"],)).fetchone()
-        if parent is None:
-            return
-        card = {"thread_id": thread_id, "title": thread["title"], "status": status, "summary": clip(summary, 600)}
-        labels = {"queued": "已排队", "working": "正在执行", "waiting": "等待你", "idle": "本轮完成",
-                  "failed": "执行失败", "cancelled": "已停止"}
-        content = f"支线「{thread['title']}」· {labels[status]}\n\n{card['summary']}"
-        request_id = f"report-{reply_id}"
-        existing = db.execute(
-            "SELECT id FROM conversation_messages WHERE conversation_id = ? AND client_request_id = ?",
-            (thread["parent_id"], request_id),
-        ).fetchone()
-        if existing:
-            db.execute("UPDATE conversation_messages SET content = ?, meta_json = ?, updated_at = ? WHERE id = ?",
-                       (content, json.dumps({"thread_update": card}, ensure_ascii=False), now(), existing["id"]))
-            db.execute("UPDATE conversations SET updated_at = ? WHERE id = ?", (now(), thread["parent_id"]))
-        else:
-            store._insert(db, thread["parent_id"], role="assistant", kind="text", content=content, status="complete",
-                          client_request_id=request_id, meta={"thread_update": card})
