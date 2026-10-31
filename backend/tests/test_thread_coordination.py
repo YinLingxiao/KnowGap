@@ -636,12 +636,19 @@ def test_initialize_removes_only_legacy_thread_update_cards(tmp_path):
     user = store.add_user_message(main, "带我复习", "migration-0001")
     thread_id = store.create_thread(STUDENT, sid, title="旧支线", anchor_message_id=None,
                                     client_request_id="migration-thread-01")
+    # 删掉空间后，原来的主线会变成普通对话，历史卡片同样要清理
+    old_chat = store.create_conversation(STUDENT, title="旧空间的对话", problem=None, client_request_id=None)
     with store.connection() as db:
         store._insert(db, thread_id, role="user", kind="text", content="旧支线的问题", status="complete")
         card = store._insert(
             db, main, role="assistant", kind="text", content="支线「旧支线」· 本轮完成\n\n旧进展卡片",
             status="complete", client_request_id="report-legacy",
             meta={"thread_update": {"thread_id": thread_id, "title": "旧支线", "status": "idle", "summary": "旧进展"}},
+        )
+        chat_card = store._insert(
+            db, old_chat, role="assistant", kind="text", content="支线「旧支线」· 本轮完成\n\n另一个旧卡片",
+            status="complete", meta={"thread_update": {"thread_id": thread_id, "title": "旧支线",
+                                                      "status": "working", "summary": "旧进展"}},
         )
         keeps_word = store._insert(db, main, role="assistant", kind="text",
                                    content="工具输出里提到 thread_update 这个词，但这不是卡片。", status="complete")
@@ -652,19 +659,67 @@ def test_initialize_removes_only_legacy_thread_update_cards(tmp_path):
                                      "takeaways": [], "memory_ids": []}},
         )
     before = store.conversation(main, STUDENT)
+    # 模拟从旧版本升级：旧库还没有一次性迁移标记
+    with store.connection() as db:
+        db.execute("DELETE FROM legacy_imports WHERE kind = 'migration' AND legacy_id = 'thread_update_cards'")
     store.initialize()
     after = store.conversation(main, STUDENT)
     ids = [m.id for m in after.messages]
     assert card not in ids
     assert keeps_word in ids and normal in ids and summary in ids and user in ids
+    assert chat_card not in [m.id for m in store.conversation(old_chat, STUDENT).messages]
     # 迁移只删派生卡片，不动会话时间戳
     assert after.updated_at == before.updated_at
-    # 幂等：再跑一次结果一样
+    # 幂等：再跑一次结果一样（一次性标记也写下了）
     store.initialize()
     assert [m.id for m in store.conversation(main, STUDENT).messages] == ids
+    with store.connection() as db:
+        marker = db.execute(
+            "SELECT 1 FROM legacy_imports WHERE kind = 'migration' AND legacy_id = 'thread_update_cards'",
+        ).fetchone()
+    assert marker
     # 卡片已不在主线的最近消息里，支线背景自然干净了
     recent = store.role_context(thread_id)["main_recent"]
     assert all("旧进展卡片" not in item["excerpt"] and "本轮完成" not in item["excerpt"] for item in recent)
+
+
+def test_role_context_keeps_progress_and_failure_reasons(tmp_path):
+    store = plain_store(tmp_path, "role-notes.sqlite3")
+    sid = store.create_subject(STUDENT, "Java", "", "").id
+    main = store.subject(sid, STUDENT).main_conversation_id
+
+    def make_thread(title, request_id):
+        thread_id = store.create_thread(STUDENT, sid, title=title, anchor_message_id=None,
+                                        client_request_id=request_id)
+        with store.connection() as db:
+            # 立刻写入一条消息，避免 create_thread 把下一根空支线复用成同一个
+            store._insert(db, thread_id, role="user", kind="text", content="开始", status="complete")
+        return thread_id
+
+    queued = make_thread("排队补充", "notes-queued-1")
+    streaming = make_thread("正在生成", "notes-streaming-1")
+    failed = make_thread("执行失败", "notes-failed-1")
+    with store.connection() as db:
+        # 最新一条是排队的用户消息，但更早的回复里已经有进展
+        store._insert(db, queued, role="assistant", kind="text", content="讲解", status="complete",
+                      meta={"progress_summary": "已经讲到链表插入。"})
+        store._insert(db, queued, role="user", kind="text", content="继续讲删除", status="complete")
+        # 最新一条是空的 streaming 占位
+        store._insert(db, streaming, role="assistant", kind="text", content="讲解", status="complete",
+                      meta={"progress_summary": "上一轮的进展还在。"})
+        store._insert(db, streaming, role="assistant", kind="text", content="", status="streaming")
+        # 失败原因要能转达
+        failed_reply = store._insert(db, failed, role="assistant", kind="text", content="讲了一半", status="failed")
+        db.execute("UPDATE conversation_messages SET error = ? WHERE id = ?",
+                   ("上游模型不可用（502）", failed_reply))
+
+    entries = {item["id"]: item for item in store.role_context(main)["threads"]}
+    assert entries[queued]["execution_status"] == "queued"
+    assert entries[queued]["progress_summary"] == "已经讲到链表插入。"
+    assert entries[streaming]["execution_status"] == "working"
+    assert entries[streaming]["progress_summary"] == "上一轮的进展还在。"
+    assert entries[failed]["execution_status"] == "failed"
+    assert "上游模型不可用" in entries[failed]["error"]
 
 
 def test_role_context_carries_thread_progress_and_caps_the_list(tmp_path):

@@ -151,7 +151,7 @@ class ChatService:
     def recover(self) -> None:
         with self.store.connection() as db:
             interrupted = db.execute(
-                "SELECT m.id, m.reply_to, m.conversation_id, c.student_id FROM conversation_messages m "
+                "SELECT m.id FROM conversation_messages m "
                 "JOIN conversations c ON c.id = m.conversation_id WHERE c.kind = 'thread' AND m.status = 'failed' "
                 "AND m.error = ?", ("服务重启，生成被中断。可以重新生成这条回复。",),
             ).fetchall()
@@ -383,8 +383,8 @@ class ChatService:
     def stop(self, conversation_id: str) -> bool:
         generation = self.active.get(conversation_id)
         with self.store.connection() as db:
-            row = db.execute("SELECT student_id FROM conversations WHERE id = ?", (conversation_id,)).fetchone()
-        pending = cancel_deliveries(self.store, conversation_id) if row else []
+            exists = db.execute("SELECT 1 FROM conversations WHERE id = ?", (conversation_id,)).fetchone()
+        pending = cancel_deliveries(self.store, conversation_id) if exists else []
         if generation and generation.streaming and generation.task and not generation.task.done():
             generation.task.cancel()
             return True
