@@ -115,7 +115,7 @@ test('sidebar downloaded indicator is quiet, keyboard-accessible and opens the e
 
 test('release configuration fixes space renaming, bundles updater and disables accidental publishing', () => {
   const pkg = JSON.parse(read('../desktop/package.json'));
-  assert.equal(pkg.dependencies['electron-updater'], '6.6.2');
+  assert.equal(pkg.dependencies['electron-updater'], '6.8.11');
   assert.ok(pkg.build.files.includes('updater.js'));
   assert.equal(pkg.build.nsis.artifactName, 'KnowGap-Setup-${version}.exe');
   assert.equal(pkg.build.nsis.oneClick, false);

@@ -1,0 +1,2 @@
+# postinstall 从 node_modules 原样拷来的第三方文件，本身带 CRLF，不做换行转换
+frontend/public/vendor/* -text
