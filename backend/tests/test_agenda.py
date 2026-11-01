@@ -55,7 +55,8 @@ def agenda_with_review_rows(path):
             CREATE TABLE agenda_tasks (
                 id TEXT PRIMARY KEY, student_id TEXT NOT NULL,
                 title TEXT NOT NULL, notes TEXT NOT NULL DEFAULT '',
-                parent_id TEXT, priority INTEGER NOT NULL DEFAULT 4, labels TEXT NOT NULL DEFAULT '[]',
+                parent_id TEXT REFERENCES agenda_tasks(id) ON DELETE CASCADE,
+                priority INTEGER NOT NULL DEFAULT 4, labels TEXT NOT NULL DEFAULT '[]',
                 subject_id TEXT, thread_id TEXT, scheduled_date TEXT, scheduled_start_at TEXT,
                 duration_minutes INTEGER, deadline_date TEXT,
                 status TEXT NOT NULL DEFAULT 'open', completed_at TEXT,
@@ -150,6 +151,19 @@ def test_legacy_review_rows_are_deleted_and_rerun_is_safe(tmp_path):
     assert _agenda_pairs(store) == kept
     ensure(store)
     assert _agenda_pairs(store) == kept
+
+
+def test_review_purge_keeps_manual_subtasks(tmp_path):
+    from app.agenda.store import ensure
+    store = agenda_with_review_rows(tmp_path / "children.sqlite3")
+    stamp = "2026-10-20T12:00:00+00:00"
+    with store.connection() as db:
+        db.execute("INSERT INTO agenda_tasks (id, student_id, title, parent_id, created_at, updated_at) "
+                   "VALUES ('child', 's', '我自己加的子任务', 'rev-open', ?, ?)", (stamp, stamp))
+    ensure(store)
+    with store.connection() as db:
+        row = db.execute("SELECT parent_id FROM agenda_tasks WHERE id = 'child'").fetchone()
+    assert row is not None and row["parent_id"] is None
 
 
 def test_review_purge_marker_is_per_database(tmp_path):

@@ -48,6 +48,9 @@ def ensure(store):
         if "reminder_minutes" not in {row["name"] for row in db.execute("PRAGMA table_info(agenda_tasks)")}:
             db.execute("ALTER TABLE agenda_tasks ADD COLUMN reminder_minutes INTEGER")
         if purge:
+            # parent_id cascades on delete; detach learner-added subtasks so they survive the purge.
+            db.execute("UPDATE agenda_tasks SET parent_id=NULL WHERE source!='review' AND parent_id IN "
+                       "(SELECT id FROM agenda_tasks WHERE source='review')")
             db.execute("DELETE FROM agenda_tasks WHERE source='review'")
     if purge:
         _purged_review_databases.add(key)
