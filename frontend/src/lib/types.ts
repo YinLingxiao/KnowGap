@@ -9,6 +9,8 @@
 
 import type { DataSource } from "@/lib/config";
 
+export type HealthState = "checking" | "online" | "offline";
+
 /** 学习记忆状态（MVP_SPEC §6.2 建议的四种状态） */
 export type MemoryStatus = "suspected" | "needs_review" | "improving" | "resolved";
 

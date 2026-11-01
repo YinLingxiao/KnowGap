@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { useChat } from "@/hooks/useChat";
 import { useI18n } from "@/components/LanguageProvider";
-import type { HealthState } from "@/hooks/useWorkbench";
+import type { HealthState } from "@/lib/types";
 import { getAIConfig, testAIConfig, type AIConfigStatus } from "@/lib/api/ai-config";
 import { API_BASE_URL, DATA_SOURCE } from "@/lib/config";
 import { cx } from "@/lib/cx";

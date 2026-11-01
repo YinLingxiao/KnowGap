@@ -40,7 +40,7 @@ PDF 的 page 从 1 开始；TXT/Markdown 使用从 1 开始的原始行号。
 `TeachingResponse` 和 `SessionMessage` 新增默认空列表 `sources`。
 引用以快照与教学消息在同一事务保存，恢复会话后可继续展开；删除与生成竞争时返回 409。
 已有消息表与教学请求字段保持兼容，新增独立资料和引用表。
-前端通过 multipart 上传，浏览器自动设置 boundary；Mock 模式显示说明，不混入真实资料。
+前端通过 multipart 上传，浏览器自动设置 boundary。
 
 ## 启动与验证
 

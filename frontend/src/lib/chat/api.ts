@@ -332,9 +332,6 @@ export const chatApi = {
       status: data.status, stage: data.stage, ready: data.ready, version: data.version, draft: data.draft ?? {},
     };
   },
-  async startOnboarding(): Promise<Conversation> {
-    return mapConversation(await request<Wire>(root, "/api/onboarding/start", { method: "POST" }));
-  },
   async completeOnboarding(version: number, entries: Record<string, string>): Promise<{ onboarded: boolean }> {
     const data = await request<Wire>(root, "/api/onboarding/complete", { method: "POST", body: JSON.stringify({ version, entries }) });
     return { onboarded: Boolean(data.onboarded) };
@@ -383,9 +380,6 @@ export const chatApi = {
       total: mapUsage(data.total),
       spaces: (data.spaces ?? []).map((item: Wire) => ({ id: item.id, name: item.name, ...mapUsage(item) })),
     };
-  },
-  async restartOnboarding(): Promise<Conversation> {
-    return mapConversation(await request<Wire>(root, "/api/onboarding/restart", { method: "POST" }));
   },
   async listCustomSkills(): Promise<Array<{ id: string; name: string; role: "thread" | "chat" | "main"; triggerKeywords: string; content: string; enabled: boolean }>> {
     const data = await request<Wire>(root, "/api/skills", { cache: "no-store" });
