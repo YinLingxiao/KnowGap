@@ -1,4 +1,5 @@
 import json
+import os
 
 import httpx
 import pytest
@@ -13,6 +14,13 @@ from app.services.search_settings import SearchSettings, clean_key, saved_key
 from tests.test_acceptance_support import isolated_settings
 
 KEY = "as_sk_synthetic0123456789abcdef"
+
+
+@pytest.fixture(autouse=True)
+def clear_anysearch_environment(monkeypatch):
+    for name in list(os.environ):
+        if name.startswith("ANYSEARCH_"):
+            monkeypatch.delenv(name)
 
 
 def ok_response(request):
