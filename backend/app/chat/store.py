@@ -232,6 +232,7 @@ class ChatStore:
                 );
                 CREATE UNIQUE INDEX IF NOT EXISTS idx_thread_reports_pending
                     ON thread_reports(thread_id) WHERE state = 'pending';
+                CREATE INDEX IF NOT EXISTS idx_thread_reports_main ON thread_reports(main_id, state);
             """)
             # NULL subject_id: conversation outside any Subject / general memory that applies everywhere.
             ensure_column(db, "conversations", "subject_id", "TEXT")
@@ -416,15 +417,18 @@ class ChatStore:
                 elif meta.get("needs_user"):
                     execution = "waiting"
         stats = db.execute("""
-            SELECT COUNT(*) AS n,
+            SELECT COUNT(*) - (
+                     SELECT COUNT(DISTINCT r.delivered_event_id) FROM thread_reports r
+                     JOIN conversation_messages m ON m.id = r.delivered_event_id
+                     WHERE r.main_id = ?
+                   ) AS n,
               (SELECT content FROM conversation_messages WHERE conversation_id = ? AND kind = 'text'
                  AND content != '' AND json_extract(meta_json, '$.system_event') IS NULL
                  ORDER BY seq DESC LIMIT 1) AS preview,
               (SELECT meta_json FROM conversation_messages WHERE conversation_id = ? AND kind = 'exercise'
                  ORDER BY seq DESC LIMIT 1) AS exercise
             FROM conversation_messages WHERE conversation_id = ?
-              AND json_extract(meta_json, '$.system_event') IS NULL
-        """, (row["id"], row["id"], row["id"])).fetchone()
+        """, (row["id"], row["id"], row["id"], row["id"])).fetchone()
         preview = " ".join((stats["preview"] or "").split())
         return {
             "id": row["id"], "title": row["title"], "title_source": row["title_source"],
@@ -1031,22 +1035,23 @@ class ChatStore:
         """Delivered events that may still need a rollback, grouped by event (bounded by reports)."""
         with self.connection() as db:
             rows = db.execute(
-                "SELECT r.id AS report_id, r.delivered_event_id AS event_id, "
-                "  (SELECT status FROM conversation_messages WHERE id = r.delivered_event_id) AS event_status, "
-                "  (SELECT r2.id FROM conversation_messages r2 WHERE r2.reply_to = r.delivered_event_id "
+                "SELECT r.delivered_event_id AS event_id, "
+                "  (SELECT r2.id FROM conversation_messages r2 "
+                "     WHERE r2.reply_to = r.delivered_event_id AND r2.conversation_id = r.main_id "
                 "     ORDER BY r2.seq DESC LIMIT 1) AS reply_id, "
-                "  (SELECT r2.status FROM conversation_messages r2 WHERE r2.reply_to = r.delivered_event_id "
+                "  (SELECT r2.status FROM conversation_messages r2 "
+                "     WHERE r2.reply_to = r.delivered_event_id AND r2.conversation_id = r.main_id "
                 "     ORDER BY r2.seq DESC LIMIT 1) AS reply_status "
-                "FROM thread_reports r WHERE r.state = 'delivered' AND r.delivered_event_id IS NOT NULL "
+                "FROM thread_reports r "
+                "JOIN conversation_messages e ON e.id = r.delivered_event_id "
+                "WHERE r.state = 'delivered' AND r.delivered_event_id IS NOT NULL "
                 "ORDER BY r.created_at, r.id",
             ).fetchall()
         events: dict[str, dict] = {}
         for row in rows:
-            event = events.setdefault(row["event_id"], {
-                "event_id": row["event_id"], "report_ids": [], "reply_id": row["reply_id"],
-                "reply_status": row["reply_status"], "event_status": row["event_status"],
+            events.setdefault(row["event_id"], {
+                "event_id": row["event_id"], "reply_id": row["reply_id"], "reply_status": row["reply_status"],
             })
-            event["report_ids"].append(row["report_id"])
         return list(events.values())
 
     def discard_system_event(self, event_id: str, reply_id: str | None) -> None:

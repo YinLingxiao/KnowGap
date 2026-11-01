@@ -202,7 +202,7 @@ class ChatService:
         # The event message is already gone when a silent turn cleaned up, so only events that still
         # exist and have no complete reply are undone.
         for event in self.store.delivered_events():
-            if event["event_status"] is None or event["reply_status"] == "complete":
+            if event["reply_status"] == "complete":
                 continue
             try:
                 self.store.rollback_wake(event["event_id"], event["reply_id"], preempted=False,
