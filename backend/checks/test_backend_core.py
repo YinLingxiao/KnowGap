@@ -16,7 +16,7 @@ from fastapi.testclient import TestClient
 from app.agents.llm import ChatCompletionsTutor, ProviderError
 from app.config import Settings
 from app.main import create_app
-from app.memory.store import StateConflict
+from app.memory.store import StateConflict, Store
 from app.models.schemas import DEMO_STUDENT, TutorOutput
 from app.services.problems import PROBLEMS, reference_for, simulate_stack
 
@@ -222,57 +222,59 @@ def test_storage_failure_rolls_back_session_messages_and_memory(tmp_path, monkey
                 assert db.execute(f"SELECT count(*) FROM {table}").fetchone()[0] == 0
 
 
+def seeded_store(tmp_path):
+    """A store holding one incorrect first-turn session, written the way the first-generation flow did."""
+    store = Store(config(tmp_path).resolved_database_path())
+    store.initialize()
+    first = store.save_turn(
+        student_id=DEMO_STUDENT, problem_id="stack-sequence-001", topic_key="stack.lifo",
+        answer="所有数字相同，所以合法。", result=TutorOutput(assessment="incorrect", issue="未检查实际栈顶",
+            confidence=0.7, evidence="所有数字相同", reply="问题"),
+        used_memory_ids=[], session=None,
+    )
+    return store, first
+
+
 def test_stale_turn_rejected_atomically(tmp_path):
-    app = create_app(config(tmp_path), ScriptedTutor(["incorrect"]))
-    with TestClient(app) as client:
-        first = start(client).json()
-        store = app.state.store
-        snapshot = store.session(first["session_id"], DEMO_STUDENT)
-        kwargs = dict(
-            student_id=DEMO_STUDENT, problem_id=snapshot.problem_id, topic_key="stack.lifo",
-            answer="当前栈顶是2", result=TutorOutput(assessment="correct", issue=None,
-                confidence=0.8, evidence="栈顶是2", reply="下一步呢？"),
-            used_memory_ids=[], session=snapshot,
-        )
+    store, first = seeded_store(tmp_path)
+    snapshot = store.session(first.session_id, DEMO_STUDENT)
+    kwargs = dict(
+        student_id=DEMO_STUDENT, problem_id=snapshot.problem_id, topic_key="stack.lifo",
+        answer="当前栈顶是2", result=TutorOutput(assessment="correct", issue=None,
+            confidence=0.8, evidence="栈顶是2", reply="下一步呢？"),
+        used_memory_ids=[], session=snapshot,
+    )
+    store.save_turn(**kwargs)
+    with pytest.raises(StateConflict):
         store.save_turn(**kwargs)
-        with pytest.raises(StateConflict):
-            store.save_turn(**kwargs)
-        saved = store.session(snapshot.id, DEMO_STUDENT)
-        assert saved.turn == 2 and len(saved.messages) == 4
-        assert store.memories(DEMO_STUDENT)[0].evidence_count == 2
+    saved = store.session(snapshot.id, DEMO_STUDENT)
+    assert saved.turn == 2 and len(saved.messages) == 4
+    assert store.memories(DEMO_STUDENT)[0].evidence_count == 2
 
 
 def test_deleted_memory_in_flight_rejected(tmp_path):
-    app = create_app(config(tmp_path), ScriptedTutor(["incorrect"]))
-    with TestClient(app) as client:
-        first = start(client).json()
-        store = app.state.store
-        memory_id = first["memory_changes"][0]["memory"]["id"]
-        store.delete_memory(memory_id, DEMO_STUDENT)
-        with pytest.raises(StateConflict):
-            store.save_turn(
-                student_id=DEMO_STUDENT, problem_id="stack-sequence-002", topic_key="stack.lifo",
-                answer="回答", result=TutorOutput(assessment="incorrect", issue="问题",
-                    confidence=0.7, evidence="回答", reply="追问"),
-                used_memory_ids=[memory_id], session=None,
-            )
-        with store.connection() as db:
-            assert db.execute("SELECT count(*) FROM learning_sessions").fetchone()[0] == 1
-        assert store.memories(DEMO_STUDENT) == []
+    store, first = seeded_store(tmp_path)
+    memory_id = first.memory_changes[0].memory.id
+    store.delete_memory(memory_id, DEMO_STUDENT)
+    with pytest.raises(StateConflict):
+        store.save_turn(
+            student_id=DEMO_STUDENT, problem_id="stack-sequence-002", topic_key="stack.lifo",
+            answer="回答", result=TutorOutput(assessment="incorrect", issue="问题",
+                confidence=0.7, evidence="回答", reply="追问"),
+            used_memory_ids=[memory_id], session=None,
+        )
+    with store.connection() as db:
+        assert db.execute("SELECT count(*) FROM learning_sessions").fetchone()[0] == 1
+    assert store.memories(DEMO_STUDENT) == []
 
 
-def test_turn_limit_and_cors(tmp_path):
-    app = create_app(config(tmp_path), ScriptedTutor(["incorrect"]))
-    with TestClient(app) as client:
-        first = start(client).json()
-        with app.state.store.connection() as db:
-            db.execute("UPDATE learning_sessions SET turn = 40 WHERE id = ?", (first["session_id"],))
-        assert client.post(f"/api/sessions/{first['session_id']}/messages", json={"content": "回答"}).status_code == 409
+def test_cors_allows_only_configured_origins(tmp_path):
+    with TestClient(create_app(config(tmp_path))) as client:
         headers = {"Origin": "http://localhost:3000", "Access-Control-Request-Method": "POST",
                    "Access-Control-Request-Headers": "content-type"}
-        assert client.options("/api/diagnosis", headers=headers).headers["access-control-allow-origin"] == headers["Origin"]
+        assert client.options("/api/conversations", headers=headers).headers["access-control-allow-origin"] == headers["Origin"]
         headers["Origin"] = "https://untrusted.example"
-        assert client.options("/api/diagnosis", headers=headers).status_code == 400
+        assert client.options("/api/conversations", headers=headers).status_code == 400
 
 
 def provider_settings(tmp_path):

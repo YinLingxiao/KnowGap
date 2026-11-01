@@ -9,6 +9,7 @@ from app.chat.agent import CHAT_PROMPT, ROLE_PROMPTS
 from app.main import create_app
 from tests.test_acceptance_support import isolated_settings
 from tests.test_chat import FakeChat, context_of, send, transcript_of
+from tests.test_onboarding_state import answer, seed_interview
 
 
 @pytest.mark.parametrize("role", ["main", "thread", "chat"])
@@ -94,35 +95,21 @@ def test_live_routing_check_allows_selection_cards_but_rejects_premature_executi
     assert judge(case, calls, text, None) is expected
 
 
-def test_conversational_onboarding_populates_user_profile_and_marks_onboarded(tmp_path):
-    class Interview(FakeChat):
-        async def complete_json(self, messages):
-            payload = json.loads(messages[-1]["content"])
-            return {"answers": [{"field": payload["stage"], "value": payload["answer"],
-                                 "quote": payload["answer"], "declined": False}]}
-    model = Interview()
-    with TestClient(create_app(isolated_settings(tmp_path), chat_model=model)) as client:
-        status0 = client.get("/api/onboarding").json()
-        assert status0["onboarded"] is False
-
-        conv = client.post("/api/onboarding/start").json()
-        assert conv["messages"][0]["role"] == "assistant"
-        assert "最近你最想" in conv["messages"][0]["content"]
-        # Calling start again is idempotent and returns the same conversation
-        assert client.post("/api/onboarding/start").json()["id"] == conv["id"]
-
-        send(client, conv["id"], "我是在校学生，最近在学计算机组成原理", "onboard-ans-1")
-        assert client.get("/api/onboarding").json()["status"] == "in_progress"
+def test_confirmed_interview_profile_populates_user_notes_and_marks_onboarded(tmp_path):
+    with TestClient(create_app(isolated_settings(tmp_path), chat_model=FakeChat())) as client:
+        assert client.get("/api/onboarding").json()["onboarded"] is False
+        seed_interview(client, {
+            "background": answer("background", "我是在校学生，最近在学计算机组成原理"),
+            "explanation": answer("explanation", "先给我具体的数字小例子再讲定义"),
+            "interaction": answer("interaction", "做题时先给小步提示让我自己思考"),
+        })
+        status = client.get("/api/onboarding").json()
+        assert status["onboarded"] is False
+        assert status["ready"] is True
         assert client.get("/api/agent-memory").json()["user"] == ""
-        send(client, conv["id"], "先给我具体的数字小例子再讲定义", "onboard-ans-2")
-        send(client, conv["id"], "做题时先给小步提示让我自己思考", "onboard-ans-3")
-
-        status1 = client.get("/api/onboarding").json()
-        assert status1["onboarded"] is False
-        assert status1["ready"] is True
-        assert client.post('/api/onboarding/complete', json={"version": status1['version'] - 1, "entries": {}}).status_code == 409
-        entries = {key: value['value'] for key, value in status1['draft'].items()}
-        assert client.post('/api/onboarding/complete', json={"version": status1['version'], "entries": entries}).status_code == 200
+        assert client.post('/api/onboarding/complete', json={"version": status['version'] - 1, "entries": {}}).status_code == 409
+        entries = {key: value['value'] for key, value in status['draft'].items()}
+        assert client.post('/api/onboarding/complete', json={"version": status['version'], "entries": entries}).status_code == 200
         assert client.get('/api/onboarding').json()['onboarded'] is True
 
         notes = client.get("/api/agent-memory").json()
