@@ -722,6 +722,34 @@ def test_role_context_keeps_progress_and_failure_reasons(tmp_path):
     assert "上游模型不可用" in entries[failed]["error"]
 
 
+def test_role_context_drops_stale_errors_after_a_later_success(tmp_path):
+    store = plain_store(tmp_path, "role-stale-error.sqlite3")
+    sid = store.create_subject(STUDENT, "Java", "", "").id
+    main = store.subject(sid, STUDENT).main_conversation_id
+
+    def make_thread(title, request_id):
+        thread_id = store.create_thread(STUDENT, sid, title=title, anchor_message_id=None,
+                                        client_request_id=request_id)
+        with store.connection() as db:
+            store._insert(db, thread_id, role="user", kind="text", content="开始", status="complete")
+        return thread_id
+
+    failed = make_thread("仍失败", "stale-failed-1")
+    recovered = make_thread("失败后成功", "stale-recovered-1")
+    with store.connection() as db:
+        failed_reply = store._insert(db, failed, role="assistant", kind="text", content="讲了一半", status="failed")
+        db.execute("UPDATE conversation_messages SET error = ? WHERE id = ?", ("上游模型不可用（502）", failed_reply))
+        old = store._insert(db, recovered, role="assistant", kind="text", content="讲了一半", status="failed")
+        db.execute("UPDATE conversation_messages SET error = ? WHERE id = ?", ("上游模型不可用（502）", old))
+        store._insert(db, recovered, role="assistant", kind="text", content="讲完了", status="complete")
+
+    entries = {item["id"]: item for item in store.role_context(main)["threads"]}
+    assert entries[failed]["execution_status"] == "failed"
+    assert "上游模型不可用" in entries[failed]["error"]
+    assert entries[recovered]["execution_status"] == "idle"
+    assert "error" not in entries[recovered]
+
+
 def test_role_context_carries_thread_progress_and_caps_the_list(tmp_path):
     store = plain_store(tmp_path, "role-context.sqlite3")
     sid = store.create_subject(STUDENT, "Java", "", "").id

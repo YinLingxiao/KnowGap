@@ -12,8 +12,10 @@ import { useI18n } from "@/components/LanguageProvider";
 import { useSlidingThumb } from "@/hooks/useSlidingThumb";
 import { toApiError } from "@/lib/api/errors";
 import { chatApi } from "@/lib/chat/api";
+import { PLAN_EVENT, planApi, type PlanEventDetail } from "@/lib/chat/plan";
 import { levelLabel, plainText } from "@/lib/chat/space";
 import type { ConversationSummary, LearnerMemory, Subject, SpaceUsage, TokenUsage } from "@/lib/chat/types";
+import { latestPlanChangeId } from "@/lib/chat/wakeEvents";
 import { API_BASE_URL } from "@/lib/config";
 import { SPACE_PAGES_EVENT, spacePagesKey } from "@/lib/spacePages";
 import { cx } from "@/lib/cx";
@@ -263,6 +265,13 @@ export function SubjectPage({
   }, [loadConversation, mainId, refreshThreads]);
 
   const main = mainId ? chat.messagesFor(mainId) : null;
+  const planChangeId = latestPlanChangeId(main?.messages ?? []);
+  useEffect(() => {
+    if (!mainId || !planChangeId) return;
+    void planApi.get(mainId).then((plan) => {
+      window.dispatchEvent(new CustomEvent<PlanEventDetail>(PLAN_EVENT, { detail: { conversationId: mainId, plan } }));
+    }).catch(() => undefined);
+  }, [mainId, planChangeId]);
   const threadId = panel.mode === "thread" ? panel.id : null;
   useEffect(() => {
     if (threadId) void loadConversation(threadId);

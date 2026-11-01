@@ -123,6 +123,11 @@ def is_system_event_row(row: sqlite3.Row) -> bool:
         return False
 
 
+def learner_rows(rows: list[sqlite3.Row]) -> list[sqlite3.Row]:
+    """Messages that belong to the learner, without hidden system events."""
+    return [row for row in rows if not is_system_event_row(row)]
+
+
 class ChatStore:
     def __init__(self, store: Store):
         self.store = store
@@ -227,6 +232,7 @@ class ChatStore:
                 );
                 CREATE UNIQUE INDEX IF NOT EXISTS idx_thread_reports_pending
                     ON thread_reports(thread_id) WHERE state = 'pending';
+                CREATE INDEX IF NOT EXISTS idx_thread_reports_main ON thread_reports(main_id, state);
             """)
             # NULL subject_id: conversation outside any Subject / general memory that applies everywhere.
             ensure_column(db, "conversations", "subject_id", "TEXT")
@@ -411,15 +417,18 @@ class ChatStore:
                 elif meta.get("needs_user"):
                     execution = "waiting"
         stats = db.execute("""
-            SELECT COUNT(*) AS n,
+            SELECT COUNT(*) - (
+                     SELECT COUNT(DISTINCT r.delivered_event_id) FROM thread_reports r
+                     JOIN conversation_messages m ON m.id = r.delivered_event_id
+                     WHERE r.main_id = ?
+                   ) AS n,
               (SELECT content FROM conversation_messages WHERE conversation_id = ? AND kind = 'text'
                  AND content != '' AND json_extract(meta_json, '$.system_event') IS NULL
                  ORDER BY seq DESC LIMIT 1) AS preview,
               (SELECT meta_json FROM conversation_messages WHERE conversation_id = ? AND kind = 'exercise'
                  ORDER BY seq DESC LIMIT 1) AS exercise
             FROM conversation_messages WHERE conversation_id = ?
-              AND json_extract(meta_json, '$.system_event') IS NULL
-        """, (row["id"], row["id"], row["id"])).fetchone()
+        """, (row["id"], row["id"], row["id"], row["id"])).fetchone()
         preview = " ".join((stats["preview"] or "").split())
         return {
             "id": row["id"], "title": row["title"], "title_source": row["title_source"],
@@ -785,7 +794,7 @@ class ChatStore:
                              if key in {"id", "title", "preview", "thread_status", "execution_status"}}
                     if progress.get(item["id"]):
                         entry["progress_summary"] = progress[item["id"]]
-                    if errors.get(item["id"]):
+                    if entry.get("execution_status") == "failed" and errors.get(item["id"]):
                         # 失败原因以前写在主线卡片里；现在由支线列表转达，协调者才答得上「为什么失败」
                         entry["error"] = errors[item["id"]]
                     entries.append(entry)
@@ -896,16 +905,51 @@ class ChatStore:
 
         Selection, the event message and the delivery marks commit together, so a replay cannot
         deliver the same report twice. `build(rows)` returns the model-facing text and its meta.
+        Every due report is re-checked first; ones that are no longer current are marked skipped
+        in this same transaction, then at most `limit` still-valid reports are delivered.
         """
         with self.connection() as db:
             db.execute("BEGIN IMMEDIATE")
             rows = db.execute(
-                "SELECT r.*, c.title AS thread_title FROM thread_reports r "
-                "JOIN conversations c ON c.id = r.thread_id "
+                "SELECT r.*, c.title AS thread_title, c.kind AS thread_kind, c.parent_id AS thread_parent, "
+                "c.thread_status AS live_thread_status, m.kind AS main_kind "
+                "FROM thread_reports r "
+                "LEFT JOIN conversations c ON c.id = r.thread_id "
+                "LEFT JOIN conversations m ON m.id = r.main_id "
                 "WHERE r.main_id = ? AND r.state = 'pending' AND (r.not_before IS NULL OR r.not_before <= ?) "
-                "ORDER BY r.created_at, r.id LIMIT ?",
-                (main_id, now(), limit),
+                "ORDER BY r.created_at, r.id",
+                (main_id, now()),
             ).fetchall()
+            valid = []
+            for row in rows:
+                current = (
+                    row["main_kind"] == "main"
+                    and row["thread_kind"] == "thread"
+                    and row["thread_parent"] == row["main_id"]
+                )
+                if current and row["outcome"] == "resolved":
+                    current = row["live_thread_status"] == "resolved"
+                elif current and row["outcome"] == "failed":
+                    current = row["live_thread_status"] != "resolved"
+                    if current:
+                        source = db.execute(
+                            "SELECT seq FROM conversation_messages WHERE id = ? AND conversation_id = ?",
+                            (row["source_message_id"], row["thread_id"]),
+                        ).fetchone()
+                        if source is None:
+                            current = False
+                        else:
+                            newer = db.execute(
+                                "SELECT 1 FROM conversation_messages WHERE conversation_id = ? "
+                                "AND role = 'assistant' AND seq > ? LIMIT 1",
+                                (row["thread_id"], source["seq"]),
+                            ).fetchone()
+                            current = newer is None
+                if current:
+                    valid.append(row)
+                else:
+                    db.execute("UPDATE thread_reports SET state = 'skipped' WHERE id = ?", (row["id"],))
+            rows = valid[:limit]
             if not rows:
                 return None
             content, meta = build(rows)
@@ -962,6 +1006,9 @@ class ChatStore:
                     )
             if reply_id:
                 db.execute("DELETE FROM conversation_messages WHERE id = ?", (reply_id,))
+            else:
+                # reply_id 未知时回复已经按 reply_to 挂上，没有外键，不删会留下不再隐藏的 streaming 气泡
+                db.execute("DELETE FROM conversation_messages WHERE reply_to = ?", (event_id,))
             db.execute("DELETE FROM conversation_messages WHERE id = ?", (event_id,))
             if event:
                 self._restore_updated_at(db, event["conversation_id"])
@@ -988,22 +1035,23 @@ class ChatStore:
         """Delivered events that may still need a rollback, grouped by event (bounded by reports)."""
         with self.connection() as db:
             rows = db.execute(
-                "SELECT r.id AS report_id, r.delivered_event_id AS event_id, "
-                "  (SELECT status FROM conversation_messages WHERE id = r.delivered_event_id) AS event_status, "
-                "  (SELECT r2.id FROM conversation_messages r2 WHERE r2.reply_to = r.delivered_event_id "
+                "SELECT r.delivered_event_id AS event_id, "
+                "  (SELECT r2.id FROM conversation_messages r2 "
+                "     WHERE r2.reply_to = r.delivered_event_id AND r2.conversation_id = r.main_id "
                 "     ORDER BY r2.seq DESC LIMIT 1) AS reply_id, "
-                "  (SELECT r2.status FROM conversation_messages r2 WHERE r2.reply_to = r.delivered_event_id "
+                "  (SELECT r2.status FROM conversation_messages r2 "
+                "     WHERE r2.reply_to = r.delivered_event_id AND r2.conversation_id = r.main_id "
                 "     ORDER BY r2.seq DESC LIMIT 1) AS reply_status "
-                "FROM thread_reports r WHERE r.state = 'delivered' AND r.delivered_event_id IS NOT NULL "
+                "FROM thread_reports r "
+                "JOIN conversation_messages e ON e.id = r.delivered_event_id "
+                "WHERE r.state = 'delivered' AND r.delivered_event_id IS NOT NULL "
                 "ORDER BY r.created_at, r.id",
             ).fetchall()
         events: dict[str, dict] = {}
         for row in rows:
-            event = events.setdefault(row["event_id"], {
-                "event_id": row["event_id"], "report_ids": [], "reply_id": row["reply_id"],
-                "reply_status": row["reply_status"], "event_status": row["event_status"],
+            events.setdefault(row["event_id"], {
+                "event_id": row["event_id"], "reply_id": row["reply_id"], "reply_status": row["reply_status"],
             })
-            event["report_ids"].append(row["report_id"])
         return list(events.values())
 
     def discard_system_event(self, event_id: str, reply_id: str | None) -> None:
@@ -1057,6 +1105,14 @@ class ChatStore:
         with self.connection() as db:
             row = db.execute("SELECT student_id FROM conversations WHERE id = ?", (conversation_id,)).fetchone()
             return row["student_id"] if row else None
+
+    def conversation_role(self, conversation_id: str) -> str:
+        with self.connection() as db:
+            row = db.execute("SELECT kind FROM conversations WHERE id = ?", (conversation_id,)).fetchone()
+        kind = row["kind"] if row else None
+        if kind in ("main", "thread"):
+            return kind
+        return "chat"
 
     def resolve_thread(self, conversation_id: str, student_id: str, title: str, summary: str, takeaways: list[str]) -> dict:
         with self.connection() as db:

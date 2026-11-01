@@ -1,5 +1,6 @@
 """Free-chat endpoints. Conversations do not require a problem; exercises are optional context."""
 
+import asyncio
 from collections import OrderedDict
 
 from fastapi import APIRouter, HTTPException, Response
@@ -518,16 +519,17 @@ def chat_router(store: ChatStore, service: ChatService) -> APIRouter:
 
     @router.post("/conversations/{conversation_id}/resolve", response_model=Resolution)
     async def resolve_thread(conversation_id: str, body: ResolveThread):
+        student = current_student()
         try:
-            resolved = store.resolve_thread(conversation_id, current_student(), body.title, body.summary,
-                                            body.takeaways)
+            resolved = await asyncio.to_thread(store.resolve_thread, conversation_id, student, body.title, body.summary,
+                                               body.takeaways)
         except LookupError as exc:
             raise HTTPException(404, str(exc)) from None
         except ValueError as exc:
             raise HTTPException(409, str(exc)) from None
         # 支线被标记已解决是协调者汇报的时机之一；异步路由保证调度落在事件循环线程里
         if resolved.get("message_id"):
-            service.thread_resolved(current_student(), conversation_id, resolved["title"], resolved["summary"],
+            service.thread_resolved(student, conversation_id, resolved["title"], resolved["summary"],
                                     resolved["takeaways"], resolved["message_id"])
         return resolved
 

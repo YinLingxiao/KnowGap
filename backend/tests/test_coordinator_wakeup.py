@@ -614,6 +614,48 @@ def test_event_wake_does_not_swallow_the_learners_plan_events(tmp_path, monkeypa
     asyncio.run(scenario())
 
 
+def test_wake_turn_ignores_skills_triggered_by_the_event_text(tmp_path, monkeypatch):
+    import app.chat.agent as agent_module
+
+    monkeypatch.setattr(service_module, "WAKE_QUIET_SECONDS", 0)
+    skill_calls = []
+    real_select = agent_module.select_skill_prompt
+
+    def counting_select(*args, **kwargs):
+        skill_calls.append(args[1] if len(args) > 1 else kwargs.get("user_text"))
+        return real_select(*args, **kwargs)
+
+    monkeypatch.setattr(agent_module, "select_skill_prompt", counting_select)
+    wording = "下一步的学习计划和路线。"
+
+    async def scenario():
+        model = WakeModel(wake="text")
+        store, service, sid, main = setup(tmp_path, model)
+        _source, thread_id = delegated_thread(store, service, main)
+        await settle(service)
+        skill_calls.clear()
+        resolve(store, service, thread_id, summary=wording)
+        await settle(service)
+        wake_call = next(call for call in model.calls
+                         if any(m["role"] == "user" and str(m["content"]).startswith(SYSTEM_PREFIX) for m in call))
+        wake = context_of(wake_call)
+        assert wake["active_skill"] is None
+        assert wake["recommended_widget"] is None
+        assert "reported_prior_knowledge" not in wake
+        assert "transfer_learning_hint" not in wake
+        assert wording in wake["latest_user_message"]
+        assert skill_calls == []
+
+        user = store.add_user_message(main, wording, "skill-main-1")
+        _ = [e async for e in service.events(service.begin(STUDENT, main, user, []))]
+        await settle(service)
+        main_turn = context_of(model.calls[-1])
+        assert main_turn["active_skill"] and "roadmap_planner" in main_turn["active_skill"]
+        assert skill_calls and wording in skill_calls[-1]
+        await service.close()
+    asyncio.run(scenario())
+
+
 def test_wake_proposals_never_leak_the_hidden_event_into_the_thread(tmp_path, monkeypatch):
     monkeypatch.setattr(service_module, "WAKE_QUIET_SECONDS", 0)
 
@@ -629,12 +671,87 @@ def test_wake_proposals_never_leak_the_hidden_event_into_the_thread(tmp_path, mo
                      if m.role == "assistant" and m.thread_proposals)
         proposal = reply.thread_proposals[0]
         new_thread = service.confirm_proposal(STUDENT, main, reply.id, proposal.id)
-        first = store.conversation(new_thread, STUDENT).messages[0]
+        created = store.conversation(new_thread, STUDENT)
+        first = created.messages[0]
+        assert created.anchor is None
+        assert store.role_context(new_thread)["anchor"] is None
         assert first.content == "带学生练链表删除。"
         assert SYSTEM_PREFIX not in first.content
+        assert store.message_meta(first.id)["source_message_id"] == reply.reply_to
+        with store.connection() as db:
+            linked = db.execute(
+                "SELECT source_message_id FROM thread_dispatches WHERE thread_id = ?", (new_thread,),
+            ).fetchone()
+        assert linked["source_message_id"] == reply.reply_to
         assert resolved["message_id"]
         await service.close()
     asyncio.run(scenario())
+
+
+def _event_payload(rows):
+    return (
+        f"{SYSTEM_PREFIX}\n" + "\n".join(row["summary"] for row in rows),
+        {"system_event": {"type": "thread_report", "report_ids": [row["id"] for row in rows],
+                          "thread_ids": [row["thread_id"] for row in rows]}},
+    )
+
+
+def test_deliver_pending_reports_skips_reports_that_went_stale(tmp_path):
+    def fresh(name):
+        store, _service, sid, main = setup(tmp_path, WakeModel(), name=name)
+        return store, sid, main
+
+    store, _sid, main = fresh("stale-continued.sqlite3")
+    source = store.add_user_message(main, "把链表讲完", "stale-c-1")
+    thread, _message = dispatch(store, STUDENT, main, source, "链表", "把链表讲完", None)
+    resolved = store.resolve_thread(thread, STUDENT, "链表", "讲完了", [])
+    store.record_thread_report(main, thread, resolved["message_id"], "resolved", "讲完了")
+    follow = store.add_user_message(main, "再讲删除", "stale-c-2")
+    dispatch(store, STUDENT, main, follow, "链表", "再讲删除", thread)
+    assert store.deliver_pending_reports(main, 4, _event_payload) is None
+    assert reports(store)[0]["state"] == "skipped"
+    assert event_messages(store, main) == []
+
+    store, sid, main = fresh("stale-deleted.sqlite3")
+    source = store.add_user_message(main, "把链表讲完", "stale-d-1")
+    thread, _message = dispatch(store, STUDENT, main, source, "链表", "把链表讲完", None)
+    resolved = store.resolve_thread(thread, STUDENT, "链表", "讲完了", [])
+    store.record_thread_report(main, thread, resolved["message_id"], "resolved", "讲完了")
+    assert store.delete_subject(sid, STUDENT)
+    assert store.deliver_pending_reports(main, 4, _event_payload) is None
+    assert reports(store)[0]["state"] == "skipped"
+    assert event_messages(store, main) == []
+
+    store, _sid, main = fresh("stale-retried.sqlite3")
+    source = store.add_user_message(main, "把链表讲完", "stale-f-1")
+    thread, _message = dispatch(store, STUDENT, main, source, "链表", "把链表讲完", None)
+    with store.connection() as db:
+        failed = store._insert(db, thread, role="assistant", kind="text", content="讲了一半", status="failed")
+    store.record_thread_report(main, thread, failed, "failed", "上游模型不可用")
+    with store.connection() as db:
+        store._insert(db, thread, role="assistant", kind="text", content="重试成功", status="complete")
+    assert store.deliver_pending_reports(main, 4, _event_payload) is None
+    assert reports(store)[0]["state"] == "skipped"
+    assert event_messages(store, main) == []
+
+    store, _sid, main = fresh("stale-valid.sqlite3")
+    source = store.add_user_message(main, "把链表讲完", "stale-v-1")
+    thread, _message = dispatch(store, STUDENT, main, source, "链表", "把链表讲完", None)
+    resolved = store.resolve_thread(thread, STUDENT, "链表", "讲完了", [])
+    store.record_thread_report(main, thread, resolved["message_id"], "resolved", "讲完了")
+    assert store.deliver_pending_reports(main, 4, _event_payload) is not None
+    assert reports(store)[0]["state"] == "delivered"
+    assert len(event_messages(store, main)) == 1
+
+    store, _sid, main = fresh("stale-failed-valid.sqlite3")
+    source = store.add_user_message(main, "把链表讲完", "stale-fv-1")
+    thread, _message = dispatch(store, STUDENT, main, source, "链表", "把链表讲完", None)
+    with store.connection() as db:
+        failed = store._insert(db, thread, role="assistant", kind="text", content="讲了一半", status="failed")
+    store.record_thread_report(main, thread, failed, "failed", "上游模型不可用")
+    assert store.deliver_pending_reports(main, 4, _event_payload) is not None
+    assert reports(store)[0]["state"] == "delivered"
+    assert len(event_messages(store, main)) == 1
 
 
 def test_http_resolve_endpoint_files_the_report(tmp_path, monkeypatch):
@@ -660,3 +777,30 @@ def test_http_resolve_endpoint_files_the_report(tmp_path, monkeypatch):
         assert client.post(f"/api/conversations/{thread_id}/resolve",
                            json={"title": "链表", "summary": "讲完了。", "takeaways": []}).status_code == 200
         assert len(reports(store)) == 1
+
+
+def test_resolve_endpoint_keeps_the_summary_when_the_report_fails(tmp_path, monkeypatch):
+    monkeypatch.setattr(service_module, "WAKE_QUIET_SECONDS", 1000)
+    from fastapi.testclient import TestClient
+    from app.main import create_app
+    from tests.test_acceptance_support import isolated_settings
+
+    model = WakeModel()
+    with TestClient(create_app(isolated_settings(tmp_path), chat_model=model)) as client:
+        space = client.post("/api/subjects", json={"name": "汇报接口"}).json()
+        main = space["main_conversation_id"]
+        service = client.app.state.chat_service
+        store = service.store
+        source = store.add_user_message(main, "把链表讲完", "http-resolve-fail-1")
+        thread_id, _message_id = dispatch(store, STUDENT, main, source, "链表", "把链表讲完", None)
+
+        def explode(*_args, **_kwargs):
+            raise RuntimeError("report write failed")
+
+        monkeypatch.setattr(store, "record_thread_report", explode)
+        response = client.post(f"/api/conversations/{thread_id}/resolve",
+                               json={"title": "链表", "summary": "讲完了。", "takeaways": []})
+        assert response.status_code == 200, response.text
+        assert any(m.role == "assistant" and "讲完了。" in m.content
+                   for m in store.conversation(main, STUDENT).messages)
+        assert reports(store) == []

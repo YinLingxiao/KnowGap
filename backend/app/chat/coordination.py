@@ -4,16 +4,18 @@ Workers never narrate into the main line: a dispatched Thread owns exactly one c
 there, and that card's state is read live from the Thread's own messages.
 """
 
-from app.chat.store import ChatStore, normalize
+import json
+
+from app.chat.store import ChatStore, is_system_event, normalize
 from app.memory.store import new_id, now
 
 
 def dispatch(store: ChatStore, student: str, main_id: str, source_id: str,
              title: str, task: str, thread_id: str | None, *, task_key: str | None = None,
-             skill: str | None = None, content: str | None = None) -> tuple[str, str]:
+             skill: str | None = None) -> tuple[str, str]:
     # Creation and delivery are atomic. Replaying a coordinator turn cannot deliver twice.
-    # `content` overrides the copied source text: a hidden system event must never become the
-    # first "learner message" inside the Thread.
+    # A hidden system event is not a learner message: a new Thread leaves its anchor empty
+    # and the copied turn uses the task text instead of the event.
     thread_id = thread_id or None
     key = task_key or thread_id or normalize(title).casefold()
     with store.connection() as db:
@@ -27,6 +29,11 @@ def dispatch(store: ChatStore, student: str, main_id: str, source_id: str,
         ).fetchone()
         if source is None:
             raise ValueError("找不到本轮用户需求。")
+        try:
+            source_meta = json.loads(source["meta_json"] or "{}")
+        except (TypeError, ValueError):
+            source_meta = {}
+        hidden_event = is_system_event(source_meta)
         if thread_id:
             target = db.execute(
                 "SELECT id FROM conversations WHERE id = ? AND student_id = ? AND parent_id = ? "
@@ -46,7 +53,8 @@ def dispatch(store: ChatStore, student: str, main_id: str, source_id: str,
             db.execute(
                 "INSERT INTO conversations(id, student_id, title, title_source, subject_id, kind, parent_id, "
                 "anchor_message_id, thread_status, created_at, updated_at) VALUES (?, ?, ?, 'auto', ?, 'thread', ?, ?, 'open', ?, ?)",
-                (thread_id, student, title, main["subject_id"], main_id, source_id, timestamp, timestamp),
+                (thread_id, student, title, main["subject_id"], main_id,
+                 None if hidden_event else source_id, timestamp, timestamp),
             )
         else:
             db.execute("UPDATE conversations SET thread_status = 'open', resolved_at = NULL WHERE id = ?", (thread_id,))
@@ -54,7 +62,7 @@ def dispatch(store: ChatStore, student: str, main_id: str, source_id: str,
         if skill:
             meta["delegated_skill"] = skill
         message_id = store._insert(
-            db, thread_id, role="user", kind="text", content=source["content"] if content is None else content,
+            db, thread_id, role="user", kind="text", content=task if hidden_event else source["content"],
             status="complete", meta=meta,
         )
         db.execute("INSERT INTO thread_dispatches VALUES (?, ?, ?, ?)", (source_id, key, thread_id, message_id))

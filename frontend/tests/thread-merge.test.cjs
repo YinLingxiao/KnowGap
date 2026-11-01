@@ -7,11 +7,22 @@ const React = require('react');
 const { renderToStaticMarkup } = require('react-dom/server');
 const { resolveI18n } = require('./i18n-support.cjs');
 
+function loadTs(relativePath) {
+  const source = fs.readFileSync(path.resolve(__dirname, relativePath), 'utf8');
+  const compiled = ts.transpileModule(source, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+  }).outputText;
+  const box = { exports: {} };
+  new Function('module', 'exports', 'require', compiled)(box, box.exports, () => ({}));
+  return box.exports;
+}
+
 // Exercise the actual message branch without a browser or backend.
 const source = fs.readFileSync(path.resolve(__dirname, '../src/components/chat/MessageList.tsx'), 'utf8');
 const js = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, jsx: ts.JsxEmit.ReactJSX },
 }).outputText;
+const wakeEvents = loadTs('../src/lib/chat/wakeEvents.ts');
 const loaded = { exports: {} };
 new Function('module', 'exports', 'require', js)(loaded, loaded.exports, (name) => {
   if (resolveI18n(name)) return resolveI18n(name);
@@ -27,6 +38,7 @@ new Function('module', 'exports', 'require', js)(loaded, loaded.exports, (name) 
   if (name.endsWith('.module.css')) return { default: new Proxy({}, { get: (_, key) => key }) };
   if (name === '@/lib/cx') return { cx: (...values) => values.filter(Boolean).join(' ') };
   if (name === './SelectionToolbar') return { SelectionToolbar: () => null };
+  if (name === '@/lib/chat/wakeEvents') return wakeEvents;
   return {};
 });
 

@@ -29,7 +29,7 @@ from app.chat.agent import (
     review_messages, validate_analysis, validate_resolution,
 )
 from app.chat.store import (
-    ChatStore, INTERRUPTED, PROPOSAL_TASK_PREFIX, is_system_event, is_system_event_row,
+    ChatStore, INTERRUPTED, PROPOSAL_TASK_PREFIX, is_system_event, is_system_event_row, learner_rows,
 )
 from app.chat.attachments import attachment_query, prepare_attachment_history
 from app.chat.plan import PlanStore, brief
@@ -202,7 +202,7 @@ class ChatService:
         # The event message is already gone when a silent turn cleaned up, so only events that still
         # exist and have no complete reply are undone.
         for event in self.store.delivered_events():
-            if event["event_status"] is None or event["reply_status"] == "complete":
+            if event["reply_status"] == "complete":
                 continue
             try:
                 self.store.rollback_wake(event["event_id"], event["reply_id"], preempted=False,
@@ -415,11 +415,9 @@ class ChatService:
             if not self.store.conversation(proposal["thread_id"], student_id):
                 raise ValueError("这个建议对应的支线已删除，请重新规划。")
             return proposal["thread_id"]
-        # 唤醒回合提出的建议：来源是隐藏事件，不能把它抄成支线的第一句「学生发言」
-        content = proposal["task"] if is_system_event(self.store.message_meta(message.reply_to)) else None
         thread_id, _ = dispatch(
             self.store, student_id, conversation_id, message.reply_to, proposal["title"], proposal["task"], None,
-            task_key=f"{PROPOSAL_TASK_PREFIX}{proposal_id}", content=content,
+            task_key=f"{PROPOSAL_TASK_PREFIX}{proposal_id}",
         )
         proposal["thread_id"] = thread_id
         self.store.merge_meta(message_id, {"thread_proposals": proposals})
@@ -441,18 +439,24 @@ class ChatService:
     def thread_resolved(self, student_id: str, conversation_id: str, title: str, summary: str,
                         takeaways: list[str], message_id: str) -> None:
         """时机一：支线被标记已解决。重复 resolve 由 source_message_id 的唯一约束挡住。"""
-        if not self._agent_flag("coordinator_wakeup"):
-            return
-        main_id = self._thread_parent_id(student_id, conversation_id)
-        if not main_id:
-            return
-        text = summary if not takeaways else "\n".join([summary, *[f"- {item}" for item in takeaways]])
-        self.store.record_thread_report(main_id, conversation_id, message_id, "resolved", text)
-        self._schedule_wake(student_id, main_id)
+        try:
+            if not self._agent_flag("coordinator_wakeup"):
+                return
+            main_id = self._thread_parent_id(student_id, conversation_id)
+            if not main_id:
+                return
+            text = summary if not takeaways else "\n".join([summary, *[f"- {item}" for item in takeaways]])
+            self.store.record_thread_report(main_id, conversation_id, message_id, "resolved", text)
+            self._schedule_wake(student_id, main_id)
+        except Exception:
+            logger.exception("Could not record the resolved Thread report")
 
     def thread_reopened(self, conversation_id: str) -> None:
         """时机一的反向：重新打开支线后，还没投递的「已解决」汇报作废。"""
-        self.store.skip_pending_resolved(conversation_id)
+        try:
+            self.store.skip_pending_resolved(conversation_id)
+        except Exception:
+            logger.exception("Could not skip the pending resolved Thread report")
 
     def _report_wake(self, student_id: str, generation: Generation, role: str) -> None:
         """时机二：主线交办的支线回合失败。完成、等待作答、停止、用户直接聊都不写。
@@ -524,6 +528,10 @@ class ChatService:
             logger.exception("Could not start the coordinator wake turn")
             self.store.rollback_wake(event_id, None, preempted=False, base_delay=WAKE_RETRY_SECONDS,
                                      max_attempts=WAKE_MAX_ATTEMPTS)
+            generation = self.active.get(main_id)
+            if generation is not None and generation.user_message_id == event_id:
+                del self.active[main_id]
+            self._schedule_wake(student_id, main_id)
 
     def _system_event_payload(self, rows) -> tuple[str, dict]:
         lines = ["【系统事件 · 支线汇报】以下内容不是学习者说的话。"]
@@ -569,6 +577,8 @@ class ChatService:
                 logger.warning("Coordinator wake turn did not stop within 5s")
         if self.active.get(conversation_id) is generation:
             self._release(generation)
+            # 任务在首次执行前被取消时 _run 的 finally 不会跑，这里补上恢复汇报
+            self._settle_wake(generation)
         return True
 
     def stop(self, conversation_id: str) -> bool:
@@ -779,10 +789,12 @@ class ChatService:
         tool_messages: list[dict] = []
         last_flush = 0.0
         role_name: str | None = None
-        # 必须最早确定：模型不可用或读历史失败时，finally 也要能回滚唤醒回合
-        event_turn = is_system_event(self.store.message_meta(generation.user_message_id))
+        event_turn = False
         finished = False
         try:
+            # 必须在 try 内、打开模型之前确定：模型不可用或读历史失败时，finally 也要能回滚唤醒回合
+            event_turn = is_system_event(self.store.message_meta(generation.user_message_id))
+            role_name = self.store.conversation_role(generation.conversation_id)
             await asyncio.sleep(0)  # let the queued "start" event reach the client before any blocking work
             if not generation.notice_resolved:
                 generation.model_notice = self._fallback_notice(generation.conversation_id)
@@ -830,7 +842,6 @@ class ChatService:
             subject_id = subject.id if subject else None
             role = self.store.role_context(generation.conversation_id)
             user_meta = self.store.message_meta(generation.user_message_id)
-            role_name = role["role"]
             exercise = None if event_turn else active_exercise(history)
             memories = [] if event_turn else self.store.relevant_memories(
                 student_id, user_text, None, subject_id,
@@ -862,7 +873,7 @@ class ChatService:
                 custom_skills=custom_skills, compressed_summary=compressed_summary,
                 compressed_up_to_seq=compressed_seq,
                 learning_plan=learning_plan, plan_user_events=plan_user_events,
-                attached_files=attached_files,
+                attached_files=attached_files, system_turn=event_turn,
             )
             ctx = ToolContext(
                 workspace_of(self.settings), self.store, student_id, generation.conversation_id,
@@ -1176,7 +1187,7 @@ class ChatService:
         learning_plan = brief(PlanStore(self.store).read(generation.conversation_id, student_id))
         try:
             raw = await asyncio.wait_for(
-                self._complete_json(model, analysis_messages(history, user_text, reply, memories, given, exercise, is_thread,
+                self._complete_json(model, analysis_messages(learner_rows(history), user_text, reply, memories, given, exercise, is_thread,
                                     learning_plan),
                                     generation.conversation_id, generation.assistant_message_id, "analysis"),
                 ANALYSIS_TIMEOUT,
@@ -1331,10 +1342,11 @@ class ChatService:
             raise LookupError("会话不存在或已删除。")
         history = self.store.history(conversation_id)
         prev_summary, prev_seq = self.store.get_context_summary(conversation_id)
-        user_seqs = [int(row["seq"]) for row in history if row["role"] == "user" and row["status"] != "failed"]
+        learner = learner_rows(history)
+        user_seqs = [int(row["seq"]) for row in learner if row["role"] == "user" and row["status"] != "failed"]
         # The two latest user turns and their replies always stay verbatim.
         cutoff = user_seqs[-2] - 1 if len(user_seqs) >= 3 else prev_seq
-        rows = [row for row in history if prev_seq < int(row["seq"]) <= cutoff]
+        rows = [row for row in learner if prev_seq < int(row["seq"]) <= cutoff]
         turns = dialogue(rows, bounded=False)
         if not turns:
             return {"conversation_id": conversation_id, "summary": prev_summary, "compressed_turns": 0,
