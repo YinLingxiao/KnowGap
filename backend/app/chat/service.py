@@ -29,7 +29,7 @@ from app.chat.agent import (
     review_messages, validate_analysis, validate_resolution,
 )
 from app.chat.store import (
-    ChatStore, INTERRUPTED, PROPOSAL_TASK_PREFIX, is_system_event, is_system_event_row,
+    ChatStore, INTERRUPTED, PROPOSAL_TASK_PREFIX, is_system_event, is_system_event_row, learner_rows,
 )
 from app.chat.attachments import attachment_query, prepare_attachment_history
 from app.chat.plan import PlanStore, brief
@@ -1187,7 +1187,7 @@ class ChatService:
         learning_plan = brief(PlanStore(self.store).read(generation.conversation_id, student_id))
         try:
             raw = await asyncio.wait_for(
-                self._complete_json(model, analysis_messages(history, user_text, reply, memories, given, exercise, is_thread,
+                self._complete_json(model, analysis_messages(learner_rows(history), user_text, reply, memories, given, exercise, is_thread,
                                     learning_plan),
                                     generation.conversation_id, generation.assistant_message_id, "analysis"),
                 ANALYSIS_TIMEOUT,
@@ -1342,10 +1342,11 @@ class ChatService:
             raise LookupError("会话不存在或已删除。")
         history = self.store.history(conversation_id)
         prev_summary, prev_seq = self.store.get_context_summary(conversation_id)
-        user_seqs = [int(row["seq"]) for row in history if row["role"] == "user" and row["status"] != "failed"]
+        learner = learner_rows(history)
+        user_seqs = [int(row["seq"]) for row in learner if row["role"] == "user" and row["status"] != "failed"]
         # The two latest user turns and their replies always stay verbatim.
         cutoff = user_seqs[-2] - 1 if len(user_seqs) >= 3 else prev_seq
-        rows = [row for row in history if prev_seq < int(row["seq"]) <= cutoff]
+        rows = [row for row in learner if prev_seq < int(row["seq"]) <= cutoff]
         turns = dialogue(rows, bounded=False)
         if not turns:
             return {"conversation_id": conversation_id, "summary": prev_summary, "compressed_turns": 0,

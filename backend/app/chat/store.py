@@ -123,6 +123,11 @@ def is_system_event_row(row: sqlite3.Row) -> bool:
         return False
 
 
+def learner_rows(rows: list[sqlite3.Row]) -> list[sqlite3.Row]:
+    """Messages that belong to the learner, without hidden system events."""
+    return [row for row in rows if not is_system_event_row(row)]
+
+
 class ChatStore:
     def __init__(self, store: Store):
         self.store = store

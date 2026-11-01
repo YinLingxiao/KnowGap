@@ -17,7 +17,7 @@ import re
 from datetime import datetime
 
 from app.chat.insights import subject_insights
-from app.chat.store import ChatStore, clip
+from app.chat.store import ChatStore, clip, learner_rows
 from app.memory.store import now
 
 logger = logging.getLogger(__name__)
@@ -141,7 +141,7 @@ def _material_excerpts(store: ChatStore, library, student_id: str, insights: dic
 def _dialogue(store: ChatStore, main_id: str | None) -> list[dict]:
     if not main_id:
         return []
-    rows = [row for row in store.history(main_id)
+    rows = [row for row in learner_rows(store.history(main_id))
             if row["status"] == "complete" and row["kind"] == "text" and row["content"].strip()]
     return [{"role": row["role"], "excerpt": clip(row["content"], 300)} for row in rows[-12:]]
 
