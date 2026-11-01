@@ -528,6 +528,10 @@ class ChatService:
             logger.exception("Could not start the coordinator wake turn")
             self.store.rollback_wake(event_id, None, preempted=False, base_delay=WAKE_RETRY_SECONDS,
                                      max_attempts=WAKE_MAX_ATTEMPTS)
+            generation = self.active.get(main_id)
+            if generation is not None and generation.user_message_id == event_id:
+                del self.active[main_id]
+            self._schedule_wake(student_id, main_id)
 
     def _system_event_payload(self, rows) -> tuple[str, dict]:
         lines = ["【系统事件 · 支线汇报】以下内容不是学习者说的话。"]
@@ -573,6 +577,8 @@ class ChatService:
                 logger.warning("Coordinator wake turn did not stop within 5s")
         if self.active.get(conversation_id) is generation:
             self._release(generation)
+            # 任务在首次执行前被取消时 _run 的 finally 不会跑，这里补上恢复汇报
+            self._settle_wake(generation)
         return True
 
     def stop(self, conversation_id: str) -> bool:
@@ -783,10 +789,12 @@ class ChatService:
         tool_messages: list[dict] = []
         last_flush = 0.0
         role_name: str | None = None
-        # 必须最早确定：模型不可用或读历史失败时，finally 也要能回滚唤醒回合
-        event_turn = is_system_event(self.store.message_meta(generation.user_message_id))
+        event_turn = False
         finished = False
         try:
+            # 必须在 try 内、打开模型之前确定：模型不可用或读历史失败时，finally 也要能回滚唤醒回合
+            event_turn = is_system_event(self.store.message_meta(generation.user_message_id))
+            role_name = self.store.conversation_role(generation.conversation_id)
             await asyncio.sleep(0)  # let the queued "start" event reach the client before any blocking work
             if not generation.notice_resolved:
                 generation.model_notice = self._fallback_notice(generation.conversation_id)
@@ -834,7 +842,6 @@ class ChatService:
             subject_id = subject.id if subject else None
             role = self.store.role_context(generation.conversation_id)
             user_meta = self.store.message_meta(generation.user_message_id)
-            role_name = role["role"]
             exercise = None if event_turn else active_exercise(history)
             memories = [] if event_turn else self.store.relevant_memories(
                 student_id, user_text, None, subject_id,

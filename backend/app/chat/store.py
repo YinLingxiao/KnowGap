@@ -997,6 +997,9 @@ class ChatStore:
                     )
             if reply_id:
                 db.execute("DELETE FROM conversation_messages WHERE id = ?", (reply_id,))
+            else:
+                # reply_id 未知时回复已经按 reply_to 挂上，没有外键，不删会留下不再隐藏的 streaming 气泡
+                db.execute("DELETE FROM conversation_messages WHERE reply_to = ?", (event_id,))
             db.execute("DELETE FROM conversation_messages WHERE id = ?", (event_id,))
             if event:
                 self._restore_updated_at(db, event["conversation_id"])
@@ -1092,6 +1095,14 @@ class ChatStore:
         with self.connection() as db:
             row = db.execute("SELECT student_id FROM conversations WHERE id = ?", (conversation_id,)).fetchone()
             return row["student_id"] if row else None
+
+    def conversation_role(self, conversation_id: str) -> str:
+        with self.connection() as db:
+            row = db.execute("SELECT kind FROM conversations WHERE id = ?", (conversation_id,)).fetchone()
+        kind = row["kind"] if row else None
+        if kind in ("main", "thread"):
+            return kind
+        return "chat"
 
     def resolve_thread(self, conversation_id: str, student_id: str, title: str, summary: str, takeaways: list[str]) -> dict:
         with self.connection() as db:
