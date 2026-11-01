@@ -1504,32 +1504,6 @@ class ChatStore:
                     state["conversation_id"] = None
             return state
 
-    def complete_onboarding(self, student_id: str, version: int, entries: dict) -> dict:
-        with self.connection() as db:
-            db.execute("BEGIN IMMEDIATE")
-            from app.chat.onboarding import state, FIELDS, LABELS
-            current = state(db, student_id)
-            if current["status"] == "completed":
-                return current
-            if current["status"] != "in_progress" or not current["ready"] or current["version"] != version:
-                raise ValueError("请完成访谈并核对最新画像后再确认。")
-            if set(entries) - set(FIELDS):
-                raise ValueError("画像字段无效。")
-            from app.memory.curated import split_entries, join_entries
-            notes = split_entries(read_all(db, student_id)["user"])
-            additions = []
-            for key, value in entries.items():
-                if not isinstance(value, str) or len(value) > 220:
-                    raise ValueError("画像条目过长或格式无效。")
-                if value.strip():
-                    additions.append(f"{LABELS[key]}：{value.strip()}")
-            # The confirmation is explicit authorization; preserve all existing notes.
-            replaced_labels = tuple(f"{LABELS[key]}：" for key in entries)
-            kept = [entry for entry in notes if not (replaced_labels and entry.startswith(replaced_labels))]
-            write_note(db, student_id, "user", join_entries(kept + additions), now())
-            db.execute("UPDATE onboarding_sessions SET status='completed', confirmed_entries=?, version=version+1 WHERE student_id=?", (json.dumps(entries, ensure_ascii=False), student_id))
-            return state(db, student_id)
-
     def skip_onboarding(self, student_id: str) -> dict:
         return self.mark_onboarding(student_id, "skipped")
 

@@ -9,7 +9,6 @@ from app.chat.agent import CHAT_PROMPT, ROLE_PROMPTS
 from app.main import create_app
 from tests.test_acceptance_support import isolated_settings
 from tests.test_chat import FakeChat, context_of, send, transcript_of
-from tests.test_onboarding_state import answer, seed_interview
 
 
 @pytest.mark.parametrize("role", ["main", "thread", "chat"])
@@ -93,26 +92,3 @@ def test_live_routing_check_allows_selection_cards_but_rejects_premature_executi
     from checks.evaluate_live_thread_routing import CASES, judge
     case = next(case for case in CASES if case["name"] == "ambiguous_acceptance")
     assert judge(case, calls, text, None) is expected
-
-
-def test_confirmed_interview_profile_populates_user_notes_and_marks_onboarded(tmp_path):
-    with TestClient(create_app(isolated_settings(tmp_path), chat_model=FakeChat())) as client:
-        assert client.get("/api/onboarding").json()["onboarded"] is False
-        seed_interview(client, {
-            "background": answer("background", "我是在校学生，最近在学计算机组成原理"),
-            "explanation": answer("explanation", "先给我具体的数字小例子再讲定义"),
-            "interaction": answer("interaction", "做题时先给小步提示让我自己思考"),
-        })
-        status = client.get("/api/onboarding").json()
-        assert status["onboarded"] is False
-        assert status["ready"] is True
-        assert client.get("/api/agent-memory").json()["user"] == ""
-        assert client.post('/api/onboarding/complete', json={"version": status['version'] - 1, "entries": {}}).status_code == 409
-        entries = {key: value['value'] for key, value in status['draft'].items()}
-        assert client.post('/api/onboarding/complete', json={"version": status['version'], "entries": entries}).status_code == 200
-        assert client.get('/api/onboarding').json()['onboarded'] is True
-
-        notes = client.get("/api/agent-memory").json()
-        assert "计算机组成原理" in notes["user"]
-        assert "数字小例子" in notes["user"]
-        assert "小步提示" in notes["user"]

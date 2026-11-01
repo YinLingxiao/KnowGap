@@ -49,11 +49,6 @@ class PendingDecision(BaseModel):
     allow: bool
 
 
-class ConfirmProfile(BaseModel):
-    version: int
-    entries: dict[str, str]
-
-
 class CreateCustomSkillBody(BaseModel):
     name: str
     role: str = "thread"
@@ -321,16 +316,6 @@ def chat_router(store: ChatStore, service: ChatService) -> APIRouter:
     @router.get("/onboarding")
     def get_onboarding():
         return store.onboarding_status(current_student())
-
-    @router.post("/onboarding/complete")
-    def complete_onboarding(body: ConfirmProfile):
-        try:
-            state = store.onboarding_status(current_student())
-            if state["conversation_id"] and service.is_generating(state["conversation_id"]):
-                raise ValueError("请等待本轮访谈完成后再确认。")
-            return store.complete_onboarding(current_student(), body.version, body.entries)
-        except ValueError as exc:
-            raise HTTPException(409, str(exc)) from None
 
     @router.post("/onboarding/skip")
     def skip_onboarding():

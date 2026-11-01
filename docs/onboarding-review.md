@@ -1,6 +1,6 @@
 # 初识访谈修复与审阅入口
 
-> **状态：访谈入口已删除。** 下文描述的是访谈上线时的行为。`POST /api/onboarding/start`、`/restart`、`chat/service.py` 里的访谈分支和 `chat/onboarding.py` 的提取 Prompt 都已移除，前端没有访谈界面；新用户走欢迎页建空间。保留 `GET /api/onboarding`、`skip`、`ack`、`complete`、`welcome`、`checklist`、`preferences`。`complete` 只能处理旧版留下的进行中访谈。
+> **状态：访谈入口已删除。** 下文描述的是访谈上线时的行为。`POST /api/onboarding/start`、`/restart`、`chat/service.py` 里的访谈分支和 `chat/onboarding.py` 的提取 Prompt 都已移除，前端没有访谈界面；新用户走欢迎页建空间。保留 `GET /api/onboarding`、`skip`、`ack`、`welcome`、`checklist`、`preferences`。`POST /api/onboarding/complete`（确认画像）也已删除，因为没有访谈就无从确认。
 
 ## 本轮行为
 
@@ -18,9 +18,8 @@
 ## 接口
 
 - `GET /api/onboarding`：状态、会话 ID、当前缺失槽、draft、ready、version。
-- 画像访谈的入口（`POST /api/onboarding/start`、`/restart`）和访谈对话分支已删除，前端不再有访谈界面。欢迎页建空间、清单和偏好接口保留；下面的 `complete` 只处理旧版留下的进行中访谈。
+- 画像访谈的入口（`POST /api/onboarding/start`、`/restart`）和访谈对话分支已删除，前端不再有访谈界面。欢迎页建空间、清单和偏好接口保留；
 - `POST /api/onboarding/skip`：独立跳过，停止当前访谈生成，保留草稿。
-- `POST /api/onboarding/complete`：`{version, entries: {background?, explanation?, interaction?}}`。必须已到核对阶段且无生成任务。
 
 ## 代码入口
 
