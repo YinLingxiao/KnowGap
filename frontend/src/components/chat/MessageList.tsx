@@ -12,6 +12,7 @@ import { chatApi } from "@/lib/chat/api";
 import { parseFileMarkers } from "@/lib/chat/attachments";
 import { createMaterialClient } from "@/lib/api/material-client";
 import type { ChatMessage, ExecutionStatus, LearnerMemory } from "@/lib/chat/types";
+import { isHiddenSystemMessage } from "@/lib/chat/wakeEvents";
 import { cx } from "@/lib/cx";
 import { useI18n } from "@/components/LanguageProvider";
 import type { MessageKey } from "@/lib/i18n";
@@ -340,11 +341,11 @@ export function MessageList({
     toBottom();
   }, [followNonce, conversationId, toBottom]);
 
-  const last = messages[messages.length - 1];
-  // 隐藏的系统事件不是学习者发言，不参与「最后一条用户消息」相关逻辑
-  const lastUser = [...messages].reverse().find((message) => message.role === "user" && !message.systemEvent);
   const eventIds = new Set(messages.filter((message) => message.role === "user" && message.systemEvent)
     .map((message) => message.id));
+  const last = [...messages].reverse().find((message) => !isHiddenSystemMessage(message, eventIds));
+  // 隐藏的系统事件不是学习者发言，不参与「最后一条用户消息」相关逻辑
+  const lastUser = [...messages].reverse().find((message) => message.role === "user" && !message.systemEvent);
   const firstLatestTurnIdx = lastUser
     ? messages.findIndex((m, idx) => idx > messages.indexOf(lastUser) && m.role === "assistant")
     : -1;
@@ -382,7 +383,7 @@ export function MessageList({
               );
             }
             if (message.role === "user") {
-              if (message.systemEvent) return null;  // 隐藏事件：学习者看不到这条消息
+              if (isHiddenSystemMessage(message, eventIds)) return null;  // 隐藏事件：学习者看不到这条消息
               const { files, body } = parseFileMarkers(message.content);
               const attempt = message.attempt ? ASSESSMENT[message.attempt.assessment] : null;
               const userFold = foldState({ ...message, content: body });
@@ -493,8 +494,7 @@ export function MessageList({
               );
             }
             // 唤醒回合的回复还没有可见内容时不渲染，避免先冒出空气泡（含只能看到思考过程的情况）
-            if (message.status === "streaming" && message.content === ""
-                && message.replyTo && eventIds.has(message.replyTo)) return null;
+            if (isHiddenSystemMessage(message, eventIds)) return null;
             const streaming = message.status === "streaming";
             const isLast = message === last && message.replyTo === lastUser?.id;
             // 计划属于整段对话，由输入框上方的计划条展示；这里只在发生变化的回复里留一行时间线标记
@@ -749,7 +749,7 @@ export function MessageList({
               </div>
             );
           })}
-          {last?.role === "user" && !last.systemEvent && phase === null && (
+          {last?.role === "user" && phase === null && (
             <div className={cx(styles.row, styles.assistantRow)}>
               <div className={styles.failure}>
                 <CircleAlert size={14} aria-hidden />
