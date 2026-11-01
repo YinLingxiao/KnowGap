@@ -10,3 +10,11 @@ export function hasThreadsNeedingAttention(
   return threads.some((item) => item.threadStatus !== "resolved"
     && (item.executionStatus === "waiting" || item.executionStatus === "failed"));
 }
+
+/**
+ * 「已合并到主线」提示只在发起合并的学习空间显示，否则「重新打开」会操作上一个空间的支线。
+ * 合并要等模型写小结，用户中途切换空间时，提示也不能落到新空间。
+ */
+export function mergeNoticeFor<T extends { subjectId: string }>(notice: T | null, subjectId: string): T | null {
+  return notice?.subjectId === subjectId ? notice : null;
+}

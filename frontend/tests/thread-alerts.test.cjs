@@ -11,7 +11,7 @@ const js = ts.transpileModule(source, {
 }).outputText;
 const loaded = { exports: {} };
 new Function('module', 'exports', 'require', js)(loaded, loaded.exports, () => ({}));
-const { hasThreadsNeedingAttention } = loaded.exports;
+const { hasThreadsNeedingAttention, mergeNoticeFor } = loaded.exports;
 
 const thread = (threadStatus, executionStatus) => ({ threadStatus, executionStatus });
 
@@ -32,4 +32,11 @@ test('busy, idle and stopped Threads do not ask for attention', () => {
     assert.equal(hasThreadsNeedingAttention([thread('open', status)]), false, String(status));
   }
   assert.equal(hasThreadsNeedingAttention([]), false);
+});
+
+test('the merge notice only shows in the space that resolved the Thread', () => {
+  const notice = { subjectId: 'subj-a', threadId: 'thread-a', messageId: 'msg-a' };
+  assert.equal(mergeNoticeFor(notice, 'subj-a'), notice);
+  assert.equal(mergeNoticeFor(notice, 'subj-b'), null);
+  assert.equal(mergeNoticeFor(null, 'subj-a'), null);
 });

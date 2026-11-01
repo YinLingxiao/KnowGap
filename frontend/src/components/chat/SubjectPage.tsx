@@ -31,7 +31,7 @@ import { MemoryItem } from "./MemoryDrawer";
 import { Library } from "./Library";
 import { MessageList } from "./MessageList";
 import { UsageStats } from "./UsageStats";
-import { hasThreadsNeedingAttention } from "@/lib/chat/threadAlerts";
+import { hasThreadsNeedingAttention, mergeNoticeFor } from "@/lib/chat/threadAlerts";
 import styles from "./SubjectPage.module.css";
 
 type Panel =
@@ -126,7 +126,8 @@ export function SubjectPage({
   const [draftError, setDraftError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
-  const [mergeNotice, setMergeNotice] = useState<{ threadId: string; messageId: string | null } | null>(null);
+  const [mergeNotice, setMergeNotice] = useState<{ subjectId: string; threadId: string; messageId: string | null } | null>(null);
+  const activeMergeNotice = mergeNoticeFor(mergeNotice, subject.id);
   const [scrollTarget, setScrollTarget] = useState<{ messageId: string | null; threadId: string; nonce: number } | null>(null);
   const [pages, setPages] = useState<{ id: string; text: string }>({ id: "", text: "" });
   const [pagesView, setPagesView] = useState<"edit" | "split" | "preview">("split");
@@ -349,7 +350,7 @@ export function SubjectPage({
     setResolveFor(null);
     setDraft(null);
     setDraftError(null);
-    setMergeNotice({ threadId: id, messageId });
+    setMergeNotice({ subjectId: subject.id, threadId: id, messageId });
     if (mainId) await chat.loadConversation(mainId);
     void chat.loadConversation(id);
     void refreshThreads();
@@ -681,14 +682,14 @@ export function SubjectPage({
         )}
         {mainId && (
           <div className={styles.dock}>
-            {mergeNotice && (
+            {activeMergeNotice && (
               <div className={styles.mergeNotice} role="status">
                 <CheckCircle2 size={14} aria-hidden />
                 <span>{tx("已合并到主线")}</span>
                 <button
                   type="button"
                   className={styles.mergeAction}
-                  onClick={() => setScrollTarget({ messageId: mergeNotice.messageId, threadId: mergeNotice.threadId, nonce: Date.now() })}
+                  onClick={() => setScrollTarget({ messageId: activeMergeNotice.messageId, threadId: activeMergeNotice.threadId, nonce: Date.now() })}
                 >
                   {tx("查看")}
                 </button>
@@ -696,7 +697,7 @@ export function SubjectPage({
                   type="button"
                   className={styles.mergeAction}
                   onClick={() => {
-                    const id = mergeNotice.threadId;
+                    const id = activeMergeNotice.threadId;
                     void reopen(id).then(() => {
                       setMergeNotice(null);
                       openThread(id);
