@@ -67,10 +67,8 @@ function mapMessage(data: Wire): ChatMessage {
     threadProposals: (data.thread_proposals ?? []).map((p: Wire) => ({
       id: p.id, title: p.title, task: p.task, reason: p.reason, threadId: p.thread_id ?? null,
     })),
-    threadUpdate: data.thread_update ? {
-      threadId: data.thread_update.thread_id, title: data.thread_update.title,
-      status: data.thread_update.status, summary: data.thread_update.summary,
-    } : null,
+    dispatchedThreads: (Array.isArray(data.dispatched_threads) ? data.dispatched_threads : [])
+      .map((item: Wire) => ({ threadId: String(item.thread_id) })),
     threadSummary: data.thread_summary ? {
       threadId: data.thread_summary.thread_id, title: data.thread_summary.title, summary: data.thread_summary.summary,
       takeaways: data.thread_summary.takeaways ?? [], memoryIds: data.thread_summary.memory_ids ?? [],

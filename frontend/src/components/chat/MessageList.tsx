@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import {
   ArrowDown, BookOpenCheck, Brain, CheckCircle2, ChevronDown, ChevronRight, ChevronUp,
-  Circle, CircleAlert, CircleDashed, CircleStop, CornerDownRight, Dumbbell, FileDown, FileText, Pin, PinOff,
+  Circle, CircleAlert, CircleDashed, CircleStop, Dumbbell, FileDown, FileText, Pin, PinOff,
   RotateCcw, Zap,
 } from "lucide-react";
 import type { StreamPhase } from "@/hooks/useChat";
@@ -11,7 +11,7 @@ import { toApiError } from "@/lib/api/errors";
 import { chatApi } from "@/lib/chat/api";
 import { parseFileMarkers } from "@/lib/chat/attachments";
 import { createMaterialClient } from "@/lib/api/material-client";
-import type { ChatMessage, LearnerMemory } from "@/lib/chat/types";
+import type { ChatMessage, ExecutionStatus, LearnerMemory } from "@/lib/chat/types";
 import { cx } from "@/lib/cx";
 import { useI18n } from "@/components/LanguageProvider";
 import type { MessageKey } from "@/lib/i18n";
@@ -105,6 +105,8 @@ interface MessageListProps {
   onStartExercise: (problemId: string) => void;
   onOpenMemories: (ids: string[]) => void;
   onOpenSummary?: (threadId: string) => void;
+  /** 主线支线卡的实时状态，按支线 id 取；没有对应支线时不渲染卡片 */
+  threadStates?: Record<string, { title: string; executionStatus: ExecutionStatus | null; threadStatus: "open" | "resolved" | null }>;
   onConfirmProposal?: (messageId: string, proposalId: string) => Promise<string>;
   onResumeCheckpoint?: (messageId: string) => Promise<void>;
   onDecideTool?: (approvalId: string, allow: boolean) => void;
@@ -211,7 +213,7 @@ function planMarksOf(changes: PlanChange[] | undefined) {
 export function MessageList({
   conversationId, messages, problems, memoriesById, conversationSubjectId, subjectNames, phase, followNonce, topSlot,
   onRegenerate, onStartExercise, onOpenMemories, onOpenSummary, onDecideTool, onConfirmProposal, onResumeCheckpoint,
-  onSendText, onOpenWeakPoints, onOpenFile, collapseLong = true, scrollTarget,
+  onSendText, onOpenWeakPoints, onOpenFile, collapseLong = true, scrollTarget, threadStates,
 }: MessageListProps) {
   const { t, tx } = useI18n();
   const summaryCard = useSummaryCard();
@@ -379,12 +381,6 @@ export function MessageList({
             if (message.role === "user") {
               const { files, body } = parseFileMarkers(message.content);
               const attempt = message.attempt ? ASSESSMENT[message.attempt.assessment] : null;
-              // 统计紧随这条用户消息之后的支线进展更新数
-              let replyUpdates = 0;
-              for (let j = index + 1; j < messages.length; j += 1) {
-                if (messages[j].role === "user") break;
-                if (messages[j].threadUpdate || messages[j].threadSummary) replyUpdates += 1;
-              }
               const userFold = foldState({ ...message, content: body });
               const userPinned = pinnedIds.includes(message.id);
               return (
@@ -407,18 +403,34 @@ export function MessageList({
                   {body && <div className={cx(styles.userBubble, userFold.folded && styles.folded)}>
                     {hasVisionMarker(body) ? <VisionMarkedText text={body} /> : body}
                   </div>}
+                  {(message.dispatchedThreads ?? []).map(({ threadId }) => {
+                    const state = threadStates?.[threadId];
+                    if (!state) return null;  // 支线已删除或尚未加载：不渲染坏卡
+                    const resolved = state.threadStatus === "resolved";
+                    const status = state.executionStatus;
+                    return (
+                      <button
+                        key={threadId}
+                        type="button"
+                        className={styles.threadPill}
+                        onClick={() => onOpenSummary?.(threadId)}
+                        title={state.title}
+                        aria-label={tx("查看支线：{title}", { title: state.title })}
+                      >
+                        <i className={cx(styles.pillDot, resolved ? styles.dot_resolved
+                          : status && status !== "idle" ? styles[`dot_${status}`] : styles.dot_hollow)} aria-hidden />
+                        {resolved ? <span className={styles.pillId}>{tx("已解决")}</span>
+                          : status && <span className={styles.pillId}>{tx(EXECUTION_LABEL[status] ?? status)}</span>}
+                        <span className={styles.pillTitle}>{state.title}</span>
+                      </button>
+                    );
+                  })}
                   <div className={styles.userMeta}>
                     {userFold.long && (
                       <button className={styles.foldToggle} onClick={() => toggleFold(message, userFold.folded)} aria-expanded={!userFold.folded}>
                         {userFold.folded ? <ChevronDown size={12} aria-hidden /> : <ChevronUp size={12} aria-hidden />}
                         {userFold.folded ? t("messages.expand") : t("messages.collapse")}
                       </button>
-                    )}
-                    {replyUpdates > 0 && (
-                      <span className={styles.replyCount}>
-                        <CornerDownRight size={11} aria-hidden />
-                        {replyUpdates} {replyUpdates === 1 ? "reply" : "replies"}
-                      </span>
                     )}
                     {message.attempt && attempt && (
                       <span className={cx(styles.note, attempt.tone)} title={t("messages.evidenceTitle", { evidence: message.attempt.evidence })}>
@@ -454,30 +466,6 @@ export function MessageList({
               );
             }
             const showNewDivider = index === firstLatestTurnIdx && Boolean(conversationSubjectId);
-            if (message.threadUpdate) {
-              const card = message.threadUpdate;
-              const isIdle = card.status === "idle";
-              return (
-                <div key={message.id} className={styles.row}>
-                  {showNewDivider && (
-                    <div className={styles.newLine} aria-hidden>
-                      <span>New</span>
-                    </div>
-                  )}
-                  <button
-                    type="button"
-                    className={styles.threadPill}
-                    onClick={() => onOpenSummary?.(card.threadId)}
-                    title={card.summary}
-                  >
-                    <i className={cx(styles.pillDot, isIdle ? styles.dot_hollow : styles[`dot_${card.status}`])} aria-hidden />
-                    <span className={styles.pillId}>{tx(EXECUTION_LABEL[card.status] ?? card.status)}</span>
-                    <span className={styles.pillTitle}>{card.title}</span>
-                    {card.summary && <span className={styles.pillSummary}>{card.summary}</span>}
-                  </button>
-                </div>
-              );
-            }
             if (message.threadSummary) {
               const card = message.threadSummary;
               return (

@@ -65,7 +65,7 @@ STUDY_NOTE_BUILDER_SKILL = f"""【当前挂载 Skill：study_note_builder（结�
 按以下工作流整理结构化讲义或代码演练：
 1. 用 `update_plan` 创建或整份更新讲义/实验的学习步骤（如：梳理核心概念框架、交互推演对比、自测），保留已有真实 id。新步骤先设 pending，实际开始才设 in_progress；自测时设 awaiting_learner 并在 note 写问题，答对才设 done。
 2. 在讲义正文中积极嵌入 `knowgap-widget`（如 `step_simulator` 过程推演 + `comparison_matrix` 对比表 + `micro_quiz` 自测题），让讲义具备可交互性。
-3. 完成后调用 `report_progress` 将讲义要点同步回主线。
+3. 完成后调用 `report_progress` 记录讲义要点（只写进这条回复，不写回主线）。
 
 {TRANSFER_LEARNING_GUIDE}
 
