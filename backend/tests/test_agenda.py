@@ -2,7 +2,7 @@
 
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date, datetime, timedelta
+from datetime import date
 
 import pytest
 from fastapi.testclient import TestClient
@@ -45,6 +45,41 @@ def seed_memory(client, memory_id="mem-one", student="demo-student-001", subject
         for quote, day in (("旧原话", "20"), ("最近原话", "21")):
             db.execute("INSERT INTO learner_memory_evidence (memory_id, quote, reason, signal, created_at) "
                        "VALUES (?,?,'reason','supports',?)", (memory_id, quote, f"2026-10-{day}T12:00:00+00:00"))
+
+
+def agenda_with_review_rows(path):
+    from app.memory.store import Store
+    store = Store(path)
+    with store.connection() as db:
+        db.execute("""
+            CREATE TABLE agenda_tasks (
+                id TEXT PRIMARY KEY, student_id TEXT NOT NULL,
+                title TEXT NOT NULL, notes TEXT NOT NULL DEFAULT '',
+                parent_id TEXT, priority INTEGER NOT NULL DEFAULT 4, labels TEXT NOT NULL DEFAULT '[]',
+                subject_id TEXT, thread_id TEXT, scheduled_date TEXT, scheduled_start_at TEXT,
+                duration_minutes INTEGER, deadline_date TEXT,
+                status TEXT NOT NULL DEFAULT 'open', completed_at TEXT,
+                source TEXT NOT NULL DEFAULT 'manual', memory_id TEXT, review_step INTEGER,
+                sort_order REAL NOT NULL DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+                UNIQUE(student_id, memory_id, review_step)
+            )
+        """)
+        stamp = "2026-10-20T12:00:00+00:00"
+        rows = [
+            ("rev-open", "s", "review", "open", "mem-a", 1),
+            ("rev-done", "s", "review", "done", "mem-a", 2),
+            ("rev-cancelled", "s", "review", "cancelled", "mem-b", 1),
+            ("rev-other", "other", "review", "open", "mem-c", 1),
+            ("manual", "s", "manual", "open", None, None),
+            ("ai", "s", "ai_breakdown", "done", None, None),
+        ]
+        db.executemany(
+            "INSERT INTO agenda_tasks (id, student_id, title, status, source, memory_id, review_step, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [(task_id, student, task_id, status, source, memory, step, stamp, stamp)
+             for task_id, student, source, status, memory, step in rows],
+        )
+    return store
 
 
 def test_crud_filters_patch_and_null(client):
@@ -102,73 +137,42 @@ def test_parent_constraints_cascade_and_batch_atomicity(client):
     assert patch(client, child, title="deleted").status_code == 404
 
 
-def test_reviews_three_rounds_completion_anchor_idempotence(client):
-    seed_memory(client)
-    first = listed(client)[0]
-    assert first["scheduled_date"] == "2026-10-21" and first["review_step"] == 1
-    assert first["priority"] == 2 and first["title"] == "闪回：戴维南"
-    assert "误区摘要" in first["notes"] and "最近原话" in first["notes"] and "旧原话" not in first["notes"]
-    with ThreadPoolExecutor(max_workers=4) as pool:
-        results = list(pool.map(lambda _: listed(client), range(8)))
-    assert all(len(r) == 1 and r[0]["id"] == first["id"] for r in results)
-    current = first
-    for next_step, offset in ((2, 3), (3, 7)):
-        completed = patch(client, current, status="done").json()
-        expected = datetime.fromisoformat(completed["completed_at"]).astimezone().date() + timedelta(days=offset)
-        current = listed(client)[0]
-        assert current["review_step"] == next_step and current["scheduled_date"] == expected.isoformat()
-        patch(client, completed, status="done")
-        assert len(listed(client)) == 1
-    patch(client, current, status="done")
-    assert listed(client) == [] and len(listed(client, status="all")) == 3
+def _agenda_pairs(store):
+    with store.connection() as db:
+        return {(row["id"], row["source"]) for row in db.execute("SELECT id, source FROM agenda_tasks")}
 
 
-@pytest.mark.parametrize("action", ["resolved", "deleted", "abandoned"])
-def test_review_cancellation_and_delete_never_resurrects(client, action):
+def test_legacy_review_rows_are_deleted_and_rerun_is_safe(tmp_path):
+    from app.agenda.store import ensure
+    kept = {("manual", "manual"), ("ai", "ai_breakdown")}
+    store = agenda_with_review_rows(tmp_path / "old.sqlite3")
+    ensure(store)
+    assert _agenda_pairs(store) == kept
+    ensure(store)
+    assert _agenda_pairs(store) == kept
+
+
+def test_review_purge_marker_is_per_database(tmp_path):
+    from app.agenda.store import ensure
+    kept = {("manual", "manual"), ("ai", "ai_breakdown")}
+    ensure(agenda_with_review_rows(tmp_path / "one.sqlite3"))
+    second = agenda_with_review_rows(tmp_path / "two.sqlite3")
+    ensure(second)
+    assert _agenda_pairs(second) == kept
+
+
+def test_unresolved_misconceptions_do_not_generate_tasks(client):
+    import json
+    from app.agent_tools.agenda import run as agenda_run
+    from app.chat.service import ToolContext
     seed_memory(client)
-    first = listed(client)[0]
-    patch(client, first, status="done")
-    second = listed(client)[0]
-    if action == "abandoned":
-        client.delete(BASE + "/tasks/" + second["id"])
-    else:
-        with client.app.state.store.connection() as db:
-            if action == "resolved":
-                db.execute("UPDATE learner_memories SET status='resolved' WHERE id='mem-one'")
-            else:
-                db.execute("DELETE FROM learner_memories WHERE id='mem-one'")
     assert listed(client) == []
-    assert client.get(BASE + "/feed").json()["tasks"][0]["status"] == "done"
-    assert len(listed(client, status="all")) == 1
-    if action != "abandoned":
-        with client.app.state.store.connection() as db:
-            assert db.execute("SELECT status FROM agenda_tasks WHERE id=?", (second["id"],)).fetchone()[0] == "cancelled"
-
-
-def test_delete_first_review_before_completion(client):
-    seed_memory(client)
-    first = listed(client)[0]
-    client.delete(BASE + "/tasks/" + first["id"])
-    assert listed(client) == [] and listed(client) == []
-
-
-def test_review_subject_readonly_memory_and_concurrent_completion(client):
-    subject = client.post("/api/subjects", json={"name": "电路"}).json()
-    seed_memory(client, subject=subject["id"])
+    assert client.get(BASE + "/feed").json()["tasks"] == []
+    assert "BEGIN:VEVENT" not in client.get(BASE + "/export.ics").text
+    ctx = ToolContext(None, client.app.state.chat_service.store, "demo-student-001", "missing")
+    assert json.loads(agenda_run("agenda_list", {"days": 60}, ctx))["tasks"] == []
     with client.app.state.store.connection() as db:
-        before = [tuple(r) for r in db.execute("SELECT * FROM learner_memories")]
-        evidence_before = [tuple(r) for r in db.execute("SELECT * FROM learner_memory_evidence")]
-    first = listed(client)[0]
-    assert first["subject_id"] == subject["id"]
-    assert patch(client, first, source="manual").status_code == 422
-    with ThreadPoolExecutor(max_workers=4) as pool:
-        responses = list(pool.map(lambda _: patch(client, first, status="done"), range(6)))
-    assert all(r.status_code == 200 for r in responses)
-    assert len({r.json()["completed_at"] for r in responses}) == 1
-    assert len(listed(client)) == 1 and listed(client)[0]["review_step"] == 2
-    with client.app.state.store.connection() as db:
-        assert before == [tuple(r) for r in db.execute("SELECT * FROM learner_memories")]
-        assert evidence_before == [tuple(r) for r in db.execute("SELECT * FROM learner_memory_evidence")]
+        assert db.execute("SELECT COUNT(*) FROM agenda_tasks").fetchone()[0] == 0
 
 
 def test_threads_feed_dates_and_subject_filter(client):

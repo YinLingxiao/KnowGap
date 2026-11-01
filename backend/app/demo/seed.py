@@ -41,7 +41,7 @@ def _subject_id(db, student_id: str, name: str) -> str | None:
 
 
 def seed_agenda(store: ChatStore, student_id: str) -> None:
-    """演示日程：固定 id，重复运行不会重复插入；闪回任务由日程后端根据误区记忆自动生成。"""
+    """演示日程：固定 id，重复运行不会重复插入。"""
     from app.agenda.store import ensure
 
     ensure(store)
@@ -83,13 +83,6 @@ def _reset_agenda(db, student_id: str, subject_ids: list[str]) -> None:
             db.execute(
                 f"DELETE FROM agenda_tasks WHERE student_id = ? AND subject_id IN ({placeholders})",
                 (student_id, *subject_ids),
-            )
-            # 由演示误区自动生成的闪回任务也一并清掉
-            placeholders = ",".join("?" * len(subject_ids))
-            db.execute(
-                f"DELETE FROM agenda_tasks WHERE student_id = ? AND source = 'review' AND memory_id IN "
-                f"(SELECT id FROM learner_memories WHERE student_id = ? AND subject_id IN ({placeholders}))",
-                (student_id, student_id, *subject_ids),
             )
     if "focus_sessions" in tables:
         # 番茄钟功能已移除；旧版本导入的演示专注记录仍留在库里，清除演示数据时一并删掉

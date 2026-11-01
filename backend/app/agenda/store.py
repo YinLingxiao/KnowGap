@@ -1,7 +1,7 @@
-"""Agenda-owned migrations, transactional writes and idempotent review chains."""
+"""Agenda-owned migrations and transactional writes."""
 
 import json
-from datetime import date, datetime, timedelta
+import os
 
 from fastapi import HTTPException
 from pydantic import ValidationError
@@ -9,9 +9,20 @@ from pydantic import ValidationError
 from app.agenda.schemas import TaskDraft
 from app.memory.store import new_id, now
 
+_purged_review_databases = set()
+
+
+def _database_key(store):
+    path = getattr(store, "path", None)
+    if path is None:
+        path = store.store.path
+    return os.path.normcase(os.path.abspath(path))
+
 
 def ensure(store):
     # Kept outside ChatStore initialization; safe for existing databases and repeated calls.
+    key = _database_key(store)
+    purge = key not in _purged_review_databases
     with store.connection() as db:
         db.executescript("""
             CREATE TABLE IF NOT EXISTS agenda_tasks (
@@ -36,6 +47,10 @@ def ensure(store):
         db.execute("BEGIN IMMEDIATE")
         if "reminder_minutes" not in {row["name"] for row in db.execute("PRAGMA table_info(agenda_tasks)")}:
             db.execute("ALTER TABLE agenda_tasks ADD COLUMN reminder_minutes INTEGER")
+        if purge:
+            db.execute("DELETE FROM agenda_tasks WHERE source='review'")
+    if purge:
+        _purged_review_databases.add(key)
 
 
 def task(row):
@@ -85,44 +100,6 @@ def insert(db, student, data):
     return owned(db, student, data["id"])
 
 
-def sync(db, student):
-    """Only reads chat tables. Writer lock + unique key serialize concurrent sync/completion."""
-    memories = db.execute(
-        "SELECT m.*, (SELECT quote FROM learner_memory_evidence e WHERE e.memory_id=m.id "
-        "ORDER BY e.created_at DESC, e.id DESC LIMIT 1) AS quote FROM learner_memories m "
-        "WHERE m.student_id=? AND m.kind='misconception' AND m.status!='resolved'", (student,)
-    ).fetchall()
-    db.execute(
-        "UPDATE agenda_tasks SET status='cancelled', updated_at=? WHERE student_id=? AND source='review' "
-        "AND status='open' AND NOT EXISTS (SELECT 1 FROM learner_memories m WHERE m.id=agenda_tasks.memory_id "
-        "AND m.student_id=? AND m.kind='misconception' AND m.status!='resolved')", (now(), student, student)
-    )
-    for memory in memories:
-        if db.execute("SELECT 1 FROM agenda_review_abandoned WHERE student_id=? AND memory_id=?",
-                      (student, memory["id"])).fetchone():
-            continue
-        rounds = db.execute(
-            "SELECT * FROM agenda_tasks WHERE student_id=? AND memory_id=? ORDER BY review_step",
-            (student, memory["id"])
-        ).fetchall()
-        if not rounds:
-            step, anchor, days = 1, memory["created_at"][:10], 1
-        else:
-            last = rounds[-1]
-            if last["status"] != "done" or last["review_step"] >= 3:
-                continue
-            step = last["review_step"] + 1
-            anchor = datetime.fromisoformat(last["completed_at"]).astimezone().date().isoformat()
-            days = 3 if step == 2 else 7
-        insert(db, student, {
-            "title": ("闪回：" + memory["topic"])[:200],
-            "notes": memory["summary"] + ("\n\n原话证据：" + memory["quote"] if memory["quote"] else ""),
-            "priority": 2, "subject_id": memory["subject_id"], "source": "review",
-            "memory_id": memory["id"], "review_step": step,
-            "scheduled_date": (date.fromisoformat(anchor) + timedelta(days=days)).isoformat(),
-        })
-
-
 def update(db, student, task_id, changes):
     previous = owned(db, student, task_id)
     # Null clears collections/text to their empty representations, not SQL NULL.
@@ -134,8 +111,6 @@ def update(db, student, task_id, changes):
         TaskDraft.model_validate({k: merged[k] for k in TaskDraft.model_fields})
     except ValidationError as exc:
         raise HTTPException(422, "计划日期或任务字段无效") from exc
-    if previous["source"] == "review" and "source" in changes:
-        raise HTTPException(422, "闪回任务不能修改来源")
     references(db, student, merged, task_id)
     if "status" in changes:
         changes["completed_at"] = (previous["completed_at"] or now()) if changes["status"] == "done" else None
@@ -144,8 +119,6 @@ def update(db, student, task_id, changes):
         changes["labels"] = json.dumps(changes["labels"], ensure_ascii=False)
     db.execute(f"UPDATE agenda_tasks SET {','.join(k + '=?' for k in changes)} WHERE id=? AND student_id=?",
                [*changes.values(), task_id, student])
-    if previous["source"] == "review":
-        sync(db, student)
     return owned(db, student, task_id)
 
 
