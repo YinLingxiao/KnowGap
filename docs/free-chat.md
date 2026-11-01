@@ -1,6 +1,6 @@
 # 自由对话 API 与状态约定
 
-首页是 ChatBox 式的自由对话：不需要先选题，题目只是可选上下文。旧的 `/api/diagnosis`、`/api/sessions/*`、`/api/memories` 保持不变，新界面不再调用它们。
+首页是 ChatBox 式的自由对话：不需要先选题，题目只是可选上下文。第一版的 `/api/diagnosis`、`/api/sessions/*`、`/api/memories` 已删除；旧会话和记忆在启动时由 `legacy_imports` 迁移成对话和学习记忆。
 
 代码位置：`backend/app/chat/`（`store.py` 持久化与分层检索、`service.py` 生成与流式、`agent.py` 提示词与校验、`router.py` 对话与记忆接口、`subjects.py` Subject 接口）；前端 `frontend/src/hooks/useChat.ts`、`frontend/src/lib/chat/`、`frontend/src/components/chat/`。
 
