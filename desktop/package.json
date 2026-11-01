@@ -11,11 +11,11 @@
     "test": "node --test tests/*.test.cjs"
   },
   "dependencies": {
-    "electron-updater": "6.6.2"
+    "electron-updater": "6.8.11"
   },
   "devDependencies": {
-    "electron": "33.2.1",
-    "electron-builder": "25.1.8"
+    "electron": "45.2.1",
+    "electron-builder": "26.18.0"
   },
   "build": {
     "appId": "app.knowgap.desktop",
