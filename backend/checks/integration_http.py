@@ -51,4 +51,4 @@ with tempfile.TemporaryDirectory() as temporary:
                 process.terminate();process.wait(timeout=10)
     finally:
         provider.shutdown();provider.server_close()
-print('Actual frontend adapter -> FastAPI -> synthetic Chat Completions -> SQLite -> restart: passed.')
+print('Actual frontend request layer -> FastAPI -> synthetic Chat Completions -> SQLite -> restart: passed.')

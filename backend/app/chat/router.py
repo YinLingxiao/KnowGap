@@ -322,12 +322,6 @@ def chat_router(store: ChatStore, service: ChatService) -> APIRouter:
     def get_onboarding():
         return store.onboarding_status(current_student())
 
-    @router.post("/onboarding/start", response_model=Conversation)
-    def start_onboarding():
-        conv = store.start_onboarding(current_student())
-        conv.generating = service.is_generating(conv.id)
-        return conv
-
     @router.post("/onboarding/complete")
     def complete_onboarding(body: ConfirmProfile):
         try:
@@ -380,15 +374,6 @@ def chat_router(store: ChatStore, service: ChatService) -> APIRouter:
             return store.save_learning_preferences(current_student(), body.model_dump())
         except ValueError as exc:
             raise HTTPException(422, str(exc)) from None
-
-    @router.post("/onboarding/restart", response_model=Conversation)
-    def restart_onboarding():
-        state = store.onboarding_status(current_student())
-        if state["conversation_id"]:
-            service.stop(state["conversation_id"])
-        conv = store.restart_onboarding(current_student())
-        conv.generating = service.is_generating(conv.id)
-        return conv
 
     @router.get("/usage")
     def account_usage():

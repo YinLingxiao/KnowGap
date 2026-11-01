@@ -815,29 +815,6 @@ class ChatService:
                 # 续跑时上下文已在检查点里，不再重复调视觉模型
                 history, image_card = await self._read_images(student_id, history, generation.user_message_id)
             user_text = next(row['content'] for row in history if row['id'] == generation.user_message_id)
-            interview = self.store.onboarding_status(student_id)
-            if interview["conversation_id"] == generation.conversation_id:
-                from app.chat.onboarding import EXTRACTION_PROMPT, QUESTIONS, apply_answer
-                if interview["status"] != "in_progress":
-                    raise ProviderError(409, "这段访谈已结束或暂停，请从学习记忆继续完善画像。")
-                result = await self._complete_json(model, [
-                    {"role": "system", "content": EXTRACTION_PROMPT},
-                    {"role": "user", "content": json.dumps({"stage": interview["stage"],
-                        "draft": interview["draft"], "answer": user_text}, ensure_ascii=False)},
-                ], generation.conversation_id, assistant_id, "onboarding")
-                if not isinstance(result.get("answers"), list):
-                    raise ProviderError(502, "访谈响应格式无效，请重试；回答尚未计入进度。")
-                with self.store.connection() as db:
-                    db.execute("BEGIN IMMEDIATE")
-                    updated = apply_answer(db, student_id, generation.user_message_id, user_text, result, interview["version"])
-                    text = (str(result.get("reply") or "")[:500] + "\n\n" + (
-                        "谢谢，下面是我整理的候选画像。请核对或修改后确认；确认前不会写入长期画像。"
-                        if updated["ready"] else QUESTIONS[updated["stage"]])).strip()
-                    # State advancement and its visible reply commit together.
-                    db.execute("UPDATE conversation_messages SET content=?, status='complete', error=NULL WHERE id=?", (text, assistant_id))
-                queue.put_nowait(("done", {"message": self._message(student_id, assistant_id)}))
-                queue.put_nowait(("analysis", {"skipped": True}))
-                return
             subject = self.store.conversation_subject(generation.conversation_id)
             subject_id = subject.id if subject else None
             role = self.store.role_context(generation.conversation_id)

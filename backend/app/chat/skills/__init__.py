@@ -3,7 +3,6 @@
 import re
 
 from app.chat.skills.chat_skills import (
-    ONBOARDING_FIRST_MESSAGE,
     ONBOARDING_TITLE,
 )
 from app.chat.skills.main_skills import MAIN_ROADMAP_SKILL
@@ -101,7 +100,6 @@ def select_skill_prompt(
 
 __all__ = [
     "MAIN_ROADMAP_SKILL",
-    "ONBOARDING_FIRST_MESSAGE",
     "ONBOARDING_TITLE",
     "THREAD_SKILLS",
     "infer_thread_skill",

@@ -3,29 +3,23 @@
 import logging
 import sqlite3
 from contextlib import asynccontextmanager
-from typing import Literal
 from urllib.parse import urlsplit
 
-from fastapi import FastAPI, HTTPException, Request, Response, Query
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
 
-from app.agents.llm import shared_ssl_context, ChatCompletionsChat, ChatCompletionsTutor, ChatModel, ProviderError, Tutor
+from app.agents.llm import shared_ssl_context, ChatCompletionsChat, ChatCompletionsTutor, ChatModel, ProviderError
 from app.config import Settings
 from app.memory.store import StateConflict, Store
-from app.models.schemas import (
-    DEMO_STUDENT, DiagnosisRequest, Memory, MessageRequest, Problem, Session, TeachingResponse,
-)
+from app.models.schemas import Problem
 from app.services.problems import PROBLEMS
-from app.services.teaching import teach
 from app.services.ai_settings import AISettings
 from app.services.chatgpt_auth import ChatGPTAuth
-from app.services.anysearch import AnySearchClient, SearchService
 from app.services.search_settings import SearchSettings
-from app.models.schemas import WebSearchResponse
 from app.services.materials import MaterialStore
 from app.api.materials import material_router
 from app.auth.deps import current_student, reset_student, set_student
@@ -44,7 +38,6 @@ from app.vision.settings import ServiceModels
 from app.vision.store import VisionStore
 
 logger = logging.getLogger(__name__)
-DemoStudent = Literal["demo-student-001"]
 
 
 def _local_page(origin: str) -> bool:
@@ -52,10 +45,7 @@ def _local_page(origin: str) -> bool:
     return host in {"127.0.0.1", "localhost", "::1"}
 
 
-def create_app(
-    settings: Settings | None = None, tutor: Tutor | None = None, search_service: SearchService | None = None,
-    chat_model: ChatModel | None = None,
-) -> FastAPI:
+def create_app(settings: Settings | None = None, chat_model: ChatModel | None = None) -> FastAPI:
     settings = settings or Settings()
     store = Store(settings.resolved_database_path())
     library = MaterialStore(store)
@@ -65,9 +55,8 @@ def create_app(
     chatgpt_auth = ChatGPTAuth(settings)
     ai_settings.chatgpt = chatgpt_auth
     ai_settings.library.chatgpt = chatgpt_auth
-    model = tutor if tutor is not None else ChatCompletionsTutor(ai_settings.current, chatgpt_auth=chatgpt_auth)
+    model = ChatCompletionsTutor(ai_settings.current, chatgpt_auth=chatgpt_auth)
     search_settings = SearchSettings(settings)
-    search = search_service if search_service is not None else AnySearchClient(settings, key_source=search_settings.saved_key)
     chat = chat_model if chat_model is not None else ChatCompletionsChat(
         ai_settings.current, chatgpt_auth=chatgpt_auth)
     model_library = None if chat_model is not None else ai_settings.library
@@ -97,7 +86,6 @@ def create_app(
     app = FastAPI(title="KnowGap API", version="0.2.0", lifespan=lifespan)
     app.state.store = store
     app.state.tutor = model
-    app.state.search = search
     app.state.materials = library
     app.state.chat_service = chat_service
     app.state.auth = auth_store
@@ -201,8 +189,7 @@ def create_app(
     def save_ai_config(request: Request, body: dict):
         require_local_configuration(request)
         status = ai_settings.save(body)
-        if tutor is None:
-            model.settings = ai_settings.current
+        model.settings = ai_settings.current
         if chat_model is None:
             chat.settings = ai_settings.current
         return status
@@ -233,41 +220,6 @@ def create_app(
     @app.get("/api/problems", response_model=list[Problem])
     def problems():
         return list(PROBLEMS.values())
-
-    @app.get('/api/search', response_model=WebSearchResponse)
-    async def web_search(q: str = Query(min_length=1, max_length=600), limit: int = Query(default=5, ge=1, le=10)):
-        query = q.strip()
-        if not query:
-            raise HTTPException(422, '请输入搜索关键词。')
-        return await search.search(query, limit)
-
-    @app.post("/api/diagnosis", response_model=TeachingResponse)
-    async def diagnosis(body: DiagnosisRequest):
-        return await teach(store, model, body, search_service=search, library=library)
-
-    @app.get("/api/sessions/{session_id}", response_model=Session)
-    def get_session(session_id: str, student_id: DemoStudent = DEMO_STUDENT):
-        session = store.session(session_id, student_id)
-        if session is None:
-            raise HTTPException(404, "会话不存在，请开启新会话。")
-        return session
-
-    @app.post("/api/sessions/{session_id}/messages", response_model=TeachingResponse)
-    async def message(session_id: str, body: MessageRequest):
-        session = get_session(session_id)
-        return await teach(store, model, DiagnosisRequest(
-            student_id=session.student_id, problem_id=session.problem_id, answer=body.content, web_search=body.web_search,
-        ), session, search_service=search, library=library)
-
-    @app.get("/api/memories", response_model=list[Memory])
-    def memories(student_id: DemoStudent = DEMO_STUDENT):
-        return store.memories(student_id)
-
-    @app.delete("/api/memories/{memory_id}", status_code=204)
-    def delete_memory(memory_id: str, student_id: DemoStudent = DEMO_STUDENT):
-        if not store.delete_memory(memory_id, student_id):
-            raise HTTPException(404, "记忆不存在或已删除。")
-        return Response(status_code=204)
 
     return app
 

@@ -1,4 +1,4 @@
-"""Free-chat HTTP contract. Independent from the legacy problem-bound /api/sessions contract."""
+"""Free-chat HTTP contract. Independent from the retired problem-bound sessions (only imported into conversations at startup)."""
 
 from typing import Annotated, Literal
 
