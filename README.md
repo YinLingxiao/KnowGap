@@ -6,7 +6,7 @@
 
 **记得你说错过什么的 AI 学习伙伴**
 
-带着原话记下误区 · 等你答对才往下走 · 第 1、3、7 天自动回来复习
+带着原话记下误区 · 等你答对才往下走 · 易错点留在首页待巩固
 
 [![Release](https://img.shields.io/github/v/release/YinLingxiao/KnowGap?label=version&color=3B82F6)](https://github.com/YinLingxiao/KnowGap/releases/latest)
 [![Platform](https://img.shields.io/badge/platform-Windows-0078D6)](https://github.com/YinLingxiao/KnowGap/releases/latest)
@@ -17,7 +17,7 @@
 
 [**下载**](#下载) · [**快速开始**](#快速开始) · [**功能**](#功能) · [**常见问题**](#常见问题) · [**工作原理**](docs/how-it-works.md) · [**路线图**](#路线图)
 
-<img src="docs/screenshots/home-today.png" alt="知隙首页：今日待办、误区闪回和上手清单" width="880" />
+<img src="docs/screenshots/home-today.png" alt="知隙首页：今日待办、待巩固的易错点和上手清单" width="880" />
 
 </div>
 
@@ -47,9 +47,9 @@
 </td>
 <td width="33%" valign="top">
 
-### 🔁 复习自己找上门
+### 📌 易错点留在首页
 
-没解决的误区会变成日程里的闪回任务：次日一次，完成后隔 3 天、再隔 7 天，不用你自己记得。
+未解决的误区（待确认、需要巩固）出现在首页「待巩固的易错点」，可以做 1 分钟靶向自测。日程不会自动生成复习任务。
 
 </td>
 </tr>
@@ -86,9 +86,9 @@
 
 <img src="docs/screenshots/space-main-thread.png" alt="学习空间的主线和支线" width="760" />
 
-### 日程与闪回复习
+### 日程
 
-预览、周历两种视图；按 `Q` 一句话快录（自动识别日期、时间、`#空间`、优先级）；对话里也能让 AI 帮你排复习。支持提醒和导出 `.ics`。
+预览、周历两种视图；按 `Q` 一句话快录（自动识别日期、时间、`#空间`、优先级）。任务来自手动添加，或 AI 拆解后确认入库，不会自动生成。对话里也可以让 AI 帮你排复习。支持提醒和导出 `.ics`。
 
 <img src="docs/screenshots/agenda-week.png" alt="日程周历" width="760" />
 
@@ -96,13 +96,11 @@
 
 - **考前一页纸**：个人易错红榜（带原话）、支线结论、核心公式、易混对比与押题自测，可导出 Markdown / PDF。
 - **知识迷雾图**：已掌握 / 待攻克 / 尚未解锁的概念三环，点节点就能开支线。
-- **模拟复试 `/viva`**：三问追问，结束后出五维雷达，每条评语都引用你的原话。
 
 <table>
 <tr>
 <td><img src="docs/screenshots/cheatsheet.png" alt="考前一页纸" /></td>
 <td><img src="docs/screenshots/concept-graph.png" alt="知识迷雾图" /></td>
-<td><img src="docs/screenshots/viva-radar.png" alt="模拟复试雷达" /></td>
 </tr>
 </table>
 
@@ -120,7 +118,7 @@
 
 关闭缩到托盘、`Alt+Space` 全局快问、单实例、应用内更新。学习记录、对话和日程都存在本机 SQLite。
 
-> 每个机制的细节（证据怎么校验、状态怎么流转、闪回怎么排）都写在 **[工作原理](docs/how-it-works.md)** 里。
+> 每个机制的细节（证据怎么校验、状态怎么流转）都写在 **[工作原理](docs/how-it-works.md)** 里。
 
 ## 常见问题
 

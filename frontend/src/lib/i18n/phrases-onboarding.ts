@@ -21,53 +21,12 @@ export const onboardingPhrases: Record<string, string> = {
     "Enter the URL, key, and model name of an OpenAI-compatible service; save and pass the test to continue.",
   "正在确认模型和学习进度…": "Checking the model and your progress…",
   "重试": "Retry",
-  "学习目标与当前基础": "Learning goals & current level",
-  "偏好的讲解与推导方式": "Preferred explanation & derivation style",
-  "练习与卡点互动节奏": "Practice & stuck-point pacing",
   "讲法": "Style",
   "互动": "Interaction",
-  "最近你最想弄明白什么？可以顺便说说现在学到哪了。":
-    "What do you most want to understand right now? Feel free to say how far you've got.",
-  "先用 3 个简短问题了解你的习惯，让之后的每次讲解更贴合你的节奏。":
-    "Three quick questions about how you learn, so later explanations fit your pace.",
-  "画像就绪 · 待你确认": "Profile ready · awaiting your confirmation",
-  "初识向导 · {step} / 3": "Onboarding · {step} / 3",
-  "初识进度": "Onboarding progress",
-  "模型设置": "Model settings",
   "画像": "Profile",
   "跳过": "Skip",
-  "已记录的偏好": "Preferences captured",
   "{label}：": "{label}: ",
-  "正在整理你的回答…": "Processing your answer…",
-  "正在整理你的回答并准备下一问…": "Processing your answer and preparing the next question…",
-  "立即显示全文": "Show full text",
-  "当前尚未配置大模型 API Key，请先配置后再回答：":
-    "No model API key configured yet. Set it up before answering:",
-  "立即配置模型 →": "Configure the model now →",
-  "快捷回答选项": "Quick answer options",
   "选择": "Choose",
-  "或用你自己的话描述": "Or describe it in your own words",
-  "你的回答": "Your answer",
-  "输入你的真实情况或偏好，按 Enter 发送…":
-    "Describe your actual situation or preference, then press Enter to send…",
-  "发送回答": "Send answer",
-  "支持按键盘": "Press",
-  "快速选择 · 候选画像仅在你最终确认后写入长期记忆":
-    "to pick quickly · The candidate profile is saved to long-term memory only after you confirm",
-  "FINAL · 专属学习画像已生成": "FINAL · Your personal learning profile is ready",
-  "核对你的学习画像": "Review your learning profile",
-  "确认后将写入长期记忆（USER），后续所有主线与支线都会按此定制讲法。你可以直接点击修改或留空：":
-    "Once confirmed, it is saved to long-term memory (USER) and all main and side threads are tailored to it. Click any field to edit, or leave it blank:",
-  "背景与目标": "Background & goals",
-  "如：正在学一门新课程，想把核心概念弄清楚":
-    "e.g. Taking a new course and want the core concepts clear",
-  "如：先看具体例子或直观类比，再看抽象定义":
-    "e.g. Start from a concrete example or analogy, then the abstract definition",
-  "如：遇到问题先给一点小提示，留给我自己思考":
-    "e.g. Give me a small hint first and let me think it through",
-  "暂不保存，直接体验": "Skip saving and explore",
-  "确认并进入工作台": "Confirm and enter the workspace",
-  "确认并创建学习空间": "Confirm and create a learning space",
 
   // Getting started checklist
   "建一个学习空间": "Create a learning space",
@@ -93,13 +52,7 @@ export const onboardingPhrases: Record<string, string> = {
   "考一题": "Quiz me",
   "发送「考考我」": "Send \"quiz me\"",
   "讲完就出一道小题检验。": "Get a quick question to check what you just learned.",
-  "口试式追问": "Viva-style follow-ups",
-  "输入 /viva": "Type /viva",
-  "让它顺着你的回答往下追问。": "It keeps probing based on your answers.",
   "复习": "Review",
-  "闪回复习": "Flash review",
-  "打开日程": "Open the agenda",
-  "记过的误区会按时间回来复习。": "Saved misconceptions come back for review on schedule.",
   "看薄弱点": "See weak spots",
   "打开空间里的知识图谱": "Open the knowledge graph in a space",
   "误区和已掌握的概念会画在这里。": "Misconceptions and mastered concepts are mapped here.",
@@ -132,8 +85,8 @@ export const onboardingPhrases: Record<string, string> = {
     "Open a side thread on the right for complex gaps; conclusions return to the main line",
   "薄弱点够了，试试考前一页纸": "Plenty of weak spots — try the pre-exam one-pager",
   "看看你的知识迷雾图": "Check out your knowledge fog map",
-  "输入 / 选技能，比如 /viva 模拟复试":
-    "Type / to pick a skill, e.g. /viva for a mock viva",
+  "输入 / 选技能，比如 /quiz 随堂微测验":
+    "Type / to pick a skill, e.g. /quiz for a quick quiz",
   "Alt+Space 随时快问": "Alt+Space to ask anytime",
   "选中一句话，可以追问、举例或存进笔记":
     "Select a sentence to follow up, get an example, or save it to notes",
@@ -150,12 +103,11 @@ export const onboardingPhrases: Record<string, string> = {
   "逾期 · {date}": "Overdue · {date}",
   "{minutes} 分钟": "{minutes} min",
   "今天没有待办，先巩固一个易错点。": "Nothing due today — shore up one tricky point.",
-  "到期复习": "Due review",
-  "到期复习 · 待巩固闪回": "Due review · flashbacks to shore up",
+  "待巩固的易错点": "Weak spots to reinforce",
   "{topic}：": "{topic}: ",
   "1 分钟靶向自测": "1-minute targeted self-test",
-  "今天还没有待办或到期复习，把薄弱点安排进这周吧。":
-    "No tasks or reviews due today. Plan your weak spots into this week.",
+  "今天还没有待办或待巩固的易错点，把薄弱点安排进这周吧。":
+    "No tasks or weak spots to reinforce today. Plan your weak spots into this week.",
   "让 AI 帮我排这周的复习": "Have the AI plan this week's revision",
   "继续学习": "Continue learning",
   "从学习空间开始": "Start from a learning space",

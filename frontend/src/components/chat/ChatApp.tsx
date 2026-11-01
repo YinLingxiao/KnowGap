@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { useChat } from "@/hooks/useChat";
 import { useI18n } from "@/components/LanguageProvider";
-import type { HealthState } from "@/hooks/useWorkbench";
+import type { HealthState } from "@/lib/types";
 import { getAIConfig, testAIConfig, type AIConfigStatus } from "@/lib/api/ai-config";
 import { API_BASE_URL, DATA_SOURCE } from "@/lib/config";
 import { cx } from "@/lib/cx";
@@ -904,9 +904,8 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
             };
             if (action === "explain") openMain(tx("用一个具体例子讲清一个核心概念"));
             else if (action === "quiz" || action === "select") openMain(action === "quiz" ? tx("考考我") : tx("选中我回复里的一句话，再追问"));
-            else if (action === "viva") openMain("/viva ");
             else if (action === "plan") openMain(tx("先列一个学习计划，再讲第一个概念"));
-            else if (action === "review" || action === "agenda" || action === "schedule") setView({ type: "agenda" });
+            else if (action === "agenda" || action === "schedule") setView({ type: "agenda" });
             else if (action === "graph" || action === "sheet") {
               if (!space) { setView({ type: "spaces" }); return; }
               setView({ type: "subject", id: space.id });

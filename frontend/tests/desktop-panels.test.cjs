@@ -49,15 +49,6 @@ test('agenda task details are bounded by the content body, not the native-window
   assert.match(rule('agenda/TaskInspector.module.css', '.body'), /overflow-y: auto/);
 });
 
-test('the legacy workbench right panel and backdrop also clear caption controls', () => {
-  assert.match(rule('Workbench.module.css', '.panel'), /top: calc\(var\(--desktop-titlebar-height\) \+ 8px\)/);
-  assert.match(rule('Workbench.module.css', '.backdrop'), /inset: var\(--desktop-titlebar-height\) 0 0/);
-  const source = read('Workbench.module.css');
-  assert.equal((source.match(/height: calc\(100vh - var\(--desktop-titlebar-height\)\)/g) || []).length, 2,
-    'both desktop and narrow workbench heights account for body titlebar padding');
-  assert.match(rule('Workbench.module.css', '.sidebarOpen'), /top: var\(--desktop-titlebar-height\)/);
-});
-
 test('the study-sheet preview clears the titlebar, while its print layout remains static', () => {
   const source = read('chat/CheatSheet.module.css');
   assert.match(rule('chat/CheatSheet.module.css', '.backdrop'), /inset: var\(--desktop-titlebar-height\) 0 0/);
@@ -69,7 +60,7 @@ test('ordinary browsers and quick ask still have a zero inset; no per-mode hardc
   const css = fs.readFileSync(path.join(__dirname, '../src/app/globals.css'), 'utf8');
   assert.match(css.match(/:root \{([^}]+)\}/)[1], /--desktop-titlebar-height: 0px/);
   assert.match(css.match(/:root\[data-desktop-platform\] \{([^}]+)\}/)[1], /--desktop-titlebar-height: 36px/);
-  for (const [file, selector] of [['chat/SubjectPage.module.css', '.overlay'], ['chat/CheatSheet.module.css', '.backdrop'], ['Workbench.module.css', '.panel']]) {
+  for (const [file, selector] of [['chat/SubjectPage.module.css', '.overlay'], ['chat/CheatSheet.module.css', '.backdrop']]) {
     assert.doesNotMatch(rule(file, selector), /(?:top|inset):\s*36px/);
   }
 });

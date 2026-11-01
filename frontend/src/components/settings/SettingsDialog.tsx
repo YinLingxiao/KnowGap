@@ -9,7 +9,7 @@ import { useI18n } from "@/components/LanguageProvider";
 import type { Language, MessageKey } from "@/lib/i18n";
 import type { LearnerMemory, TokenUsage } from "@/lib/chat/types";
 import { updatePassword, type AuthUser } from "@/lib/api/auth";
-import type { HealthState } from "@/hooks/useWorkbench";
+import type { HealthState } from "@/lib/types";
 import {
   applyAppearance, readAppearance, writeAppearance,
   type Appearance, type ChatWidth, type MotionChoice, type TextSize,

@@ -37,7 +37,7 @@ export function parseViewKey(raw: unknown): AgendaViewKey | null {
 }
 
 export interface TaskNode {
-  kind: "task" | "review";
+  kind: "task";
   key: string;
   task: AgendaTask;
   /** 子任务（含已完成），按 sortOrder 排序 */
@@ -156,7 +156,7 @@ export function buildNodes(tasks: AgendaTask[], options?: { includeDone?: boolea
   for (const task of tops) {
     const children = (childrenOf.get(task.id) ?? []).sort(compareSiblings);
     if (task.status === "done" && !options?.includeDone && !children.some((child) => child.status === "open")) continue;
-    nodes.push({ kind: task.source === "review" ? "review" : "task", key: taskKey(task.id), task, children });
+    nodes.push({ kind: "task", key: taskKey(task.id), task, children });
   }
   return nodes;
 }
@@ -300,19 +300,16 @@ export function buildUpcomingGroups(
   return groups;
 }
 
-/** 学习空间视图：进行中支线 / 闪回复习 / 任务 */
+/** 学习空间视图：进行中支线 / 任务 */
 export function buildSpaceGroups(
   tasks: AgendaTask[], threads: AgendaThread[], subjectId: string, options?: { includeDone?: boolean },
   tx: TranslatePhrase = raw,
 ): AgendaGroup[] {
   const nodes = buildNodes(tasks.filter((task) => task.subjectId === subjectId), options);
   const threadNodes = threads.filter((thread) => thread.subjectId === subjectId).map(threadNode);
-  const reviews = nodes.filter((node) => node.kind === "review");
-  const plain = nodes.filter((node) => node.kind === "task");
   const groups: AgendaGroup[] = [];
   if (threadNodes.length) groups.push({ key: "threads", label: tx("进行中支线"), nodes: sorted(threadNodes) });
-  if (reviews.length) groups.push({ key: "reviews", label: tx("闪回复习"), nodes: sorted(reviews) });
-  groups.push({ key: "tasks", label: tx("任务"), nodes: sorted(plain), compose: { subjectId }, keepEmpty: true });
+  groups.push({ key: "tasks", label: tx("任务"), nodes: sorted(nodes), compose: { subjectId }, keepEmpty: true });
   return groups;
 }
 

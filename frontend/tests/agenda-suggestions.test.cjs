@@ -27,7 +27,7 @@ const task = (partial) => ({
   subjectId: null, threadId: null, scheduledDate: null, scheduledStartAt: null,
   durationMinutes: null, deadlineDate: null, reminderMinutes: null,
   status: 'open', completedAt: null, source: 'manual', memoryId: null,
-  reviewStep: null, sortOrder: 0, createdAt: '2026-10-20T00:00:00', updatedAt: '2026-10-20T00:00:00',
+  sortOrder: 0, createdAt: '2026-10-20T00:00:00', updatedAt: '2026-10-20T00:00:00',
   ...partial,
 });
 

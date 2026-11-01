@@ -8,7 +8,7 @@ KnowGap 学习演示页面，使用 Next.js、React 和 TypeScript。
 
 在此目录执行 `npm install`、`npm run dev`，访问 http://localhost:3000。
 
-复制 `.env.example` 为 `.env.local`。默认 `NEXT_PUBLIC_DATA_SOURCE=mock` 使用明确标注的模拟数据；连接真实后端时使用：
+复制 `.env.example` 为 `.env.local`。默认 `NEXT_PUBLIC_DATA_SOURCE=mock` 不连接后端，页面只显示接入提示；连接真实后端时使用：
 
 ```dotenv
 NEXT_PUBLIC_DATA_SOURCE=api
@@ -29,7 +29,7 @@ NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000
 - 409、422、模型故障和超时均有提示。缺少模型配置时保留输入，不生成模拟诊断。
 - API 模式使用固定演示身份 `demo-student-001`；没有真实用户登录或身份隔离功能。
 
-设置（侧栏齿轮或快捷键 `,`）里的「模型接入」卡片对接 `GET/PUT /api/ai/config` 与 `POST /api/ai/test`（契约见 `../docs/ai-config-api.md`，代码在 `src/lib/api/ai-config.ts`）：选服务商预设或自定义地址，填写模型与 API Key，先测试连接再保存，保存后立即生效、无需重启后端。密钥只随请求发往本机后端，后端不回传；页面不缓存、不持久化密钥，保存成功后清空输入框。API 模式启动时读取一次配置，未配置时侧栏显示「模型未接入」。Mock 模式下卡片只显示说明。服务商地址与示例模型名以各家控制台为准。
+设置（侧栏齿轮或快捷键 `,`）里的「模型接入」卡片对接 `GET/PUT /api/ai/config` 与 `POST /api/ai/test`（契约见 `../docs/ai-config-api.md`，代码在 `src/lib/api/ai-config.ts`）：选服务商预设或自定义地址，填写模型与 API Key，先测试连接再保存，保存后立即生效、无需重启后端。密钥只随请求发往本机后端，后端不回传；页面不缓存、不持久化密钥，保存成功后清空输入框。API 模式启动时读取一次配置，未配置时侧栏显示「模型未接入」。服务商地址与示例模型名以各家控制台为准。
 
 初次诊断若在服务器保存后丢失响应，客户端尚不能通过幂等键找回未知的会话 ID；重试可能创建新会话。后续可补充请求幂等接口。
 
@@ -48,11 +48,9 @@ npm run build
 
 ## 目录
 
-- `src/components/`：三栏工作台、题目、诊断、对话和记忆组件。
-- `src/hooks/useWorkbench.ts`：加载、提交、会话恢复、追问和记忆状态。
-- `src/lib/api/`：HTTP 客户端、客户端选择和错误处理。
+- `src/components/`：对话、学习空间、日程、首页、引导和设置等界面组件。
+- `src/lib/api/`：HTTP 请求和错误处理。
 - `src/lib/types.ts`：页面视图模型和客户端接口。
-- `src/mocks/`：独立的模拟数据模式，不调用模型；页面明确显示 Mock 标识。
 - `tests/http-client.test.cjs`：使用 Node 内置测试工具执行的客户端契约检查。
 
 ## 设计约定

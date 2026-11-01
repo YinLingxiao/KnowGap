@@ -280,11 +280,6 @@
   font-weight: 500;
 }
 
-.badgeReview {
-  background: var(--amber-soft);
-  color: var(--amber);
-}
-
 .badgeThread {
   background: var(--accent-soft);
   color: var(--accent-text);

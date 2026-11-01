@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import { Check, ChevronRight, Ellipsis, MessagesSquare, Plus, Repeat } from "lucide-react";
+import { Check, ChevronRight, Ellipsis, MessagesSquare, Plus } from "lucide-react";
 import { useI18n } from "@/components/LanguageProvider";
 import type { AgendaTask, AgendaThread, TaskPriority } from "@/lib/agenda/types";
 import { cx } from "@/lib/cx";
@@ -253,7 +253,6 @@ function TaskRow(props: AgendaListProps & { node: TaskNode; task: AgendaTask; ch
   const key = taskKey(task.id);
   const done = task.status === "done";
   const leaving = props.leavingIds?.has(task.id) ?? false;
-  const review = node.kind === "review" && !child;
   const progress = !child && node.children.length ? subtaskProgress(node.children) : null;
   const schedule = scheduleLabel(task, today, tx);
   const overdueSchedule = Boolean(task.scheduledDate && task.scheduledDate < today && !done);
@@ -301,12 +300,6 @@ function TaskRow(props: AgendaListProps & { node: TaskNode; task: AgendaTask; ch
       </button>
 
       <button type="button" className={styles.main} tabIndex={-1} onClick={() => { props.onSelect(key); props.onOpenTask(task); }}>
-        {review && (
-          <span className={cx(styles.badge, styles.badgeReview)} title={tx("艾宾浩斯闪回")}>
-            <Repeat size={11} aria-hidden />
-            {tx("闪回")}{task.reviewStep ? tx(" · 第 {step} 轮", { step: task.reviewStep }) : ""}
-          </span>
-        )}
         <span className={styles.title}>{task.title}</span>
         {task.labels.map((label) => <span key={label} className={styles.label}>#{label}</span>)}
       </button>

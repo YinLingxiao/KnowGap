@@ -13,7 +13,7 @@ function task(id: string, input: TaskInput): AgendaTask {
   return { id, title: input.title, notes: input.notes ?? "", priority: input.priority ?? 4, labels: input.labels ?? [], parentId: input.parentId ?? null,
     subjectId: input.subjectId ?? null, threadId: null, scheduledDate: input.scheduledDate ?? null, scheduledStartAt: input.scheduledStartAt ?? null,
     durationMinutes: input.durationMinutes ?? null, deadlineDate: input.deadlineDate ?? null, reminderMinutes: null, status: "open", completedAt: null,
-    source: input.source ?? "manual", memoryId: null, reviewStep: null, sortOrder: 0, createdAt: "", updatedAt: "" };
+    source: input.source ?? "manual", memoryId: null, sortOrder: 0, createdAt: "", updatedAt: "" };
 }
 function fixtures(week: string): AgendaTask[] {
   return [
@@ -21,7 +21,6 @@ function fixtures(week: string): AgendaTask[] {
     task("overlap", { title: "电路例题 · 重叠分栏", scheduledDate: week, scheduledStartAt: `${week}T09:30`, durationMinutes: 60 }),
     task("overlap-2", { title: "整理公式", scheduledDate: week, scheduledStartAt: `${week}T09:45`, durationMinutes: 30 }),
     task("resize", { title: "模拟答辩 · 拉底边", scheduledDate: shift(week, 1), scheduledStartAt: `${shift(week, 1)}T10:00`, durationMinutes: 90 }),
-    { ...task("review", { title: "闪回：节点电压法", scheduledDate: shift(week, 2), scheduledStartAt: `${shift(week, 2)}T08:30`, durationMinutes: 45 }), source: "review", reviewStep: 2 },
     task("all-day", { title: "整理期末复习清单", scheduledDate: shift(week, 2) }),
     task("deadline", { title: "提交实验报告", scheduledDate: shift(week, 3), deadlineDate: shift(week, 4) }),
     { ...task("done", { title: "完成：基础概念回顾", scheduledDate: shift(week, 3), scheduledStartAt: `${shift(week, 3)}T09:00`, durationMinutes: 45 }), status: "done" },

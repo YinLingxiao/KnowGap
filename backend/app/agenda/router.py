@@ -28,7 +28,6 @@ def agenda_router(chat_store, model):
     def list_tasks(status: Literal["open", "done", "all"] = "open", subject_id: str | None = None):
         with transaction() as (db, student):
             persistence.references(db, student, {"subject_id": subject_id})
-            persistence.sync(db, student)
             return {"tasks": persistence.tasks(db, student, status, subject_id)}
 
     @router.get("/feed")
@@ -37,7 +36,6 @@ def agenda_router(chat_store, model):
         if from_date and to_date and from_date > to_date:
             raise HTTPException(422, "from 不得晚于 to")
         with transaction() as (db, student):
-            persistence.sync(db, student)
             tasks = persistence.tasks(db, student, "all")
             def included(t):
                 if t["status"] == "open":
@@ -80,10 +78,6 @@ def agenda_router(chat_store, model):
     def delete(task_id: str):
         with transaction() as (db, student):
             task = persistence.owned(db, student, task_id)
-            # Preserve abandonment even after physical deletion, including review children.
-            for row in db.execute("SELECT memory_id FROM agenda_tasks WHERE student_id=? AND source='review' "
-                                  "AND (id=? OR parent_id=?)", (student, task_id, task_id)).fetchall():
-                db.execute("INSERT OR IGNORE INTO agenda_review_abandoned VALUES (?, ?)", (student, row["memory_id"]))
             db.execute("DELETE FROM agenda_tasks WHERE id=? AND student_id=?", (task["id"], student))
         return Response(status_code=204)
 
@@ -106,7 +100,6 @@ def agenda_router(chat_store, model):
     def export(status: Literal["open", "all"] = "open", subject_id: str | None = None):
         with transaction() as (db, student):
             persistence.references(db, student, {"subject_id": subject_id})
-            persistence.sync(db, student)
             content = calendar(persistence.tasks(db, student, status, subject_id))
         return Response(content, media_type="text/calendar; charset=utf-8",
                         headers={"Content-Disposition": 'attachment; filename="knowgap-agenda.ics"'})

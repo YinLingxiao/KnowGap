@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Bell, Check, Plus, Repeat, Trash2, X } from "lucide-react";
+import { Bell, Check, Plus, Trash2, X } from "lucide-react";
 import { useI18n } from "@/components/LanguageProvider";
 import type { AgendaTask, TaskPatch, TaskPriority } from "@/lib/agenda/types";
 import { cx } from "@/lib/cx";
@@ -47,7 +47,7 @@ export function TaskInspector(props: TaskInspectorProps) {
   const { task, subtasks } = props;
   const [title, setTitle] = useState(task.title);
   const [notes, setNotes] = useState(task.notes);
-  const [preview, setPreview] = useState(Boolean(task.notes) && task.source === "review");
+  const [preview, setPreview] = useState(false);
   const [labelDraft, setLabelDraft] = useState("");
   const [subtaskDraft, setSubtaskDraft] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -70,7 +70,6 @@ export function TaskInspector(props: TaskInspectorProps) {
 
   const today = props.today ?? formatYmd(new Date());
   const patch = (value: TaskPatch) => void props.onUpdate(task.id, value);
-  const isReview = task.source === "review";
   const done = task.status === "done";
 
   const commitTitle = () => {
@@ -132,12 +131,7 @@ export function TaskInspector(props: TaskInspectorProps) {
           {done && <Check size={12} strokeWidth={3} aria-hidden />}
         </button>
         <span className={styles.headTitle}>
-          {isReview ? (
-            <span className={styles.reviewTag}>
-              <Repeat size={11} aria-hidden />
-              {tx("闪回")}{task.reviewStep ? tx(" · 第 {step} 轮", { step: task.reviewStep }) : ""}
-            </span>
-          ) : task.source === "ai_breakdown" ? tx("AI 拆解的任务") : tx("任务")}
+          {task.source === "ai_breakdown" ? tx("AI 拆解的任务") : tx("任务")}
         </span>
         {task.reminderMinutes !== null && <Bell size={13} className={styles.reminderIcon} aria-label={tx("已设置提醒")} />}
         <button type="button" className={styles.iconBtn} onClick={props.onClose} aria-label={tx("关闭详情")} title={tx("关闭（Esc）")}>
@@ -164,16 +158,6 @@ export function TaskInspector(props: TaskInspectorProps) {
             if (event.key === "Enter" && !event.nativeEvent.isComposing) event.currentTarget.blur();
           }}
         />
-
-        {isReview && (
-          <section className={styles.memory} aria-label={tx("对应的学习记忆")}>
-            <h3>{tx("对应的学习记忆")}</h3>
-            {task.notes ? <Markdown text={task.notes} /> : <p className={styles.muted}>{tx("这条闪回没有附带记忆说明。")}</p>}
-            <p className={styles.memoryHint}>
-              {tx("完成本轮后会自动安排下一轮复习（第 2 轮 3 天后，第 3 轮 7 天后）。")}
-            </p>
-          </section>
-        )}
 
         <Field label={tx("优先级")}>
           <div className={styles.segment} role="radiogroup" aria-label={tx("优先级")}>
@@ -301,30 +285,28 @@ export function TaskInspector(props: TaskInspectorProps) {
           </div>
         </Field>
 
-        {!isReview && (
-          <section className={styles.notes} aria-label={tx("备注")}>
-            <div className={styles.notesHead}>
-              <h3>{tx("备注")}</h3>
-              <div className={styles.segment} role="group" aria-label={tx("备注模式")}>
-                <button type="button" className={cx(styles.segBtn, !preview && styles.segOn)} onClick={() => setPreview(false)}>{tx("编辑")}</button>
-                <button type="button" className={cx(styles.segBtn, preview && styles.segOn)} onClick={() => { commitNotes(); setPreview(true); }}>{tx("预览")}</button>
-              </div>
+        <section className={styles.notes} aria-label={tx("备注")}>
+          <div className={styles.notesHead}>
+            <h3>{tx("备注")}</h3>
+            <div className={styles.segment} role="group" aria-label={tx("备注模式")}>
+              <button type="button" className={cx(styles.segBtn, !preview && styles.segOn)} onClick={() => setPreview(false)}>{tx("编辑")}</button>
+              <button type="button" className={cx(styles.segBtn, preview && styles.segOn)} onClick={() => { commitNotes(); setPreview(true); }}>{tx("预览")}</button>
             </div>
-            {preview ? (
-              notes.trim() ? <div className={styles.preview}><Markdown text={notes} /></div> : <p className={styles.muted}>{tx("还没有备注。")}</p>
-            ) : (
-              <textarea
-                className={styles.textarea}
-                value={notes}
-                rows={5}
-                placeholder={tx("支持 Markdown：**加粗**、- 列表、`代码`、$公式$")}
-                aria-label={tx("备注（Markdown）")}
-                onChange={(event) => setNotes(event.target.value)}
-                onBlur={commitNotes}
-              />
-            )}
-          </section>
-        )}
+          </div>
+          {preview ? (
+            notes.trim() ? <div className={styles.preview}><Markdown text={notes} /></div> : <p className={styles.muted}>{tx("还没有备注。")}</p>
+          ) : (
+            <textarea
+              className={styles.textarea}
+              value={notes}
+              rows={5}
+              placeholder={tx("支持 Markdown：**加粗**、- 列表、`代码`、$公式$")}
+              aria-label={tx("备注（Markdown）")}
+              onChange={(event) => setNotes(event.target.value)}
+              onBlur={commitNotes}
+            />
+          )}
+        </section>
 
         {!task.parentId && (
           <section className={styles.subtasks} aria-label={tx("子任务")}>
@@ -384,7 +366,7 @@ export function TaskInspector(props: TaskInspectorProps) {
         {confirmDelete ? (
           <div className={styles.confirm} role="group" aria-label={tx("确认删除")}>
             <span>
-              {isReview ? tx("删除后不再生成后续轮次。") : subtasks.length ? tx("连同 {count} 个子任务一起删除？", { count: subtasks.length }) : tx("确认删除这个任务？")}
+              {subtasks.length ? tx("连同 {count} 个子任务一起删除？", { count: subtasks.length }) : tx("确认删除这个任务？")}
             </span>
             <button type="button" onClick={() => setConfirmDelete(false)}>{tx("取消")}</button>
             <button type="button" className={styles.danger} onClick={() => void props.onDelete(task.id)}>{tx("删除")}</button>

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useId, useState } from "react";
 import { CircleCheck, Cpu, RefreshCw, TriangleAlert } from "lucide-react";
 import { useI18n } from "@/components/LanguageProvider";
-import type { HealthState } from "@/hooks/useWorkbench";
+import type { HealthState } from "@/lib/types";
 import type { AIConfigStatus } from "@/lib/api/ai-config";
 import { toApiError } from "@/lib/api/errors";
 import {

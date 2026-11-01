@@ -112,7 +112,6 @@ def run(name: str, arguments: dict, ctx) -> str:
                 days = arguments.get("days", 7)
                 days = days if isinstance(days, int) and 1 <= days <= 60 else 7
                 horizon = (date.today() + timedelta(days=days)).isoformat()
-                agenda.sync(db, student)
                 items = [_brief(task) for task in agenda.tasks(db, student, "open")
                          if not task["scheduled_date"] or task["scheduled_date"] <= horizon]
                 return json.dumps({"today": date.today().isoformat(), "tasks": items[:60]}, ensure_ascii=False)

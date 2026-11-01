@@ -23,7 +23,6 @@ function priority(value: unknown): TaskPriority {
 }
 
 export function mapTask(data: Wire): AgendaTask {
-  const step = data.review_step;
   return {
     id: String(data.id),
     title: String(data.title ?? ""),
@@ -40,9 +39,8 @@ export function mapTask(data: Wire): AgendaTask {
     reminderMinutes: typeof data.reminder_minutes === "number" ? data.reminder_minutes : null,
     status: data.status === "done" || data.status === "cancelled" ? data.status : "open",
     completedAt: str(data.completed_at),
-    source: data.source === "ai_breakdown" || data.source === "review" ? data.source : "manual",
+    source: data.source === "ai_breakdown" ? data.source : "manual",
     memoryId: str(data.memory_id),
-    reviewStep: step === 1 || step === 2 || step === 3 ? step : null,
     sortOrder: typeof data.sort_order === "number" ? data.sort_order : 0,
     createdAt: String(data.created_at ?? ""),
     updatedAt: String(data.updated_at ?? ""),

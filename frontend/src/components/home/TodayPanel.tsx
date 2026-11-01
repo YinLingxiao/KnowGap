@@ -154,7 +154,6 @@ export function TodayPanel(props: TodayPanelProps) {
                     <div className={styles.taskBody}>
                       <span className={styles.taskTitle}>{task.title}</span>
                       <span className={styles.taskMeta}>
-                        {task.source === "review" && <span className={styles.reviewTag}>{tx("闪回复习")}</span>}
                         {dueDay(task)! < today ? <span className={styles.overdue}>{tx("逾期 · {date}", { date: dueDay(task)?.slice(5) ?? "" })}</span>
                           : <span>{task.scheduledStartAt?.slice(11, 16) || tx("今天")}</span>}
                         {task.durationMinutes != null && <span>{tx("{minutes} 分钟", { minutes: task.durationMinutes })}</span>}
@@ -168,10 +167,10 @@ export function TodayPanel(props: TodayPanelProps) {
           </section>
 
           {props.reviewTarget && props.showReview && (
-            <section className={styles.review} aria-label={tx("到期复习")}>
+            <section className={styles.review} aria-label={tx("待巩固的易错点")}>
               <RotateCcw size={15} aria-hidden />
               <div className={styles.reviewBody}>
-                <span className={styles.reviewLabel}>{tx("到期复习 · 待巩固闪回")}</span>
+                <span className={styles.reviewLabel}>{tx("待巩固的易错点")}</span>
                 <p title={props.reviewTarget.summary}><strong>{tx("{topic}：", { topic: props.reviewTarget.topic })}</strong>{props.reviewTarget.summary}</p>
               </div>
               <button type="button" className={styles.reviewAction} onClick={props.onReview}>{tx("1 分钟靶向自测")} <ArrowRight size={13} aria-hidden /></button>
@@ -180,7 +179,7 @@ export function TodayPanel(props: TodayPanelProps) {
 
           {!loading && tasks.length === 0 && !props.reviewTarget && (
             <div className={styles.empty}>
-              <p>{tx("今天还没有待办或到期复习，把薄弱点安排进这周吧。")}</p>
+              <p>{tx("今天还没有待办或待巩固的易错点，把薄弱点安排进这周吧。")}</p>
               <button type="button" className={styles.plan} onClick={props.onPlanReview}>{tx("让 AI 帮我排这周的复习")} <ArrowRight size={14} aria-hidden /></button>
             </div>
           )}

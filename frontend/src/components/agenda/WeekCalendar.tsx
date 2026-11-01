@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import { ChevronLeft, ChevronRight, Flag, RotateCcw } from "lucide-react";
+import { ChevronLeft, ChevronRight, Flag } from "lucide-react";
 import { useI18n } from "@/components/LanguageProvider";
 import type { AgendaTask, AgendaThread } from "@/lib/agenda/types";
 import { AgendaEmpty } from "./AgendaEmpty";
@@ -208,7 +208,7 @@ export default function WeekCalendar({ weekStart, tasks, threads, today, onWeekC
             {days.map(day => <div key={day} className={styles.allDayCell} onClick={event => { if (event.target === event.currentTarget) onCreateAt?.({ scheduledDate: day, scheduledStartAt: null }); }}>
               {visibleTasks.filter(task => task.scheduledDate === day && !task.scheduledStartAt).map(task => <button type="button" key={task.id} data-task-id={task.id} data-done={task.status === "done"} data-preview={preview?.id === task.id} className={styles.allDayTask}
                 onPointerDown={event => begin(event, tasks.find(original => original.id === task.id)!, "move")} onClick={() => select(task.id)} onKeyDown={event => keyboard(event, task)}>
-                {task.source === "review" && <RotateCcw size={11} aria-label={tx("闪回")} />}<span>{task.title}</span>
+                <span>{task.title}</span>
               </button>)}
             </div>)}
           </div>
@@ -224,7 +224,7 @@ export default function WeekCalendar({ weekStart, tasks, threads, today, onWeekC
                 {layout(visibleTasks.filter(task => task.scheduledStartAt?.slice(0, 10) === day)).filter(item => item.end > START && item.start < END).map(({ task, start, end, column, columns }) =>
                   <div key={task.id} className={styles.block} data-task-id={task.id} data-done={task.status === "done"} data-preview={preview?.id === task.id} style={{ top: (Math.max(start, START) - START) * SCALE, height: Math.max(18, (Math.min(end, END) - Math.max(start, START)) * SCALE - 2), left: `calc(${column / columns * 100}% + 3px)`, width: `calc(${100 / columns}% - 6px)` }}>
                     <button type="button" className={styles.blockMain} onPointerDown={event => begin(event, tasks.find(original => original.id === task.id)!, "move")} onClick={() => select(task.id)} onKeyDown={event => keyboard(event, task)} title={tx("{title} · {time}。Alt + 方向键排期，Alt + Shift + 上下调整时长", { title: task.title, time: `${clock(start)}–${clock(end)}` })}>
-                      <span className={styles.blockTitle}>{task.source === "review" && <RotateCcw size={12} aria-label={tx("闪回")} />}{task.title}</span>
+                      <span className={styles.blockTitle}>{task.title}</span>
                       <span className={styles.blockTime}>{clock(start)}–{clock(end)}</span>
                     </button>
                     <button type="button" className={styles.resize} aria-label={tx("调整时长：{title}", { title: task.title })} onPointerDown={event => begin(event, tasks.find(original => original.id === task.id)!, "resize")} onClick={event => { event.stopPropagation(); suppressClick.current = false; }} onKeyDown={event => keyboard(event, task)} />

@@ -143,21 +143,6 @@
   font-size: var(--text-xs);
 }
 
-.reviewTag {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--amber);
-}
-
-.reviewTag::before {
-  content: "";
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--amber);
-}
-
 .overdue {
   color: var(--orange);
 }
