@@ -71,7 +71,7 @@ interface SpaceTaskListProps {
   onCompose?: (defaults: NonNullable<AgendaGroup["compose"]>, groupKey: string) => void;
 }
 
-/** 某个学习空间的未完成任务：进行中支线 / 闪回复习 / 任务（日程页与学习空间页共用） */
+/** 某个学习空间的未完成任务：进行中支线 / 任务（日程页与学习空间页共用） */
 export function SpaceTaskList(props: SpaceTaskListProps) {
   const { subject, tasks, threads, today } = props;
   const list = useListState();

@@ -904,9 +904,8 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
             };
             if (action === "explain") openMain(tx("用一个具体例子讲清一个核心概念"));
             else if (action === "quiz" || action === "select") openMain(action === "quiz" ? tx("考考我") : tx("选中我回复里的一句话，再追问"));
-            else if (action === "viva") openMain("/viva ");
             else if (action === "plan") openMain(tx("先列一个学习计划，再讲第一个概念"));
-            else if (action === "review" || action === "agenda" || action === "schedule") setView({ type: "agenda" });
+            else if (action === "agenda" || action === "schedule") setView({ type: "agenda" });
             else if (action === "graph" || action === "sheet") {
               if (!space) { setView({ type: "spaces" }); return; }
               setView({ type: "subject", id: space.id });

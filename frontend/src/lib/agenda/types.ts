@@ -2,7 +2,7 @@
 
 export type TaskPriority = 1 | 2 | 3 | 4;
 export type TaskStatus = "open" | "done" | "cancelled";
-export type TaskSource = "manual" | "ai_breakdown" | "review";
+export type TaskSource = "manual" | "ai_breakdown";
 
 export interface AgendaTask {
   id: string;
@@ -26,7 +26,6 @@ export interface AgendaTask {
   completedAt: string | null;
   source: TaskSource;
   memoryId: string | null;
-  reviewStep: 1 | 2 | 3 | null;
   sortOrder: number;
   createdAt: string;
   updatedAt: string;

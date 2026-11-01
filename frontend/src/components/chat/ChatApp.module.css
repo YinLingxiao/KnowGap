@@ -568,7 +568,7 @@
   font-size: var(--text-sm);
 }
 
-/* 「待巩固闪回」：中性卡片 + 左侧琥珀色小圆点（琥珀 = 待复习） */
+/* 「待巩固的易错点」：中性卡片 + 左侧琥珀色小圆点（琥珀 = 待复习） */
 .spacedReviewTag {
   display: inline-flex;
   flex-shrink: 0;

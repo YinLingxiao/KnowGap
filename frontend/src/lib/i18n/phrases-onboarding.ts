@@ -93,13 +93,7 @@ export const onboardingPhrases: Record<string, string> = {
   "考一题": "Quiz me",
   "发送「考考我」": "Send \"quiz me\"",
   "讲完就出一道小题检验。": "Get a quick question to check what you just learned.",
-  "口试式追问": "Viva-style follow-ups",
-  "输入 /viva": "Type /viva",
-  "让它顺着你的回答往下追问。": "It keeps probing based on your answers.",
   "复习": "Review",
-  "闪回复习": "Flash review",
-  "打开日程": "Open the agenda",
-  "记过的误区会按时间回来复习。": "Saved misconceptions come back for review on schedule.",
   "看薄弱点": "See weak spots",
   "打开空间里的知识图谱": "Open the knowledge graph in a space",
   "误区和已掌握的概念会画在这里。": "Misconceptions and mastered concepts are mapped here.",
@@ -132,8 +126,8 @@ export const onboardingPhrases: Record<string, string> = {
     "Open a side thread on the right for complex gaps; conclusions return to the main line",
   "薄弱点够了，试试考前一页纸": "Plenty of weak spots — try the pre-exam one-pager",
   "看看你的知识迷雾图": "Check out your knowledge fog map",
-  "输入 / 选技能，比如 /viva 模拟复试":
-    "Type / to pick a skill, e.g. /viva for a mock viva",
+  "输入 / 选技能，比如 /quiz 随堂微测验":
+    "Type / to pick a skill, e.g. /quiz for a quick quiz",
   "Alt+Space 随时快问": "Alt+Space to ask anytime",
   "选中一句话，可以追问、举例或存进笔记":
     "Select a sentence to follow up, get an example, or save it to notes",
@@ -150,12 +144,11 @@ export const onboardingPhrases: Record<string, string> = {
   "逾期 · {date}": "Overdue · {date}",
   "{minutes} 分钟": "{minutes} min",
   "今天没有待办，先巩固一个易错点。": "Nothing due today — shore up one tricky point.",
-  "到期复习": "Due review",
-  "到期复习 · 待巩固闪回": "Due review · flashbacks to shore up",
+  "待巩固的易错点": "Weak spots to reinforce",
   "{topic}：": "{topic}: ",
   "1 分钟靶向自测": "1-minute targeted self-test",
-  "今天还没有待办或到期复习，把薄弱点安排进这周吧。":
-    "No tasks or reviews due today. Plan your weak spots into this week.",
+  "今天还没有待办或待巩固的易错点，把薄弱点安排进这周吧。":
+    "No tasks or weak spots to reinforce today. Plan your weak spots into this week.",
   "让 AI 帮我排这周的复习": "Have the AI plan this week's revision",
   "继续学习": "Continue learning",
   "从学习空间开始": "Start from a learning space",
