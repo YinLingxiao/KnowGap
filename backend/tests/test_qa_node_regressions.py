@@ -14,7 +14,8 @@ from app.agent_tools.guard import ToolError, check_content_security_blacklist, c
 from app.agents.llm import ChatCompletionsChat, _tool_calls_from
 from app.chat.agent import chat_messages, learning_context
 from app.chat.service import ChatService, Generation
-from app.chat.skills import THREAD_SKILLS, select_skill_prompt
+from app.chat.skills import THREAD_SKILLS, infer_thread_skill, recommend_widget, select_skill_prompt
+from app.chat.skills.problem_drill_skill import drill_plan
 from app.config import Settings
 from app.main import create_app
 from app.memory.curated import snapshot_text
@@ -196,6 +197,24 @@ def test_feynman_challenge_sticks_after_the_first_turn():
     chat = select_skill_prompt("chat", "为什么栈顶先出？我的理解是这样", earlier_user_texts=["听我讲一遍栈"])
     assert chat == feynman.replace("，并调用 `report_progress` 回报掌握结论", "")
     assert select_skill_prompt("thread", "为什么栈顶先出", earlier_user_texts=["讲讲栈"]) != feynman
+
+
+# 「你当考官考我」命中 _FEYNMAN_RE 的「考官」，技能与出题路由保持费曼，不因「考我」改走练习。
+def test_examiner_phrase_stays_on_feynman_route():
+    text = "你当考官考我"
+    feynman = THREAD_SKILLS["feynman_challenge"]
+    assert infer_thread_skill(text) == "feynman_challenge"
+    assert select_skill_prompt("chat", text) == feynman.replace("，并调用 `report_progress` 回报掌握结论", "")
+    assert select_skill_prompt("thread", text) == feynman
+    assert select_skill_prompt("main", text) is None
+    assert drill_plan("chat", text) == (False, None)
+    assert drill_plan("thread", text) == (False, None)
+    assert drill_plan("main", text) == (False, None)
+    assert recommend_widget("chat", text) == (
+        "micro_quiz（建议在回复中嵌入 ```knowgap-widget 的 micro_quiz 随堂微测卡）"
+    )
+    assert recommend_widget("thread", text) == recommend_widget("chat", text)
+    assert recommend_widget("main", text) is None
 
 
 # 9. Prior-knowledge extraction and preference deduplication.
