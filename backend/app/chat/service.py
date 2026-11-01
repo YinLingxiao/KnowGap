@@ -439,18 +439,24 @@ class ChatService:
     def thread_resolved(self, student_id: str, conversation_id: str, title: str, summary: str,
                         takeaways: list[str], message_id: str) -> None:
         """时机一：支线被标记已解决。重复 resolve 由 source_message_id 的唯一约束挡住。"""
-        if not self._agent_flag("coordinator_wakeup"):
-            return
-        main_id = self._thread_parent_id(student_id, conversation_id)
-        if not main_id:
-            return
-        text = summary if not takeaways else "\n".join([summary, *[f"- {item}" for item in takeaways]])
-        self.store.record_thread_report(main_id, conversation_id, message_id, "resolved", text)
-        self._schedule_wake(student_id, main_id)
+        try:
+            if not self._agent_flag("coordinator_wakeup"):
+                return
+            main_id = self._thread_parent_id(student_id, conversation_id)
+            if not main_id:
+                return
+            text = summary if not takeaways else "\n".join([summary, *[f"- {item}" for item in takeaways]])
+            self.store.record_thread_report(main_id, conversation_id, message_id, "resolved", text)
+            self._schedule_wake(student_id, main_id)
+        except Exception:
+            logger.exception("Could not record the resolved Thread report")
 
     def thread_reopened(self, conversation_id: str) -> None:
         """时机一的反向：重新打开支线后，还没投递的「已解决」汇报作废。"""
-        self.store.skip_pending_resolved(conversation_id)
+        try:
+            self.store.skip_pending_resolved(conversation_id)
+        except Exception:
+            logger.exception("Could not skip the pending resolved Thread report")
 
     def _report_wake(self, student_id: str, generation: Generation, role: str) -> None:
         """时机二：主线交办的支线回合失败。完成、等待作答、停止、用户直接聊都不写。

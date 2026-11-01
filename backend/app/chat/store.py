@@ -896,16 +896,51 @@ class ChatStore:
 
         Selection, the event message and the delivery marks commit together, so a replay cannot
         deliver the same report twice. `build(rows)` returns the model-facing text and its meta.
+        Every due report is re-checked first; ones that are no longer current are marked skipped
+        in this same transaction, then at most `limit` still-valid reports are delivered.
         """
         with self.connection() as db:
             db.execute("BEGIN IMMEDIATE")
             rows = db.execute(
-                "SELECT r.*, c.title AS thread_title FROM thread_reports r "
-                "JOIN conversations c ON c.id = r.thread_id "
+                "SELECT r.*, c.title AS thread_title, c.kind AS thread_kind, c.parent_id AS thread_parent, "
+                "c.thread_status AS live_thread_status, m.kind AS main_kind "
+                "FROM thread_reports r "
+                "LEFT JOIN conversations c ON c.id = r.thread_id "
+                "LEFT JOIN conversations m ON m.id = r.main_id "
                 "WHERE r.main_id = ? AND r.state = 'pending' AND (r.not_before IS NULL OR r.not_before <= ?) "
-                "ORDER BY r.created_at, r.id LIMIT ?",
-                (main_id, now(), limit),
+                "ORDER BY r.created_at, r.id",
+                (main_id, now()),
             ).fetchall()
+            valid = []
+            for row in rows:
+                current = (
+                    row["main_kind"] == "main"
+                    and row["thread_kind"] == "thread"
+                    and row["thread_parent"] == row["main_id"]
+                )
+                if current and row["outcome"] == "resolved":
+                    current = row["live_thread_status"] == "resolved"
+                elif current and row["outcome"] == "failed":
+                    current = row["live_thread_status"] != "resolved"
+                    if current:
+                        source = db.execute(
+                            "SELECT seq FROM conversation_messages WHERE id = ? AND conversation_id = ?",
+                            (row["source_message_id"], row["thread_id"]),
+                        ).fetchone()
+                        if source is None:
+                            current = False
+                        else:
+                            newer = db.execute(
+                                "SELECT 1 FROM conversation_messages WHERE conversation_id = ? "
+                                "AND role = 'assistant' AND seq > ? LIMIT 1",
+                                (row["thread_id"], source["seq"]),
+                            ).fetchone()
+                            current = newer is None
+                if current:
+                    valid.append(row)
+                else:
+                    db.execute("UPDATE thread_reports SET state = 'skipped' WHERE id = ?", (row["id"],))
+            rows = valid[:limit]
             if not rows:
                 return None
             content, meta = build(rows)
