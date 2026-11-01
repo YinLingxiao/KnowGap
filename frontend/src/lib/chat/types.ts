@@ -137,6 +137,8 @@ export interface ChatMessage {
   threadProposals?: ThreadProposal[];
   /** 主线用户消息下要展示的支线卡；标题与状态按 id 从支线列表实时取 */
   dispatchedThreads?: Array<{ threadId: string }>;
+  /** 隐藏的系统事件消息（如支线汇报唤醒协调者），学习者看不到 */
+  systemEvent?: SystemEvent | null;
   planChanges?: PlanChange[];
   createdAt: string;
 }
@@ -169,6 +171,13 @@ export interface ThreadSummary {
   summary: string;
   takeaways: string[];
   memoryIds: string[];
+}
+
+/** 服务端写入的隐藏系统事件；目前只有支线汇报唤醒协调者一种 */
+export interface SystemEvent {
+  type: string;
+  reportIds: string[];
+  threadIds: string[];
 }
 
 export interface MessageAnchor {

@@ -155,6 +155,7 @@ class AISettings:
             "auto_approve": bool(raw.get("auto_approve")),
             "memory_write_approval": bool(raw.get("memory_write_approval")),
             "reasoning_effort": effort,
+            "coordinator_wakeup": bool(raw.get("coordinator_wakeup", True)),
         }
 
     def save_agent(self, body: dict) -> dict:
@@ -177,6 +178,8 @@ class AISettings:
                 if effort not in {"off", "low", "medium", "high"}:
                     raise HTTPException(422, "思考深度选项无效。")
                 payload["reasoning_effort"] = effort
+            if "coordinator_wakeup" in body:
+                payload["coordinator_wakeup"] = bool(body.get("coordinator_wakeup"))
             self._write(payload)
         return self.agent_config()
 
