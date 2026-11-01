@@ -415,11 +415,9 @@ class ChatService:
             if not self.store.conversation(proposal["thread_id"], student_id):
                 raise ValueError("这个建议对应的支线已删除，请重新规划。")
             return proposal["thread_id"]
-        # 唤醒回合提出的建议：来源是隐藏事件，不能把它抄成支线的第一句「学生发言」
-        content = proposal["task"] if is_system_event(self.store.message_meta(message.reply_to)) else None
         thread_id, _ = dispatch(
             self.store, student_id, conversation_id, message.reply_to, proposal["title"], proposal["task"], None,
-            task_key=f"{PROPOSAL_TASK_PREFIX}{proposal_id}", content=content,
+            task_key=f"{PROPOSAL_TASK_PREFIX}{proposal_id}",
         )
         proposal["thread_id"] = thread_id
         self.store.merge_meta(message_id, {"thread_proposals": proposals})
@@ -862,7 +860,7 @@ class ChatService:
                 custom_skills=custom_skills, compressed_summary=compressed_summary,
                 compressed_up_to_seq=compressed_seq,
                 learning_plan=learning_plan, plan_user_events=plan_user_events,
-                attached_files=attached_files,
+                attached_files=attached_files, system_turn=event_turn,
             )
             ctx = ToolContext(
                 workspace_of(self.settings), self.store, student_id, generation.conversation_id,

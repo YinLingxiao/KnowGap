@@ -785,7 +785,7 @@ class ChatStore:
                              if key in {"id", "title", "preview", "thread_status", "execution_status"}}
                     if progress.get(item["id"]):
                         entry["progress_summary"] = progress[item["id"]]
-                    if errors.get(item["id"]):
+                    if entry.get("execution_status") == "failed" and errors.get(item["id"]):
                         # 失败原因以前写在主线卡片里；现在由支线列表转达，协调者才答得上「为什么失败」
                         entry["error"] = errors[item["id"]]
                     entries.append(entry)

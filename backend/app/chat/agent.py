@@ -223,7 +223,7 @@ def chat_messages(
     custom_skills: list[dict] | None = None, compressed_summary: str | None = None,
     compressed_up_to_seq: int = 0,
     learning_plan: dict | None = None, plan_user_events: list[str] | None = None,
-    attached_files: list[dict] | None = None,
+    attached_files: list[dict] | None = None, *, system_turn: bool = False,
 ) -> list[dict]:
     # Ordered from stable to volatile so provider prefix caches cover the prompt and the whole history;
     # only the trailing turn context (and the new message) is fresh input each turn.
@@ -231,27 +231,30 @@ def chat_messages(
     role_name = role_info.get("role", "chat")
     user_texts = [readable_file_markers(row["content"]) for row in history if row["role"] == "user"]
     latest_user = user_texts[-1] if user_texts else ""
-    active_skill = select_skill_prompt(
-        role_name,
-        attachment_query(latest_user) if attached_files else latest_user,
-        role_info.get("delegated_task"),
-        role_info.get("delegated_skill"),
-        conversation_title,
-        earlier_user_texts=user_texts[:-1],
-        attached_files=attached_files,
-    )
-    if custom_skills:
-        sample_text = f"{role_info.get('delegated_task') or ''} {latest_user}".lower()
-        matched_custom = []
-        for sk in custom_skills:
-            if not sk.get("enabled") or sk.get("role") != role_name:
-                continue
-            raw_triggers = [t.strip().lower() for t in re.split(r"[,，、\s]+", sk.get("trigger_keywords") or "") if t.strip()]
-            if not raw_triggers or any(t in sample_text for t in raw_triggers):
-                matched_custom.append(f"【用户自定义 Skill：{sk['name']}】\n{sk['content']}")
-        if matched_custom:
-            custom_block = "\n\n".join(matched_custom[:2])
-            active_skill = f"{active_skill}\n\n{custom_block}" if active_skill else custom_block
+    if system_turn:
+        active_skill = None
+    else:
+        active_skill = select_skill_prompt(
+            role_name,
+            attachment_query(latest_user) if attached_files else latest_user,
+            role_info.get("delegated_task"),
+            role_info.get("delegated_skill"),
+            conversation_title,
+            earlier_user_texts=user_texts[:-1],
+            attached_files=attached_files,
+        )
+        if custom_skills:
+            sample_text = f"{role_info.get('delegated_task') or ''} {latest_user}".lower()
+            matched_custom = []
+            for sk in custom_skills:
+                if not sk.get("enabled") or sk.get("role") != role_name:
+                    continue
+                raw_triggers = [t.strip().lower() for t in re.split(r"[,，、\s]+", sk.get("trigger_keywords") or "") if t.strip()]
+                if not raw_triggers or any(t in sample_text for t in raw_triggers):
+                    matched_custom.append(f"【用户自定义 Skill：{sk['name']}】\n{sk['content']}")
+            if matched_custom:
+                custom_block = "\n\n".join(matched_custom[:2])
+                active_skill = f"{active_skill}\n\n{custom_block}" if active_skill else custom_block
     # USER is authoritative. Historical preference records are evidence, not a second policy.
     user_note = (snapshot or "").split("MEMORY（本轮开始时的快照）：", 1)[0]
     # The same preference may be stored with and without a "[Preference]" label.
@@ -272,7 +275,7 @@ def chat_messages(
         )
         for anchor in _split_anchors(match.group(1))
     ))
-    reported_prior_knowledge = reported_prior_skills(latest_user)
+    reported_prior_knowledge = [] if system_turn else reported_prior_skills(latest_user)
     stable = {
         "subject": subject_context(subject) if subject else None,
         "available_exercises": [{"id": p.id, "title": p.title} for p in PROBLEMS.values()],
@@ -282,8 +285,8 @@ def chat_messages(
         "latest_user_message": latest_user,
         "conversation_role": role_info,
         "active_skill": active_skill,
-        "recommended_widget": recommend_widget(role_name, latest_user, role_info.get("delegated_task"),
-                                               earlier_user_texts=user_texts[:-1]),
+        "recommended_widget": None if system_turn else recommend_widget(
+            role_name, latest_user, role_info.get("delegated_task"), earlier_user_texts=user_texts[:-1]),
         "thinking_depth": thinking_depth,
         "teaching_preferences": teaching_preferences,
         "prior_knowledge_anchors": prior_knowledge_anchors,
@@ -312,7 +315,7 @@ def chat_messages(
     )
     # 模拟复试只提问不讲课，不插入先验探针或对比迁移提示
     in_viva = active_skill is not None and "viva_interview" in active_skill
-    if 1 <= user_turns <= 2 and (learning_topic or reported_prior_knowledge) and not in_viva:
+    if not system_turn and 1 <= user_turns <= 2 and (learning_topic or reported_prior_knowledge) and not in_viva:
         turn["transfer_learning_hint"] = (
             TRANSFER_LEARNING_HINT if prior_knowledge_anchors or reported_prior_knowledge else PREREQUISITE_PROBE_HINT
         )

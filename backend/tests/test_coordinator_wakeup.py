@@ -614,6 +614,48 @@ def test_event_wake_does_not_swallow_the_learners_plan_events(tmp_path, monkeypa
     asyncio.run(scenario())
 
 
+def test_wake_turn_ignores_skills_triggered_by_the_event_text(tmp_path, monkeypatch):
+    import app.chat.agent as agent_module
+
+    monkeypatch.setattr(service_module, "WAKE_QUIET_SECONDS", 0)
+    skill_calls = []
+    real_select = agent_module.select_skill_prompt
+
+    def counting_select(*args, **kwargs):
+        skill_calls.append(args[1] if len(args) > 1 else kwargs.get("user_text"))
+        return real_select(*args, **kwargs)
+
+    monkeypatch.setattr(agent_module, "select_skill_prompt", counting_select)
+    wording = "下一步的学习计划和路线。"
+
+    async def scenario():
+        model = WakeModel(wake="text")
+        store, service, sid, main = setup(tmp_path, model)
+        _source, thread_id = delegated_thread(store, service, main)
+        await settle(service)
+        skill_calls.clear()
+        resolve(store, service, thread_id, summary=wording)
+        await settle(service)
+        wake_call = next(call for call in model.calls
+                         if any(m["role"] == "user" and str(m["content"]).startswith(SYSTEM_PREFIX) for m in call))
+        wake = context_of(wake_call)
+        assert wake["active_skill"] is None
+        assert wake["recommended_widget"] is None
+        assert "reported_prior_knowledge" not in wake
+        assert "transfer_learning_hint" not in wake
+        assert wording in wake["latest_user_message"]
+        assert skill_calls == []
+
+        user = store.add_user_message(main, wording, "skill-main-1")
+        _ = [e async for e in service.events(service.begin(STUDENT, main, user, []))]
+        await settle(service)
+        main_turn = context_of(model.calls[-1])
+        assert main_turn["active_skill"] and "roadmap_planner" in main_turn["active_skill"]
+        assert skill_calls and wording in skill_calls[-1]
+        await service.close()
+    asyncio.run(scenario())
+
+
 def test_wake_proposals_never_leak_the_hidden_event_into_the_thread(tmp_path, monkeypatch):
     monkeypatch.setattr(service_module, "WAKE_QUIET_SECONDS", 0)
 
@@ -629,9 +671,18 @@ def test_wake_proposals_never_leak_the_hidden_event_into_the_thread(tmp_path, mo
                      if m.role == "assistant" and m.thread_proposals)
         proposal = reply.thread_proposals[0]
         new_thread = service.confirm_proposal(STUDENT, main, reply.id, proposal.id)
-        first = store.conversation(new_thread, STUDENT).messages[0]
+        created = store.conversation(new_thread, STUDENT)
+        first = created.messages[0]
+        assert created.anchor is None
+        assert store.role_context(new_thread)["anchor"] is None
         assert first.content == "带学生练链表删除。"
         assert SYSTEM_PREFIX not in first.content
+        assert store.message_meta(first.id)["source_message_id"] == reply.reply_to
+        with store.connection() as db:
+            linked = db.execute(
+                "SELECT source_message_id FROM thread_dispatches WHERE thread_id = ?", (new_thread,),
+            ).fetchone()
+        assert linked["source_message_id"] == reply.reply_to
         assert resolved["message_id"]
         await service.close()
     asyncio.run(scenario())
