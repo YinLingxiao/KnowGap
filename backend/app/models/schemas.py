@@ -4,7 +4,6 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
-TextInput = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=6000)]
 ShortText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=1500)]
 Assessment = Literal["correct", "incorrect", "uncertain"]
 DEMO_STUDENT = "demo-student-001"
@@ -12,18 +11,6 @@ DEMO_STUDENT = "demo-student-001"
 
 class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
-
-
-class DiagnosisRequest(StrictModel):
-    student_id: Literal["demo-student-001"] = DEMO_STUDENT
-    problem_id: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
-    answer: TextInput
-    web_search: bool = False
-
-
-class MessageRequest(StrictModel):
-    content: TextInput
-    web_search: bool = False
 
 
 class WebSource(BaseModel):

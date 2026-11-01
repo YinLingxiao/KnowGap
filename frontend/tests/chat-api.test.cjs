@@ -77,15 +77,6 @@ test('interview status preserves skip, draft evidence and server progress', asyn
   assert.deepEqual(state.draft, draft);
 });
 
-test('profile confirmation sends revision and user-edited entries', async () => {
-  global.fetch = async (url, options) => {
-    assert.ok(url.endsWith('/api/onboarding/complete'));
-    assert.deepEqual(JSON.parse(options.body), { version: 4, entries: { explanation: '先举例' } });
-    return json({ onboarded: true });
-  };
-  assert.deepEqual(await chatApi.completeOnboarding(4, { explanation: '先举例' }), { onboarded: true });
-});
-
 test('conversation summaries keep model_key and model updates send it back', async () => {
   global.fetch = async () => json({
     id: 'c1', title: '基础', title_source: 'auto', model_key: 'prov-a11d5e01/google/gemini-3.5-flash', messages: [],
@@ -137,6 +128,4 @@ test('skip is separate from completion and confirmation failures propagate', asy
     return json({ status: 'skipped' });
   };
   await chatApi.skipOnboarding();
-  global.fetch = async () => json({ detail: '画像版本已变化' }, 409);
-  await assert.rejects(chatApi.completeOnboarding(1, {}), /画像版本已变化/);
 });

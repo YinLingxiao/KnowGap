@@ -17,8 +17,7 @@ from app.chat.schemas import (
     MemoryEvidence, SystemEvent, ToolCallRecord, PreferencePrompt,
     MessageAnchor, SpaceProgress, Subject, ThreadSummary,
 )
-from app.chat.skills import ONBOARDING_FIRST_MESSAGE, ONBOARDING_TITLE
-from app.memory.curated import LIMITS, apply as apply_note, bump_turns, decide, onboarding_state, pending, set_onboarding_state
+from app.memory.curated import LIMITS, apply as apply_note, bump_turns, decide, pending
 from app.memory.curated import ensure as ensure_notes
 from app.memory.curated import ensure_fts, read_all, search as search_notes, snapshot_text, write as write_note
 from app.memory.store import Store, ensure_column, new_id, now
@@ -1504,84 +1503,6 @@ class ChatStore:
                 if not exists:
                     state["conversation_id"] = None
             return state
-
-    def start_onboarding(self, student_id: str) -> Conversation:
-        from app.chat.onboarding import QUESTIONS
-        with self.connection() as db:
-            db.execute("BEGIN IMMEDIATE")
-            from app.chat.onboarding import state as read_state
-            state = read_state(db, student_id)
-            conv_id = state.get("conversation_id")
-            if conv_id:
-                existing = db.execute(
-                    "SELECT id FROM conversations WHERE id = ? AND student_id = ?",
-                    (conv_id, student_id),
-                ).fetchone()
-                if existing:
-                    if state["status"] != "in_progress":
-                        db.execute("UPDATE onboarding_sessions SET status='in_progress', version=version+1 WHERE student_id=?", (student_id,))
-                    conv = self.conversation(conv_id, student_id)
-                    if conv is not None:
-                        return conv
-            timestamp = now()
-            conv_id = new_id("conv")
-            db.execute(
-                "INSERT INTO conversations(id, student_id, title, title_source, kind, created_at, updated_at) "
-                "VALUES (?, ?, ?, 'user', 'chat', ?, ?)",
-                (conv_id, student_id, ONBOARDING_TITLE, timestamp, timestamp),
-            )
-            self._insert(
-                db,
-                conv_id,
-                role="assistant",
-                kind="text",
-                content=(ONBOARDING_FIRST_MESSAGE if state["stage"] == "background" and not state["draft"] else
-                         "欢迎回来。请继续核对候选画像。" if state["ready"] else
-                         QUESTIONS[state["stage"]]),
-                status="complete",
-            )
-            set_onboarding_state(db, student_id, onboarded=False, conversation_id=conv_id)
-            db.execute('''INSERT INTO onboarding_sessions(student_id, conversation_id, status)
-                VALUES (?, ?, 'in_progress') ON CONFLICT(student_id) DO UPDATE SET
-                conversation_id=excluded.conversation_id, status='in_progress', version=version+1''', (student_id, conv_id))
-        conv = self.conversation(conv_id, student_id)
-        assert conv is not None
-        return conv
-
-    def complete_onboarding(self, student_id: str, version: int, entries: dict) -> dict:
-        with self.connection() as db:
-            db.execute("BEGIN IMMEDIATE")
-            from app.chat.onboarding import state, FIELDS, LABELS
-            current = state(db, student_id)
-            if current["status"] == "completed":
-                return current
-            if current["status"] != "in_progress" or not current["ready"] or current["version"] != version:
-                raise ValueError("请完成访谈并核对最新画像后再确认。")
-            if set(entries) - set(FIELDS):
-                raise ValueError("画像字段无效。")
-            from app.memory.curated import split_entries, join_entries
-            notes = split_entries(read_all(db, student_id)["user"])
-            additions = []
-            for key, value in entries.items():
-                if not isinstance(value, str) or len(value) > 220:
-                    raise ValueError("画像条目过长或格式无效。")
-                if value.strip():
-                    additions.append(f"{LABELS[key]}：{value.strip()}")
-            # The confirmation is explicit authorization; preserve all existing notes.
-            replaced_labels = tuple(f"{LABELS[key]}：" for key in entries)
-            kept = [entry for entry in notes if not (replaced_labels and entry.startswith(replaced_labels))]
-            write_note(db, student_id, "user", join_entries(kept + additions), now())
-            db.execute("UPDATE onboarding_sessions SET status='completed', confirmed_entries=?, version=version+1 WHERE student_id=?", (json.dumps(entries, ensure_ascii=False), student_id))
-            return state(db, student_id)
-
-    def restart_onboarding(self, student_id: str) -> Conversation:
-        with self.connection() as db:
-            db.execute("DELETE FROM onboarding_sessions WHERE student_id = ?", (student_id,))
-            db.execute(
-                "UPDATE agent_state SET onboarded = 0, onboarding_conversation_id = NULL WHERE student_id = ?",
-                (student_id,),
-            )
-        return self.start_onboarding(student_id)
 
     def skip_onboarding(self, student_id: str) -> dict:
         return self.mark_onboarding(student_id, "skipped")

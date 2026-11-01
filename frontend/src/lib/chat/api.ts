@@ -332,10 +332,6 @@ export const chatApi = {
       status: data.status, stage: data.stage, ready: data.ready, version: data.version, draft: data.draft ?? {},
     };
   },
-  async completeOnboarding(version: number, entries: Record<string, string>): Promise<{ onboarded: boolean }> {
-    const data = await request<Wire>(root, "/api/onboarding/complete", { method: "POST", body: JSON.stringify({ version, entries }) });
-    return { onboarded: Boolean(data.onboarded) };
-  },
   async skipOnboarding(): Promise<void> {
     await request(root, "/api/onboarding/skip", { method: "POST" });
   },

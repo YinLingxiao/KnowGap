@@ -48,13 +48,10 @@ def main():
                     raise RuntimeError("Uvicorn did not become ready")
                 assert ready.json() == {"status": "ok"}
                 assert len(client.get("/api/problems").json()) == 3
-                assert client.get("/api/memories").json() == []
                 paths = client.get("/openapi.json").json()["paths"]
                 required_paths = {
-                    "/health", "/api/problems", "/api/diagnosis", "/api/sessions/{session_id}",
-                    "/api/sessions/{session_id}/messages", "/api/memories", "/api/memories/{memory_id}",
-                    "/api/ai/config", "/api/ai/test",
-                    "/api/search",
+                    "/health", "/api/problems", "/api/ai/config", "/api/ai/test",
+                    "/api/search/config", "/api/search/test",
                     "/api/materials", "/api/materials/search", "/api/materials/{document_id}",
                     "/api/conversations", "/api/conversations/{conversation_id}",
                     "/api/conversations/{conversation_id}/messages",
@@ -74,12 +71,7 @@ def main():
                 assert blocked.status_code == 422
                 assert client.get("/api/agent-memory").json()["memory"] == saved.json()["memory"]
                 assert client.get("/api/ai/config").status_code == 200
-                response = client.post("/api/diagnosis", json={
-                    "problem_id": "stack-sequence-001", "answer": "合法，因为数字集合相同。",
-                })
-                assert response.status_code == 503
-                assert client.get("/api/memories").json() == []
-                print(f"Real HTTP smoke passed: health, 3 problems, learner/agent memories, note validation, AI config, {len(paths)} OpenAPI paths, unconfigured model 503.")
+                print(f"Real HTTP smoke passed: health, 3 problems, learner/agent memories, note validation, AI config, {len(paths)} OpenAPI paths.")
         finally:
             process.terminate()
             try:

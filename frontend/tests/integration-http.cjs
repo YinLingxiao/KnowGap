@@ -9,40 +9,24 @@ for (const file of ['lib/config.ts', 'lib/api/errors.ts', 'lib/api/http-client.t
   fs.writeFileSync(dest, ts.transpileModule(fs.readFileSync(path.join(__dirname,'../src',file),'utf8'),
     {compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText);
 }
-const {createHttpClient,request} = require(path.join(temp,'lib/api/http-client.js'));
+const {request} = require(path.join(temp,'lib/api/http-client.js'));
 const {createMaterialClient} = require(path.join(temp,'lib/api/material-client.js'));
 const root = process.env.ROUNDTRIP_API;
-const client = createHttpClient(root);
 const materials = createMaterialClient(root);
 async function main() {
-  await client.checkHealth();
+  assert.deepEqual(await request(root,'/health'),{status:'ok'});
   const config = await request(root,'/api/ai/config');
   if (process.argv[2] === 'restart') {
     assert.equal(config.model,'synthetic-tutor');
     assert.equal(config.has_api_key,true);
-    const id = fs.readFileSync(path.join(temp,'session'),'utf8');
-    const session = await client.getSession(id);
-    assert.equal(session.turn,4);
-    assert.equal(session.diagnosis.assessment,'correct');
-    assert.equal(session.submissionDiagnosis.assessment,'incorrect');
-    assert.equal(session.messages.length,7);
-    assert.equal(session.messages[0].sources[0].title,'stack-notes.md');
-    const memories = await client.listMemories('demo-student-001');
-    assert.equal(memories.length,1);
-    assert.equal(memories[0].status,'improving');
-    await client.deleteMemory(memories[0].id);
-    assert.deepEqual(await client.listMemories('demo-student-001'),[]);
     const [document] = await materials.list();
     await materials.remove(document.id);
     assert.deepEqual(await materials.search('后进先出'),[]);
-    const next = await client.startSession({studentId:'demo-student-001',problemId:'stack-sequence-001',answer:'合法',reasoning:'数字相同'});
-    assert.deepEqual(next.usedMemoryIds,[]);
-    assert.deepEqual(next.reply.sources,[]);
-    console.log('HTTP adapter roundtrip: restart recovery, persisted AI configuration, memory deletion passed.');
+    console.log('HTTP adapter roundtrip: restart recovery, persisted AI configuration, material removal passed.');
     return;
   }
   assert.equal(config.configured,false);
-  assert.equal((await client.listProblems()).length,3);
+  assert.equal((await request(root,'/api/problems')).length,3);
   const document = await materials.upload(new File(['栈遵循后进先出，只能弹出栈顶。 LIFO means last in first out.'], 'stack-notes.md'));
   assert.equal((await materials.search('后进先出'))[0].documentId,document.id);
   const input = {base_url:process.env.ROUNDTRIP_PROVIDER,model:'synthetic-tutor',api_key:'synthetic-key'};
@@ -51,28 +35,10 @@ async function main() {
   const probe = await request(root,'/api/ai/test',{method:'POST',body:JSON.stringify(input)});
   assert.equal(probe.structured_output,true);
   assert.equal((await request(root,'/api/ai/config')).configured,false);
-  assert.deepEqual(await client.listMemories('demo-student-001'),[]);
   const saved = await request(root,'/api/ai/config',{method:'PUT',body:JSON.stringify(input)});
   assert.equal(saved.configured,true);
   assert.equal(JSON.stringify(saved).includes(input.api_key),false);
   assert.equal((await request(root,'/api/ai/test',{method:'POST'})).status,'ok');
-  const start = await client.startSession({studentId:'demo-student-001',problemId:'stack-sequence-001',answer:'合法',reasoning:'数字相同'});
-  assert.equal(start.diagnosis.assessment,'incorrect');
-  assert.equal(start.reply.sources.length,1);
-  const memoryId = start.memoryChanges[0].memoryId;
-  const first = await client.sendMessage(start.sessionId,'弹出3后可以直接拿1。');
-  assert.equal(first.turn,2);
-  assert.equal(first.memoryChanges[0].toStatus,'needs_review');
-  assert.deepEqual(first.usedMemoryIds,[memoryId]);
-  for (const text of ['栈顶其实是2。','栈顶的2必须先弹出。']) {
-    const turn = await client.sendMessage(start.sessionId,text);
-    assert.equal(turn.diagnosis.assessment,'correct');
-    assert.equal(turn.memoryChanges[0].toStatus,'improving');
-  }
-  const memories = await client.listMemories('demo-student-001');
-  assert.equal(memories.length,1);
-  assert.equal(memories[0].evidenceCount,4);
-  fs.writeFileSync(path.join(temp,'session'),start.sessionId);
-  console.log('HTTP adapter roundtrip: provider auth/format errors, AI test/save, 4 teaching turns, memory retrieval passed.');
+  console.log('HTTP adapter roundtrip: provider auth/format errors, AI test/save, material upload/search passed.');
 }
 main().catch(e=>{console.error(e);process.exitCode=1});

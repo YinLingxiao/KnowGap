@@ -10,7 +10,7 @@ from app.chat.service import ChatService
 from app.chat.store import ChatStore
 from app.main import create_app
 from app.memory.store import Store
-from app.models.schemas import TutorOutput
+from app.models.schemas import DEMO_STUDENT, TutorOutput
 from tests.test_acceptance_support import isolated_settings
 
 
@@ -286,16 +286,20 @@ def test_rename_delete_and_missing(tmp_path):
 
 
 def test_legacy_sessions_and_memories_are_imported_once(tmp_path):
-    class Tutor:
-        async def generate(self, context):
-            return TutorOutput(assessment="incorrect", issue="没有检查栈顶", confidence=0.7,
-                               evidence="我认为该序列合法", reply="弹出 3 后栈顶是谁？")
-
     settings = isolated_settings(tmp_path)
-    with TestClient(create_app(settings, tutor=Tutor(), chat_model=FakeChat())) as client:
-        legacy = client.post("/api/diagnosis", json={"problem_id": "stack-sequence-001", "answer": "我认为该序列合法"}).json()
+    # Rows written by the first-generation teaching flow, before the app (and its importer) starts.
+    legacy_store = Store(settings.resolved_database_path())
+    legacy_store.initialize()
+    legacy = legacy_store.save_turn(
+        student_id=DEMO_STUDENT, problem_id="stack-sequence-001", topic_key="stack.lifo",
+        answer="我认为该序列合法",
+        result=TutorOutput(assessment="incorrect", issue="没有检查栈顶", confidence=0.7,
+                           evidence="我认为该序列合法", reply="弹出 3 后栈顶是谁？"),
+        used_memory_ids=[], session=None,
+    )
+    with TestClient(create_app(settings, chat_model=FakeChat())) as client:
         conversations = client.get("/api/conversations").json()
-        assert len(conversations) == 1 and conversations[0]["legacy_session_id"] == legacy["session_id"]
+        assert len(conversations) == 1 and conversations[0]["legacy_session_id"] == legacy.session_id
         detail = client.get(f"/api/conversations/{conversations[0]['id']}").json()
         assert [m["kind"] for m in detail["messages"]] == ["exercise", "text", "text"]
         assert detail["messages"][1]["attempt"]["assessment"] == "incorrect"
@@ -303,10 +307,10 @@ def test_legacy_sessions_and_memories_are_imported_once(tmp_path):
         assert len(memories) == 1 and memories[0]["origin"] == "diagnosis"
         assert memories[0]["evidence"][0]["conversation_id"] == conversations[0]["id"]
         client.delete(f"/api/learner-memories/{memories[0]['id']}")
-        # Legacy rows are untouched and the old API still answers.
-        assert client.get(f"/api/sessions/{legacy['session_id']}").status_code == 200
+        # Legacy rows are untouched by the import.
+        assert legacy_store.session(legacy.session_id, DEMO_STUDENT) is not None
 
-    with TestClient(create_app(settings, tutor=Tutor(), chat_model=FakeChat())) as client:
+    with TestClient(create_app(settings, chat_model=FakeChat())) as client:
         assert len(client.get("/api/conversations").json()) == 1
         assert client.get("/api/learner-memories").json() == []
 

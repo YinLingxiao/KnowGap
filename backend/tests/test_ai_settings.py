@@ -70,7 +70,7 @@ def test_connection_probe_does_not_save(monkeypatch, tmp_path):
         assert response.json() == {"status": "ok", "model": "probe", "structured_output": True}
         assert observed[0][0] == "probe"
         assert client.get("/api/ai/config").json()["configured"] is False
-        assert client.get("/api/memories").json() == []
+        assert client.app.state.store.memories("demo-student-001") == []
         assert not (tmp_path / "data" / "ai-settings.json").exists()
 
 

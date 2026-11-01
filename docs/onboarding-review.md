@@ -1,5 +1,7 @@
 # 初识访谈修复与审阅入口
 
+> **状态：访谈入口已删除。** 下文描述的是访谈上线时的行为。`POST /api/onboarding/start`、`/restart`、`chat/service.py` 里的访谈分支和 `chat/onboarding.py` 的提取 Prompt 都已移除，前端没有访谈界面；新用户走欢迎页建空间。保留 `GET /api/onboarding`、`skip`、`ack`、`welcome`、`checklist`、`preferences`。`POST /api/onboarding/complete`（确认画像）也已删除，因为没有访谈就无从确认。
+
 ## 本轮行为
 
 - 首次默认进入，可随时跳过。状态分别为 `not_started / in_progress / skipped / completed`。
@@ -16,15 +18,13 @@
 ## 接口
 
 - `GET /api/onboarding`：状态、会话 ID、当前缺失槽、draft、ready、version。
-- `POST /api/onboarding/start`：幂等开启/恢复；显式操作可重新打开已跳过/已完成访谈。
+- 画像访谈的入口（`POST /api/onboarding/start`、`/restart`）和访谈对话分支已删除，前端不再有访谈界面。欢迎页建空间、清单和偏好接口保留；
 - `POST /api/onboarding/skip`：独立跳过，停止当前访谈生成，保留草稿。
-- `POST /api/onboarding/complete`：`{version, entries: {background?, explanation?, interaction?}}`。必须已到核对阶段且无生成任务。
 
 ## 代码入口
 
 - `backend/app/chat/onboarding.py`：独立提取 Prompt、状态和原话校验。
 - `backend/app/chat/store.py`：启动、恢复、跳过、确认与事务。
-- `backend/app/chat/service.py`：专用访谈分支；版本防止跳过后的迟到模型结果推进状态。
 - `backend/app/chat/router.py`：HTTP 契约。
 - `frontend/src/components/chat/ChatApp.tsx`：服务端状态驱动的访谈、核对、模型设置、恢复入口。
 
