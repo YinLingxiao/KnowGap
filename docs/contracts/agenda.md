@@ -3,14 +3,15 @@
 > 状态：约定 v1（2026-10-21）。后端、日程主界面、周历/AI 拆解三个会话按此并行开发；字段改动必须同步本文、`frontend/src/lib/agenda/types.ts` 与 `api.ts`。
 > 线上字段一律 snake_case，前端只在 `lib/agenda/api.ts` 内做映射。所有接口沿用现有鉴权（`current_student()`），跨学生访问一律 404。
 
-## 1. 三类任务来源
+## 1. 两类任务来源
 
 | 来源 | 存储 | 说明 |
 | --- | --- | --- |
 | `manual` | `agenda_tasks` 表 | 用户手动或快录添加的待办，支持父子任务 |
 | `ai_breakdown` | `agenda_tasks` 表 | AI 拆解排期后用户确认入列的任务（父任务 + 子任务） |
-| `review` | `agenda_tasks` 表 | 艾宾浩斯错题闪回，由后端根据 `misconception` 学习记忆自动生成 |
 | 支线 | **不存储**，`GET /api/agenda/feed` 实时聚合 | 进行中（open）的空间支线，截止日继承所属空间的 `deadline` |
+
+日程不会根据学习记忆自动生成任务。`source` 只接受 `manual` 和 `ai_breakdown`。旧库里 `source = 'review'` 的行，由 `agenda/store.py` 的 `ensure()` 一次性删除（同一进程、同一数据库路径只删一次，再调用是空删除）。列 `memory_id`、`review_step`、唯一约束 `UNIQUE(student_id, memory_id, review_step)` 和表 `agenda_review_abandoned` 仍保留，不再使用。
 
 ## 2. Task 对象
 
@@ -30,9 +31,9 @@
   "deadline_date": "2026-10-30",     // 硬截止日（Deadline），可空，与 Schedule 独立
   "status": "open",                  // open | done | cancelled
   "completed_at": null,              // ISO 时间，done 时由后端写入
-  "source": "manual",                // manual | ai_breakdown | review
-  "memory_id": null,                 // review 任务对应的 misconception 记忆 id
-  "review_step": null,               // review 任务的轮次 1|2|3
+  "source": "manual",                // manual | ai_breakdown
+  "memory_id": null,                 // 保留列，不再使用
+  "review_step": null,               // 保留列，不再使用
   "sort_order": 0,                   // 同组内排序，浮点
   "created_at": "…",
   "updated_at": "…"
@@ -41,16 +42,7 @@
 
 校验：`title` 1~200 字；`priority` 1~4（默认 4）；`labels` 至多 10 个、每个至多 20 字；日期 `YYYY-MM-DD`；`scheduled_start_at` `YYYY-MM-DDTHH:MM`；`duration_minutes` 5~720；`parent_id` 只能指向同一学生的顶层任务（只支持两层）；`subject_id` / `thread_id` 必须属于当前学生，否则 422。
 
-## 3. 艾宾浩斯闪回规则（anchor = completion）
-
-- 每条 `kind = "misconception"` 且 `status` 不是已解决的学习记忆，对应一条闪回链。
-- 第 1 轮：`scheduled_date = 记忆创建日期 + 1 天`。
-- 完成第 k 轮（PATCH 为 `done`）后，后端立即生成第 k+1 轮：第 2 轮 = 完成日期 + 3 天，第 3 轮 = 完成日期 + 7 天。第 3 轮完成后链结束。
-- 记忆被标记为已解决或被删除时，链上未完成的 review 任务改为 `cancelled`。
-- 生成是幂等的：每次 `GET /api/agenda/tasks` 或 `/feed` 时同步一次（同一记忆同一轮次最多一条）。
-- review 任务标题：`闪回：{记忆 topic}`，`notes` 带记忆 summary 与最近一条原话证据，`subject_id` 继承记忆的 `subject_id`，`priority` 默认 2。
-
-## 4. 接口
+## 3. 接口
 
 ### `GET /api/agenda/tasks`
 查询参数：`status=open|done|all`（默认 `open`）、`subject_id`（可选）。
@@ -77,10 +69,10 @@
 用于 AI 拆解确认入列：`{"parent": TaskCreate | null, "children": TaskCreate[]}`（children 至多 30 条，忽略其中的 `parent_id`，有 parent 时全部挂到新建的 parent 下）。单事务，返回 201 + `{"parent": Task | null, "children": Task[]}`。
 
 ### `PATCH /api/agenda/tasks/{id}`
-部分更新可写字段与 `status`、`sort_order`。传 `null` 表示清空该字段。`status` 改为 `done` 时写 `completed_at`，改回 `open` 时清空。review 任务完成时按第 3 节生成下一轮。返回 Task。
+部分更新可写字段与 `status`、`sort_order`。传 `null` 表示清空该字段。`status` 改为 `done` 时写 `completed_at`，改回 `open` 时清空。返回 Task。
 
 ### `DELETE /api/agenda/tasks/{id}`
-删除任务及其子任务，返回 204。review 任务也可删除（视为放弃该轮，不再生成后续轮次）。
+删除任务及其子任务，返回 204。
 
 ### `POST /api/agenda/breakdown`
 请求体：`{"goal": "两周内搞定电路原理期末", "subject_id": "subj-…" | null, "deadline_date": "2026-11-05" | null, "today": "2026-10-21"}`。
@@ -95,7 +87,7 @@
 - 有 `scheduled_start_at` 的任务导出为带时间的 `VEVENT`（时长取 `duration_minutes`，缺省 30 分钟）；只有 `scheduled_date` 的导出为全天事件；只有 `deadline_date` 的导出为全天事件，标题前加「截止：」。
 - 需要鉴权头，前端用 `fetch` + `authHeader()` 取 Blob 后触发下载，不能直接用 `<a href>`。
 
-## 5. 前端协作约定
+## 4. 前端协作约定
 
 - **数据层**：`frontend/src/lib/agenda/types.ts`、`api.ts`（已提供，各会话只读；需要改动请在汇报中说明，由集成步骤统一改）。
 - **日程主界面**（agenda-ui 会话）拥有：`components/agenda/AgendaPage.tsx`（页面外壳、视图切换）、列表视图、`TaskInspector` 右侧抽屉、Quick Add 与 `lib/agenda/quickAdd.ts` 中文解析器、导航入口（侧栏「日程」+ `ChatApp` 的 `agenda` 视图）、`.ics` 导出按钮。
@@ -130,21 +122,21 @@ interface AiBreakdownDialogProps {
 
 - **刷新**：任何模块改了任务后派发 `window` 事件 `knowgap:agenda-changed`（无 detail），日程页监听后重新拉取。
 
-## 6. v2 增补（2026-10-21 晚）：提醒、全局添加任务、桌面托盘
+## 5. v2 增补（2026-10-21 晚）：提醒、全局添加任务、桌面托盘
 
-### 6.1 提醒字段 `reminder_minutes`
+### 5.1 提醒字段 `reminder_minutes`
 - Task 新增可写字段 `reminder_minutes`：整数，开始前多少分钟提醒，`0` = 准时，`null` = 不提醒；允许值 `0 / 5 / 10 / 15 / 30 / 60 / 120 / 1440`，其他值 422。
 - 只对有 `scheduled_start_at` 的任务生效；没有开始时间时可以存，但不会触发。
 - `.ics` 导出：有提醒的 VEVENT 加 `VALARM`（`TRIGGER:-PT{n}M`，`ACTION:DISPLAY`）。
 - AI 工具 `agenda_add` / `agenda_update` 的任务字段同步增加 `reminder_minutes`。
 - 前端类型：`AgendaTask.reminderMinutes`、`TaskInput.reminderMinutes`（`lib/agenda/types.ts`、`api.ts` 已加映射）。
 
-### 6.2 全局「添加任务」弹窗
+### 5.2 全局「添加任务」弹窗
 - 任何模块派发 `window` 事件 `COMPOSE_TASK_EVENT = "knowgap:compose-task"`，`detail: ComposeTaskDetail`（`scheduledDate / subjectId / parentId / title` 均可选，作为默认值），即打开弹窗。
 - 弹窗由 task-composer 会话实现并在 ChatApp 挂载一次；创建成功后派发 `AGENDA_CHANGED_EVENT`。
 - 日程页各视图里的「+ 添加任务」一律派发这个事件，不再各自实现输入框（行内快录 QuickAdd 可保留在「今天/待办」顶部）。
 
-### 6.3 桌面端桥接（`window.knowgap`，preload 暴露）
+### 5.3 桌面端桥接（`window.knowgap`，preload 暴露）
 | 方法 / 事件 | 方向 | 说明 |
 | --- | --- | --- |
 | `showMain(): void` | 页面 → 主进程 | 显示并聚焦主窗口（窗口在托盘里时也能唤出）。通知点击、快问浮窗跳转都用它 |
