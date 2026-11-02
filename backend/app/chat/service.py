@@ -37,6 +37,7 @@ from app.chat.checkpoints import MAX_TOOL_ROUNDS, resume_state
 from app.chat.usage import normalize_usage
 from app.chat.schemas import DispatchThread, ProposeThreads, ReportProgress
 from app.chat.quizzes import guard_gaps, seal_quizzes
+from app.chat.skills import WIDGET_RETRY_NOTICE, refuses_widget
 from app.chat.skills.problem_drill_skill import SEARCH_TOOL, drill_plan, guard_reply, lesson_first, wants_problems
 from app.chat.coordination import cancel_deliveries, dispatch, next_delivery
 from app.memory.store import new_id
@@ -1003,6 +1004,25 @@ class ChatService:
                 ctx.workspace = workspace_of(self.settings)
             else:
                 raise ProviderError(502, "工具调用已达到本轮上限，请缩小任务范围后重试。")
+            last_reply = "".join(round_text)
+            if role["role"] != "main" and not event_turn and refuses_widget(last_reply, user_text):
+                # 小模型偶尔仍说「嵌不了」或把整页 HTML 丢给用户：只重试一次，不流式输出，
+                # 替换后的正文由 done 事件覆盖已显示的原文，历史里也不留下错误示范。
+                retry = [*flatten_tool_history(messages), {"role": "assistant", "content": last_reply},
+                         {"role": "user", "content": WIDGET_RETRY_NOTICE}]
+                request_id = new_id("usage")
+                self._usage(request_id, model, generation.conversation_id, assistant_id, "chat")
+                rewritten: list[str] = []
+                async for kind, value in model.stream(retry):
+                    if kind == "text":
+                        rewritten.append(value)
+                    elif kind == "usage":
+                        self._usage(request_id, model, generation.conversation_id, assistant_id, "chat", value)
+                    elif kind == "finish":
+                        finish = value
+                if "".join(rewritten).strip() and not refuses_widget("".join(rewritten), user_text):
+                    del parts[len(parts) - len(round_text):]
+                    parts.extend(rewritten)
             text = "".join(parts)
             if not text.strip() and not event_turn:
                 # 唤醒回合的沉默是合法结果；普通回合空回复按失败处理

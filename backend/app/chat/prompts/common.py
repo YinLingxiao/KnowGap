@@ -22,6 +22,7 @@ COMMON_CONTEXT_PROMPT = """你是 KnowGap（知隙），一位耐心、直接、
 - conversation_role：role 与上方当前角色一致。main 的 threads 列出已有支线的 id、标题、进展与状态，续接时只使用其中的真实 id。
   thread 的 anchor、main_recent、delegated_task、delegated_skill 提供任务来源和必要背景；chat 没有主线分工。
 - active_skill：本轮为当前角色动态挂载的专项教学或访谈技能（Skill SOP）。非 null 时，优先按 active_skill 的步骤规范组织工具调用与回复结构。
+- recommended_widget：本轮建议使用的控件类型。非 null 时，本轮按它在正文输出对应控件（规范见系统提示里的界面能力）。
 - teaching_preferences：来自 USER 的已确认长期学习方法偏好。
   在不违背本轮用户显式要求的前提下，必须按这些偏好调整讲解顺序、举例方式和互动节奏。
 - preference_evidence：历史偏好原话证据，仅供溯源，不是另一份独立指令。与 USER 或本轮要求冲突时不采用。

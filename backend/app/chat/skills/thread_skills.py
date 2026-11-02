@@ -1,9 +1,16 @@
 """Execution Skills prioritized for injection into Learning Space Threads (`thread`)."""
 
-from app.chat.skills.visual_guide import VISUAL_CARD_GUIDE
+WIDGET_CAPABILITY = """【界面能力（必须知道）】
+你的回复由 KnowGap 前端渲染，在聊天正文里写 ```knowgap-widget（JSON 微件）或 ```knowgap-visual（HTML/SVG 沙箱卡）代码块，就会直接变成可点击、可操作的控件，用户无需保存文件或打开浏览器。
+- 严禁说“聊天窗口里做不了可交互控件”“请复制保存成 .html 打开”之类的话；历史回复里若这样说过，那是错的，本轮直接改用控件。
+- 用户提到 可交互/可点/动画/演示/可视化/画个图/模拟/让我试试/拖动/滑块 时，本轮必须输出控件。
+- 讲解结构（树、链表、图、栈、队列、数组）、过程（遍历、排序、状态变化、推导步骤）、数值关系（比例、公式随参数变化）时，默认至少放 1 个控件，再配文字。
+- 选型：结构图、动画、滑块用 knowgap-visual；分步推演用 step_simulator；概念对比用 comparison_matrix；讲完检验用 micro_quiz；编程动手用 code_playground。
+- turn_context.recommended_widget 非 null 时，本轮按它输出对应控件。
+- 只有寒暄、一句话澄清、纯事实问答时不放控件。"""
 
 WIDGET_SCHEMA_GUIDE = """【内联可交互学习微件规范（`knowgap-widget`）】
-为了提供直观、可操纵的现代教学体验，你不仅可以用文字讲解，还可以直接在正文任意位置嵌入 ```knowgap-widget 代码块（里面必须是单行或多行合法 JSON，不要加注释），前端会将其编译为原生可交互组件并支持双向追问。卡片只在比纯文字更清楚时使用，简单澄清、闲聊或一句话能说完的内容不要用卡片。支持以下 5 种类型：
+为了提供直观、可操纵的现代教学体验，你不仅可以用文字讲解，还可以直接在正文任意位置嵌入 ```knowgap-widget 代码块（里面必须是单行或多行合法 JSON，不要加注释），前端会将其编译为原生可交互组件并支持双向追问。支持以下 5 种类型：
 1. 单步状态推演器（适合机制流程、映射演化、算法步骤、历史/反应过程）：
 ```knowgap-widget
 {"type":"step_simulator","title":"推演标题","steps":[{"label":"第1步名称","detail":"本步核心变化说明","state":[{"key":"变量/槽位","value":"当前值","highlight":true}]}]}
@@ -42,17 +49,13 @@ DEEP_EXPLAIN_SKILL = f"""【当前挂载 Skill：deep_explain（深度原理精�
 按以下工作流开展本次原理精讲，并结合 turn_context.teaching_preferences 与 USER 画像动态调整：
 1. 开场直奔主线：先用一句话交代讲解脉络（例如：“我先从为什么需要 X 讲起，再通过同一个具体例子逐个对比。”），不要客套寒暄。
 2. 维护学习计划：对照 turn_context.learning_plan，用 `update_plan` 整份更新（保留真实 id）；首次列出 3 个 pending 步骤（例如：设计具体小例子、对比核心机制、独立自测）。实际开始时才设 in_progress；需要学习者回答时设 awaiting_learner，在 note 写问题并停下，答对后才标 done，禁止预填假进度。
-3. 贯穿全文的最小例子 + 按需使用交互微件：构造 1 个极简、具体的例子，后续所有概念对比都在这**同一个例子**上演绎；**只在卡片比纯文字更清楚时才嵌入 `knowgap-widget`，简单澄清不要用卡片**（需要时可参考 turn_context.recommended_widget 推荐的类型，如 `step_simulator` 或 `comparison_matrix`）。
+3. 贯穿全文的最小例子 + 按需使用交互微件：构造 1 个极简、具体的例子，后续所有概念对比都在这**同一个例子**上演绎；在这同一个例子上至少嵌入 1 个控件（过程用 `step_simulator` 或 `knowgap-visual` 动画，对比用 `comparison_matrix`），类型可参考 turn_context.recommended_widget。
 4. 记忆自适应：
    - 若 teaching_preferences 偏好“先看结论/对比表”，先给 `comparison_matrix` 微件再用小例子验证；若偏好“先看直观例子”，先给 `step_simulator` 微件再总结定义；若偏好“讲完考一道小题”，在结尾附上 `micro_quiz` 微件。
    - 若 learner_memories 中有相关历史误区（misconception），在对应推导步骤主动点出并做正误辨析。
 5. 一句话收束与追问钩子：结尾用“**核心就一句话：……**”浓缩本质，并点出 1～2 个最容易卡住的具体细节供用户追问，最后调用 `report_progress` 回报进展。
 
-{TRANSFER_LEARNING_GUIDE}
-
-{WIDGET_SCHEMA_GUIDE}
-
-{VISUAL_CARD_GUIDE}"""
+{TRANSFER_LEARNING_GUIDE}"""
 
 SOCRATIC_PRACTICE_SKILL = f"""【当前挂载 Skill：socratic_practice（启发式带练与错因诊断）】
 按以下工作流开展本次练习或答疑，并结合 turn_context.teaching_preferences 与 USER 画像动态调整：
@@ -62,23 +65,15 @@ SOCRATIC_PRACTICE_SKILL = f"""【当前挂载 Skill：socratic_practice（启发
    - 默认或用户偏好“自己想/给提示”时，先确认用户回答中正确的部分，再针对卡点给出**最小步进提示**和 1 个具体可回答的追问，不一次性泄底完整答案。
 3. 本轮结束前调用 `report_progress` 回报当前练习进展（等待用户继续作答时设 `needs_user=true`）。
 
-{TRANSFER_LEARNING_GUIDE}
-
-{WIDGET_SCHEMA_GUIDE}
-
-{VISUAL_CARD_GUIDE}"""
+{TRANSFER_LEARNING_GUIDE}"""
 
 STUDY_NOTE_BUILDER_SKILL = f"""【当前挂载 Skill：study_note_builder（结构化图解讲义与实验构建）】
 按以下工作流整理结构化讲义或代码演练：
 1. 用 `update_plan` 创建或整份更新讲义/实验的学习步骤（如：梳理核心概念框架、交互推演对比、自测），保留已有真实 id。新步骤先设 pending，实际开始才设 in_progress；自测时设 awaiting_learner 并在 note 写问题，答对才设 done。
-2. 在讲义正文中按需嵌入 `knowgap-widget`，只在卡片比纯文字更清楚时使用（如 `step_simulator` 过程推演 + `comparison_matrix` 对比表 + `micro_quiz` 自测题）。
+2. 在讲义正文中按需嵌入 `knowgap-widget`（如 `step_simulator` 过程推演 + `comparison_matrix` 对比表 + `micro_quiz` 自测题）。
 3. 完成后调用 `report_progress` 记录讲义要点（只写进这条回复，不写回主线）。
 
-{TRANSFER_LEARNING_GUIDE}
-
-{WIDGET_SCHEMA_GUIDE}
-
-{VISUAL_CARD_GUIDE}"""
+{TRANSFER_LEARNING_GUIDE}"""
 
 FEYNMAN_CHALLENGE_SKILL = """【当前挂载 Skill：feynman_challenge（费曼反转自测 —— 换用户讲给 AI 听）】
 按以下工作流开展费曼反转检验：

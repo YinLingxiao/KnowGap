@@ -211,7 +211,7 @@ def test_examiner_phrase_stays_on_feynman_route():
     assert drill_plan("thread", text) == (False, None)
     assert drill_plan("main", text) == (False, None)
     assert recommend_widget("chat", text) == (
-        "micro_quiz（建议在回复中嵌入 ```knowgap-widget 的 micro_quiz 随堂微测卡）"
+        "micro_quiz（必须在回复中嵌入 ```knowgap-widget 的 micro_quiz 随堂微测卡）"
     )
     assert recommend_widget("thread", text) == recommend_widget("chat", text)
     assert recommend_widget("main", text) is None

@@ -14,7 +14,7 @@ from app.chat.prompts import (
     THREAD_ROLE_PROMPT,
 )
 from app.chat.schemas import LearnerMemory, Subject
-from app.chat.skills import recommend_widget, select_skill_prompt
+from app.chat.skills import WIDGET_SYSTEM_PROMPT, recommend_widget, select_skill_prompt
 from app.chat.store import quote_in
 from app.chat.attachments import attachment_query, readable_file_markers
 from app.models.schemas import Problem, SourceReference
@@ -321,6 +321,8 @@ def chat_messages(
             turn["recommended_widget"] = "comparison_matrix（对比旧知机制、新知机制与跨领域负迁移易错点）"
     role_prompt = ROLE_PROMPTS.get((conversation_role or {}).get("role", "chat"), CHAT_ROLE_PROMPT)
     system = f"{role_prompt}\n\n{CHAT_PROMPT}"
+    if role_name != "main":
+        system += f"\n\n{WIDGET_SYSTEM_PROMPT}"
     if snapshot:
         system += f"\n\n{snapshot}"
     # Rows folded into the persisted summary leave the verbatim window; the summary stands in for them.
