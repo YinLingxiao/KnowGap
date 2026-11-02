@@ -33,6 +33,19 @@
   pointer-events: none;
 }
 
+/* 图上批注编号的命中区从 22px 提到 26px，文字保持正文下限 13px */
+button.badge {
+  width: 26px;
+  height: 26px;
+  font-size: var(--text-sm);
+}
+
+/* 底栏的追问按钮沿用强调胶囊，但字号和高度按本卡正文规格调整 */
+button.askBtn {
+  height: 28px;
+  font-size: var(--text-sm);
+}
+
 .annoText {
   flex: 1;
   min-width: 0;
@@ -87,14 +100,14 @@
 .cellSelect {
   width: 100%;
   min-width: 56px;
-  height: 26px;
+  height: 28px;
   padding: 0 6px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
   background: var(--bg-subtle);
   color: var(--text);
   font: inherit;
-  font-size: var(--text-xs);
+  font-size: var(--text-sm);
 }
 
 .cellInput:focus-visible,
@@ -112,8 +125,8 @@
 .iconBtn {
   display: inline-grid;
   place-items: center;
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   padding: 0;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -124,6 +137,11 @@
 .iconBtn:hover {
   background: var(--red-soft);
   color: var(--red);
+}
+
+.iconBtn:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
 }
 
 .issueList {
@@ -186,6 +204,43 @@
   flex-wrap: wrap;
   gap: 8px;
   margin-left: auto;
+}
+
+/* 底栏保留强调样式的动作，字号与命中高度按正文规格补足 */
+button.footBtn {
+  height: 28px;
+  font-size: var(--text-sm);
+}
+
+/* 降级为文字的辅助动作：跟随底栏高度，只用悬停底色提示可点 */
+button.textBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  transition: background-color var(--t-hover) var(--ease-out), color var(--t-hover) var(--ease-out);
+}
+
+button.textBtn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+button.textBtn:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+button.textBtn:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 /* ImageAttach */
