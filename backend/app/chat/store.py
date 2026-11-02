@@ -232,6 +232,23 @@ class ChatStore:
                 CREATE UNIQUE INDEX IF NOT EXISTS idx_thread_reports_pending
                     ON thread_reports(thread_id) WHERE state = 'pending';
                 CREATE INDEX IF NOT EXISTS idx_thread_reports_main ON thread_reports(main_id, state);
+                -- 题目与作答只随会话删除；message_id 不设外键，重新生成删除旧回复时记录照留
+                CREATE TABLE IF NOT EXISTS quiz_items (
+                    quiz_id TEXT PRIMARY KEY, message_id TEXT NOT NULL,
+                    conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+                    question TEXT NOT NULL, options_json TEXT NOT NULL, answer_index INTEGER NOT NULL,
+                    explanation TEXT NOT NULL DEFAULT '', meta_json TEXT NOT NULL DEFAULT '{}',
+                    superseded INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_quiz_items_message ON quiz_items(message_id);
+                CREATE TABLE IF NOT EXISTS quiz_attempts (
+                    id TEXT PRIMARY KEY, action_id TEXT NOT NULL UNIQUE,
+                    quiz_id TEXT NOT NULL REFERENCES quiz_items(quiz_id) ON DELETE CASCADE,
+                    conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+                    option_index INTEGER NOT NULL, correct INTEGER NOT NULL, created_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_quiz_attempts_quiz ON quiz_attempts(quiz_id);
+                CREATE INDEX IF NOT EXISTS idx_quiz_attempts_conversation ON quiz_attempts(conversation_id);
             """)
             # NULL subject_id: conversation outside any Subject / general memory that applies everywhere.
             ensure_column(db, "conversations", "subject_id", "TEXT")
@@ -1349,6 +1366,9 @@ class ChatStore:
         with self.connection() as db:
             db.execute("BEGIN IMMEDIATE")
             for message_id in discard:
+                # 旧回复里的题标为作废，题目和作答记录保留
+                db.execute("UPDATE quiz_items SET superseded = 1 WHERE message_id IN "
+                           "(SELECT id FROM conversation_messages WHERE id = ? AND reply_to = ?)", (message_id, reply_to))
                 db.execute("DELETE FROM conversation_messages WHERE id = ? AND reply_to = ?", (message_id, reply_to))
             return self._insert(db, conversation_id, role="assistant", kind="text", content="",
                                 status="streaming", reply_to=reply_to)
