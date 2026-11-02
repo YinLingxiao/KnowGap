@@ -6,7 +6,7 @@
  * Placeholders use `{name}` and are replaced by `translate()`.
  */
 export const zh = {
-  "app.title": "知隙 KnowGap",
+  "app.title": "KnowGap",
   "app.description": "以对话为核心的学习 Agent：解释、追问、举例与练习，并从有依据的对话中积累学习记忆。",
   "app.avatar": "学",
   "app.demoLearner": "演示学习者",
@@ -30,7 +30,7 @@ export const zh = {
   "common.processing": "处理中…",
 
   "sidebar.label": "对话",
-  "sidebar.brand": "知隙",
+  "sidebar.brand": "KnowGap",
   "sidebar.collapse": "收起侧栏",
   "sidebar.expand": "展开侧栏",
   "sidebar.newChat": "新对话",

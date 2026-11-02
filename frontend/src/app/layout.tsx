@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import "@fontsource-variable/geist";
-import "@fontsource-variable/noto-sans-sc";
 import "@fontsource-variable/source-serif-4";
 import "katex/dist/katex.min.css";
 import { LanguageProvider } from "@/components/LanguageProvider";
