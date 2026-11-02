@@ -282,7 +282,7 @@ export function QuickAsk() {
                 {phase === "streaming" && !answer && (
                   <p className={styles.status}>{tool ? tx("正在使用工具：{tool}", { tool }) : tx("正在思考…")}</p>
                 )}
-                {answer && <div className={styles.answer}><Markdown text={answer} /></div>}
+                {answer && <div className={styles.answer}><Markdown text={answer} live={busy} /></div>}
                 {phase === "streaming" && answer && tool && <p className={styles.status}>{tx("正在使用工具：{tool}", { tool })}</p>}
                 {error && <p className={styles.error} role="alert">{error}</p>}
                 <div className={styles.actions}>

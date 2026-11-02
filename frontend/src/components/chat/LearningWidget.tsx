@@ -1,13 +1,13 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useMemo, useState } from "react";
+import { createContext, useContext, useMemo, useState } from "react";
 import {
   CheckCircle2, ChevronLeft, ChevronRight, CircleAlert, HelpCircle,
-  Layers, Lightbulb, MessageSquarePlus, Sliders, Sparkles,
+  Layers, Lightbulb, MessageSquarePlus, Sparkles,
 } from "lucide-react";
 import { cx } from "@/lib/cx";
-import { parseWidgetJson } from "@/lib/chat/widgetJson";
+import { parsePartialWidgetJson, parseWidgetJson } from "@/lib/chat/widgetJson";
 import { useI18n } from "@/components/LanguageProvider";
 import styles from "./LearningWidget.module.css";
 import { MathText } from "./math";
@@ -26,6 +26,9 @@ const CodePlaygroundWidget = dynamic(
 );
 
 export const WIDGET_ASK_EVENT = "knowgap:widget-ask";
+
+/** True while the message holding the widget is still being written. Markdown provides it. */
+export const WidgetLiveContext = createContext(false);
 
 function emitWidgetQuestion(prompt: string) {
   window.dispatchEvent(new CustomEvent<string>(WIDGET_ASK_EVENT, { detail: prompt }));
@@ -49,21 +52,47 @@ interface CompareRow {
   takeaway?: string;
 }
 
-interface LabParam {
-  id: string;
-  label: string;
-  min: number;
-  max: number;
-  step?: number;
-  default: number;
-  unit?: string;
+/** Types that can be previewed while streaming, with the least data that makes the preview worth showing. */
+const PREVIEWABLE: Record<string, (data: Record<string, unknown>) => boolean> = {
+  step_simulator: (data) => Array.isArray(data.steps) && data.steps.length > 0,
+  comparison_matrix: (data) =>
+    Array.isArray(data.columns) && data.columns.length > 0 && Array.isArray(data.rows) && data.rows.length > 0,
+  micro_quiz: (data) => Boolean(data.question) && Array.isArray(data.options) && data.options.length > 0,
+};
+
+function renderWidget(type: string, data: Record<string, unknown>) {
+  if (type === "step_simulator") return <StepSimulatorWidget data={data} />;
+  if (type === "comparison_matrix") return <ComparisonMatrixWidget data={data} />;
+  if (type === "micro_quiz") return <MicroQuizWidget data={data} />;
+  if (type === "code_playground") return <CodePlaygroundWidget data={data} />;
+  if (type === "image_annotator") return <ImageAnnotatorWidget data={data} />;
+  if (type === "circuit_netlist") return <CircuitNetlistWidget data={data} />;
+  return null;
 }
+
+const KNOWN_TYPES = new Set([
+  "step_simulator", "comparison_matrix", "micro_quiz", "code_playground", "image_annotator", "circuit_netlist",
+]);
 
 export function LearningWidget({ rawCode }: { rawCode: string }) {
   const { tx } = useI18n();
+  const live = useContext(WidgetLiveContext);
   const parsed = useMemo(() => parseWidgetJson(rawCode), [rawCode]);
+  const partial = useMemo(() => (!parsed && live ? parsePartialWidgetJson(rawCode) : null), [parsed, live, rawCode]);
 
-  if (!parsed) {
+  const previewType = String(partial?.type || "");
+  const previewing = Boolean(partial && PREVIEWABLE[previewType]?.(partial));
+  const data = parsed ?? (previewing ? partial : null);
+
+  if (data) {
+    const type = String(data.type || "");
+    if (!KNOWN_TYPES.has(type)) return <WidgetFailure rawCode={rawCode} reason={tx("这种卡片已不再支持")} />;
+    // 预览和完成后是同一棵树，卡片不会因为 JSON 收尾而重新挂载；
+    // inert 让半成品不能点，避免对着还没写完的选项作答。
+    return <div className={previewing ? styles.liveWrap : undefined} inert={previewing}>{renderWidget(type, data)}</div>;
+  }
+
+  if (live) {
     return (
       <div className={styles.skeletonCard} role="status">
         <Sparkles size={14} className={styles.skeletonIcon} aria-hidden />
@@ -72,30 +101,21 @@ export function LearningWidget({ rawCode }: { rawCode: string }) {
     );
   }
 
-  const type = String(parsed.type || "");
-  if (type === "step_simulator") {
-    return <StepSimulatorWidget data={parsed} />;
-  }
-  if (type === "comparison_matrix") {
-    return <ComparisonMatrixWidget data={parsed} />;
-  }
-  if (type === "parameter_lab") {
-    return <ParameterLabWidget data={parsed} />;
-  }
-  if (type === "micro_quiz") {
-    return <MicroQuizWidget data={parsed} />;
-  }
-  if (type === "code_playground") {
-    return <CodePlaygroundWidget data={parsed} />;
-  }
-  if (type === "image_annotator") {
-    return <ImageAnnotatorWidget data={parsed} />;
-  }
-  if (type === "circuit_netlist") {
-    return <CircuitNetlistWidget data={parsed} />;
-  }
+  return <WidgetFailure rawCode={rawCode} reason={tx("这张卡片没能生成")} />;
+}
 
-  return null;
+function WidgetFailure({ rawCode, reason }: { rawCode: string; reason: string }) {
+  const { tx } = useI18n();
+  return (
+    <details className={styles.failCard}>
+      <summary>
+        <CircleAlert size={13} aria-hidden />
+        <span>{reason}</span>
+        <span>· {tx("查看原文")}</span>
+      </summary>
+      <pre>{rawCode}</pre>
+    </details>
+  );
 }
 
 function StepSimulatorWidget({ data }: { data: Record<string, unknown> }) {
@@ -298,94 +318,6 @@ function ComparisonMatrixWidget({ data }: { data: Record<string, unknown> }) {
         >
           <MessageSquarePlus size={12} aria-hidden />
           <span>{tx("举例辨析")}</span>
-        </button>
-      </footer>
-    </section>
-  );
-}
-
-function ParameterLabWidget({ data }: { data: Record<string, unknown> }) {
-  const { tx, lang } = useI18n();
-  const title = String(data.title || tx("参数实验室"));
-  const formula = String(data.formula || "");
-  const insight = String(data.insight || "");
-  const params = useMemo(
-    () => (Array.isArray(data.params) ? (data.params as LabParam[]) : []),
-    [data.params],
-  );
-  const [values, setValues] = useState<Record<string, number>>(() =>
-    Object.fromEntries(params.map((p) => [p.id, Number(p.default ?? p.min ?? 1)])),
-  );
-
-  if (params.length === 0) return null;
-
-  return (
-    <section className={styles.widgetCard} aria-label={title}>
-      <header className={styles.widgetHead}>
-        <div className={styles.widgetTitleWrap}>
-          <span className={styles.widgetBadge}>
-            <Sliders size={12} aria-hidden />
-            {tx("参数实验")}
-          </span>
-          <strong className={styles.widgetTitle}><MathText text={title} /></strong>
-        </div>
-        {formula && <code className={styles.formulaBadge}>{formula}</code>}
-      </header>
-
-      <div className={styles.labGrid}>
-        {params.map((p) => {
-          const val = values[p.id] ?? p.default ?? p.min;
-          const min = Number(p.min ?? 0);
-          const max = Number(p.max ?? 100);
-          const ratio = max > min ? Math.min(100, Math.max(0, ((val - min) / (max - min)) * 100)) : 50;
-          return (
-            <label key={p.id} className={styles.sliderRow}>
-              <div className={styles.sliderHeader}>
-                <span>{p.label}</span>
-                <strong>
-                  {val}
-                  {p.unit ?? ""}
-                </strong>
-              </div>
-              <input
-                type="range"
-                min={min}
-                max={max}
-                step={p.step ?? 1}
-                value={val}
-                onChange={(e) => setValues((old) => ({ ...old, [p.id]: Number(e.target.value) }))}
-              />
-              <div className={styles.barMeter}>
-                <span style={{ width: `${ratio}%` }} />
-              </div>
-            </label>
-          );
-        })}
-      </div>
-
-      {insight && (
-        <p className={styles.matrixTakeaway}>
-          <Lightbulb size={14} className={styles.takeawayIcon} aria-hidden />
-          <span><MathText text={insight} /></span>
-        </p>
-      )}
-
-      <footer className={styles.widgetFoot}>
-        <span className={styles.footHint}>{tx("拖动滑块调整参数，或将当前参数发送给 AI 推演")}</span>
-        <button
-          type="button"
-          className={styles.askAiBtn}
-          onClick={() => {
-            const summary = params
-              .map((p) => `${p.label}=${values[p.id] ?? p.default}${p.unit ?? ""}`)
-              .join(lang === "en" ? ", " : "，");
-            emitWidgetQuestion(
-              tx("当「{title}」的参数设定为（{summary}）时，结果会怎样变化？请帮我分析一下。", { title, summary }),
-            );
-          }}
-        >
-          <MessageSquarePlus size={12} aria-hidden />
-          <span>{tx("以此参数请 AI 分析")}</span>
         </button>
       </footer>
     </section>

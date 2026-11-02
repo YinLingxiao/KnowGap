@@ -213,9 +213,6 @@ function deriveInstantSuggestion(messages?: ChatMessage[]): string {
     if (raw.includes('"comparison_matrix"')) {
       return "对比表很清楚，那就顺着这几者的核心区别，带我看看实际应用中最容易踩的坑有哪些？";
     }
-    if (raw.includes('"parameter_lab"')) {
-      return "我试着拖动了参数滑块观察曲线，能帮我推导一下当参数取极值时为什么会出现这种现象吗？";
-    }
     if (raw.includes('"micro_quiz"')) {
       return "我已经完成了上面的随堂微测，请结合这道题考察的易错点再带我往深处推进一层。";
     }

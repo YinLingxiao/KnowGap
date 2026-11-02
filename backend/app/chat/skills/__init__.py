@@ -15,7 +15,6 @@ _NOTE_RE = re.compile(r"讲义|笔记|总结成文档|模拟器|写成文件|整
 _ROADMAP_RE = re.compile(r"计划|路线|怎么学|从哪开始|学习安排|规划")
 _EXPLAIN_RE = re.compile(r"讲解|原理|为什么|怎么理解|区别|对比|深入|映射|机制|过程|推导")
 _COMPARE_RE = re.compile(r"区别|对比|异同|不同|优缺点|还是|哪几种")
-_FORMULA_RE = re.compile(r"公式|计算|参数|曲线|命中率|弹性|斜率|变化影响")
 _CODE_RE = re.compile(r"代码实验|写代码|代码填空|脚手架|补全.*代码|编译运行|code_playground", re.I)
 
 
@@ -34,8 +33,6 @@ def recommend_widget(
         return "micro_quiz（建议在回复中嵌入 ```knowgap-widget 的 micro_quiz 随堂微测卡）"
     if _COMPARE_RE.search(sample):
         return "comparison_matrix 或 step_simulator（建议在回复中嵌入 ```knowgap-widget 交互对比卡或单步推演器）"
-    if _FORMULA_RE.search(sample):
-        return "parameter_lab（建议在回复中嵌入 ```knowgap-widget 参数实验微件）"
     if _EXPLAIN_RE.search(sample) or role == "thread":
         return "step_simulator（建议在回复中嵌入 ```knowgap-widget 单步状态推演器展示核心过程）"
     return None

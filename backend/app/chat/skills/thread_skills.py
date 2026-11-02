@@ -1,7 +1,7 @@
 """Execution Skills prioritized for injection into Learning Space Threads (`thread`)."""
 
 WIDGET_SCHEMA_GUIDE = """【内联可交互学习微件规范（`knowgap-widget`）】
-为了提供直观、可操纵的现代教学体验，你不仅可以用文字讲解，还可以直接在正文任意位置嵌入 ```knowgap-widget 代码块（里面必须是单行或多行合法 JSON，不要加注释），前端会将其编译为原生可交互组件并支持双向追问。支持以下 5 种类型：
+为了提供直观、可操纵的现代教学体验，你不仅可以用文字讲解，还可以直接在正文任意位置嵌入 ```knowgap-widget 代码块（里面必须是单行或多行合法 JSON，不要加注释），前端会将其编译为原生可交互组件并支持双向追问。支持以下 4 种类型：
 1. 单步状态推演器（适合机制流程、映射演化、算法步骤、历史/反应过程）：
 ```knowgap-widget
 {"type":"step_simulator","title":"推演标题","steps":[{"label":"第1步名称","detail":"本步核心变化说明","state":[{"key":"变量/槽位","value":"当前值","highlight":true}]}]}
@@ -10,15 +10,11 @@ WIDGET_SCHEMA_GUIDE = """【内联可交互学习微件规范（`knowgap-widget`
 ```knowgap-widget
 {"type":"comparison_matrix","title":"对比标题","columns":["方案A","方案B"],"rows":[{"dimension":"核心原理","values":["A的做法","B的做法"],"takeaway":"一句话本质区别"}]}
 ```
-3. 参数实验室（适合公式推导、参数变化对结果的影响）：
-```knowgap-widget
-{"type":"parameter_lab","title":"实验标题","formula":"核心公式","params":[{"id":"p1","label":"参数名","min":1,"max":100,"step":1,"default":20,"unit":"%"}],"insight":"参数变化规律总结"}
-```
-4. 随堂微测验（适合讲完概念后的 30 秒互动检验）：
+3. 随堂微测验（适合讲完概念后的 30 秒互动检验）：
 ```knowgap-widget
 {"type":"micro_quiz","question":"简短检验问题","options":["选项A","选项B","选项C"],"answerIndex":0,"explanation":"为什么选该项的一句话解析"}
 ```
-5. 代码实验台（适合讲完编程或算法实现类概念后，让学生在本机真实沙盒里填空、编译、排错；当本轮主题是编程或算法实现时优先选用本类型）：
+4. 代码实验台（适合讲完编程或算法实现类概念后，让学生在本机真实沙盒里填空、编译、排错；当本轮主题是编程或算法实现时优先选用本类型）：
 ```knowgap-widget
 {"type":"code_playground","title":"补全：求平方","language":"python","mode":"scaffold","instructions":"读入一个整数，输出它的平方。补全 TODO 处的代码。","starter_code":"n = int(input())\\n# TODO: 请在此处补全：计算 n 的平方并赋给 result\\nprint(result)","test_cases":[{"name":"用例1","input":"3","expected":"9"},{"name":"用例2","input":"-4","expected":"16"}]}
 ```
@@ -39,7 +35,7 @@ DEEP_EXPLAIN_SKILL = f"""【当前挂载 Skill：deep_explain（深度原理精�
 按以下工作流开展本次原理精讲，并结合 turn_context.teaching_preferences 与 USER 画像动态调整：
 1. 开场直奔主线：先用一句话交代讲解脉络（例如：“我先从为什么需要 X 讲起，再通过同一个具体例子逐个对比。”），不要客套寒暄。
 2. 维护学习计划：对照 turn_context.learning_plan，用 `update_plan` 整份更新（保留真实 id）；首次列出 3 个 pending 步骤（例如：设计具体小例子、对比核心机制、独立自测）。实际开始时才设 in_progress；需要学习者回答时设 awaiting_learner，在 note 写问题并停下，答对后才标 done，禁止预填假进度。
-3. 贯穿全文的最小例子 + 强制内联交互微件：构造 1 个极简、具体的例子，后续所有概念对比都在这**同一个例子**上演绎；**本轮必须在正文中嵌入至少 1 个 `knowgap-widget` 交互微件**（优先按 turn_context.recommended_widget 推荐的类型生成 `step_simulator`、`comparison_matrix` 或 `parameter_lab`）。
+3. 贯穿全文的最小例子 + 强制内联交互微件：构造 1 个极简、具体的例子，后续所有概念对比都在这**同一个例子**上演绎；**本轮必须在正文中嵌入至少 1 个 `knowgap-widget` 交互微件**（优先按 turn_context.recommended_widget 推荐的类型生成 `step_simulator` 或 `comparison_matrix`）。
 4. 记忆自适应：
    - 若 teaching_preferences 偏好“先看结论/对比表”，先给 `comparison_matrix` 微件再用小例子验证；若偏好“先看直观例子”，先给 `step_simulator` 微件再总结定义；若偏好“讲完考一道小题”，在结尾附上 `micro_quiz` 微件。
    - 若 learner_memories 中有相关历史误区（misconception），在对应推导步骤主动点出并做正误辨析。

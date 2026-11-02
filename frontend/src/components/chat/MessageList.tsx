@@ -60,7 +60,9 @@ const SAVE_TO_PAGE_EVENT = "knowgap:save-to-page";
 
 /** 流式回复先过一道平滑显示，再交给 Markdown 渲染 */
 function SmoothMarkdown({ text, live }: { text: string; live: boolean }) {
-  return <Markdown text={useSmoothText(text, live)} />;
+  const shown = useSmoothText(text, live);
+  // 流结束后平滑显示还会追一小段，追完之前卡片仍按「写入中」处理
+  return <Markdown text={shown} live={live || shown !== text} />;
 }
 
 function isLongText(text: string): boolean {

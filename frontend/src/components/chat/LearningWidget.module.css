@@ -95,8 +95,7 @@
   line-height: var(--leading-read);
 }
 
-.stepCounter,
-.formulaBadge {
+.stepCounter {
   flex-shrink: 0;
   padding: 2px 8px;
   border: 1px solid var(--border);
@@ -107,8 +106,41 @@
   font-variant-numeric: tabular-nums;
 }
 
-.formulaBadge {
+/* 流式中的半成品卡片：内容边到边显示，交互要等 JSON 完整后才开放（外层 inert） */
+.liveWrap > .widgetCard {
+  animation: none;
+  border-style: dashed;
+}
+
+.liveWrap .widgetFoot {
+  opacity: 0.45;
+}
+
+/* 回复结束仍解析不出来，或类型已不再支持 */
+.failCard {
+  margin: 12px 0;
+  padding: 10px 14px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+}
+
+.failCard summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.failCard pre {
+  max-height: 240px;
+  margin: 8px 0 0;
+  overflow: auto;
   font-family: var(--font-mono-cjk);
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 
 /* 1. step_simulator 状态网格 */
@@ -470,59 +502,7 @@
   color: var(--amber);
 }
 
-/* 3. parameter_lab 参数实验室 */
-.labGrid {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.sliderRow {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  padding: 9px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg-subtle);
-}
-
-.sliderHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: var(--text-sm);
-}
-
-.sliderHeader strong {
-  font-family: var(--font-mono-cjk);
-  font-variant-numeric: tabular-nums;
-  color: var(--accent-text);
-}
-
-.sliderRow input[type="range"] {
-  width: 100%;
-  accent-color: var(--accent);
-  cursor: pointer;
-}
-
-.barMeter {
-  height: 4px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: var(--border);
-  box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.12);
-}
-
-.barMeter span {
-  display: block;
-  height: 100%;
-  border-radius: 999px;
-  background: var(--accent);
-  transition: width 80ms linear;
-}
-
-/* 4. micro_quiz 随堂微测 */
+/* 3. micro_quiz 随堂微测 */
 .quizOptions {
   display: flex;
   flex-direction: column;

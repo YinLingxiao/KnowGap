@@ -16,7 +16,7 @@ import sql from "highlight.js/lib/languages/sql";
 import typescript from "highlight.js/lib/languages/typescript";
 import { Check, Copy } from "lucide-react";
 import { normalizeMathDelimiters } from "@/lib/chat/mathDelimiters";
-import { LearningWidget } from "./LearningWidget";
+import { LearningWidget, WidgetLiveContext } from "./LearningWidget";
 import { mathRehypePlugins, mathRemarkPlugins } from "./math";
 import styles from "./Markdown.module.css";
 
@@ -130,13 +130,18 @@ const components: Components = {
 const remarkPlugins = [remarkGfm, ...(mathRemarkPlugins ?? [])];
 const rehypePlugins: Options["rehypePlugins"] = [...(mathRehypePlugins ?? []), [rehypeHighlight, highlightOptions]];
 
-/** 模型回复的 Markdown（GFM + $…$ / $$…$$ 公式，也认 \(…\) / \[…\]）。不渲染原始 HTML。 */
-export const Markdown = memo(function Markdown({ text }: { text: string }) {
+/**
+ * 模型回复的 Markdown（GFM + $…$ / $$…$$ 公式，也认 \(…\) / \[…\]）。不渲染原始 HTML。
+ * live：文字还在流式写入。学习卡片据此区分「还没写完」和「写坏了」。
+ */
+export const Markdown = memo(function Markdown({ text, live = false }: { text: string; live?: boolean }) {
   return (
     <div className={styles.markdown}>
-      <ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins} components={components}>
-        {normalizeMathDelimiters(text)}
-      </ReactMarkdown>
+      <WidgetLiveContext.Provider value={live}>
+        <ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins} components={components}>
+          {normalizeMathDelimiters(text)}
+        </ReactMarkdown>
+      </WidgetLiveContext.Provider>
     </div>
   );
 });
