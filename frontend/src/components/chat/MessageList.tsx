@@ -17,6 +17,7 @@ import { cx } from "@/lib/cx";
 import { useI18n } from "@/components/LanguageProvider";
 import type { MessageKey } from "@/lib/i18n";
 import { useSmoothText } from "@/hooks/useSmoothText";
+import { fastForwardWidgets } from "@/lib/chat/smoothWidgets";
 import type { Problem } from "@/lib/types";
 import { CopyButton, Markdown } from "./Markdown";
 import { FileCard, kindFromName, openFileLibrary, recalledFile, rememberFile, scaleOf } from "./FileCard";
@@ -63,8 +64,11 @@ const SAVE_TO_PAGE_EVENT = "knowgap:save-to-page";
 /** 流式回复先过一道平滑显示，再交给 Markdown 渲染 */
 function SmoothMarkdown({ text, live }: { text: string; live: boolean }) {
   const shown = useSmoothText(text, live);
+  // 卡片 JSON 逐字增长会反复重排，已经开始的卡片直接显示 full 中的当前内容；
+  // 平滑显示已追平时无需再扫描，与 fastForwardWidgets 的早退条件一致
+  const display = shown === text ? shown : fastForwardWidgets(shown, text);
   // 流结束后平滑显示还会追一小段，追完之前卡片仍按「写入中」处理
-  return <Markdown text={shown} live={live || shown !== text} />;
+  return <Markdown text={display} live={live || shown !== text} />;
 }
 
 function isLongText(text: string): boolean {
