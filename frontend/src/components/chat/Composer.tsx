@@ -25,12 +25,14 @@ import { chatApi } from "@/lib/chat/api";
 import type { ChatMessage } from "@/lib/chat/types";
 import { cx } from "@/lib/cx";
 import type { Problem } from "@/lib/types";
-import { WIDGET_ASK_EVENT } from "./LearningWidget";
 import { QUOTE_TO_COMPOSER_EVENT, SEND_TO_COMPOSER_EVENT, type ComposerTextDetail } from "./SelectionToolbar";
 import { ImageAttach } from "./widgets/ImageAttach";
 import { ImageThumb } from "./widgets/ImageMarker";
 import { joinDraftImages, splitDraftImages, withLeadingImage } from "./widgets/visionData";
-import { WIDGET_AUTOSEND_EVENT, WIDGET_SEND_EVENT, type WidgetAutoSendDetail, type WidgetSendDetail } from "./widgets/widgetEvents";
+import {
+  WIDGET_ASK_EVENT, WIDGET_AUTOSEND_EVENT, WIDGET_SEND_EVENT,
+  type WidgetAskDetail, type WidgetAutoSendDetail, type WidgetSendDetail,
+} from "./widgets/widgetEvents";
 import { FileCard, kindFromName, rememberFile, recalledFile, scaleOf, type FileCardState } from "./FileCard";
 import styles from "./Composer.module.css";
 
@@ -180,6 +182,8 @@ interface ComposerProps {
   hero?: boolean;
   /** 当前会话 ID 与消息列表（用于生成 AI 回复后的智能灰字追问预测） */
   conversationId?: string | null;
+  /** 响应没有会话归属（conversationId 为 null）的微件事件；空间里只有主线设为 true */
+  acceptUnscoped?: boolean;
   messages?: ChatMessage[];
   /** 首页（还没有对话）上传文件前调用，返回承接文件的对话 ID */
   ensureConversation?: () => Promise<string | null>;
@@ -245,7 +249,7 @@ function deriveInstantSuggestion(messages?: ChatMessage[]): string {
 export function Composer({
   value: draft, onChange: onChangeRaw, onSend, onStop, phase, busy, problems = [], onStartExercise, autoFocusKey,
   placeholder, hero = false, inputId = COMPOSER_ID,
-  conversationId, messages, ensureConversation, onFilesCleared,
+  conversationId, acceptUnscoped = false, messages, ensureConversation, onFilesCleared,
   modelKey = null, onModelKeyChange, modelClient,
 }: ComposerProps) {
   const { t, tx } = useI18n();
@@ -315,6 +319,13 @@ export function Composer({
   const fileSeq = useRef(0);
   const dragDepth = useRef(0);
   const convRef = useRef(conversationId);
+  // 微件事件按会话路由：带 id 的只给对应 Composer；无 id 的只给 acceptUnscoped 的
+  const widgetScope = useRef({ conversationId, acceptUnscoped });
+  widgetScope.current = { conversationId, acceptUnscoped };
+  const ownsWidgetEvent = (target: string | null | undefined) => {
+    const { conversationId: mine, acceptUnscoped: unscoped } = widgetScope.current;
+    return target ? target === mine : unscoped;
+  };
   const uploadEpoch = useRef(0);
   const updatePending = useCallback((update: (list: PendingFile[]) => PendingFile[]) => {
     pendingRef.current = update(pendingRef.current);
@@ -407,7 +418,9 @@ export function Composer({
       if (next) setEffort(next);
     };
     const onWidgetAsk = (event: Event) => {
-      const prompt = (event as CustomEvent<string>).detail;
+      const detail = (event as CustomEvent<WidgetAskDetail>).detail;
+      if (!ownsWidgetEvent(detail?.conversationId)) return;
+      const prompt = detail.prompt;
       if (prompt) {
         onChange(prompt);
         textareaRef.current?.focus();
@@ -415,7 +428,7 @@ export function Composer({
     };
     const onWidgetSend = (event: Event) => {
       const detail = (event as CustomEvent<WidgetSendDetail>).detail;
-      if (!detail?.text) return;
+      if (!detail?.text || !ownsWidgetEvent(detail.conversationId)) return;
       if (detail.effort) {
         setEffort(detail.effort);
         try { localStorage.setItem(EFFORT_STORAGE_KEY, detail.effort); } catch { /* ignore */ }
@@ -489,7 +502,7 @@ export function Composer({
     // 微件（如代码实验台）要求立即发送：空闲时直接发，忙时交还微件改为预填
     const onWidgetAutoSend = (event: Event) => {
       const detail = (event as CustomEvent<WidgetAutoSendDetail>).detail;
-      if (!detail?.text || !canSendNow.current || detail.handled) return;
+      if (!detail?.text || !ownsWidgetEvent(detail.conversationId) || !canSendNow.current || detail.handled) return;
       const { value: current, onChange: change } = latest.current;
       restoreDraft.current = current.trim() && current !== detail.text ? current : null;
       pendingSend.current = detail.text;

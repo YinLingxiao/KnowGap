@@ -730,6 +730,7 @@ export function SubjectPage({
             {failureFor(mainId) && <p className={styles.error}>{failureFor(mainId)?.error.message}</p>}
             <Composer
               conversationId={mainId}
+              acceptUnscoped
               messages={main?.messages}
               value={chat.draftFor(mainId)}
               onChange={(value) => chat.setDraftFor(mainId, value)}

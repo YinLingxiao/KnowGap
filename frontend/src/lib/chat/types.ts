@@ -210,6 +210,18 @@ export interface Conversation extends ConversationSummary {
   messages: ChatMessage[];
 }
 
+/** 微测作答结果；answerIndex / explanation 只在作答后由服务端给出 */
+export interface QuizAttemptResult {
+  quizId: string;
+  attemptId: string;
+  optionIndex: number;
+  correct: boolean;
+  answerIndex: number;
+  explanation: string;
+  /** 该题此前已作答，返回的是首次结果 */
+  repeated: boolean;
+}
+
 export type ExecutionStatus = "queued" | "working" | "waiting" | "idle" | "failed" | "cancelled";
 
 /** 一次发送 / 重新生成的流式事件，已映射为视图模型 */

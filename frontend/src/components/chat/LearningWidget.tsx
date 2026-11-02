@@ -1,18 +1,21 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { createContext, useContext, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
   ArrowRight, CheckCircle2, ChevronLeft, ChevronRight, CircleAlert,
-  Lightbulb, MessageSquarePlus, Sparkles,
+  Lightbulb, LoaderCircle, MessageSquarePlus, Sparkles,
 } from "lucide-react";
 import { cx } from "@/lib/cx";
+import { cachedQuizAttempt, loadQuizAttempts, submitQuizAttempt, subscribeQuizAttempts } from "@/lib/chat/quizAttempts";
+import type { QuizAttemptResult } from "@/lib/chat/types";
 import { parsePartialWidgetJson, parseWidgetJson } from "@/lib/chat/widgetJson";
 import { useI18n } from "@/components/LanguageProvider";
 import styles from "./LearningWidget.module.css";
 import { MathText } from "./math";
 import { CircuitNetlistWidget } from "./widgets/CircuitNetlistWidget";
 import { ImageAnnotatorWidget } from "./widgets/ImageAnnotatorWidget";
+import { WIDGET_ASK_EVENT, askInComposer, useWidgetScope } from "./widgets/widgetEvents";
 import { ProblemSourceBadge, type ProblemSource } from "./widgets/ProblemSourceBadge";
 
 function CodeEditorLoading() {
@@ -25,14 +28,12 @@ const CodePlaygroundWidget = dynamic(
   { ssr: false, loading: () => <CodeEditorLoading /> },
 );
 
-export const WIDGET_ASK_EVENT = "knowgap:widget-ask";
+export { WIDGET_ASK_EVENT };
 
 /** True while the message holding the widget is still being written. Markdown provides it. */
 export const WidgetLiveContext = createContext(false);
 
-function emitWidgetQuestion(prompt: string) {
-  window.dispatchEvent(new CustomEvent<string>(WIDGET_ASK_EVENT, { detail: prompt }));
-}
+const emitWidgetQuestion = askInComposer;
 
 interface StepStateItem {
   key: string;
@@ -120,6 +121,7 @@ function WidgetFailure({ rawCode, reason }: { rawCode: string; reason: string })
 
 function StepSimulatorWidget({ data }: { data: Record<string, unknown> }) {
   const { tx } = useI18n();
+  const scope = useWidgetScope();
   const title = String(data.title || tx("过程步进推演"));
   const steps = Array.isArray(data.steps) ? (data.steps as SimulatorStep[]) : [];
   const [index, setIndex] = useState(0);
@@ -196,6 +198,7 @@ function StepSimulatorWidget({ data }: { data: Record<string, unknown> }) {
           className={styles.askAiBtn}
           onClick={() =>
             emitWidgetQuestion(
+              scope,
               tx("在「{title}」的第 {step} 步（{label}）中，为什么会是这个状态？请帮我再展开讲讲。", {
                 title,
                 step: safeIdx + 1,
@@ -214,6 +217,7 @@ function StepSimulatorWidget({ data }: { data: Record<string, unknown> }) {
 
 function ComparisonMatrixWidget({ data }: { data: Record<string, unknown> }) {
   const { tx, lang } = useI18n();
+  const scope = useWidgetScope();
   const title = String(data.title || tx("核心差异对比"));
   const columns = Array.isArray(data.columns) ? data.columns.map(String) : [];
   const rows = Array.isArray(data.rows) ? (data.rows as CompareRow[]) : [];
@@ -301,6 +305,7 @@ function ComparisonMatrixWidget({ data }: { data: Record<string, unknown> }) {
           className={styles.askAiBtn}
           onClick={() =>
             emitWidgetQuestion(
+              scope,
               tx("关于「{title}」中的「{dimension}」，能给我举一个最容易混淆的具体例子吗？", {
                 title,
                 dimension: activeDim === "all" ? rows[0]?.dimension ?? "" : activeDim,
@@ -318,19 +323,64 @@ function ComparisonMatrixWidget({ data }: { data: Record<string, unknown> }) {
 
 function MicroQuizWidget({ data }: { data: Record<string, unknown> }) {
   const { tx } = useI18n();
+  const scope = useWidgetScope();
+  const live = useContext(WidgetLiveContext);
   const question = String(data.question || "");
   const options = Array.isArray(data.options) ? data.options.map(String) : [];
-  const answerIndex = typeof data.answerIndex === "number" ? data.answerIndex : 0;
-  const explanation = String(data.explanation || "");
+  // 封存过的题带 quizId、不带答案，由服务端判分；没有 quizId 的旧消息仍按本地答案判
+  const quizId = typeof data.quizId === "string" ? data.quizId : null;
   // problem_drill 出的题带服务端核对过的 meta.source；其他技能的普通微测没有 meta，不显示标签
   const meta = data.meta && typeof data.meta === "object" ? (data.meta as Record<string, unknown>) : null;
   const source = meta?.source && typeof meta.source === "object" ? (meta.source as ProblemSource) : null;
   // 先选再提交：选中只是草稿，提交后才揭晓答案、锁定选项
   const [selected, setSelected] = useState<number | null>(null);
-  const [answered, setAnswered] = useState(false);
+  const [localAnswered, setLocalAnswered] = useState(false);
+  const [ownResult, setOwnResult] = useState<QuizAttemptResult | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState(false);
+  // 网络重试沿用同一个 actionId，服务端据此去重；换了选项就换新的
+  const actionId = useRef<string | null>(null);
+  const restored = useSyncExternalStore(
+    subscribeQuizAttempts,
+    () => (quizId ? cachedQuizAttempt(scope, quizId) : null),
+    () => null,
+  );
+  useEffect(() => {
+    if (quizId && scope) void loadQuizAttempts(scope);
+  }, [quizId, scope]);
 
   if (!question || options.length === 0) return null;
-  const isCorrect = answered && selected === answerIndex;
+  // 回复还在生成、题目还没封存：服务端核验前不能作答
+  const validating = !quizId && live;
+  const attempt = quizId ? restored ?? ownResult : null;
+  const answered = quizId ? Boolean(attempt) : localAnswered;
+  const chosen = attempt ? attempt.optionIndex : selected;
+  const answerIndex = attempt ? attempt.answerIndex : typeof data.answerIndex === "number" ? data.answerIndex : 0;
+  const explanation = attempt ? attempt.explanation : String(data.explanation || "");
+  const isCorrect = answered && chosen === answerIndex;
+
+  const pick = (idx: number) => {
+    if (idx !== selected) actionId.current = null;
+    setSelected(idx);
+    setSubmitError(false);
+  };
+  const submit = async () => {
+    if (selected === null) return;
+    if (!quizId) {
+      setLocalAnswered(true);
+      return;
+    }
+    actionId.current ??= crypto.randomUUID();
+    setSubmitting(true);
+    setSubmitError(false);
+    try {
+      setOwnResult(await submitQuizAttempt(scope, quizId, actionId.current, selected));
+    } catch {
+      setSubmitError(true);
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <section className={styles.widgetCard} aria-label={tx("随堂即时自测")}>
@@ -339,7 +389,7 @@ function MicroQuizWidget({ data }: { data: Record<string, unknown> }) {
           <MathText text={question} />
         </div>
         <div className={styles.quizHintRow}>
-          {!answered && <span className={styles.quizHint}>{tx("请选择一个答案")}</span>}
+          {!answered && <span className={styles.quizHint}>{validating ? tx("正在校验题目…") : tx("请选择一个答案")}</span>}
           {source && (
             <ProblemSourceBadge
               source={source}
@@ -353,7 +403,7 @@ function MicroQuizWidget({ data }: { data: Record<string, unknown> }) {
 
       <div className={styles.quizOptions} role="radiogroup" aria-label={question}>
         {options.map((opt, idx) => {
-          const picked = selected === idx;
+          const picked = chosen === idx;
           const rightOption = answered && idx === answerIndex;
           const wrongPicked = answered && picked && !isCorrect;
           return (
@@ -362,14 +412,14 @@ function MicroQuizWidget({ data }: { data: Record<string, unknown> }) {
               type="button"
               role="radio"
               aria-checked={picked}
-              disabled={answered}
+              disabled={answered || validating || submitting}
               className={cx(
                 styles.quizOptionBtn,
                 picked && !answered && styles.quizOptionPicked,
                 rightOption && styles.quizOptionRight,
                 wrongPicked && styles.quizOptionWrong,
               )}
-              onClick={() => setSelected(idx)}
+              onClick={() => pick(idx)}
             >
               <span className={styles.quizOptionLetter}>{String.fromCharCode(65 + idx)}</span>
               <span className={styles.quizOptionText}>
@@ -391,15 +441,16 @@ function MicroQuizWidget({ data }: { data: Record<string, unknown> }) {
         <button
           type="button"
           className={styles.quizSubmit}
-          disabled={selected === null}
-          onClick={() => setAnswered(true)}
+          disabled={selected === null || validating || submitting}
+          aria-busy={submitting || undefined}
+          onClick={() => void submit()}
         >
-          <span>{tx("提交答案")}</span>
-          <ArrowRight size={14} aria-hidden />
+          <span>{submitting ? tx("正在提交…") : submitError ? tx("提交失败，点此重试") : tx("提交答案")}</span>
+          {submitting ? <LoaderCircle size={14} className={styles.spin} aria-hidden /> : <ArrowRight size={14} aria-hidden />}
         </button>
       )}
 
-      {answered && selected !== null && (
+      {answered && chosen !== null && (
         <div className={cx(styles.quizFeedback, isCorrect ? styles.feedbackRight : styles.feedbackWrong)}>
           <strong>{isCorrect ? tx("回答正确！") : tx("这道题选 {letter}", { letter: String.fromCharCode(65 + answerIndex) })}</strong>
           {explanation && (
@@ -413,9 +464,10 @@ function MicroQuizWidget({ data }: { data: Record<string, unknown> }) {
               className={styles.askAiBtn}
               onClick={() =>
                 emitWidgetQuestion(
+                  scope,
                   tx("针对刚才这道题「{question}」，我选了「{option}」，{followUp}", {
                     question,
-                    option: options[selected],
+                    option: options[chosen],
                     followUp: isCorrect ? tx("请再考我一道稍微进阶一点的变式题！") : tx("我对这个选项为什么不对还有点疑问，能再讲讲吗？"),
                   }),
                 )

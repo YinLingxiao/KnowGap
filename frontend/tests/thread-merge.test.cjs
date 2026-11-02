@@ -38,6 +38,7 @@ new Function('module', 'exports', 'require', js)(loaded, loaded.exports, (name) 
   if (name.endsWith('.module.css')) return { default: new Proxy({}, { get: (_, key) => key }) };
   if (name === '@/lib/cx') return { cx: (...values) => values.filter(Boolean).join(' ') };
   if (name === './SelectionToolbar') return { SelectionToolbar: () => null };
+  if (name === './widgets/widgetEvents') return { WidgetScopeContext: { Provider: ({ children }) => children } };
   if (name === '@/lib/chat/wakeEvents') return wakeEvents;
   return {};
 });

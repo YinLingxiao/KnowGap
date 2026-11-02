@@ -110,6 +110,7 @@ def create_app(settings: Settings | None = None, chat_model: ChatModel | None = 
     from app.chat.attachments import attachment_router; app.include_router(attachment_router(chat_store, library))
     from app.chat.files_router import files_router; app.include_router(files_router(file_store))
     from app.chat.plan_router import plan_router; app.include_router(plan_router(chat_store))
+    from app.chat.quizzes import quiz_router; app.include_router(quiz_router(chat_store))
     app.include_router(agenda_router(chat_store, chat))
     app.include_router(subject_router(chat_store, chat_service))
     app.include_router(auth_router(auth_store, chat_store, settings))
