@@ -3,8 +3,8 @@
 import dynamic from "next/dynamic";
 import { createContext, useContext, useMemo, useState } from "react";
 import {
-  CheckCircle2, ChevronLeft, ChevronRight, CircleAlert, HelpCircle,
-  Layers, Lightbulb, MessageSquarePlus, Sparkles,
+  ArrowRight, CheckCircle2, ChevronLeft, ChevronRight, CircleAlert,
+  Lightbulb, MessageSquarePlus, Sparkles,
 } from "lucide-react";
 import { cx } from "@/lib/cx";
 import { parsePartialWidgetJson, parseWidgetJson } from "@/lib/chat/widgetJson";
@@ -133,10 +133,6 @@ function StepSimulatorWidget({ data }: { data: Record<string, unknown> }) {
     <section className={styles.widgetCard} aria-label={title}>
       <header className={styles.widgetHead}>
         <div className={styles.widgetTitleWrap}>
-          <span className={styles.widgetBadge}>
-            <Layers size={12} aria-hidden />
-            {tx("交互推演")}
-          </span>
           <strong className={styles.widgetTitle}><MathText text={title} /></strong>
         </div>
         <span className={styles.stepCounter}>
@@ -232,10 +228,6 @@ function ComparisonMatrixWidget({ data }: { data: Record<string, unknown> }) {
     <section className={styles.widgetCard} aria-label={title}>
       <header className={styles.widgetHead}>
         <div className={styles.widgetTitleWrap}>
-          <span className={styles.widgetBadge}>
-            <Sparkles size={12} aria-hidden />
-            {tx("交互对比")}
-          </span>
           <strong className={styles.widgetTitle}><MathText text={title} /></strong>
         </div>
       </header>
@@ -333,35 +325,33 @@ function MicroQuizWidget({ data }: { data: Record<string, unknown> }) {
   // problem_drill 出的题带服务端核对过的 meta.source；其他技能的普通微测没有 meta，不显示标签
   const meta = data.meta && typeof data.meta === "object" ? (data.meta as Record<string, unknown>) : null;
   const source = meta?.source && typeof meta.source === "object" ? (meta.source as ProblemSource) : null;
+  // 先选再提交：选中只是草稿，提交后才揭晓答案、锁定选项
   const [selected, setSelected] = useState<number | null>(null);
+  const [answered, setAnswered] = useState(false);
 
   if (!question || options.length === 0) return null;
-  const answered = selected !== null;
-  const isCorrect = selected === answerIndex;
+  const isCorrect = answered && selected === answerIndex;
 
   return (
     <section className={styles.widgetCard} aria-label={tx("随堂即时自测")}>
-      <header className={styles.widgetHead}>
-        <div className={styles.widgetTitleWrap}>
-          <span className={styles.widgetBadge}>
-            <HelpCircle size={12} aria-hidden />
-            {tx("随堂微测")}
-          </span>
-          <div className={cx(styles.widgetTitle, styles.quizQuestion)}>
-            <MathText text={question} />
-          </div>
+      <header className={styles.quizHead}>
+        <div className={styles.quizQuestion}>
+          <MathText text={question} />
         </div>
-        {source && (
-          <ProblemSourceBadge
-            source={source}
-            patternId={typeof meta?.pattern_id === "string" ? meta.pattern_id : null}
-            knowledgePoint={typeof meta?.knowledge_point === "string" ? meta.knowledge_point : null}
-            fingerprint={typeof meta?.fingerprint === "string" ? meta.fingerprint : null}
-          />
-        )}
+        <div className={styles.quizHintRow}>
+          {!answered && <span className={styles.quizHint}>{tx("请选择一个答案")}</span>}
+          {source && (
+            <ProblemSourceBadge
+              source={source}
+              patternId={typeof meta?.pattern_id === "string" ? meta.pattern_id : null}
+              knowledgePoint={typeof meta?.knowledge_point === "string" ? meta.knowledge_point : null}
+              fingerprint={typeof meta?.fingerprint === "string" ? meta.fingerprint : null}
+            />
+          )}
+        </div>
       </header>
 
-      <div className={styles.quizOptions}>
+      <div className={styles.quizOptions} role="radiogroup" aria-label={question}>
         {options.map((opt, idx) => {
           const picked = selected === idx;
           const rightOption = answered && idx === answerIndex;
@@ -370,8 +360,12 @@ function MicroQuizWidget({ data }: { data: Record<string, unknown> }) {
             <button
               key={`${idx}-${opt}`}
               type="button"
+              role="radio"
+              aria-checked={picked}
+              disabled={answered}
               className={cx(
                 styles.quizOptionBtn,
+                picked && !answered && styles.quizOptionPicked,
                 rightOption && styles.quizOptionRight,
                 wrongPicked && styles.quizOptionWrong,
               )}
@@ -381,14 +375,31 @@ function MicroQuizWidget({ data }: { data: Record<string, unknown> }) {
               <span className={styles.quizOptionText}>
                 <MathText text={opt} />
               </span>
-              {rightOption && <CheckCircle2 size={15} className={styles.iconRight} aria-hidden />}
-              {wrongPicked && <CircleAlert size={15} className={styles.iconWrong} aria-hidden />}
+              {rightOption ? (
+                <CheckCircle2 size={18} className={styles.iconRight} aria-hidden />
+              ) : wrongPicked ? (
+                <CircleAlert size={18} className={styles.iconWrong} aria-hidden />
+              ) : (
+                <span className={cx(styles.quizRadio, picked && styles.quizRadioOn)} aria-hidden />
+              )}
             </button>
           );
         })}
       </div>
 
-      {answered && (
+      {!answered && (
+        <button
+          type="button"
+          className={styles.quizSubmit}
+          disabled={selected === null}
+          onClick={() => setAnswered(true)}
+        >
+          <span>{tx("提交答案")}</span>
+          <ArrowRight size={14} aria-hidden />
+        </button>
+      )}
+
+      {answered && selected !== null && (
         <div className={cx(styles.quizFeedback, isCorrect ? styles.feedbackRight : styles.feedbackWrong)}>
           <strong>{isCorrect ? tx("回答正确！") : tx("这道题选 {letter}", { letter: String.fromCharCode(65 + answerIndex) })}</strong>
           {explanation && (

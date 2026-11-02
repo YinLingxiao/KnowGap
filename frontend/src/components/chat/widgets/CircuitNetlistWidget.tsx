@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useMemo, useState } from "react";
 import {
-  Check, CircleAlert, CircuitBoard, ImageIcon, Loader2, Pencil, Plus, RotateCcw, Trash2, TriangleAlert,
+  Check, CircleAlert, ImageIcon, Loader2, Pencil, Plus, RotateCcw, Trash2, TriangleAlert,
 } from "lucide-react";
 import { cx } from "@/lib/cx";
 import { useI18n } from "@/components/LanguageProvider";
@@ -199,10 +199,6 @@ export function CircuitNetlistWidget({ data }: { data: Record<string, unknown> }
     <section className={base.widgetCard} aria-label={card.title}>
       <header className={base.widgetHead}>
         <div className={base.widgetTitleWrap}>
-          <span className={base.widgetBadge}>
-            <CircuitBoard size={12} aria-hidden />
-            {tx("电路拓扑")}
-          </span>
           <strong className={base.widgetTitle}>{card.title}</strong>
         </div>
         <div className={styles.headMeta}>

@@ -64,35 +64,37 @@
   min-width: 0;
 }
 
-/* 标题栏等宽胶囊标签 */
-.widgetBadge {
-  display: inline-flex;
-  flex-shrink: 0;
-  align-items: center;
-  gap: 4px;
-  height: 22px;
-  padding: 0 8px;
-  border: 1px solid color-mix(in srgb, var(--accent) 32%, var(--border));
-  border-radius: 999px;
-  background: var(--accent-soft);
-  color: var(--accent-text);
-  /* 徽章是中文标签，不用等宽字体（汉字会掉到宋体） */
-  font-size: var(--text-xs);
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  line-height: 1;
-}
-
 .widgetTitle {
   color: var(--text);
-  font-size: var(--text-sm);
+  font-size: var(--text-md);
   font-weight: 600;
 }
 
-/* 微测题干通常是一整句话甚至一段，常规偏中字重比全粗体好读 */
+/* 微测：题干是整张卡的主角，比正文略大；嵌在对话里不能压过上下文，所以不超过 17px */
+.quizHead {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .quizQuestion {
-  font-weight: 500;
-  line-height: var(--leading-read);
+  color: var(--text);
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.quizHintRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.quizHint {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
 }
 
 .stepCounter {
@@ -175,9 +177,9 @@
 
 .stateVal {
   color: var(--text);
-  font-family: var(--font-mono-cjk);
-  font-size: var(--text-sm);
-  font-weight: 600;
+  font-family: inherit;
+  font-size: var(--text-md);
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
 
@@ -190,7 +192,7 @@
 
 .stepLabel {
   color: var(--text);
-  font-size: var(--text-sm);
+  font-size: var(--text-md);
   font-weight: 600;
   line-height: var(--leading-ui);
 }
@@ -198,7 +200,7 @@
 .stepDetail {
   margin-top: 4px;
   color: var(--text-secondary);
-  font-size: var(--text-sm);
+  font-size: var(--text-md);
   line-height: var(--leading-read);
 }
 
@@ -378,7 +380,7 @@
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
-  font-size: var(--text-sm);
+  font-size: var(--text-md);
   line-height: var(--leading-ui);
   font-variant-numeric: tabular-nums;
   /* 第一列占固定比例，其余内容列平分，不会被某一格的长文字撑得宽窄不一 */
@@ -405,7 +407,7 @@
   border-bottom-color: var(--border-strong);
   color: var(--text-secondary);
   font-size: var(--text-xs);
-  font-weight: 600;
+  font-weight: 500;
   letter-spacing: 0.01em;
 }
 
@@ -464,7 +466,7 @@
     margin-bottom: 1px;
     color: var(--text-tertiary);
     font-size: var(--text-xs);
-    font-weight: 600;
+    font-weight: 500;
     content: attr(data-label);
   }
 }
@@ -478,8 +480,8 @@
   border-radius: var(--radius);
   background: var(--bg-subtle);
   color: var(--text-secondary);
-  font-size: var(--text-sm);
-  line-height: var(--leading-ui);
+  font-size: var(--text-md);
+  line-height: var(--leading-read);
 }
 
 .matrixTakeaway > span,
@@ -506,21 +508,21 @@
 .quizOptions {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
 .quizOptionBtn {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   width: 100%;
-  padding: 9px 12px;
-  border: 1px solid var(--border-strong);
+  min-height: 48px;
+  padding: 10px 16px;
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--bg-subtle);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
   color: var(--text);
-  font-size: var(--text-sm);
+  font-size: var(--text-read);
   text-align: left;
   transition:
     background-color var(--t-hover) var(--ease-out),
@@ -528,12 +530,23 @@
     transform var(--t-press) var(--ease-out);
 }
 
-.quizOptionBtn:hover {
+.quizOptionBtn:hover:not(:disabled) {
+  border-color: var(--border-strong);
   background: var(--bg-hover);
 }
 
 .quizOptionBtn:active:not(:disabled) {
   transform: scale(0.99);
+}
+
+.quizOptionBtn:disabled {
+  cursor: default;
+}
+
+.quizOptionPicked,
+.quizOptionPicked:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .quizOptionRight {
@@ -547,23 +560,63 @@
 }
 
 .quizOptionLetter {
-  display: inline-grid;
   flex-shrink: 0;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg-elevated);
+  width: 16px;
   color: var(--text-secondary);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  font-weight: 600;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  text-align: center;
 }
 
 .quizOptionText {
   flex: 1;
   line-height: var(--leading-ui);
+}
+
+/* 单选圆圈：空心是未选，选中后实心主题色，避免灰色实心圆像禁用 */
+.quizRadio {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 50%;
+  transition:
+    border-color var(--t-hover) var(--ease-out),
+    box-shadow var(--t-hover) var(--ease-out);
+}
+
+.quizRadioOn {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 4px var(--bg-elevated), inset 0 0 0 9px var(--accent);
+}
+
+.quizSubmit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  height: 42px;
+  border: none;
+  border-radius: var(--radius-lg);
+  background: var(--accent-solid);
+  color: var(--on-accent);
+  font-size: var(--text-md);
+  font-weight: 500;
+  transition:
+    background-color var(--t-hover) var(--ease-out),
+    opacity var(--t-hover) var(--ease-out);
+}
+
+.quizSubmit:hover:not(:disabled) {
+  background: var(--accent-solid-hover);
+}
+
+.quizSubmit:disabled {
+  box-shadow: inset 0 0 0 1px var(--border);
+  background: var(--bg-hover);
+  color: var(--text-tertiary);
+  cursor: not-allowed;
 }
 
 .iconRight {
@@ -582,8 +635,8 @@
   gap: 6px;
   padding: 10px 12px;
   border-radius: var(--radius-lg);
-  font-size: var(--text-sm);
-  line-height: var(--leading-ui);
+  font-size: var(--text-md);
+  line-height: var(--leading-read);
 }
 
 .feedbackRight {
@@ -773,7 +826,7 @@
   border-radius: 999px;
   color: var(--on-solid);
   font-size: var(--text-xs);
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
   transition: transform 160ms var(--ease-spring);
@@ -835,7 +888,7 @@
   border-radius: 999px;
   color: var(--on-solid);
   font-size: var(--text-xs);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 /* 7. circuit_netlist 电路拓扑确认 */
