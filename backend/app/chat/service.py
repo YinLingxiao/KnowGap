@@ -36,7 +36,7 @@ from app.chat.plan import PlanStore, brief
 from app.chat.checkpoints import MAX_TOOL_ROUNDS, resume_state
 from app.chat.usage import normalize_usage
 from app.chat.schemas import DispatchThread, ProposeThreads, ReportProgress
-from app.chat.quizzes import seal_quizzes
+from app.chat.quizzes import guard_gaps, seal_quizzes
 from app.chat.skills.problem_drill_skill import SEARCH_TOOL, drill_plan, guard_reply, lesson_first, wants_problems
 from app.chat.coordination import cancel_deliveries, dispatch, next_delivery
 from app.memory.store import new_id
@@ -1020,6 +1020,7 @@ class ChatService:
             if any(quiz_report.values()):  # 有任何核对、替换或清理动作就记一笔
                 # warning 级别：uvicorn 默认不输出应用自己的 info 日志
                 logger.warning("problem_drill quiz check: %s", quiz_report)
+            text = guard_gaps(text, {m.id for m, _ in memories if m.kind == "misconception"})
             # 定稿前封存题目：存库并抹掉正文里的答案与解析，done 事件和之后的读取都不含答案
             text = seal_quizzes(text, assistant_id, generation.conversation_id, self.store)
             cited = [source.model_dump() for source in sources if f"[{source.label}]" in text]

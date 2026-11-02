@@ -489,10 +489,10 @@ def test_widget_guide_examples_are_valid_json_and_match_the_contract():
     blocks = re.findall(r"```knowgap-widget\n(.*?)\n```", WIDGET_SCHEMA_GUIDE, flags=re.S)
     parsed = [json.loads(block) for block in blocks]
     assert [item["type"] for item in parsed] == [
-        "step_simulator", "comparison_matrix", "micro_quiz", "code_playground",
+        "step_simulator", "comparison_matrix", "micro_quiz", "code_playground", "gap",
     ]
-    assert "4 种类型" in WIDGET_SCHEMA_GUIDE
-    spec = parsed[-1]
+    assert "5 种类型" in WIDGET_SCHEMA_GUIDE
+    spec = parsed[3]
     assert spec["mode"] in ("scaffold", "free") and "TODO" in spec["starter_code"]
     request = RunRequest(language=spec["language"], code=spec["starter_code"], test_cases=spec["test_cases"])
     assert request.test_cases[0].expected == "9"

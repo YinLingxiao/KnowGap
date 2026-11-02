@@ -269,6 +269,10 @@ class ChatStore:
             ensure_column(db, "conversations", "compressed_up_to_seq", "INTEGER NOT NULL DEFAULT 0")
             ensure_column(db, "conversations", "model_key", "TEXT")
             ensure_column(db, "conversations", "model_notice_key", "TEXT")
+            # 证据来源：聊天引用（message_quote）或测验作答（quiz_attempt，message_id 留空）
+            ensure_column(db, "learner_memory_evidence", "source", "TEXT NOT NULL DEFAULT 'message_quote'")
+            ensure_column(db, "learner_memory_evidence", "attempt_id", "TEXT")
+            ensure_column(db, "quiz_items", "plan_step_id", "TEXT")
             self._migrate_spaces(db)
             ensure_notes(db)
             from app.chat.onboarding import ensure as ensure_onboarding
@@ -1807,10 +1811,27 @@ class ChatStore:
             )
             return [change] if change else []
 
+    def record_quiz_evidence(
+        self, db, student_id: str, memory_id: str, *, signal: str, quote: str, reason: str,
+        conversation_id: str, attempt_id: str,
+    ) -> MemoryChange | None:
+        """作答产生的误区证据：在调用方的事务里走同一套状态迁移；他人的、被用户纠正过的记忆不动。"""
+        target = db.execute(
+            "SELECT * FROM learner_memories WHERE id = ? AND student_id = ? AND kind = 'misconception' "
+            "AND user_corrected = 0", (memory_id, student_id),
+        ).fetchone()
+        if target is None:
+            return None
+        return self._record_locked(
+            db, student_id, kind="misconception", topic=target["topic"], topic_key=None, summary=target["summary"],
+            quote=quote, reason=reason, signal=signal, related_id=memory_id, conversation_id=conversation_id,
+            message_id=None, subject_id=target["subject_id"], tags=None, source="quiz_attempt", attempt_id=attempt_id,
+        )
+
     def _record_locked(
         self, db, student_id: str, *, kind: str, topic: str, topic_key: str | None, summary: str, quote: str,
         reason: str, signal: str, related_id: str | None, conversation_id: str, message_id: str,
-        subject_id: str | None, tags: list[str] | None,
+        subject_id: str | None, tags: list[str] | None, source: str = "message_quote", attempt_id: str | None = None,
     ) -> MemoryChange | None:
         timestamp = now()
         row = None
@@ -1847,8 +1868,9 @@ class ChatStore:
                        (json.dumps(merged, ensure_ascii=False), memory_id))
         inserted = db.execute(
             "INSERT OR IGNORE INTO learner_memory_evidence"
-            "(memory_id, conversation_id, message_id, quote, reason, signal, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (memory_id, conversation_id, message_id, quote, reason, signal, timestamp),
+            "(memory_id, conversation_id, message_id, quote, reason, signal, created_at, source, attempt_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (memory_id, conversation_id, message_id, quote, reason, signal, timestamp, source, attempt_id),
         ).rowcount
         if not inserted:
             return None
