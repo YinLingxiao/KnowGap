@@ -89,10 +89,10 @@ const components: Components = {
     const language = /language-([\w+-]+)/.exec(className)?.[1] ?? "";
     const code = textOf(children).replace(/\n$/, "");
     if (language === "knowgap-widget" || language === "widget") {
-      return <LearningWidget rawCode={code} />;
+      return <div className={styles.widgetSlot}><LearningWidget rawCode={code} /></div>;
     }
     if (language === "knowgap-visual") {
-      return <VisualCard rawCode={code} />;
+      return <div className={styles.widgetSlot}><VisualCard rawCode={code} /></div>;
     }
     return (
       <div className={styles.codeBlock}>
