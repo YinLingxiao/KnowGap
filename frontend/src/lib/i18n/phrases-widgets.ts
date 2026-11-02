@@ -124,5 +124,8 @@ export const widgetPhrases: Record<string, string> = {
   "我在做代码实验台「{title}」（{language}），但本机没有 {tool}，没法运行。请你直接读下面的代码做静态检查，不需要运行：指出语法或逻辑错误（带行号）、预测它会输出什么、说明怎么修。": "I am working in the code playground “{title}” ({language}), but {tool} is not installed locally, so it cannot run. Read the code below and do a static check instead: identify syntax or logic errors with line numbers, predict the output and explain how to fix them.",
   "题目要求：{text}": "Task requirements: {text}",
   "我的代码：": "My code:",
+  "正在生成图示…": "Generating the diagram…",
+  "图示没能生成": "The diagram could not be generated",
+  "交互图示": "Interactive diagram",
 };
 

@@ -17,6 +17,7 @@ import typescript from "highlight.js/lib/languages/typescript";
 import { Check, Copy } from "lucide-react";
 import { normalizeMathDelimiters } from "@/lib/chat/mathDelimiters";
 import { LearningWidget, WidgetLiveContext } from "./LearningWidget";
+import { VisualCard } from "./widgets/VisualCard";
 import { mathRehypePlugins, mathRemarkPlugins } from "./math";
 import styles from "./Markdown.module.css";
 
@@ -29,7 +30,7 @@ const highlightOptions: HighlightOptions = {
     cpp: ["c++", "cc"],
     bash: ["sh", "shell", "zsh"],
   },
-  plainText: ["knowgap-widget", "widget"],
+  plainText: ["knowgap-widget", "widget", "knowgap-visual"],
 };
 
 export async function copyText(text: string): Promise<boolean> {
@@ -89,6 +90,9 @@ const components: Components = {
     const code = textOf(children).replace(/\n$/, "");
     if (language === "knowgap-widget" || language === "widget") {
       return <LearningWidget rawCode={code} />;
+    }
+    if (language === "knowgap-visual") {
+      return <VisualCard rawCode={code} />;
     }
     return (
       <div className={styles.codeBlock}>
