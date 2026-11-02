@@ -235,7 +235,7 @@ Get-ChildItem "desktop\dist\win-unpacked\resources\backend"
 
 ## 自动更新（v0.5.7 起，首个公开版本 v0.5.8）
 
-v0.8.0 起新增 [PR 验证和主分支自动发布](desktop-release-automation.md)。工作流通过后自动上传完整更新文件并公开正式 Release；以下安装级手动检查仍可作为发布后的复核依据。
+新增 [PR 验证和主分支自动发布](desktop-release-automation.md)。工作流通过后自动上传完整更新文件并公开正式 Release；以下安装级手动检查仍可作为发布后的复核依据。
 
 ### 安全策略与边界
 

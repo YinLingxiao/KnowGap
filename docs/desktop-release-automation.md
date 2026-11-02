@@ -1,15 +1,11 @@
 # PR 合并与桌面自动更新
 
-## 本次交付
-
-分支 `feat/streaming-interaction` 基于最新 `main`，正式桌面版本为 `0.8.0`，包含流式交互、白屏修复和发布工作流。PR 的正文可参考 [pr-streaming-interaction.md](pr-streaming-interaction.md)。不要将本机数据库、API 配置、`node_modules` 或安装包提交进 Git。
-
-在 VS Code 打开本分支所在目录，选择“发布分支”，再向官方仓库的 `main` 创建 PR。命令行也可以运行 `git push -u origin feat/streaming-interaction`；本次仅准备本地提交，没有替你推送或发布。提交前可用 `git log origin/main..HEAD --oneline` 查看本次两条提交。
+**合并到 `main` 即发布**：只要 `desktop/package.json` 的版本高于 GitHub 上最新正式版，推送到 `main` 的那次运行就会自动公开 Release。功能分支不要改版本号，版本递增只放在 `release/vX.Y.Z` 分支的 `chore: release` 提交里。
 
 ## 从 PR 到其他人的“检查更新”
 
 1. 向 `YinLingxiao/KnowGap` 的 `main` 提交 PR。工作流会在 Windows 上运行前后端、桌面和发布回归，构建完整安装包，并对冻结后的后端、静态资源、待发送接口和重启持久化进行检查。PR 仅产生测试用构建产物，不发布 Release。
-2. 负责人审核并合并 PR。主分支使用相同构建流程；全部通过且版本高于当前最新正式版时，发布任务使用该次合并的准确提交创建 `v0.8.0`。
+2. 负责人审核并合并 PR。主分支使用相同构建流程；全部通过且版本高于当前最新正式版时，发布任务使用该次合并的准确提交创建 `v<版本>` 标签。
 3. 先创建草稿 Release，上传安装包、差分映射和 `latest.yml`，核对文件名及体积后再公开并设为最新正式版。上传中断时保持草稿，已安装客户端不会读到半套更新。已公开版本不会被覆盖。
 4. 其他人打开设置 → 通用 → 软件更新 → 检查更新，下载完成后确认重启安装。默认也会后台检查和下载。更新沿用项目现有机制，保留本地学习数据与模型配置。
 
