@@ -41,8 +41,10 @@ class FakeChat:
 def parse(body: str):
     events = []
     for block in body.strip().split("\n\n"):
-        lines = block.split("\n")
-        events.append((lines[0].removeprefix("event: "), json.loads(lines[1].removeprefix("data: "))))
+        fields = dict(line.split(": ", 1) for line in block.split("\n") if not line.startswith(":"))
+        # A quiet stream sends ": keep-alive" comments; they carry no event.
+        if "data" in fields:
+            events.append((fields["event"], json.loads(fields["data"])))
     return events
 
 
