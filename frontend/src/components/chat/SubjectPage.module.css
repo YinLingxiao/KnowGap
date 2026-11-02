@@ -25,6 +25,11 @@
   margin: 8px;
 }
 
+/* 全屏切换期间才给面板命名，过渡动画本身在 globals.css 的 space-panel 规则里 */
+:global(html[data-panel-vt]) .panel:not(.overlay) {
+  view-transition-name: space-panel;
+}
+
 .main,
 .thread,
 .info,
