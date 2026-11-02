@@ -35,7 +35,7 @@ from app.chat.attachments import attachment_query, prepare_attachment_history
 from app.chat.plan import PlanStore, brief
 from app.chat.checkpoints import MAX_TOOL_ROUNDS, resume_state
 from app.chat.usage import normalize_usage
-from app.chat.streaming import EventJournal, StreamStore, read_events
+from app.chat.streaming import StreamStore
 from app.chat.schemas import DispatchThread, ProposeThreads, ReportProgress
 from app.chat.quizzes import guard_gaps, seal_quizzes
 from app.chat.skills import WIDGET_RETRY_NOTICE, refuses_widget
@@ -188,12 +188,7 @@ class ChatService:
         await asyncio.gather(*tasks, return_exceptions=True)
 
     def recover(self) -> None:
-        for message_id, text, reasoning in self.streams.recover():
-            with self.store.connection() as db:
-                row = db.execute("SELECT conversation_id, status, error FROM conversation_messages WHERE id = ?", (message_id,)).fetchone()
-            if row and row["status"] == "failed" and row["error"] == INTERRUPTED:
-                self.store.finish_reply(message_id, content=seal_quizzes(text, message_id, row["conversation_id"], self.store),
-                                        status="failed", error=INTERRUPTED, meta={"reasoning": reasoning[:MAX_REASONING_CHARS]})
+        self.streams.recover()
         with self.store.connection() as db:
             interrupted = db.execute(
                 "SELECT m.id FROM conversation_messages m "
@@ -369,7 +364,6 @@ class ChatService:
 
     def _start_next_queued_thread(self, student_id: str, main_id: str, exclude: str | None = None) -> None:
         """Fill all free slots, oldest undelivered input first; skip already-running workers."""
-        self.streams.ensure()
         with self.store.connection() as db:
             queued = db.execute("""
                 SELECT c.id, MIN(m.created_at) AS oldest FROM conversations c
@@ -627,7 +621,7 @@ class ChatService:
         # Called without awaiting in between the caller's is_generating() check, so registration is atomic.
         assistant_id = self.store.start_reply(conversation_id, user_message_id, discard)
         generation = Generation(conversation_id, user_message_id, assistant_id)
-        generation.queue = EventJournal(self.streams, generation)
+        generation.queue = self.streams.journal(conversation_id, generation.assistant_message_id)
         if not self.streams.listing(conversation_id)["items"]:
             self.streams.pause(conversation_id, False)
         generation.student_id = student_id
@@ -690,7 +684,7 @@ class ChatService:
         self.store.finish_reply(message_id, content="".join(checkpoint["parts"]), status="streaming",
                                 meta={"pending_approval": None})
         generation = Generation(conversation_id, message.reply_to, message_id)
-        generation.queue = EventJournal(self.streams, generation)
+        generation.queue = self.streams.journal(conversation_id, generation.assistant_message_id)
         generation.student_id = student_id
         generation.parent_id = self._thread_parent_id(student_id, conversation_id)
         generation.detached = True
@@ -756,13 +750,14 @@ class ChatService:
         self._save_checkpoint(generation, state)
 
     async def events(self, generation: Generation) -> AsyncIterator[str]:
-        async for event in read_events(self.streams, generation.assistant_message_id, journal=generation.queue):
+        async for event in generation.queue.read():
             yield event
 
     async def subscribe(self, conversation_id: str, run_id: str, after: int = 0) -> AsyncIterator[str]:
-        generation = self.active.get(conversation_id)
-        journal = generation.queue if generation and generation.assistant_message_id == run_id else None
-        async for event in read_events(self.streams, run_id, after, journal):
+        journal = self.streams.find_run(run_id, conversation_id)
+        if journal is None:
+            return
+        async for event in journal.read(after):
             yield event
 
     def drain_outbox(self, student_id: str, conversation_id: str) -> None:

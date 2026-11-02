@@ -307,8 +307,7 @@ def chat_router(store: ChatStore, service: ChatService) -> APIRouter:
             await service.preempt_system_turn(conversation_id)
         service.drain_outbox(current_student(), conversation_id)
         # Return a durable receipt even when the first turn starts immediately.
-        with store.connection() as db:
-            return dict(db.execute("SELECT * FROM chat_outbox WHERE id = ?", (item["id"],)).fetchone())
+        return service.streams.item(item["id"])
 
     @router.patch("/conversations/{conversation_id}/outbox/{item_id}")
     async def edit_queued(conversation_id: str, item_id: str, body: QueuedEdit):

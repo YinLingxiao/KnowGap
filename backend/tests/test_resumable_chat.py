@@ -146,14 +146,13 @@ def test_new_turn_resets_an_empty_paused_queue_but_keeps_existing_pending_items_
     asyncio.run(scenario())
 
 
-def test_restart_restores_last_durable_token_and_pauses_queue(tmp_path):
+def test_restart_keeps_the_flushed_partial_reply_and_pauses_queue(tmp_path):
     async def scenario():
         model = GatedChat()
         store, service, cid = setup(tmp_path, model)
         uid = store.add_user_message(cid, "定义", "stream-request-004")
         run = service.begin(DEMO_STUDENT, cid, uid, [])
         await model.first_token.wait()
-        run.queue.put_nowait(("delta", {"text": "最后已接收内容"}))
         service.streams.enqueue(cid, "下一题", "queued-request-004")
         # Simulate the persisted database at a hard crash, without running the old worker's cleanup.
         backup = Store(tmp_path / "crash.sqlite3")
@@ -166,7 +165,8 @@ def test_restart_restores_last_durable_token_and_pauses_queue(tmp_path):
         next_service.recover()
         saved = recovered.message(run.assistant_message_id, DEMO_STUDENT)
         assert saved.status == "failed" and saved.error == INTERRUPTED
-        assert saved.content == "第一段。最后已接收内容"
+        # The journal is in memory; the reply row is flushed while streaming.
+        assert saved.content == "第一段。"
         assert next_service.streams.listing(cid)["paused"]
         assert len(next_model.calls) == 0
         await service.close()
