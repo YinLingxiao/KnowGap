@@ -6,7 +6,7 @@ import type { Problem } from "@/lib/types";
 import { mapPlan, mapPlanChanges } from "./plan";
 import type {
   ChatMessage, Conversation, ConversationSummary, GeneratedFile, LearnerMemory, LearnerMemoryStatus, MemoryChange, SpaceInput,
-  StreamEvent, Subject, TokenUsage, SpaceUsage,
+  QuizAttemptResult, StreamEvent, Subject, TokenUsage, SpaceUsage,
 } from "./types";
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- wire payloads are mapped field by field below */
@@ -173,9 +173,27 @@ function mapEvent(type: string, data: Wire): StreamEvent | null {
 }
 
 const root = API_BASE_URL;
+function mapQuizAttempt(data: Wire): QuizAttemptResult {
+  return {
+    quizId: data.quiz_id, attemptId: data.attempt_id, optionIndex: data.option_index, correct: Boolean(data.correct),
+    answerIndex: data.answer_index, explanation: String(data.explanation ?? ""), repeated: Boolean(data.repeated),
+  };
+}
+
 const path = (id: string) => `/api/conversations/${encodeURIComponent(id)}`;
 
 export const chatApi = {
+  /** 提交微测作答；同一 actionId 重发安全，题目已作答时返回首次结果（repeated） */
+  async submitQuizAttempt(quizId: string, input: { actionId: string; optionIndex: number }): Promise<QuizAttemptResult> {
+    return mapQuizAttempt(await request(root, `/api/quizzes/${encodeURIComponent(quizId)}/attempts`, {
+      method: "POST", body: JSON.stringify({ action_id: input.actionId, option_index: input.optionIndex }),
+    }));
+  },
+  /** 会话内所有已作答的微测，key 为 quizId，刷新后用来恢复作答状态 */
+  async listQuizAttempts(conversationId: string): Promise<Record<string, QuizAttemptResult>> {
+    const data = await request<Record<string, Wire>>(root, `${path(conversationId)}/quiz-attempts`, { cache: "no-store" });
+    return Object.fromEntries(Object.entries(data).map(([quizId, item]) => [quizId, mapQuizAttempt(item)]));
+  },
   async listConversations(): Promise<ConversationSummary[]> {
     return (await request<Wire[]>(root, "/api/conversations", { cache: "no-store" })).map(mapSummary);
   },
