@@ -26,8 +26,13 @@ function mapMemory(data: Wire): LearnerMemory {
     evidence: (data.evidence ?? []).map((item: Wire) => ({
       conversationId: item.conversation_id, messageId: item.message_id, quote: item.quote, reason: item.reason,
       signal: item.signal, createdAt: item.created_at, sourceAvailable: item.source_available,
+      source: item.source === "quiz_attempt" ? "quiz_attempt" : "message_quote",
     })),
   };
+}
+
+function mapMemoryChanges(raw: Wire): MemoryChange[] {
+  return (raw ?? []).map((change: Wire): MemoryChange => ({ action: change.action, memory: mapMemory(change.memory) }));
 }
 
 function mapMessage(data: Wire): ChatMessage {
@@ -39,9 +44,7 @@ function mapMessage(data: Wire): ChatMessage {
       problemId: data.attempt.problem_id, assessment: data.attempt.assessment,
       issue: data.attempt.issue ?? null, evidence: data.attempt.evidence,
     } : null,
-    memoryChanges: (data.memory_changes ?? []).map((change: Wire): MemoryChange => ({
-      action: change.action, memory: mapMemory(change.memory),
-    })),
+    memoryChanges: mapMemoryChanges(data.memory_changes),
     usedMemoryIds: data.used_memory_ids ?? [],
     suggestedProblemId: data.suggested_problem_id ?? null,
     sources: (data.sources ?? []).map((source: WireSource) => mapSource(source)),
@@ -173,10 +176,12 @@ function mapEvent(type: string, data: Wire): StreamEvent | null {
 }
 
 const root = API_BASE_URL;
-function mapQuizAttempt(data: Wire): QuizAttemptResult {
+export function mapQuizAttempt(data: Wire): QuizAttemptResult {
   return {
     quizId: data.quiz_id, attemptId: data.attempt_id, optionIndex: data.option_index, correct: Boolean(data.correct),
     answerIndex: data.answer_index, explanation: String(data.explanation ?? ""), repeated: Boolean(data.repeated),
+    memoryChanges: mapMemoryChanges(data.memory_changes),
+    planStep: data.plan_step && data.plan_step.id ? { id: String(data.plan_step.id), title: String(data.plan_step.title ?? "") } : null,
   };
 }
 
