@@ -20,8 +20,8 @@
 }
 
 .markdown p,
-.markdown ul,
-.markdown ol,
+.markdown ul:not(.widgetSlot *),
+.markdown ol:not(.widgetSlot *),
 .markdown blockquote,
 .markdown .codeBlock,
 .markdown .tableWrap {
@@ -43,21 +43,26 @@
   font-size: var(--text-xl);
 }
 
-.markdown ul,
-.markdown ol {
+/* 正文列表样式不进卡片：卡片里的列表有自己的样式，否则会被带上圆点和缩进 */
+.markdown ul:not(.widgetSlot *),
+.markdown ol:not(.widgetSlot *) {
   padding-left: 1.4em;
 }
 
-.markdown ul {
+.markdown ul:not(.widgetSlot *) {
   list-style: disc;
 }
 
-.markdown ol {
+.markdown ol:not(.widgetSlot *) {
   list-style: decimal;
 }
 
-.markdown li + li {
+.markdown li:not(.widgetSlot *) + li {
   margin-top: 5px;
+}
+
+.widgetSlot {
+  min-width: 0;
 }
 
 .markdown li > ul,
