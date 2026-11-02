@@ -612,6 +612,16 @@
   background: var(--accent-solid-hover);
 }
 
+.spin {
+  animation: quiz-spin 0.9s linear infinite;
+}
+
+@keyframes quiz-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .quizSubmit:disabled {
   box-shadow: inset 0 0 0 1px var(--border);
   background: var(--bg-hover);
