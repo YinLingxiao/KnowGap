@@ -929,6 +929,7 @@ export function SubjectPage({
                   conversationSubjectId={subject.id}
                   subjectNames={subjectNames}
                   collapseLong={false}
+                  showNav={panelExpanded}
                   phase={threadPhase}
                   followNonce={chat.followNonceFor(threadId)}
                   topSlot={(

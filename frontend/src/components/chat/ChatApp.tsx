@@ -645,6 +645,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
                   subjectNames={subjectNames}
                   phase={phase}
                   followNonce={chat.followNonceFor(chat.activeId)}
+                  showNav
                   onRegenerate={() => void chat.regenerate(chat.activeId!)}
                   onStartExercise={(problemId) => void chat.startExercise(problemId)}
                   onOpenMemories={openMemories}

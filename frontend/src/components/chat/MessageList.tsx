@@ -29,6 +29,7 @@ import { VisionMarkedText } from "./widgets/ImageMarker";
 import type { PlanChange } from "@/lib/chat/plan";
 import { AGENDA_TOOLS, AgendaToolCard } from "./AgendaToolCard";
 import { hasVisionMarker } from "./widgets/visionData";
+import { MessageNav } from "./MessageNav";
 import styles from "./MessageList.module.css";
 
 const ASSESSMENT: Record<string, { labelKey: MessageKey; tone: string }> = {
@@ -119,6 +120,8 @@ interface MessageListProps {
   onOpenFile?: (documentId: string, subjectId: string | null) => void;
   collapseLong?: boolean;
   scrollTarget?: { messageId: string | null; threadId: string; nonce: number } | null;
+  /** 右侧提问导航：平行对话常开，支线只在全屏时开 */
+  showNav?: boolean;
 }
 
 const NEXT_LABEL = { quiz: "考考我", schedule: "排进日程", save_note: "存进笔记", weak_points: "看看我的薄弱点" } as const;
@@ -216,7 +219,7 @@ function planMarksOf(changes: PlanChange[] | undefined) {
 export function MessageList({
   conversationId, messages, problems, memoriesById, conversationSubjectId, subjectNames, phase, followNonce, topSlot,
   onRegenerate, onStartExercise, onOpenMemories, onOpenSummary, onDecideTool, onConfirmProposal, onResumeCheckpoint,
-  onSendText, onOpenWeakPoints, onOpenFile, collapseLong = true, scrollTarget, threadStates,
+  onSendText, onOpenWeakPoints, onOpenFile, collapseLong = true, scrollTarget, threadStates, showNav = false,
 }: MessageListProps) {
   const { t, tx } = useI18n();
   const summaryCard = useSummaryCard();
@@ -351,6 +354,11 @@ export function MessageList({
   const firstLatestTurnIdx = lastUser
     ? messages.findIndex((m, idx) => idx > messages.indexOf(lastUser) && m.role === "assistant")
     : -1;
+  const navEntries = showNav
+    ? messages
+      .filter((message) => message.role === "user" && message.kind !== "exercise" && !isHiddenSystemMessage(message, eventIds))
+      .map((message) => ({ id: message.id, preview: pinPreview(message.content) }))
+    : [];
 
   return (
     <div className={styles.wrap}>
@@ -774,6 +782,7 @@ export function MessageList({
         canSaveToPage={Boolean(conversationSubjectId)}
         canSend={phase === null || phase === "analyzing"}
       />
+      {showNav && <MessageNav entries={navEntries} scrollRef={scrollRef} onJump={jumpToMessage} />}
       {showJump && (
         <button className={styles.jump} onClick={() => { following.current = true; setShowJump(false); toBottom(); }}>
           <ArrowDown size={14} aria-hidden />

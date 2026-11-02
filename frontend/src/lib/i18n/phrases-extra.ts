@@ -351,6 +351,7 @@ export const extraPhrases: Record<string, string> = {
   "针对第 {index} 处批注追问 AI": "Ask the AI about annotation {index}",
   "随堂即时自测": "Quick in-class self-test",
   "请选择一个答案": "Choose one answer",
+  "提问导航": "Question navigator",
   "提交答案": "Submit answer",
   "题目来源详情": "Question source details",
   "题目来源：{text}，点击查看详情": "Question source: {text}; click for details",
