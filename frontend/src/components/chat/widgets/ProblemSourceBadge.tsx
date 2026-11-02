@@ -12,7 +12,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { BookMarked, ExternalLink, Loader2, RefreshCw, X } from "lucide-react";
 import { useI18n } from "@/components/LanguageProvider";
-import { WIDGET_ASK_EVENT } from "../LearningWidget";
+import { askInComposer, useWidgetScope } from "./widgetEvents";
 import styles from "./ProblemSourceBadge.module.css";
 
 export interface ProblemSource {
@@ -83,6 +83,7 @@ export function ProblemSourceBadge({
   source, patternId, knowledgePoint, fingerprint, onRequestMore, disabled = false,
 }: ProblemSourceBadgeProps) {
   const { tx } = useI18n();
+  const scope = useWidgetScope();
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const [filled, setFilled] = useState(false);
@@ -133,7 +134,7 @@ export function ProblemSourceBadge({
       }
       return;
     }
-    window.dispatchEvent(new CustomEvent<string>(WIDGET_ASK_EVENT, { detail: message }));
+    askInComposer(scope, message);
     setFilled(true);
   };
 

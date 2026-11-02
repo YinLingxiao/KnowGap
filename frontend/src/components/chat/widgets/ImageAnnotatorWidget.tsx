@@ -7,7 +7,7 @@ import { cx } from "@/lib/cx";
 import base from "../LearningWidget.module.css";
 import { RouteBadge, useImageUrl } from "./VisionBits";
 import { arrowBetween, ellipseOf, parseAnnotatorData } from "./visionData";
-import { askInComposer } from "./widgetEvents";
+import { askInComposer, useWidgetScope } from "./widgetEvents";
 import styles from "./VisionWidgets.module.css";
 
 const CIRCLED = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳";
@@ -22,6 +22,7 @@ export const annotationMarker = (index: number) => CIRCLED[index] ?? String(inde
  */
 export function ImageAnnotatorWidget({ data }: { data: Record<string, unknown> }) {
   const { tx } = useI18n();
+  const scope = useWidgetScope();
   const parsed = useMemo(() => parseAnnotatorData(data), [data]);
   const { title, summary, annotations, aspect, route } = parsed;
   const image = useImageUrl(parsed.imageId);
@@ -137,6 +138,7 @@ export function ImageAnnotatorWidget({ data }: { data: Record<string, unknown> }
             onClick={() => {
               if (!current || active === null) return;
               askInComposer(
+                scope,
                 tx("关于「{title}」中的批注 {index}：「{text}」，请结合图中这一处详细讲讲错在哪里、应该怎么改。", {
                   title: tx(title),
                   index: annotationMarker(active),

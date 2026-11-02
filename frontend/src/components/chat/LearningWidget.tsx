@@ -13,6 +13,7 @@ import styles from "./LearningWidget.module.css";
 import { MathText } from "./math";
 import { CircuitNetlistWidget } from "./widgets/CircuitNetlistWidget";
 import { ImageAnnotatorWidget } from "./widgets/ImageAnnotatorWidget";
+import { WIDGET_ASK_EVENT, askInComposer, useWidgetScope } from "./widgets/widgetEvents";
 import { ProblemSourceBadge, type ProblemSource } from "./widgets/ProblemSourceBadge";
 
 function CodeEditorLoading() {
@@ -25,14 +26,12 @@ const CodePlaygroundWidget = dynamic(
   { ssr: false, loading: () => <CodeEditorLoading /> },
 );
 
-export const WIDGET_ASK_EVENT = "knowgap:widget-ask";
+export { WIDGET_ASK_EVENT };
 
 /** True while the message holding the widget is still being written. Markdown provides it. */
 export const WidgetLiveContext = createContext(false);
 
-function emitWidgetQuestion(prompt: string) {
-  window.dispatchEvent(new CustomEvent<string>(WIDGET_ASK_EVENT, { detail: prompt }));
-}
+const emitWidgetQuestion = askInComposer;
 
 interface StepStateItem {
   key: string;
@@ -120,6 +119,7 @@ function WidgetFailure({ rawCode, reason }: { rawCode: string; reason: string })
 
 function StepSimulatorWidget({ data }: { data: Record<string, unknown> }) {
   const { tx } = useI18n();
+  const scope = useWidgetScope();
   const title = String(data.title || tx("过程步进推演"));
   const steps = Array.isArray(data.steps) ? (data.steps as SimulatorStep[]) : [];
   const [index, setIndex] = useState(0);
@@ -196,6 +196,7 @@ function StepSimulatorWidget({ data }: { data: Record<string, unknown> }) {
           className={styles.askAiBtn}
           onClick={() =>
             emitWidgetQuestion(
+              scope,
               tx("在「{title}」的第 {step} 步（{label}）中，为什么会是这个状态？请帮我再展开讲讲。", {
                 title,
                 step: safeIdx + 1,
@@ -214,6 +215,7 @@ function StepSimulatorWidget({ data }: { data: Record<string, unknown> }) {
 
 function ComparisonMatrixWidget({ data }: { data: Record<string, unknown> }) {
   const { tx, lang } = useI18n();
+  const scope = useWidgetScope();
   const title = String(data.title || tx("核心差异对比"));
   const columns = Array.isArray(data.columns) ? data.columns.map(String) : [];
   const rows = Array.isArray(data.rows) ? (data.rows as CompareRow[]) : [];
@@ -301,6 +303,7 @@ function ComparisonMatrixWidget({ data }: { data: Record<string, unknown> }) {
           className={styles.askAiBtn}
           onClick={() =>
             emitWidgetQuestion(
+              scope,
               tx("关于「{title}」中的「{dimension}」，能给我举一个最容易混淆的具体例子吗？", {
                 title,
                 dimension: activeDim === "all" ? rows[0]?.dimension ?? "" : activeDim,
@@ -318,6 +321,7 @@ function ComparisonMatrixWidget({ data }: { data: Record<string, unknown> }) {
 
 function MicroQuizWidget({ data }: { data: Record<string, unknown> }) {
   const { tx } = useI18n();
+  const scope = useWidgetScope();
   const question = String(data.question || "");
   const options = Array.isArray(data.options) ? data.options.map(String) : [];
   const answerIndex = typeof data.answerIndex === "number" ? data.answerIndex : 0;
@@ -413,6 +417,7 @@ function MicroQuizWidget({ data }: { data: Record<string, unknown> }) {
               className={styles.askAiBtn}
               onClick={() =>
                 emitWidgetQuestion(
+                  scope,
                   tx("针对刚才这道题「{question}」，我选了「{option}」，{followUp}", {
                     question,
                     option: options[selected],
