@@ -363,18 +363,18 @@ export function CircuitNetlistWidget({ data }: { data: Record<string, unknown> }
 
       <footer className={base.widgetFoot}>
         {hasReferenceImage && (
-          <button type="button" className={base.ctrlBtn} aria-expanded={showImage} onClick={() => setShowImage((open) => !open)}>
+          <button type="button" className={styles.textBtn} aria-expanded={showImage} onClick={() => setShowImage((open) => !open)}>
             <ImageIcon size={12} aria-hidden />
             <span>{showImage ? tx("收起原图") : tx("对照原图")}</span>
           </button>
         )}
         {!done && !editing && (
           <div className={styles.footActions}>
-            <button type="button" className={base.ctrlBtn} disabled={busy} onClick={startEdit}>
+            <button type="button" className={cx(base.ctrlBtn, styles.footBtn)} disabled={busy} onClick={startEdit}>
               <Pencil size={12} aria-hidden />
               <span>{tx("修正某条支路连接")}</span>
             </button>
-            <button type="button" className={base.askAiBtn} disabled={busy || blocking} onClick={() => void confirm(null)}
+            <button type="button" className={cx(base.askAiBtn, styles.footBtn)} disabled={busy || blocking} onClick={() => void confirm(null)}
               title={blocking ? tx("网表有连接错误，请先修正") : undefined}>
               {busy ? <Loader2 size={12} className={styles.spin} aria-hidden /> : <Check size={12} aria-hidden />}
               <span>{tx("连接无误，交由逻辑模型列方程求解")}</span>
@@ -383,18 +383,18 @@ export function CircuitNetlistWidget({ data }: { data: Record<string, unknown> }
         )}
         {!done && editing && (
           <div className={styles.footActions}>
-            <button type="button" className={base.ctrlBtn} disabled={busy || draft.length >= 80} onClick={addRow}>
+            <button type="button" className={cx(base.ctrlBtn, styles.footBtn)} disabled={busy || draft.length >= 80} onClick={addRow}>
               <Plus size={12} aria-hidden />
               <span>{tx("添加支路")}</span>
             </button>
-            <button type="button" className={base.ctrlBtn} disabled={busy} onClick={startEdit}>
+            <button type="button" className={styles.textBtn} disabled={busy} onClick={startEdit}>
               <RotateCcw size={12} aria-hidden />
               <span>{tx("恢复识别结果")}</span>
             </button>
-            <button type="button" className={base.ctrlBtn} disabled={busy} onClick={() => { setMode("view"); setError(""); setServerIssues([]); }}>
+            <button type="button" className={styles.textBtn} disabled={busy} onClick={() => { setMode("view"); setError(""); setServerIssues([]); }}>
               <span>{tx("取消")}</span>
             </button>
-            <button type="button" className={base.askAiBtn} disabled={busy || editErrors.length > 0} onClick={() => void confirm(draft)}>
+            <button type="button" className={cx(base.askAiBtn, styles.footBtn)} disabled={busy || editErrors.length > 0} onClick={() => void confirm(draft)}>
               {busy ? <Loader2 size={12} className={styles.spin} aria-hidden /> : <Check size={12} aria-hidden />}
               <span>{tx("提交修正并求解")}</span>
             </button>

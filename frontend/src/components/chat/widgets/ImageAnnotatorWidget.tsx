@@ -95,7 +95,7 @@ export function ImageAnnotatorWidget({ data }: { data: Record<string, unknown> }
           <button
             key={`badge-${i}`}
             type="button"
-            className={cx(base.annoBadge, active === i && base.annoBadgeOn)}
+            className={cx(base.annoBadge, styles.badge, active === i && base.annoBadgeOn)}
             style={{ left: `${anno.box[1] / 10}%`, top: `${anno.box[0] / 10}%`, background: anno.color }}
             aria-pressed={active === i}
             aria-label={tx("批注 {index}：{text}", { index: i + 1, text: tx(anno.text) })}
@@ -133,7 +133,7 @@ export function ImageAnnotatorWidget({ data }: { data: Record<string, unknown> }
           <span className={base.footHint}>{tx("点击图上的编号或下方列表高亮对应批注，再针对这一处追问")}</span>
           <button
             type="button"
-            className={base.askAiBtn}
+            className={cx(base.askAiBtn, styles.askBtn)}
             disabled={!current}
             onClick={() => {
               if (!current || active === null) return;

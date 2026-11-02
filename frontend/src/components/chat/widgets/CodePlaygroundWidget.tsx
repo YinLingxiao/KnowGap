@@ -510,12 +510,12 @@ function PlaygroundPanel({ spec, onAsk }: { spec: PlaygroundSpec; onAsk?: (promp
           {running ? <LoaderCircle size={14} className={styles.spin} aria-hidden /> : <Play size={14} aria-hidden />}
           <span>{running ? tx("运行中…") : tx("编译并运行")}</span>
         </button>
-        <button type="button" className={base.ctrlBtn} onClick={reset} disabled={running}>
+        <button type="button" className={cx(base.ctrlBtn, styles.controlBtn)} onClick={reset} disabled={running}>
           <RotateCcw size={13} aria-hidden />
           <span>{scaffold ? tx("重置脚手架") : tx("重置代码")}</span>
         </button>
         {failed && (
-          <button type="button" className={base.askAiBtn} onClick={diagnose}>
+          <button type="button" className={cx(styles.textBtn, styles.textBtnAccent)} onClick={diagnose}>
             <Bot size={13} aria-hidden />
             <span>{tx("让 AI 诊断报错原因")}</span>
           </button>
@@ -534,7 +534,7 @@ function PlaygroundPanel({ spec, onAsk }: { spec: PlaygroundSpec; onAsk?: (promp
           <div className={styles.bannerText}>
             <strong>{tx("本机没有 {tool}，没法运行", { tool: missing.tool })}</strong>
             <p>{tx("已请 AI 先读一遍代码，检查结果在下方对话里。")}</p>
-            <button type="button" className={base.askAiBtn} onClick={recheck}>
+            <button type="button" className={cx(styles.textBtn, styles.textBtnAccent)} onClick={recheck}>
               <Bot size={13} aria-hidden />
               <span>{tx("再让 AI 检查一次")}</span>
             </button>

@@ -1,16 +1,17 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { createContext, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import {
   ArrowRight, CheckCircle2, ChevronLeft, ChevronRight, CircleAlert,
-  Lightbulb, LoaderCircle, MessageSquarePlus, Sparkles,
+  Lightbulb, LoaderCircle, MessageSquarePlus,
 } from "lucide-react";
 import { cx } from "@/lib/cx";
 import { cachedQuizAttempt, loadQuizAttempts, submitQuizAttempt, subscribeQuizAttempts } from "@/lib/chat/quizAttempts";
 import { PLAN_EVENT, planApi, type PlanEventDetail } from "@/lib/chat/plan";
 import type { QuizAttemptResult } from "@/lib/chat/types";
 import { parsePartialWidgetJson, parseWidgetJson } from "@/lib/chat/widgetJson";
+import type { TranslatePhrase } from "@/lib/i18n";
 import { useI18n } from "@/components/LanguageProvider";
 import styles from "./LearningWidget.module.css";
 import { MathText } from "./math";
@@ -20,6 +21,7 @@ import { ImageAnnotatorWidget } from "./widgets/ImageAnnotatorWidget";
 import { MEMORY_CHANGED_EVENT } from "./widgets/memoryContext";
 import { WIDGET_ASK_EVENT, askInComposer, useWidgetScope } from "./widgets/widgetEvents";
 import { ProblemSourceBadge, type ProblemSource } from "./widgets/ProblemSourceBadge";
+import { WidgetSkeleton } from "./widgets/WidgetSkeleton";
 
 function CodeEditorLoading() {
   const { tx } = useI18n();
@@ -79,6 +81,49 @@ const KNOWN_TYPES = new Set([
   "step_simulator", "comparison_matrix", "micro_quiz", "code_playground", "image_annotator", "circuit_netlist", "gap",
 ]);
 
+/** 完成播报里的标题：优先用卡片自带的 title，再按类型回退到卡片名。 */
+function widgetTitle(type: string, data: Record<string, unknown>, tx: TranslatePhrase): string {
+  const title = typeof data.title === "string" ? data.title.trim() : "";
+  if (title) return title;
+  if (type === "step_simulator") return tx("过程步进推演");
+  if (type === "comparison_matrix") return tx("核心差异对比");
+  if (type === "micro_quiz") return tx("随堂即时自测");
+  if (type === "code_playground") return tx("编程代码实验台");
+  if (type === "image_annotator") return tx("图片批注");
+  if (type === "circuit_netlist") return tx("电路拓扑确认");
+  return tx("卡片");
+}
+
+/** 完成播报前确认卡片真的有内容可画：step/comparison 缺数据时会渲染成 null。 */
+function widgetHasContent(type: string, data: Record<string, unknown>): boolean {
+  if (type === "step_simulator") return Array.isArray(data.steps) && data.steps.length > 0;
+  if (type === "comparison_matrix") {
+    return Array.isArray(data.columns) && data.columns.length > 0
+      && Array.isArray(data.rows) && data.rows.length > 0;
+  }
+  return true;
+}
+
+/** 只在卡片从生成中变为可用时播报一次；静态卡片挂载时不播报。 */
+function useCompletionAnnouncement(live: boolean, ready: boolean, title: string) {
+  const { tx } = useI18n();
+  const [message, setMessage] = useState("");
+  const wasGenerating = useRef(false);
+  const announced = useRef(false);
+
+  useEffect(() => {
+    if (live) {
+      wasGenerating.current = true;
+      return;
+    }
+    if (!ready || !wasGenerating.current || announced.current) return;
+    announced.current = true;
+    setMessage(tx("卡片已生成：{title}", { title }));
+  }, [live, ready, title, tx]);
+
+  return message;
+}
+
 export function LearningWidget({ rawCode }: { rawCode: string }) {
   const { tx } = useI18n();
   const live = useContext(WidgetLiveContext);
@@ -88,25 +133,42 @@ export function LearningWidget({ rawCode }: { rawCode: string }) {
   const previewType = String(partial?.type || "");
   const previewing = Boolean(partial && PREVIEWABLE[previewType]?.(partial));
   const data = parsed ?? (previewing ? partial : null);
+  const type = String(data?.type || "");
+  const renderable = Boolean(data) && KNOWN_TYPES.has(type);
+  // 已知类型也可能因为数据不足渲染成 null，这时不播报「已生成」
+  const announceable = data !== null && renderable && widgetHasContent(type, data);
+  const title = data && announceable ? widgetTitle(type, data, tx) : "";
+  const announcement = useCompletionAnnouncement(live, announceable, title);
 
+  let content: ReactNode;
   if (data) {
-    const type = String(data.type || "");
-    if (!KNOWN_TYPES.has(type)) return <WidgetFailure rawCode={rawCode} reason={tx("这种卡片已不再支持")} />;
-    // 预览和完成后是同一棵树，卡片不会因为 JSON 收尾而重新挂载；
-    // inert 让半成品不能点，避免对着还没写完的选项作答。
-    return <div className={previewing ? styles.liveWrap : undefined} inert={previewing}>{renderWidget(type, data)}</div>;
-  }
-
-  if (live) {
-    return (
-      <div className={styles.skeletonCard} role="status">
-        <Sparkles size={14} className={styles.skeletonIcon} aria-hidden />
-        <span>{tx("正在流式构建可交互学习微件…")}</span>
+    content = renderable ? (
+      // 预览和完成后是同一棵树，卡片不会因为 JSON 收尾而重新挂载；
+      // inert 让半成品不能点，避免对着还没写完的选项作答。
+      <div
+        className={previewing ? styles.liveWrap : undefined}
+        aria-busy={live || undefined}
+        inert={previewing}
+      >
+        {renderWidget(type, data)}
       </div>
+    ) : (
+      <WidgetFailure rawCode={rawCode} reason={tx("这种卡片已不再支持")} />
     );
+  } else if (live) {
+    // 生成中且预览不可用时，用 partial 里已经解析出的 type 画出对应骨架
+    content = <WidgetSkeleton type={previewType} />;
+  } else {
+    content = <WidgetFailure rawCode={rawCode} reason={tx("这张卡片没能生成")} />;
   }
 
-  return <WidgetFailure rawCode={rawCode} reason={tx("这张卡片没能生成")} />;
+  return (
+    <>
+      {/* 状态区域先挂载、等生成结束后再写入文本，读屏只会播报一次结果 */}
+      <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">{announcement}</span>
+      {content}
+    </>
+  );
 }
 
 function WidgetFailure({ rawCode, reason }: { rawCode: string; reason: string }) {
@@ -136,7 +198,23 @@ function StepSimulatorWidget({ data }: { data: Record<string, unknown> }) {
   const stateItems = Array.isArray(current?.state) ? current.state : [];
 
   return (
-    <section className={styles.widgetCard} aria-label={title}>
+    <section
+      className={styles.widgetCard}
+      aria-label={title}
+      onKeyDown={(event) => {
+        // 焦点在卡片内时左右方向键切步骤；输入框和组合键留给控件自己处理
+        if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+        const target = event.target as HTMLElement;
+        if (target.closest("input, textarea, select, [contenteditable='true']")) return;
+        if (event.key === "ArrowLeft" && safeIdx > 0) {
+          event.preventDefault();
+          setIndex((value) => Math.max(0, value - 1));
+        } else if (event.key === "ArrowRight" && safeIdx < steps.length - 1) {
+          event.preventDefault();
+          setIndex((value) => Math.min(steps.length - 1, value + 1));
+        }
+      }}
+    >
       <header className={styles.widgetHead}>
         <div className={styles.widgetTitleWrap}>
           <strong className={styles.widgetTitle}><MathText text={title} /></strong>
@@ -199,7 +277,7 @@ function StepSimulatorWidget({ data }: { data: Record<string, unknown> }) {
 
         <button
           type="button"
-          className={styles.askAiBtn}
+          className={styles.textAction}
           onClick={() =>
             emitWidgetQuestion(
               scope,

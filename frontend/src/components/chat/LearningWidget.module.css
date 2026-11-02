@@ -253,7 +253,37 @@
   opacity: 0.4;
 }
 
+/* 卡片底栏的次要操作：用文字按钮，不与上一步/下一步抢视觉重量 */
+.textAction {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  transition:
+    background-color var(--t-hover) var(--ease-out),
+    color var(--t-hover) var(--ease-out),
+    transform var(--t-press) var(--ease-out);
+}
+
+.textAction:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.textAction:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
 .ctrlBtn:focus-visible,
+.stepDot:focus-visible,
+.textAction:focus-visible,
 .askAiBtn:focus-visible,
 .dimPill:focus-visible,
 .quizOptionBtn:focus-visible,
@@ -261,6 +291,11 @@
 .netPick:focus-visible {
   outline: var(--focus-ring);
   outline-offset: 2px;
+}
+
+/* 胶囊在横向滚动容器里，内嵌焦点环不会被裁掉 */
+.dimPill:focus-visible {
+  outline-offset: -2px;
 }
 
 .stepDots {
@@ -323,6 +358,8 @@
   margin: 0 -2px;
   padding: 2px;
   overflow-x: auto;
+  /* 只允许横向滚动，避免胶囊行出现内部纵向滚动条 */
+  overflow-y: hidden;
   /* 不显示滚动条（Windows 上会带箭头，很笨重），用右侧渐隐提示还能往右滑 */
   scrollbar-width: none;
   mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent);
@@ -370,6 +407,8 @@
 .matrixScroll {
   container-type: inline-size;
   overflow-x: auto;
+  /* 明确关掉纵向溢出，卡片内部只保留横向滚动 */
+  overflow-y: hidden;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
   scrollbar-color: var(--border-strong) transparent;
@@ -982,6 +1021,7 @@
   }
 
   .ctrlBtn,
+  .textAction,
   .askAiBtn,
   .dimPill,
   .quizOptionBtn,
