@@ -8,13 +8,16 @@ import {
 } from "lucide-react";
 import { cx } from "@/lib/cx";
 import { cachedQuizAttempt, loadQuizAttempts, submitQuizAttempt, subscribeQuizAttempts } from "@/lib/chat/quizAttempts";
+import { PLAN_EVENT, planApi, type PlanEventDetail } from "@/lib/chat/plan";
 import type { QuizAttemptResult } from "@/lib/chat/types";
 import { parsePartialWidgetJson, parseWidgetJson } from "@/lib/chat/widgetJson";
 import { useI18n } from "@/components/LanguageProvider";
 import styles from "./LearningWidget.module.css";
 import { MathText } from "./math";
 import { CircuitNetlistWidget } from "./widgets/CircuitNetlistWidget";
+import { GapCard } from "./widgets/GapCard";
 import { ImageAnnotatorWidget } from "./widgets/ImageAnnotatorWidget";
+import { MEMORY_CHANGED_EVENT } from "./widgets/memoryContext";
 import { WIDGET_ASK_EVENT, askInComposer, useWidgetScope } from "./widgets/widgetEvents";
 import { ProblemSourceBadge, type ProblemSource } from "./widgets/ProblemSourceBadge";
 
@@ -68,11 +71,12 @@ function renderWidget(type: string, data: Record<string, unknown>) {
   if (type === "code_playground") return <CodePlaygroundWidget data={data} />;
   if (type === "image_annotator") return <ImageAnnotatorWidget data={data} />;
   if (type === "circuit_netlist") return <CircuitNetlistWidget data={data} />;
+  if (type === "gap") return <GapCard data={data} />;
   return null;
 }
 
 const KNOWN_TYPES = new Set([
-  "step_simulator", "comparison_matrix", "micro_quiz", "code_playground", "image_annotator", "circuit_netlist",
+  "step_simulator", "comparison_matrix", "micro_quiz", "code_playground", "image_annotator", "circuit_netlist", "gap",
 ]);
 
 export function LearningWidget({ rawCode }: { rawCode: string }) {
@@ -349,6 +353,18 @@ function MicroQuizWidget({ data }: { data: Record<string, unknown> }) {
     if (quizId && scope) void loadQuizAttempts(scope);
   }, [quizId, scope]);
 
+  // 刚提交且服务端写入了记忆/推进了计划：通知外层刷新记忆列表和计划条（刷新恢复的结果不带变化，不会重复触发）
+  const freshResult = ownResult && (ownResult.memoryChanges.length > 0 || ownResult.planStep) ? ownResult : null;
+  useEffect(() => {
+    if (!freshResult) return;
+    if (freshResult.memoryChanges.length > 0) window.dispatchEvent(new Event(MEMORY_CHANGED_EVENT));
+    if (freshResult.planStep && scope) {
+      void planApi.get(scope)
+        .then((plan) => window.dispatchEvent(new CustomEvent<PlanEventDetail>(PLAN_EVENT, { detail: { conversationId: scope, plan } })))
+        .catch(() => { /* 计划条下次加载时会自行同步 */ });
+    }
+  }, [freshResult, scope]);
+
   if (!question || options.length === 0) return null;
   // 回复还在生成、题目还没封存：服务端核验前不能作答
   const validating = !quizId && live;
@@ -458,6 +474,10 @@ function MicroQuizWidget({ data }: { data: Record<string, unknown> }) {
               <MathText text={explanation} />
             </p>
           )}
+          {freshResult?.memoryChanges.map((change) => (
+            <p key={change.memory.id}>{tx("已记入学习记录：{topic}", { topic: change.memory.topic })}</p>
+          ))}
+          {freshResult?.planStep && <p>{tx("学习计划「{title}」已完成", { title: freshResult.planStep.title })}</p>}
           <div className={styles.quizFeedbackFoot}>
             <button
               type="button"

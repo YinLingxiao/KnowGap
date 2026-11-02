@@ -24,6 +24,8 @@ export interface MemoryEvidence {
   signal: "supports" | "contradicts";
   createdAt: string;
   sourceAvailable: boolean;
+  /** message_quote：对话原话；quiz_attempt：随堂微测作答 */
+  source: "message_quote" | "quiz_attempt";
 }
 
 export interface SpaceProgress {
@@ -220,6 +222,10 @@ export interface QuizAttemptResult {
   explanation: string;
   /** 该题此前已作答，返回的是首次结果 */
   repeated: boolean;
+  /** 本次提交写入的记忆变化；重放和刷新恢复时为空 */
+  memoryChanges: MemoryChange[];
+  /** 本次提交推进完成的计划步骤 */
+  planStep: { id: string; title: string } | null;
 }
 
 export type ExecutionStatus = "queued" | "working" | "waiting" | "idle" | "failed" | "cancelled";

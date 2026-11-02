@@ -39,6 +39,7 @@ new Function('module', 'exports', 'require', js)(loaded, loaded.exports, (name) 
   if (name === '@/lib/cx') return { cx: (...values) => values.filter(Boolean).join(' ') };
   if (name === './SelectionToolbar') return { SelectionToolbar: () => null };
   if (name === './widgets/widgetEvents') return { WidgetScopeContext: { Provider: ({ children }) => children } };
+  if (name === './widgets/memoryContext') return { MemoriesByIdContext: { Provider: ({ children }) => children } };
   if (name === '@/lib/chat/wakeEvents') return wakeEvents;
   return {};
 });

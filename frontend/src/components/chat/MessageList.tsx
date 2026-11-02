@@ -30,6 +30,7 @@ import type { PlanChange } from "@/lib/chat/plan";
 import { AGENDA_TOOLS, AgendaToolCard } from "./AgendaToolCard";
 import { hasVisionMarker } from "./widgets/visionData";
 import { MessageNav } from "./MessageNav";
+import { MemoriesByIdContext } from "./widgets/memoryContext";
 import { WidgetScopeContext } from "./widgets/widgetEvents";
 import styles from "./MessageList.module.css";
 
@@ -363,6 +364,7 @@ export function MessageList({
 
   return (
     <WidgetScopeContext.Provider value={conversationId}>
+    <MemoriesByIdContext.Provider value={memoriesById}>
     <div className={styles.wrap}>
       <div ref={scrollRef} className={styles.scroll} onScroll={onScroll}>
         <div className={styles.list} role="log" aria-live="polite" aria-relevant="additions">
@@ -792,6 +794,7 @@ export function MessageList({
         </button>
       )}
     </div>
+    </MemoriesByIdContext.Provider>
     </WidgetScopeContext.Provider>
   );
 }
