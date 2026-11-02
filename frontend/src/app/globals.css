@@ -359,6 +359,20 @@ html[data-vt-dir="fade"]::view-transition-new(root) {
   opacity: 0;
 }
 
+/* 学习空间支线面板放大 / 退出全屏：面板外框平滑变形，内容新旧快照交叉淡化 */
+::view-transition-group(space-panel) {
+  z-index: 50;
+  animation-duration: 260ms;
+  animation-timing-function: var(--ease-out);
+}
+
+::view-transition-old(space-panel),
+::view-transition-new(space-panel) {
+  height: 100%;
+  animation-duration: 260ms;
+  animation-timing-function: var(--ease-out);
+}
+
 button,
 input,
 textarea,

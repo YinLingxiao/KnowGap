@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ImageIcon, MessageSquarePlus } from "lucide-react";
+import { MessageSquarePlus } from "lucide-react";
 import { useI18n } from "@/components/LanguageProvider";
 import { cx } from "@/lib/cx";
 import base from "../LearningWidget.module.css";
@@ -49,10 +49,6 @@ export function ImageAnnotatorWidget({ data }: { data: Record<string, unknown> }
     <section className={base.widgetCard} aria-label={tx(title)}>
       <header className={base.widgetHead}>
         <div className={base.widgetTitleWrap}>
-          <span className={base.widgetBadge}>
-            <ImageIcon size={12} aria-hidden />
-            {tx("图片批注")}
-          </span>
           <strong className={base.widgetTitle}>{tx(title)}</strong>
         </div>
         <div className={styles.headMeta}>

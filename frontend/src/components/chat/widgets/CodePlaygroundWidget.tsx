@@ -13,7 +13,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Bot, CircleAlert, CircleCheck, Code, LoaderCircle, Play, RotateCcw, ShieldAlert,
+  Bot, CircleAlert, CircleCheck, LoaderCircle, Play, RotateCcw, ShieldAlert,
 } from "lucide-react";
 import {
   defaultKeymap, history, historyKeymap, indentWithTab, temporarilySetTabFocusMode,
@@ -479,10 +479,6 @@ function PlaygroundPanel({ spec, onAsk }: { spec: PlaygroundSpec; onAsk?: (promp
     <section className={base.widgetCard} aria-label={spec.title}>
       <header className={base.widgetHead}>
         <div className={base.widgetTitleWrap}>
-          <span className={base.widgetBadge}>
-            <Code size={12} aria-hidden />
-            {tx("代码实验")}
-          </span>
           <strong className={base.widgetTitle}>{spec.title}</strong>
         </div>
         <div className={styles.metaRow}>
@@ -590,10 +586,6 @@ export function CodePlaygroundWidget({ data, onAsk }: CodePlaygroundWidgetProps)
       <section className={base.widgetCard} role="alert" aria-label={tx("代码实验台无法载入")}>
         <header className={base.widgetHead}>
           <div className={base.widgetTitleWrap}>
-            <span className={base.widgetBadge}>
-              <Code size={12} aria-hidden />
-              {tx("代码实验")}
-            </span>
             <strong className={base.widgetTitle}>{tx("无法载入代码实验台")}</strong>
           </div>
         </header>

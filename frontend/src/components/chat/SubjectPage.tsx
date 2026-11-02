@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import {
   Brain, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Download, GraduationCap, History, Library as LibraryIcon, Link2, ListTodo,
   LoaderCircle, Maximize2, MessagesSquare, Mic, Minimize2, MoreHorizontal,
@@ -114,6 +115,20 @@ export function SubjectPage({
   const [overlay, setOverlay] = useState(false);
   const [panelCollapsed, setPanelCollapsed] = useState(false);
   const [panelExpanded, setPanelExpanded] = useState(false);
+  /** 全屏切换走 View Transition：面板从右栏平滑放大到整页，退出时缩回。只在切换期间给面板命名，避免干扰主题切换动画。 */
+  const toggleExpanded = () => {
+    const next = !panelExpanded;
+    const root = document.documentElement;
+    const doc = document as Document & { startViewTransition?: (update: () => void) => { finished: Promise<void> } };
+    const reduced = root.dataset.motion === "reduced" || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduced || typeof doc.startViewTransition !== "function") {
+      setPanelExpanded(next);
+      return;
+    }
+    root.dataset.panelVt = "";
+    const transition = doc.startViewTransition(() => flushSync(() => setPanelExpanded(next)));
+    void transition.finished.finally(() => delete root.dataset.panelVt);
+  };
   const [threads, setThreads] = useState<ConversationSummary[]>([]);
   const [usage, setUsage] = useState<SpaceUsage | null>(null);
   const [menu, setMenu] = useState(false);
@@ -560,6 +575,7 @@ export function SubjectPage({
             conversationSubjectId={subject.id}
             subjectNames={subjectNames}
             threadStates={threadStates}
+            showNav={!panelVisible}
             phase={chat.streamFor(mainId)?.phase ?? null}
             followNonce={chat.followNonceFor(mainId)}
             topSlot={(
@@ -823,7 +839,7 @@ export function SubjectPage({
                 <button
                   type="button"
                   className={styles.panelActionBtn}
-                  onClick={() => setPanelExpanded((v) => !v)}
+                  onClick={toggleExpanded}
                   aria-label={panelExpanded ? tx("退出全屏") : tx("全屏")}
                   title={panelExpanded ? tx("退出全屏") : tx("全屏")}
                 >
@@ -929,6 +945,7 @@ export function SubjectPage({
                   conversationSubjectId={subject.id}
                   subjectNames={subjectNames}
                   collapseLong={false}
+                  showNav={panelExpanded}
                   phase={threadPhase}
                   followNonce={chat.followNonceFor(threadId)}
                   topSlot={(

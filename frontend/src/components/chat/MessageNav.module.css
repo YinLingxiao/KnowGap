@@ -1,0 +1,103 @@
+/* 提问导航：平时只是一列刻度，悬停或聚焦时同一列向左展开成提问列表（行高不变，鼠标下的项不会跳走） */
+.nav {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  z-index: 5;
+  display: flex;
+  max-height: 70%;
+  transform: translateY(-50%);
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 6px;
+  overflow-y: auto;
+  border: 1px solid transparent;
+  border-radius: var(--radius-lg);
+  list-style: none;
+  scrollbar-width: none;
+  transition:
+    background-color var(--t-hover) var(--ease-out),
+    border-color var(--t-hover) var(--ease-out);
+}
+
+.panel::-webkit-scrollbar {
+  display: none;
+}
+
+.nav:hover .panel,
+.nav:focus-within .panel {
+  border-color: var(--border);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-popover); /* taste-skill-ignore */
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  width: 100%;
+  height: 24px;
+  padding: 0 4px 0 8px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.item:hover,
+.item:focus-visible {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.itemText {
+  max-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: opacity var(--t-hover) var(--ease-out);
+}
+
+.nav:hover .itemText,
+.nav:focus-within .itemText {
+  max-width: 260px;
+  opacity: 1;
+}
+
+.tick {
+  flex-shrink: 0;
+  width: 10px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--border-strong);
+  transition:
+    width var(--t-hover) var(--ease-out),
+    background-color var(--t-hover) var(--ease-out);
+}
+
+.itemOn {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.itemOn .tick {
+  width: 16px;
+  background: var(--text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel,
+  .itemText,
+  .tick {
+    transition: none;
+  }
+}

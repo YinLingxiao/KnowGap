@@ -154,7 +154,7 @@
 .score {
   flex-shrink: 0;
   font-variant-numeric: tabular-nums;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .result {
