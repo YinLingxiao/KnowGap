@@ -6,6 +6,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -177,11 +178,13 @@ def test_shell_timeout_and_cancel_stop_descendants(tmp_path, cancel):
         marker = tmp_path / "child-survived.txt"
         started = tmp_path / "child-started.txt"
         child = tmp_path / "child.ps1"
-        child.write_text("Set-Content child-started.txt ready\nStart-Sleep -Seconds 4\nSet-Content child-survived.txt bad\n", encoding="utf-8")
+        # Hosted CI runners can take seconds just to start the nested PowerShell, so the
+        # timeout leaves room for that and the child outlives it either way.
+        child.write_text("Set-Content child-started.txt ready\nStart-Sleep -Seconds 8\nSet-Content child-survived.txt bad\n", encoding="utf-8")
         command = "& powershell -NoProfile -NonInteractive -File ./child.ps1"
-        task = asyncio.create_task(run_command(tmp_path, {"command": command, "timeout": 2}))
+        task = asyncio.create_task(run_command(tmp_path, {"command": command, "timeout": 6}))
         if cancel:
-            for _ in range(100):
+            for _ in range(300):
                 if started.exists():
                     break
                 await asyncio.sleep(0.03)
@@ -193,7 +196,8 @@ def test_shell_timeout_and_cancel_stop_descendants(tmp_path, cancel):
             with pytest.raises(ToolError, match="已终止进程树"):
                 await task
             assert started.exists()
-        await asyncio.sleep(4.2)
+        # Wait until a surviving child would have written its marker.
+        await asyncio.sleep(max(0.0, started.stat().st_mtime + 8.5 - time.time()))
         assert not marker.exists()
 
     asyncio.run(scenario())
