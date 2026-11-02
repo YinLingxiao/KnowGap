@@ -9,6 +9,7 @@ import { PLAN_EVENT, type PlanEventDetail } from "@/lib/chat/plan";
 import type {
   ChatMessage, Conversation, ConversationSummary, LearnerMemory, LearnerMemoryStatus, SpaceInput, StreamEvent, Subject,
 } from "@/lib/chat/types";
+import { MEMORY_CHANGED_EVENT } from "@/components/chat/widgets/memoryContext";
 import { MODELS_CHANGED_EVENT } from "@/lib/api/model-library";
 import { API_BASE_URL } from "@/lib/config";
 import { errorText } from "@/lib/i18n/errors";
@@ -220,6 +221,13 @@ export function useChat(notify: Notify, userId: string) {
       setMemoriesLoading(false);
     }
   }, []);
+
+  // 卡片（微测作答、缺口卡）改动记忆后重新拉取
+  useEffect(() => {
+    const onChanged = () => void loadMemories();
+    window.addEventListener(MEMORY_CHANGED_EVENT, onChanged);
+    return () => window.removeEventListener(MEMORY_CHANGED_EVENT, onChanged);
+  }, [loadMemories]);
 
   const newChat = useCallback((subjectId: string | null = null) => {
     if (draftConvRef.current) {
