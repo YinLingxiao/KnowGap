@@ -91,7 +91,7 @@ function bridgeContext(hasObserver) {
   const listeners = {};
   let onResize = null;
   const element = {
-    scrollHeight: 90,
+    getBoundingClientRect: () => ({ height: 89.4 }),
     style: { setProperty: (key, value) => { props[key] = value; } },
   };
   const sandbox = {
@@ -148,7 +148,9 @@ test('bridge reports height once per frame, ask, error, and theme', () => {
   const rejected = ctx.messages[ctx.messages.length - 1];
   assert.equal(rejected.type, 'knowgap-visual:error');
   assert.equal(rejected.message, 'nope');
-  ctx.listeners['win:message']({ data: { type: 'knowgap-visual:theme', vars: { '--bg': '#123', color: 'red', '--text': 1 } } });
+  ctx.listeners['win:message']({ source: {}, data: { type: 'knowgap-visual:theme', vars: { '--bg': '#000' } } });
+  assert.equal(ctx.props['--bg'], undefined);
+  ctx.listeners['win:message']({ source: ctx.sandbox.parent, data: { type: 'knowgap-visual:theme', vars: { '--bg': '#123', color: 'red', '--text': 1 } } });
   assert.equal(ctx.props['--bg'], '#123');
   assert.equal(ctx.props['--text'], '1');
   assert.equal(ctx.props.color, undefined);

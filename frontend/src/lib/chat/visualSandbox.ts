@@ -34,7 +34,8 @@ const CSP_META =
   `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; font-src data:">`;
 
 const BASE_STYLE =
-  "<style>html,body{margin:0;background:transparent;color:var(--text);font:14px/1.6 var(--font-sans)}*{box-sizing:border-box}</style>";
+  // html 不出滚动条：滚动条会改宽度，和高度自适应互相触发
+  "<style>html,body{margin:0;background:transparent;color:var(--text);font:14px/1.6 var(--font-sans)}html{overflow:hidden}*{box-sizing:border-box}</style>";
 
 function hostRoot(): HTMLElement | undefined {
   if (typeof document === "undefined") return undefined;
@@ -51,6 +52,9 @@ export function readThemeVars(root?: HTMLElement): Record<string, string> {
     const value = style.getPropertyValue(name).trim();
     if (value) vars[name] = value;
   }
+  // 和宿主 color-scheme 不一致时 Chrome 会给 iframe 垫白底
+  const scheme = style.colorScheme?.trim();
+  if (scheme) vars["color-scheme"] = scheme;
   return vars;
 }
 
@@ -101,7 +105,8 @@ function bridgeScript(): string {
   var ERROR = ${error};
   var THEME = ${theme};
   function sendHeight() {
-    parent.postMessage({ type: HEIGHT, height: document.documentElement.scrollHeight }, "*");
+    // scrollHeight 不会小于视口，缩不回去；取 html 盒子的实际高度
+    parent.postMessage({ type: HEIGHT, height: Math.ceil(document.documentElement.getBoundingClientRect().height) }, "*");
   }
   var queued = false;
   function sendHeightSoon() {
@@ -136,7 +141,7 @@ function bridgeScript(): string {
     var keys = Object.keys(vars);
     for (var i = 0; i < keys.length; i++) {
       var key = keys[i];
-      if (key.indexOf("--") === 0) document.documentElement.style.setProperty(key, String(vars[key]));
+      if (key.indexOf("--") === 0 || key === "color-scheme") document.documentElement.style.setProperty(key, String(vars[key]));
     }
   });
 })();</script>`;

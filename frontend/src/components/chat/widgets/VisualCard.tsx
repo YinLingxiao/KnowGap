@@ -20,9 +20,13 @@ export function VisualCard({ rawCode }: { rawCode: string }) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [height, setHeight] = useState(160);
   const [failed, setFailed] = useState(false);
+  // 挂载后才建 iframe：SSR 读不到主题变量，且 iframe 的首批消息会早于监听器
+  const [mounted, setMounted] = useState(false);
   const body = useMemo(() => extractVisualBody(rawCode), [rawCode]);
   // 只在原文变化时重建文档；之后的主题变化走 postMessage。
-  const srcdoc = useMemo(() => buildVisualSrcdoc(rawCode, readThemeVars()), [rawCode]);
+  const srcdoc = useMemo(() => (mounted ? buildVisualSrcdoc(rawCode, readThemeVars()) : ""), [rawCode, mounted]);
+
+  useEffect(() => setMounted(true), []);
 
   useEffect(() => {
     setFailed(false);
@@ -56,7 +60,7 @@ export function VisualCard({ rawCode }: { rawCode: string }) {
     return () => observer.disconnect();
   }, []);
 
-  if (live) {
+  if (live || !mounted) {
     return (
       <div className={styles.skeletonCard} role="status">
         <Sparkles size={14} className={styles.skeletonIcon} aria-hidden />
