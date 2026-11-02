@@ -4,7 +4,7 @@ Message lifecycle:
 - The user message is stored before the model is called, so a failure never loses the input.
 - The assistant reply starts as `streaming` and ends as exactly one of:
   `complete`  - the model finished; full text stored.
-  `cancelled` - stopped by the user or the client disconnected; the partial text shown so far is stored.
+  `cancelled` - explicitly stopped by the user; disconnecting only detaches the reader.
   `failed`    - the provider failed; partial text (if any) and the error are stored, excluded from model history.
 - Retrying (same client_request_id) or regenerating replaces the previous reply to that user message.
 - Learning analysis runs after the reply completes. It cannot alter the reply, and it runs at most once per user message.
@@ -35,6 +35,7 @@ from app.chat.attachments import attachment_query, prepare_attachment_history
 from app.chat.plan import PlanStore, brief
 from app.chat.checkpoints import MAX_TOOL_ROUNDS, resume_state
 from app.chat.usage import normalize_usage
+from app.chat.streaming import StreamStore
 from app.chat.schemas import DispatchThread, ProposeThreads, ReportProgress
 from app.chat.quizzes import guard_gaps, seal_quizzes
 from app.chat.skills import WIDGET_RETRY_NOTICE, refuses_widget
@@ -174,6 +175,7 @@ class ChatService:
         # One pending quiet-period timer per main conversation; replaced on every re-schedule.
         self.wake_handles: dict[str, asyncio.TimerHandle] = {}
         self.closing = False
+        self.streams = StreamStore(store)
 
     async def close(self) -> None:
         self.closing = True
@@ -186,6 +188,7 @@ class ChatService:
         await asyncio.gather(*tasks, return_exceptions=True)
 
     def recover(self) -> None:
+        self.streams.recover()
         with self.store.connection() as db:
             interrupted = db.execute(
                 "SELECT m.id FROM conversation_messages m "
@@ -373,6 +376,12 @@ class ChatService:
         for row in queued:
             if row["id"] != exclude:
                 self._start_delivery(student_id, row["id"])
+        with self.store.connection() as db:
+            pending = db.execute("SELECT DISTINCT c.id FROM conversations c JOIN chat_outbox q ON q.conversation_id = c.id "
+                                 "WHERE c.student_id = ? AND c.parent_id = ? AND q.status = 'pending'", (student_id, main_id)).fetchall()
+        for row in pending:
+            if row["id"] != exclude:
+                self.drain_outbox(student_id, row["id"])
 
     def _dispatch_thread(self, student_id: str, generation: Generation, arguments: dict) -> str:
         body = DispatchThread(**arguments)
@@ -583,15 +592,22 @@ class ChatService:
             self._settle_wake(generation)
         return True
 
-    def stop(self, conversation_id: str) -> bool:
+    def stop(self, conversation_id: str, run_id: str | None = None, request_id: str | None = None) -> bool:
         generation = self.active.get(conversation_id)
+        if request_id:
+            self.streams.cancel_request(conversation_id, request_id)
+            if generation and self.store.find_request(conversation_id, request_id) != generation.user_message_id:
+                return False
+        if run_id and (not generation or generation.assistant_message_id != run_id):
+            return False  # A delayed Stop must never cancel the next queued turn.
+        self.streams.pause(conversation_id)
         with self.store.connection() as db:
             exists = db.execute("SELECT 1 FROM conversations WHERE id = ?", (conversation_id,)).fetchone()
         pending = cancel_deliveries(self.store, conversation_id) if exists else []
         if generation and generation.streaming and generation.task and not generation.task.done():
             generation.task.cancel()
             return True
-        return bool(pending)
+        return bool(pending) or bool(request_id)
 
     def _message(self, student_id: str, message_id: str) -> dict | None:
         message = self.store.message(message_id, student_id)
@@ -605,6 +621,9 @@ class ChatService:
         # Called without awaiting in between the caller's is_generating() check, so registration is atomic.
         assistant_id = self.store.start_reply(conversation_id, user_message_id, discard)
         generation = Generation(conversation_id, user_message_id, assistant_id)
+        generation.queue = self.streams.journal(conversation_id, generation.assistant_message_id)
+        if not self.streams.listing(conversation_id)["items"]:
+            self.streams.pause(conversation_id, False)
         generation.student_id = student_id
         generation.parent_id = self._thread_parent_id(student_id, conversation_id)
         generation.detached = detached
@@ -623,7 +642,21 @@ class ChatService:
         generation.task = asyncio.create_task(self._run(student_id, generation))
         self.tasks.add(generation.task)
         generation.task.add_done_callback(self.tasks.discard)
+        generation.task.add_done_callback(lambda task: self._finish_unstarted(generation))
         return generation
+
+    def _finish_unstarted(self, generation: Generation) -> None:
+        if not generation.streaming:
+            return
+        # Cancellation before the coroutine's first step does not enter its finally block.
+        saved = self.store.message(generation.assistant_message_id, generation.student_id)
+        self.store.finish_reply(generation.assistant_message_id, content=saved.content if saved else "", status="failed" if self.closing else "cancelled",
+                                error=INTERRUPTED if self.closing else None)
+        generation.queue.put_nowait(("cancelled", {"message": self._message(generation.student_id, generation.assistant_message_id)}))
+        generation.queue.put_nowait(None)
+        self._release(generation)
+        if is_system_event(self.store.message_meta(generation.user_message_id)):
+            self._settle_wake(generation)
 
     def resume(self, student_id: str, conversation_id: str, message_id: str) -> Generation:
         message = self.store.message(message_id, student_id)
@@ -651,14 +684,21 @@ class ChatService:
         self.store.finish_reply(message_id, content="".join(checkpoint["parts"]), status="streaming",
                                 meta={"pending_approval": None})
         generation = Generation(conversation_id, message.reply_to, message_id)
+        generation.queue = self.streams.journal(conversation_id, generation.assistant_message_id)
         generation.student_id = student_id
         generation.parent_id = self._thread_parent_id(student_id, conversation_id)
         generation.detached = True
         generation.checkpoint = checkpoint
+        generation.queue.put_nowait(("start", {
+            "conversation": self._conversation(student_id, conversation_id),
+            "user_message": self._message(student_id, message.reply_to),
+            "assistant_message": self._message(student_id, message_id), "discarded_ids": [],
+        }))
         self.active[conversation_id] = generation
         generation.task = asyncio.create_task(self._run(student_id, generation))
         self.tasks.add(generation.task)
         generation.task.add_done_callback(self.tasks.discard)
+        generation.task.add_done_callback(lambda task: self._finish_unstarted(generation))
         return generation
 
     def _save_checkpoint(self, generation: Generation, state: dict) -> None:
@@ -710,16 +750,36 @@ class ChatService:
         self._save_checkpoint(generation, state)
 
     async def events(self, generation: Generation) -> AsyncIterator[str]:
-        try:
-            while True:
-                item = await generation.queue.get()
-                if item is None:
-                    return
-                yield sse(*item)
-        finally:
-            # Client went away mid-reply: treat it like Stop so the reply is not left "streaming".
-            if not generation.detached and generation.streaming and generation.task and not generation.task.done():
-                generation.task.cancel()
+        async for event in generation.queue.read():
+            yield event
+
+    async def subscribe(self, conversation_id: str, run_id: str, after: int = 0) -> AsyncIterator[str]:
+        journal = self.streams.find_run(run_id, conversation_id)
+        if journal is None:
+            return
+        async for event in journal.read(after):
+            yield event
+
+    def drain_outbox(self, student_id: str, conversation_id: str) -> None:
+        if self.closing or self.is_generating(conversation_id):
+            return
+        queue = self.streams.listing(conversation_id)
+        if queue["paused"] or not queue["items"]:
+            return
+        if self.store.role_context(conversation_id)["role"] == "thread" and not self.has_thread_slot(student_id, conversation_id):
+            return
+        item = queue["items"][0]
+        user_id = self.store.find_request(conversation_id, item["client_request_id"])
+        if not user_id:
+            user_id = self.store.add_user_message(conversation_id, item["content"], item["client_request_id"])
+        # If the process died between starting and recording the receipt, do not rerun tools.
+        replies = self.store.replies(user_id)
+        if replies:
+            self.streams.dispatched(item["id"], replies[-1]["id"])
+            self.streams.pause(conversation_id)
+            return
+        generation = self.begin(student_id, conversation_id, user_id, [])
+        self.streams.dispatched(item["id"], generation.assistant_message_id)
 
     async def replay(self, student_id: str, conversation_id: str, user_id: str, assistant_id: str) -> AsyncIterator[str]:
         """A retried request whose reply already completed: return the stored result, do not call the model."""
@@ -781,6 +841,9 @@ class ChatService:
         generation.streaming = False
         if self.active.get(generation.conversation_id) is generation:
             del self.active[generation.conversation_id]
+            message = self.store.message(generation.assistant_message_id, generation.student_id)
+            if message and message.status == "complete" and not self.closing:
+                asyncio.get_running_loop().call_soon(self.drain_outbox, generation.student_id, generation.conversation_id)
 
     async def _run(self, student_id: str, generation: Generation) -> None:
         queue = generation.queue
@@ -871,8 +934,7 @@ class ChatService:
 
             def on_file(file: dict) -> None:
                 self.store.merge_meta(assistant_id, {"files": list(ctx.generated)})
-                if not generation.detached:
-                    queue.put_nowait(("file", file))
+                queue.put_nowait(("file", file))
             ctx.on_file = on_file
             if role["role"] == "main" and not event_turn:
                 ctx.dispatch_thread = lambda arguments: self._dispatch_thread(student_id, generation, arguments)
@@ -938,8 +1000,7 @@ class ChatService:
             if image_card:
                 # 识图卡片（原图圈画 / 电路网表）由服务端放在回复开头，模型只看文字结果
                 parts.append(image_card + "\n\n")
-                if not generation.detached:
-                    queue.put_nowait(("delta", {"text": image_card + "\n\n"}))
+                queue.put_nowait(("delta", {"text": image_card + "\n\n"}))
             empty_retries = 0
             for round_index in range(state["rounds"], MAX_TOOL_ROUNDS):
                 nudged = empty_retries > 0 and not "".join(parts).strip()
@@ -962,15 +1023,13 @@ class ChatService:
                     if kind == "text":
                         parts.append(value)
                         round_text.append(value)
-                        if not generation.detached:
-                            queue.put_nowait(("delta", {"text": value}))
-                        elif time.monotonic() - last_flush >= 0.3:
-                            self.store.finish_reply(assistant_id, content="".join(parts), status="streaming")
+                        queue.put_nowait(("delta", {"text": value}))
+                        if time.monotonic() - last_flush >= 0.3:
+                            self.store.finish_reply(assistant_id, content="".join(parts), status="streaming", meta=_reasoning_meta(thoughts))
                             last_flush = time.monotonic()
                     elif kind == "reasoning":
                         thoughts.append(value)
-                        if not generation.detached:
-                            queue.put_nowait(("reasoning", {"text": value}))
+                        queue.put_nowait(("reasoning", {"text": value}))
                     elif kind == "usage":
                         self._usage(request_id, model, generation.conversation_id, assistant_id, "chat", value)
                     elif kind == "tool_calls":
@@ -1152,6 +1211,10 @@ class ChatService:
                 except Exception:
                     logger.exception("Could not schedule the coordinator wake")
             queue.put_nowait(None)
+            if not finished:
+                self.streams.pause(generation.conversation_id)
+            elif not self.closing:
+                self.drain_outbox(student_id, generation.conversation_id)
 
     async def _review(self, student_id: str, model: ChatModel, turns: list[dict],
                       conversation_id: str, message_id: str) -> None:

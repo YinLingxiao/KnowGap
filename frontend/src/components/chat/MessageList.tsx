@@ -63,12 +63,12 @@ const PIN_KEY_PREFIX = "knowgap.pins.v1.";
 const SAVE_TO_PAGE_EVENT = "knowgap:save-to-page";
 
 /** 流式回复先过一道平滑显示，再交给 Markdown 渲染 */
-function SmoothMarkdown({ text, live }: { text: string; live: boolean }) {
-  const shown = useSmoothText(text, live);
+function SmoothMarkdown({ text, live, paused }: { text: string; live: boolean; paused: boolean }) {
+  const shown = useSmoothText(text, live, paused);
   // 卡片 JSON 逐字增长会反复重排，已经开始的卡片直接显示 full 中的当前内容；
   // 平滑显示已追平时无需再扫描，与 fastForwardWidgets 的早退条件一致
-  const display = shown === text ? shown : fastForwardWidgets(shown, text);
-  // 流结束后平滑显示还会追一小段，追完之前卡片仍按「写入中」处理
+  const display = paused || shown === text ? shown : fastForwardWidgets(shown, text);
+  // 选区冻结时保留当前可见内容，解除选区后再显示定稿。
   return <Markdown text={display} live={live || shown !== text} />;
 }
 
@@ -120,7 +120,7 @@ interface MessageListProps {
   onConfirmProposal?: (messageId: string, proposalId: string) => Promise<string>;
   onResumeCheckpoint?: (messageId: string) => Promise<void>;
   onDecideTool?: (approvalId: string, allow: boolean) => void;
-  onSendText?: (text: string) => void;
+  onSendText?: (text: string) => Promise<boolean> | boolean;
   onOpenWeakPoints?: () => void;
   /** 外层若提供导航回调可无刷新打开资料；未提供时复用既有视图恢复机制。 */
   onOpenFile?: (documentId: string, subjectId: string | null) => void;
@@ -254,6 +254,7 @@ export function MessageList({
   }, [conversationSubjectId, missingFileIds]);
   const [settledPrompts, setSettledPrompts] = useState<Set<string>>(new Set());
   const [sentActions, setSentActions] = useState<Set<string>>(new Set());
+  const [pendingActions, setPendingActions] = useState<Set<string>>(new Set());
   const decidePreference = (id: string, allow: boolean) => {
     setSettledPrompts((current) => new Set(current).add(id));
     void chatApi.decidePreference(id, allow).catch(() => {
@@ -265,7 +266,9 @@ export function MessageList({
     });
   };
   const scrollRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const following = useRef(true);
+  const [readingSelection, setReadingSelection] = useState(false);
   const [showJump, setShowJump] = useState(false);
   const [foldOverride, setFoldOverride] = useState<Record<string, boolean>>({});
   const [savedId, setSavedId] = useState<string | null>(null);
@@ -315,17 +318,41 @@ export function MessageList({
     if (element) element.scrollTop = element.scrollHeight;
   }, []);
 
+  const lastScrollTop = useRef(0);
   const onScroll = () => {
     const element = scrollRef.current;
     if (!element) return;
     const near = element.scrollHeight - element.scrollTop - element.clientHeight < 96;
-    following.current = near;
-    setShowJump(!near);
+    // 自动滚到底的那次滚动事件到达时，流式内容可能又长了一截；只有 scrollTop 变小（学习者往上翻）才停止跟随
+    if (near) following.current = true;
+    else if (element.scrollTop < lastScrollTop.current) following.current = false;
+    lastScrollTop.current = element.scrollTop;
+    setShowJump(!following.current);
   };
 
+  useEffect(() => {
+    const selected = () => {
+      const selection = window.getSelection();
+      const active = Boolean(selection && !selection.isCollapsed && selection.anchorNode && scrollRef.current?.contains(selection.anchorNode));
+      setReadingSelection(active);
+      if (active) { following.current = false; setShowJump(true); }
+    };
+    document.addEventListener("selectionchange", selected);
+    return () => document.removeEventListener("selectionchange", selected);
+  }, []);
+
   useLayoutEffect(() => {
-    if (following.current) toBottom();
-  }, [messages, toBottom]);
+    if (following.current && !readingSelection) toBottom();
+  }, [messages, readingSelection, toBottom]);
+
+  // 卡片、公式、图片在渲染之后还会继续变高：跟随时一并贴住底部，选中文字阅读时不动
+  useEffect(() => {
+    const list = listRef.current;
+    if (!list || readingSelection) return;
+    const observer = new ResizeObserver(() => { if (following.current) toBottom(); });
+    observer.observe(list);
+    return () => observer.disconnect();
+  }, [readingSelection, toBottom]);
 
   useEffect(() => {
     if (!scrollTarget) return;
@@ -371,7 +398,7 @@ export function MessageList({
     <MemoriesByIdContext.Provider value={memoriesById}>
     <div className={styles.wrap}>
       <div ref={scrollRef} className={styles.scroll} onScroll={onScroll}>
-        <div className={styles.list} role="log" aria-live="polite" aria-relevant="additions">
+        <div ref={listRef} className={styles.list} role="log" aria-live="polite" aria-relevant="additions">
           {topSlot}
           {fileNavigationError && <p className={styles.fileNavigationError} role="alert">{fileNavigationError}</p>}
           {pinnedMessages.length > 0 && (
@@ -600,10 +627,10 @@ export function MessageList({
                   <>
                     <div
                       className={cx(streaming && styles.streaming, fold.folded && styles.folded)}
-                      {...(!streaming && { [SELECTABLE_ATTR]: "" })}
+                      {...{ [SELECTABLE_ATTR]: "" }}
                       {...(finished && message.content.length >= 80 ? { "data-coachmark": "select" } : {})}
                     >
-                      <SmoothMarkdown text={message.content} live={streaming} />
+                      <SmoothMarkdown text={message.content} live={streaming} paused={readingSelection} />
                     </div>
                     {fold.long && (
                       <button
@@ -676,10 +703,17 @@ export function MessageList({
                           key={action}
                           type="button"
                           className={styles.nextBtn}
-                          onClick={() => {
-                            setSentActions((current) => new Set(current).add(`${message.id}:${action}`));
-                            if (action === "weak_points") onOpenWeakPoints?.();
-                            else onSendText?.(tx(NEXT_TEXT[action]));
+                          disabled={pendingActions.has(`${message.id}:${action}`)}
+                          onClick={async () => {
+                            const key = `${message.id}:${action}`;
+                            setPendingActions((current) => new Set(current).add(key));
+                            try {
+                              const accepted = action === "weak_points" ? (onOpenWeakPoints?.(), true)
+                                : await onSendText?.(tx(NEXT_TEXT[action]));
+                              if (accepted) setSentActions((current) => new Set(current).add(key));
+                            } finally {
+                              setPendingActions((current) => { const next = new Set(current); next.delete(key); return next; });
+                            }
                           }}
                         >
                           {tx(NEXT_LABEL[action])}
@@ -788,11 +822,11 @@ export function MessageList({
         scopeRef={scrollRef}
         conversationId={conversationId}
         canSaveToPage={Boolean(conversationSubjectId)}
-        canSend={phase === null || phase === "analyzing"}
+        canSend={phase !== "connecting"}
       />
       {showNav && <MessageNav entries={navEntries} scrollRef={scrollRef} onJump={jumpToMessage} />}
       {showJump && (
-        <button className={styles.jump} onClick={() => { following.current = true; setShowJump(false); toBottom(); }}>
+        <button className={styles.jump} onClick={() => { window.getSelection()?.removeAllRanges(); following.current = true; setReadingSelection(false); setShowJump(false); toBottom(); }}>
           <ArrowDown size={14} aria-hidden />
           {t("messages.backToBottom")}
         </button>

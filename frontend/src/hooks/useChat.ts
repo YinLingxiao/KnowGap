@@ -26,11 +26,12 @@ export interface Thread {
 }
 
 /** connecting：请求已发出、服务端尚未确认；streaming：正在输出；analyzing：回复已完成，正在整理学习记录 */
-export type StreamPhase = "connecting" | "streaming" | "analyzing";
+export type StreamPhase = "connecting" | "streaming" | "reconnecting" | "analyzing";
 
 interface StreamHandle {
   controller: AbortController;
   phase: StreamPhase;
+  runId?: string;
 }
 
 export interface SendFailure {
@@ -102,10 +103,19 @@ export function useChat(notify: Notify, userId: string) {
   const pending = useRef<Record<string, { text: string; requestId: string }>>({});
   const streamsRef = useRef(streams);
   streamsRef.current = streams;
+  const threadsRef = useRef(threads);
+  threadsRef.current = threads;
+  const sending = useRef(new Set<string>());
   const conversationsRef = useRef(conversations);
   conversationsRef.current = conversations;
   const assignedRef = useRef(assignedModels);
   assignedRef.current = assignedModels;
+
+  useEffect(() => () => {
+    // Detach old views and accounts; cancellation of a reply always uses the Stop endpoint.
+    for (const handle of Object.values(streamsRef.current)) handle.controller.abort();
+    streamsRef.current = {};
+  }, [userId]);
 
   /** 首页直接上传文件时预建的空对话；发送时转为正式对话，学生移除全部文件或离开首页时删除 */
   const draftConvRef = useRef<string | null>(null);
@@ -146,7 +156,14 @@ export function useChat(notify: Notify, userId: string) {
   const putConversation = useCallback((conversation: Conversation) => {
     const { messages, ...summary } = conversation;
     upsertSummary(summary);
-    setThreads((all) => ({ ...all, [conversation.id]: { messages, loading: false, error: null } }));
+    setThreads((all) => ({ ...all, [conversation.id]: {
+      messages: messages.map((message) => {
+        const local = all[conversation.id]?.messages.find((item) => item.id === message.id);
+        // A slower snapshot must not rewind tokens already delivered by the live stream.
+        return streamsRef.current[conversation.id] && local?.status === "streaming" && message.status === "streaming"
+          ? { ...message, content: local.content, reasoning: local.reasoning } : message;
+      }), loading: false, error: null,
+    } }));
   }, [upsertSummary]);
 
   const modelKeyFor = useCallback((id: string | null, fallback: string | null = null) => {
@@ -307,6 +324,9 @@ export function useChat(notify: Notify, userId: string) {
   }, [draftKey]);
 
   const endStream = useCallback((id: string, controller: AbortController) => {
+    if (streamsRef.current[id]?.controller === controller) {
+      const next = { ...streamsRef.current }; delete next[id]; streamsRef.current = next;
+    }
     setStreams((all) => {
       if (all[id]?.controller !== controller) return all;
       const next = { ...all };
@@ -316,7 +336,8 @@ export function useChat(notify: Notify, userId: string) {
   }, []);
 
   const setPhase = useCallback((id: string, controller: AbortController, phase: StreamPhase) => {
-    setStreams((all) => (all[id]?.controller === controller ? { ...all, [id]: { controller, phase } } : all));
+    if (streamsRef.current[id]?.controller === controller) streamsRef.current[id] = { ...streamsRef.current[id], phase };
+    setStreams((all) => (all[id]?.controller === controller ? { ...all, [id]: { ...all[id], controller, phase } } : all));
   }, []);
 
   /** 运行一次流式请求。连接阶段失败时抛出 ApiError；返回服务端是否已确认收到 */
@@ -324,11 +345,26 @@ export function useChat(notify: Notify, userId: string) {
     id: string,
     start: (onEvent: (event: StreamEvent) => void, signal: AbortSignal) => Promise<"ended" | "interrupted">,
     onAck?: () => void,
+    followOnStart = true,
   ): Promise<boolean> => {
     const controller = new AbortController();
+    streamsRef.current = { ...streamsRef.current, [id]: { controller, phase: "connecting" } };
     setStreams((all) => ({ ...all, [id]: { controller, phase: "connecting" } }));
     let assistantId: string | null = null;
     let userMessageId: string | null = null;
+    let pendingText = "";
+    let pendingReasoning = "";
+    let flushTimer: number | undefined;
+    const flushText = () => {
+      window.clearTimeout(flushTimer);
+      flushTimer = undefined;
+      const text = pendingText, reasoning = pendingReasoning;
+      pendingText = ""; pendingReasoning = "";
+      if ((!text && !reasoning) || streamsRef.current[id]?.controller !== controller) return;
+      patchMessages(id, (messages) => messages.map((message) => message.id === assistantId
+        ? { ...message, content: message.content + text, reasoning: (message.reasoning ?? "") + reasoning } : message));
+    };
+    const scheduleFlush = () => { flushTimer ??= window.setTimeout(flushText, 32); };
     let acked = false;
     let noticed = false;
     const showModelNotice = (detail: string) => {
@@ -338,7 +374,12 @@ export function useChat(notify: Notify, userId: string) {
       window.dispatchEvent(new Event(MODELS_CHANGED_EVENT));
     };
     const onEvent = (event: StreamEvent) => {
+      if (streamsRef.current[id]?.controller !== controller) return;
+      if (event.type !== "delta" && event.type !== "reasoning") flushText();
       switch (event.type) {
+        case "connection":
+          setPhase(id, controller, event.reconnecting ? "reconnecting" : "streaming");
+          break;
         case "thread_dispatched":
           setThreadDispatch((previous) => ({ mainId: id, threadId: event.threadId, nonce: (previous?.nonce ?? 0) + 1 }));
           // 卡片要在流式期间就出现；之后的轮询会用服务端的 dispatched_threads 覆盖，结果一致
@@ -353,31 +394,35 @@ export function useChat(notify: Notify, userId: string) {
           void loadSubjects();
           break;
         case "start":
+          if (!acked) onAck?.();
           acked = true;
-          onAck?.();
           upsertSummary(event.conversation);
           assistantId = event.assistantMessage?.id ?? null;
+          streamsRef.current[id].runId = assistantId ?? undefined;
+          setStreams((all) => all[id]?.controller === controller ? { ...all, [id]: { ...all[id], runId: assistantId ?? undefined } } : all);
           userMessageId = event.userMessage?.id ?? null;
           patchMessages(id, (messages) => upsert(
             upsert(messages.filter((m) => !event.discardedIds.includes(m.id)), event.userMessage),
             event.assistantMessage,
           ));
           setPhase(id, controller, "streaming");
-          setFollows((all) => ({ ...all, [id]: (all[id] ?? 0) + 1 }));
+          if (followOnStart) setFollows((all) => ({ ...all, [id]: (all[id] ?? 0) + 1 }));
           if (event.modelNotice) showModelNotice(event.modelNotice);
           break;
         case "model_notice":
           showModelNotice(event.detail);
           break;
         case "delta":
-          patchMessages(id, (messages) => messages.map((m) => (m.id === assistantId ? { ...m, content: m.content + event.text } : m)));
+          pendingText += event.text;
+          scheduleFlush();
           break;
         case "file":
           patchMessages(id, (messages) => messages.map((m) => (m.id === assistantId && !m.files?.some((item) => item.id === event.file.id)
             ? { ...m, files: [...(m.files ?? []), event.file] } : m)));
           break;
         case "reasoning":
-          patchMessages(id, (messages) => messages.map((m) => (m.id === assistantId ? { ...m, reasoning: (m.reasoning ?? "") + event.text } : m)));
+          pendingReasoning += event.text;
+          scheduleFlush();
           break;
         case "done":
           patchMessages(id, (messages) => upsert(messages, event.message));
@@ -423,31 +468,58 @@ export function useChat(notify: Notify, userId: string) {
     };
     try {
       const result = await start(onEvent, controller.signal);
+      flushText();
       if (result === "interrupted" && acked) await loadConversation(id);
       return acked;
     } finally {
+      flushText();
       endStream(id, controller);
       void refreshList();
     }
   }, [endStream, loadConversation, loadMemories, loadSubjects, notify, patchMessages, refreshList, setPhase, t, upsertSummary]);
 
-  const sendTo = useCallback(async (id: string, text: string) => {
+  const sendTo = useCallback(async (id: string, text: string, afterStop = false) => {
     const trimmed = text.trim();
     if (!trimmed) return false;
-    if (streamsRef.current[id] && streamsRef.current[id].phase !== "analyzing") return false;
+    if (sending.current.has(id)) return false;
+    sending.current.add(id);
     const previous = pending.current[id];
     const requestId = previous && previous.text === trimmed ? previous.requestId : newId();
     pending.current[id] = { text: trimmed, requestId };
     setSendFailure(null);
+    const acknowledge = () => {
+      delete pending.current[id];
+      setDrafts((all) => ({ ...all, [id]: (all[id] ?? "").trim() === trimmed ? "" : all[id] ?? "" }));
+      window.dispatchEvent(new CustomEvent("knowgap:outbox-updated", { detail: { conversationId: id } }));
+    };
     try {
+      const running = streamsRef.current[id]?.phase;
+      if (!afterStop && ((running && running !== "analyzing") || threadsRef.current[id]?.messages.some((m) => m.status === "streaming"))) {
+        await chatApi.enqueue(id, trimmed, requestId);
+        acknowledge();
+        return true;
+      }
+      // Release the sending lock once the receipt arrives, so another prompt can be queued.
       await runStream(id, (onEvent, signal) => chatApi.sendMessage(id, trimmed, requestId, onEvent, signal), () => {
-        delete pending.current[id];
-        setDrafts((all) => ({ ...all, [id]: (all[id] ?? "").trim() === trimmed ? "" : all[id] ?? "" }));
+        acknowledge(); sending.current.delete(id);
       });
       return true;
     } catch (error) {
+      const apiError = toApiError(error);
+      if (apiError.kind === "conflict" && !apiError.message.includes("已停止")) {
+        try {
+          await chatApi.enqueue(id, trimmed, requestId);
+          acknowledge();
+          return true;
+        } catch (queueError) {
+          setSendFailure({ conversationId: id, error: toApiError(queueError) });
+          return false;
+        }
+      }
       setSendFailure({ conversationId: id, error: toApiError(error) });
       return false;
+    } finally {
+      sending.current.delete(id);
     }
   }, [runStream]);
 
@@ -541,24 +613,32 @@ export function useChat(notify: Notify, userId: string) {
 
   const stop = useCallback(async (id: string) => {
     const handle = streamsRef.current[id];
+    const runId = handle?.runId ?? [...(threadsRef.current[id]?.messages ?? [])].reverse().find((m) => m.status === "streaming")?.id;
+    const requestId = !runId ? pending.current[id]?.requestId : undefined;
     if (!handle) {
-      try { await chatApi.stop(id); }
-      catch (error) { notify({ tone: "error", title: t("toast.stopFailed"), description: errorText(toApiError(error), t, lang) }); }
+      try { await chatApi.stop(id, runId, requestId); return true; }
+      catch (error) { notify({ tone: "error", title: t("toast.stopFailed"), description: errorText(toApiError(error), t, lang) }); return false; }
       finally { void loadConversation(id); }
-      return;
-    }
-    if (handle.phase === "connecting") {
-      handle.controller.abort();
-      return;
     }
     try {
-      await chatApi.stop(id);
-    } catch {
-      // The server also stops when the stream is closed.
+      await chatApi.stop(id, runId, requestId);
+      if (requestId) delete pending.current[id];
       handle.controller.abort();
-      void loadConversation(id);
+      endStream(id, handle.controller);
+      await loadConversation(id);
+      window.dispatchEvent(new CustomEvent("knowgap:outbox-updated", { detail: { conversationId: id } }));
+      return true;
+    } catch (error) {
+      notify({ tone: "error", title: t("toast.stopFailed"), description: errorText(toApiError(error), t, lang) });
+      return false;
     }
-  }, [lang, loadConversation, notify, t]);
+  }, [endStream, lang, loadConversation, notify, t]);
+
+  const reviseTo = useCallback(async (id: string, text: string) => {
+    if (!text.trim()) return false;
+    if (!await stop(id)) return false;
+    return sendTo(id, text, true);
+  }, [sendTo, stop]);
 
   const startExerciseOn = useCallback(async (id: string | null, problemId: string) => {
     if (id && streamsRef.current[id] && streamsRef.current[id].phase !== "analyzing") {
@@ -715,16 +795,41 @@ export function useChat(notify: Notify, userId: string) {
     }
   }, [lang, notify, t]);
 
-  // 打开的会话里有其他页面正在生成（或刷新前中断）的回复：短轮询直到它结束
+  // Reopen a server-owned run without sending the prompt or executing tools again.
   const activeThread = activeId ? threads[activeId] : undefined;
-  const waitingElsewhere = Boolean(
-    activeId && !streams[activeId] && activeThread?.messages.some((message) => message.status === "streaming"),
-  );
+  const resumableKey = Object.entries(threads).filter(([id, thread]) =>
+    !streams[id] && thread.messages.some((message) => message.status === "streaming"))
+    .map(([id]) => id).sort().join(",");
   useEffect(() => {
-    if (!waitingElsewhere || !activeId) return;
-    const timer = window.setTimeout(() => void loadConversation(activeId), 1500);
-    return () => window.clearTimeout(timer);
-  }, [waitingElsewhere, activeId, activeThread, loadConversation]);
+    const timers = resumableKey.split(",").filter(Boolean).map((id) => window.setTimeout(() => {
+      const thread = threadsRef.current[id];
+      const run = [...(thread?.messages ?? [])].reverse().find((message) => message.status === "streaming");
+      if (!run || streamsRef.current[id]) return;
+      void runStream(id, (onEvent, signal) => chatApi.subscribe(id, run.id, onEvent, signal), undefined, false)
+        .catch(() => loadConversation(id));
+    }, threadsRef.current[id]?.error ? 3000 : 500));
+    return () => timers.forEach(window.clearTimeout);
+  }, [resumableKey, loadConversation, runStream]);
+
+  useEffect(() => {
+    const refresh = (event?: Event) => {
+      const cid = (event as CustomEvent<{ conversationId?: string }> | undefined)?.detail?.conversationId ?? activeId;
+      if (cid && event?.type === "knowgap:outbox-dispatched" && streamsRef.current[cid]?.phase === "analyzing") {
+        const handle = streamsRef.current[cid];
+        handle.controller.abort(); endStream(cid, handle.controller);
+      }
+      if (cid && !streamsRef.current[cid]) void loadConversation(cid);
+    };
+    const visible = () => { if (!document.hidden) refresh(); };
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", visible);
+    window.addEventListener("knowgap:outbox-dispatched", refresh);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", visible);
+      window.removeEventListener("knowgap:outbox-dispatched", refresh);
+    };
+  }, [activeId, endStream, loadConversation]);
 
   const activeConversation = useMemo(
     () => conversations.find((item) => item.id === activeId) ?? null,
@@ -747,7 +852,7 @@ export function useChat(notify: Notify, userId: string) {
     problems,
     memories, memoriesLoading, memoriesError, loadMemories, updateMemory, deleteMemory, decideTool,
     pendingModelKey, modelKeyFor, setConversationModel,
-    newChat, ensureUploadConversation, discardDraftConversation, openConversation, loadConversation, sendMessage, sendTo, regenerate, stop, startExercise, startExerciseOn,
+    newChat, ensureUploadConversation, discardDraftConversation, openConversation, loadConversation, sendMessage, sendTo, reviseTo, regenerate, stop, startExercise, startExerciseOn,
     renameConversation, deleteConversation,
   };
 }

@@ -1,0 +1,117 @@
+name: Desktop checks and release
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: pwsh
+    outputs:
+      version: ${{ steps.plan.outputs.version }}
+      should-publish: ${{ steps.plan.outputs.should-publish }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            desktop/package-lock.json
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/requirements*.txt
+      - name: Validate version and publication eligibility
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $flags = @()
+          if ($env:GITHUB_REPOSITORY -eq 'YinLingxiao/KnowGap' -and $env:GITHUB_REF -eq 'refs/heads/main' -and $env:GITHUB_EVENT_NAME -ne 'pull_request') { $flags += '--github' }
+          $json = & node scripts/release-plan.cjs @flags
+          if ($LASTEXITCODE -ne 0) { throw 'Release preflight failed' }
+          $plan = $json | ConvertFrom-Json
+          "version=$($plan.version)" >> $env:GITHUB_OUTPUT
+          "should-publish=$($plan.shouldPublish.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+      - name: Install locked JavaScript dependencies
+        run: |
+          npm ci --prefix frontend --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { throw 'Frontend dependencies failed' }
+          npm ci --prefix desktop --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { throw 'Desktop dependencies failed' }
+      - name: Install Python test and build dependencies
+        run: |
+          python -m venv backend/.venv
+          if ($LASTEXITCODE -ne 0) { throw 'Python environment failed' }
+          backend/.venv/Scripts/python.exe -m pip install -r backend/requirements-dev.txt pyinstaller
+          if ($LASTEXITCODE -ne 0) { throw 'Python dependencies failed' }
+      - name: Frontend regression tests
+        working-directory: frontend
+        run: |
+          npm run test:api
+          if ($LASTEXITCODE -ne 0) { throw 'Frontend tests failed' }
+      - name: Backend regression tests
+        working-directory: backend
+        run: .venv/Scripts/python.exe -m pytest -q
+      - name: Desktop and release tests
+        working-directory: desktop
+        run: npm test
+      - name: Build and validate the Windows updater artifacts
+        run: ./scripts/build-desktop.ps1 -SkipDependencies
+      - name: Smoke test the packaged backend and pages
+        run: backend/.venv/Scripts/python.exe scripts/smoke-desktop.py
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: knowgap-windows-${{ steps.plan.outputs.version }}
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            desktop/dist/KnowGap-Setup-${{ steps.plan.outputs.version }}.exe
+            desktop/dist/KnowGap-Setup-${{ steps.plan.outputs.version }}.exe.blockmap
+            desktop/dist/latest.yml
+
+  publish:
+    needs: build
+    if: github.repository == 'YinLingxiao/KnowGap' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && needs.build.outputs.should-publish == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: knowgap-windows-${{ needs.build.outputs.version }}
+          path: desktop/dist
+      - name: Install release verifier dependencies
+        shell: pwsh
+        run: npm ci --prefix desktop --ignore-scripts --no-audit --no-fund
+      - name: Publish complete stable release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/publish-release-ci.ps1

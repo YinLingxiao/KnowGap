@@ -650,7 +650,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
                   onStartExercise={(problemId) => void chat.startExercise(problemId)}
                   onOpenMemories={openMemories}
                   onDecideTool={(approvalId, allow) => void chat.decideTool(approvalId, allow)}
-                  onSendText={(text) => void chat.sendTo(chat.activeId!, text)}
+                  onSendText={(text) => chat.sendTo(chat.activeId!, text)}
                   onOpenWeakPoints={chat.activeConversation?.subjectId ? () => {
                     const subjectId = chat.activeConversation?.subjectId;
                     if (!subjectId) return;
@@ -678,6 +678,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
                     onChange={chat.setDraft}
                     onSend={() => void chat.sendMessage()}
                     onStop={() => chat.activeId && void chat.stop(chat.activeId)}
+                    onRevise={() => chat.activeId ? chat.reviseTo(chat.activeId, chat.draft) : undefined}
                     phase={phase}
                     busy={chat.creating}
                     problems={chat.problems}

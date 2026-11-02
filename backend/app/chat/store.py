@@ -277,8 +277,10 @@ class ChatStore:
             ensure_notes(db)
             from app.chat.onboarding import ensure as ensure_onboarding
             from app.chat.preferences import ensure as ensure_preferences
+            from app.chat.streaming import ensure as ensure_outbox
             ensure_onboarding(db)
             ensure_preferences(db)
+            ensure_outbox(db)
             ensure_fts(db)
             # A process that died mid-generation leaves "streaming" rows; they can never finish.
             db.execute(

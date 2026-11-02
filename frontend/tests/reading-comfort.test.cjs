@@ -42,7 +42,7 @@ test('reasoning flows from the stream into the message and is shown before the a
   const api = read('lib/chat/api.ts');
   assert.match(api, /case "reasoning":\s*return \{ type, text: String\(data\.text \?\? ""\) \}/);
   assert.match(api, /reasoning: String\(data\.reasoning \?\? ""\)/);
-  assert.match(read('hooks/useChat.ts'), /case "reasoning":[\s\S]*reasoning: \(m\.reasoning \?\? ""\) \+ event\.text/);
+  assert.match(read('hooks/useChat.ts'), /case "reasoning":[\s\S]*pendingReasoning \+= event\.text/);
   const list = read('components/chat/MessageList.tsx');
   assert.ok(list.indexOf('<ReasoningBlock') < list.indexOf('<SmoothMarkdown'));
   assert.match(list, /streaming && !message\.reasoning/);

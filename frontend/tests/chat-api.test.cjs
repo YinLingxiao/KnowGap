@@ -23,6 +23,61 @@ const originalFetch = global.fetch;
 after(() => { global.fetch = originalFetch; fs.rmSync(temp, { recursive: true, force: true }); });
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 
+test('SSE survives CRLF and multibyte characters split across network chunks', async () => {
+  const previousWindow = global.window;
+  global.window = { setTimeout, clearTimeout };
+  const bytes = new TextEncoder().encode('event: delta\r\ndata: {"text":"你好😀"}\r\n\r\nevent: done\r\ndata: {"message":null}\r\n\r\n');
+  global.fetch = async () => new Response(new ReadableStream({ start(controller) {
+    for (const byte of bytes) controller.enqueue(Uint8Array.of(byte));
+    controller.close();
+  } }));
+  const events = [];
+  try {
+    assert.equal(await chatApi.sendMessage('c1', '问题', 'split-request', (event) => events.push(event), new AbortController().signal), 'ended');
+    assert.deepEqual(events.map((event) => event.type), ['delta', 'done']);
+    assert.equal(events[0].text, '你好😀');
+  } finally { global.window = previousWindow; }
+});
+
+test('connection loss attaches after the last received event without posting the question twice', async () => {
+  const previousWindow = global.window;
+  global.window = { setTimeout, clearTimeout };
+  const requests = [];
+  global.fetch = async (url, options) => {
+    requests.push({ url, method: options.method });
+    const text = requests.length === 1
+      ? 'event: start\ndata: {"discarded_ids":[]}\nid: reply-123:1\n\nevent: delta\ndata: {"text":"前半"}\nid: reply-123:2\n\n'
+      : 'event: delta\ndata: {"text":"后半"}\nid: reply-123:3\n\nevent: done\ndata: {"message":null}\nid: reply-123:4\n\n';
+    return new Response(text);
+  };
+  const events = [];
+  try {
+    assert.equal(await chatApi.sendMessage('c/1', '问题', 'resume-request', (event) => events.push(event), new AbortController().signal), 'ended');
+    assert.equal(requests.length, 2);
+    assert.equal(requests[0].method, 'POST');
+    assert.equal(requests[1].method, 'GET');
+    assert.ok(requests[1].url.endsWith('/conversations/c%2F1/runs/reply-123/events?after=2'));
+    assert.equal(events.filter((event) => event.type === 'delta').map((event) => event.text).join(''), '前半后半');
+    assert.deepEqual(events.filter((event) => event.type === 'connection').map((event) => event.reconnecting), [true, false]);
+  } finally { global.window = previousWindow; }
+});
+
+test('queue editing and targeted Stop use the owning conversation and run identifiers', async () => {
+  const calls = [];
+  global.fetch = async (url, options) => {
+    calls.push({ url, method: options.method, body: options.body && JSON.parse(options.body) });
+    return json(options.method === 'POST' && url.endsWith('/stop') ? { stopped: true } : { paused: true, items: [] });
+  };
+  await chatApi.editQueued('c/1', 'q/1', '改成例子');
+  await chatApi.removeQueued('c/1', 'q/1');
+  await chatApi.resumeQueue('c/1');
+  await chatApi.stop('c/1', 'run-1');
+  assert.ok(calls[0].url.endsWith('/c%2F1/outbox/q%2F1'));
+  assert.deepEqual(calls[0].body, { content: '改成例子' });
+  assert.equal(calls[1].method, 'DELETE');
+  assert.deepEqual(calls[3].body, { run_id: 'run-1' });
+});
+
 const wire = {
   id: 'thread-1', title: '基础', messages: [{ id: 'm1', role: 'assistant', content: '请选择', status: 'complete',
     thread_proposals: [{ id: 'p1', title: '概念', task: '讲解基础', reason: '先熟悉术语', thread_id: 't1' }],

@@ -3,14 +3,14 @@
 import asyncio
 from collections import OrderedDict
 
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, HTTPException, Response, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.agents.llm import ProviderError
 from app.chat.schemas import (
     ConfirmProposal, Conversation, ConversationSummary, CreateConversation, LearnerMemory, Resolution, ResolveThread, SendMessage,
-    StartExercise, UpdateConversation, UpdateMemory,
+    StartExercise, UpdateConversation, UpdateMemory, MessageText,
 )
 from app.models.model_library_schemas import ConversationModelUpdate
 from app.chat.service import ChatService
@@ -24,6 +24,15 @@ STREAM_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
 
 class ToolApprovalBody(BaseModel):
     allow: bool
+
+
+class QueuedEdit(BaseModel):
+    content: MessageText
+
+
+class StopBody(BaseModel):
+    run_id: str | None = None
+    client_request_id: str | None = None
 
 
 class WelcomeBody(BaseModel):
@@ -252,9 +261,14 @@ def chat_router(store: ChatStore, service: ChatService) -> APIRouter:
         require(conversation_id)
         existing = store.find_request(conversation_id, body.client_request_id)
         if existing and service.is_generating(conversation_id):
-            raise HTTPException(409, "这条消息正在生成回复，请稍候；刷新会话可查看最新状态。")
+            generation = service.active[conversation_id]
+            if generation.user_message_id == existing:
+                return stream(service.events(generation))
+            raise HTTPException(409, "其他回复仍在生成，请加入待发送队列。")
         # 学习者优先：后台唤醒回合可以直接被这条消息打断，而不是回 409
         await service.preempt_system_turn(conversation_id)
+        if service.streams.request_stopped(conversation_id, body.client_request_id):
+            raise HTTPException(409, "本次发送已停止，输入已保留。")
         require_idle(conversation_id)
         if existing:
             # Same request id again (timeout, double click, reconnect): never store the message twice.
@@ -267,6 +281,54 @@ def chat_router(store: ChatStore, service: ChatService) -> APIRouter:
             user_id = store.add_user_message(conversation_id, body.content, body.client_request_id)
             generation = service.begin(current_student(), conversation_id, user_id, [])
         return stream(service.events(generation))
+
+    @router.get("/conversations/{conversation_id}/runs/{run_id}/events")
+    async def subscribe(conversation_id: str, run_id: str, after: int = Query(default=0, ge=0)):
+        require(conversation_id)
+        if not service.streams.find_run(run_id, conversation_id):
+            raise HTTPException(404, "这次生成已不在了，请刷新会话查看保存的回复。")
+        return stream(service.subscribe(conversation_id, run_id, after))
+
+    @router.get("/conversations/{conversation_id}/outbox")
+    async def outbox(conversation_id: str):
+        require(conversation_id)
+        return service.streams.listing(conversation_id)
+
+    @router.post("/conversations/{conversation_id}/outbox")
+    async def enqueue(conversation_id: str, body: SendMessage):
+        require(conversation_id)
+        if service.streams.request_stopped(conversation_id, body.client_request_id):
+            raise HTTPException(409, "本次发送已停止，请重新发送。")
+        try:
+            item = service.streams.enqueue(conversation_id, body.content, body.client_request_id)
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from None
+        if item["status"] == "pending":
+            await service.preempt_system_turn(conversation_id)
+        service.drain_outbox(current_student(), conversation_id)
+        # Return a durable receipt even when the first turn starts immediately.
+        return service.streams.item(item["id"])
+
+    @router.patch("/conversations/{conversation_id}/outbox/{item_id}")
+    async def edit_queued(conversation_id: str, item_id: str, body: QueuedEdit):
+        require(conversation_id)
+        if not service.streams.change(conversation_id, item_id, body.content):
+            raise HTTPException(409, "这条消息已开始发送，无法再修改。")
+        return service.streams.listing(conversation_id)
+
+    @router.delete("/conversations/{conversation_id}/outbox/{item_id}")
+    async def remove_queued(conversation_id: str, item_id: str):
+        require(conversation_id)
+        if not service.streams.change(conversation_id, item_id):
+            raise HTTPException(409, "这条消息已开始发送，无法再撤回。")
+        return service.streams.listing(conversation_id)
+
+    @router.post("/conversations/{conversation_id}/outbox/resume")
+    async def resume_outbox(conversation_id: str):
+        require(conversation_id)
+        service.streams.pause(conversation_id, False)
+        service.drain_outbox(current_student(), conversation_id)
+        return service.streams.listing(conversation_id)
 
     @router.post("/conversations/{conversation_id}/messages/{message_id}/resume", response_model=Conversation)
     async def resume_thread(conversation_id: str, message_id: str):
@@ -471,9 +533,13 @@ def chat_router(store: ChatStore, service: ChatService) -> APIRouter:
         return {"result": result, **store.agent_notes_view(current_student())}
 
     @router.post("/conversations/{conversation_id}/stop")
-    async def stop(conversation_id: str):
+    async def stop(conversation_id: str, body: StopBody | None = None):
         require(conversation_id)
-        return {"stopped": service.stop(conversation_id)}
+        generation = service.active.get(conversation_id)
+        stopped = service.stop(conversation_id, body.run_id if body else None, body.client_request_id if body else None)
+        if stopped and generation and generation.task:
+            await asyncio.gather(generation.task, return_exceptions=True)
+        return {"stopped": stopped}
 
     @router.post("/conversations/{conversation_id}/resolve/draft", response_model=Resolution)
     async def draft_resolution(conversation_id: str):
