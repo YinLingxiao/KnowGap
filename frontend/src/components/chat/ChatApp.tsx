@@ -672,6 +672,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
               {failureBar}
                   <Composer
                     conversationId={chat.activeId}
+                    acceptUnscoped
                     messages={thread?.messages}
                     value={chat.draft}
                     onChange={chat.setDraft}
@@ -722,6 +723,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
               {failureBar}
               <Composer
                 hero
+                acceptUnscoped
                 value={chat.draft}
                 onChange={chat.setDraft}
                 modelKey={chat.pendingModelKey}

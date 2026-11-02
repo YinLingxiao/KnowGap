@@ -13,7 +13,7 @@ import { cx } from "@/lib/cx";
 import { localeOf, type Language } from "@/lib/i18n";
 import type { CourseMaterial } from "@/lib/types";
 import { useI18n } from "@/components/LanguageProvider";
-import { WIDGET_ASK_EVENT } from "./LearningWidget";
+import { askInComposer } from "./widgets/widgetEvents";
 import styles from "./Library.module.css";
 
 type Category = "doc" | "slides" | "sheet" | "text";
@@ -74,7 +74,8 @@ interface LibraryProps {
   onChange: () => void;
 }
 
-const askAbout = (text: string) => window.dispatchEvent(new CustomEvent<string>(WIDGET_ASK_EVENT, { detail: text }));
+// Library 拿不到会话 id，走无作用域事件，由空间主线的 Composer 响应
+const askAbout = (text: string) => askInComposer(null, text);
 const askWorkspaceFile = (
   path: string,
   tr: (text: string, vars?: Record<string, string | number>) => string,

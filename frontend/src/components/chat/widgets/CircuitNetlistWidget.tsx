@@ -13,7 +13,7 @@ import {
   asRecord, asText, checkNetlist, CONTROLLED_ELEMENTS, describeControl, ELEMENT_OPTIONS, elementLabel, netlistText,
   parseNetlistData, toWireNetlist, type NetBranch, type NetControl, type NetIssue, type NetlistData,
 } from "./visionData";
-import { sendOrAsk } from "./widgetEvents";
+import { sendOrAsk, useWidgetScope } from "./widgetEvents";
 import styles from "./VisionWidgets.module.css";
 
 const solveRequest = (tr: (text: string) => string) =>
@@ -61,6 +61,7 @@ function IssueList({ issues }: { issues: NetIssue[] }) {
  */
 export function CircuitNetlistWidget({ data }: { data: Record<string, unknown> }) {
   const { tx } = useI18n();
+  const scope = useWidgetScope();
   const initial = useMemo(() => parseNetlistData(data), [data]);
   const [card, setCard] = useState<NetlistData>(initial);
   const [mode, setMode] = useState<"view" | "edit">("view");
@@ -160,7 +161,7 @@ export function CircuitNetlistWidget({ data }: { data: Record<string, unknown> }
       ].join("\n");
       setCard({ ...card, branches, confirmed: true });
       setMode("view");
-      setSent(sendOrAsk(text, solveEffort(card.route)));
+      setSent(sendOrAsk(scope, text, solveEffort(card.route)));
       return;
     }
     setBusy(true);
@@ -175,7 +176,7 @@ export function CircuitNetlistWidget({ data }: { data: Record<string, unknown> }
         state: edited ? tx("（含我的修正）") : tx("，连接无误"),
         request: solveRequest(tx),
       });
-      setSent(sendOrAsk(`${marker}\n${solve}`, solveEffort(next.route)));
+      setSent(sendOrAsk(scope, `${marker}\n${solve}`, solveEffort(next.route)));
     } catch (err) {
       const apiError = err as { message?: string; kind?: string; issues?: NetIssue[] };
       setError(apiError.message || tx("确认失败，请稍后重试。"));
