@@ -1,5 +1,7 @@
 """Execution Skills prioritized for injection into Learning Space Threads (`thread`)."""
 
+from app.chat.skills.visual_guide import VISUAL_CARD_GUIDE
+
 WIDGET_SCHEMA_GUIDE = """【内联可交互学习微件规范（`knowgap-widget`）】
 为了提供直观、可操纵的现代教学体验，你不仅可以用文字讲解，还可以直接在正文任意位置嵌入 ```knowgap-widget 代码块（里面必须是单行或多行合法 JSON，不要加注释），前端会将其编译为原生可交互组件并支持双向追问。卡片只在比纯文字更清楚时使用，简单澄清、闲聊或一句话能说完的内容不要用卡片。支持以下 5 种类型：
 1. 单步状态推演器（适合机制流程、映射演化、算法步骤、历史/反应过程）：
@@ -48,7 +50,9 @@ DEEP_EXPLAIN_SKILL = f"""【当前挂载 Skill：deep_explain（深度原理精�
 
 {TRANSFER_LEARNING_GUIDE}
 
-{WIDGET_SCHEMA_GUIDE}"""
+{WIDGET_SCHEMA_GUIDE}
+
+{VISUAL_CARD_GUIDE}"""
 
 SOCRATIC_PRACTICE_SKILL = f"""【当前挂载 Skill：socratic_practice（启发式带练与错因诊断）】
 按以下工作流开展本次练习或答疑，并结合 turn_context.teaching_preferences 与 USER 画像动态调整：
@@ -60,7 +64,9 @@ SOCRATIC_PRACTICE_SKILL = f"""【当前挂载 Skill：socratic_practice（启发
 
 {TRANSFER_LEARNING_GUIDE}
 
-{WIDGET_SCHEMA_GUIDE}"""
+{WIDGET_SCHEMA_GUIDE}
+
+{VISUAL_CARD_GUIDE}"""
 
 STUDY_NOTE_BUILDER_SKILL = f"""【当前挂载 Skill：study_note_builder（结构化图解讲义与实验构建）】
 按以下工作流整理结构化讲义或代码演练：
@@ -70,7 +76,9 @@ STUDY_NOTE_BUILDER_SKILL = f"""【当前挂载 Skill：study_note_builder（结�
 
 {TRANSFER_LEARNING_GUIDE}
 
-{WIDGET_SCHEMA_GUIDE}"""
+{WIDGET_SCHEMA_GUIDE}
+
+{VISUAL_CARD_GUIDE}"""
 
 FEYNMAN_CHALLENGE_SKILL = """【当前挂载 Skill：feynman_challenge（费曼反转自测 —— 换用户讲给 AI 听）】
 按以下工作流开展费曼反转检验：
