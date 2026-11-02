@@ -4,7 +4,7 @@ export const extraPhrases: Record<string, string> = {
   "1 天前": "1 day ago",
   "AI 拆解排期": "AI schedule breakdown",
   "AI 拆解的任务": "Tasks broken down by AI",
-  "KnowGap 知隙 · ①② 来自你的真实学习记录，③④ 由模型生成，请以课本为准": "KnowGap · ①② come from your real learning records; ③④ are model-generated. Always check the textbook.",
+  "KnowGap · ①② 来自你的真实学习记录，③④ 由模型生成，请以课本为准": "KnowGap · ①② come from your real learning records; ③④ are model-generated. Always check the textbook.",
   "{action}子任务「{title}」": "{action} subtask “{title}”",
   "{cached}生成于 {time}": "{cached} generated at {time}",
   "{count} 个文件": "{count} files",

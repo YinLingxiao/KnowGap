@@ -44,11 +44,11 @@ def _send_smtp_email(settings: Settings, recipient: str, code: str, purpose: str
     msg = EmailMessage()
     action_label = "注册账号" if purpose == "register" else "登录验证"
     sender = (settings.smtp_from or settings.smtp_user).strip()
-    msg["Subject"] = f"【知隙 KnowGap】你的{action_label}验证码：{code}"
+    msg["Subject"] = f"【KnowGap】你的{action_label}验证码：{code}"
     msg["From"] = sender
     msg["To"] = recipient
     msg.set_content(
-        f"你好！\n\n你正在进行知隙（KnowGap）{action_label}。\n"
+        f"你好！\n\n你正在进行 KnowGap {action_label}。\n"
         f"你的 6 位验证码是：{code}\n\n"
         f"该验证码在 5 分钟内有效，请勿泄露给他人。\n"
     )

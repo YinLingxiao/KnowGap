@@ -270,7 +270,7 @@ export function CheatSheet({ subject, notes, onClose }: { subject: Subject; note
               )}
             </Quadrant>
           </div>
-          <footer className={styles.sheetFoot}>{tx("KnowGap 知隙 · ①② 来自你的真实学习记录，③④ 由模型生成，请以课本为准")}</footer>
+          <footer className={styles.sheetFoot}>{tx("KnowGap · ①② 来自你的真实学习记录，③④ 由模型生成，请以课本为准")}</footer>
         </article>
       </div>
     </div>,
