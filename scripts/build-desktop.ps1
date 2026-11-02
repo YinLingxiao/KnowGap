@@ -1,7 +1,15 @@
 ﻿# 构建 KnowGap 桌面安装包：Next 静态导出 + PyInstaller 后端 + electron-builder(NSIS)
 # 用法：powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-desktop.ps1
+[CmdletBinding()]
+param(
+    [switch]$SkipDependencies,
+    [string]$BackendSpec = '',
+    [string]$BackendPython = ''
+)
 $ErrorActionPreference = "Stop"
-$root = Split-Path $PSScriptRoot -Parent
+$root = [IO.Path]::GetFullPath((Split-Path $PSScriptRoot -Parent))
+if (-not $BackendSpec) { $BackendSpec = Join-Path $root 'backend\knowgap.spec' }
+$BackendSpec = (Resolve-Path -LiteralPath $BackendSpec).Path
 
 function Assert-Exit([string]$name) {
     if ($LASTEXITCODE -ne 0) {
@@ -11,10 +19,13 @@ function Assert-Exit([string]$name) {
 }
 
 function Remove-BuildDir([string]$relative) {
-    $target = Join-Path $root $relative
-    if (Test-Path $target) {
+    $target = [IO.Path]::GetFullPath((Join-Path $root $relative))
+    if (-not $target.StartsWith($root.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)) {
+        throw "构建目录超出当前仓库：$target"
+    }
+    if (Test-Path -LiteralPath $target) {
         Write-Host "    清理 $relative" -ForegroundColor DarkGray
-        Remove-Item -Recurse -Force $target
+        Remove-Item -LiteralPath $target -Recurse -Force
     }
 }
 
@@ -32,8 +43,10 @@ Push-Location (Join-Path $root "frontend")
 try {
     $env:NEXT_PUBLIC_DATA_SOURCE = "api"
     $env:NEXT_PUBLIC_API_BASE_URL = "/"
-    npm install --no-audit --no-fund
-    Assert-Exit "npm install (frontend)"
+    if (-not $SkipDependencies) {
+        npm ci --no-audit --no-fund
+        Assert-Exit "npm ci (frontend)"
+    }
     npm run build
     Assert-Exit "next build"
 } finally {
@@ -43,10 +56,18 @@ try {
 Write-Host "==> 3/4 构建后端 (PyInstaller)" -ForegroundColor Cyan
 Push-Location (Join-Path $root "backend")
 try {
-    if (-not (Test-Path ".venv\Scripts\python.exe")) { python -m venv .venv }
-    .\.venv\Scripts\python.exe -m pip install -r requirements.txt pyinstaller
-    Assert-Exit "pip install (backend)"
-    .\.venv\Scripts\pyinstaller.exe --noconfirm --clean knowgap.spec
+    if (-not $BackendPython) {
+        if (-not (Test-Path ".venv\Scripts\python.exe")) {
+            python -m venv .venv
+            Assert-Exit "venv (backend)"
+        }
+        $BackendPython = (Resolve-Path -LiteralPath '.venv\Scripts\python.exe').Path
+    }
+    if (-not $SkipDependencies) {
+        & $BackendPython -m pip install -r requirements.txt pyinstaller
+        Assert-Exit "pip install (backend)"
+    }
+    & $BackendPython -m PyInstaller --noconfirm --clean $BackendSpec
     Assert-Exit "pyinstaller"
 } finally {
     Pop-Location
@@ -55,10 +76,18 @@ try {
 Write-Host "==> 4/4 打包桌面安装包 (electron-builder)" -ForegroundColor Cyan
 Push-Location (Join-Path $root "desktop")
 try {
-    $env:ELECTRON_MIRROR = "https://npmmirror.com/mirrors/electron/"
-    $env:ELECTRON_BUILDER_BINARIES_MIRROR = "https://npmmirror.com/mirrors/electron-builder-binaries/"
-    npm install --no-audit --no-fund
-    Assert-Exit "npm install (desktop)"
+    if (-not $env:CI) {
+        if (-not $env:ELECTRON_MIRROR) { $env:ELECTRON_MIRROR = "https://npmmirror.com/mirrors/electron/" }
+        if (-not $env:ELECTRON_BUILDER_BINARIES_MIRROR) { $env:ELECTRON_BUILDER_BINARIES_MIRROR = "https://npmmirror.com/mirrors/electron-builder-binaries/" }
+    }
+    if (-not $SkipDependencies) {
+        npm ci --no-audit --no-fund
+        Assert-Exit "npm ci (desktop)"
+    }
+    if (-not (Test-Path 'node_modules\electron\dist\electron.exe')) {
+        node node_modules/electron/install.js
+        Assert-Exit "Electron runtime download"
+    }
     npm run dist
     Assert-Exit "electron-builder"
 } finally {

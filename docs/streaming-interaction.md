@@ -29,6 +29,8 @@ cd backend
 .\.venv\Scripts\python.exe scripts\streaming_demo.py
 ```
 
+需要更长的手动操作时间时，可在启动模拟后端前设置 `$env:KNOWGAP_DEMO_DELAY = "0.65"`，仅放慢模拟文字输出。
+
 第二个终端：
 
 ```powershell
