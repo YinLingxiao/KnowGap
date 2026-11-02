@@ -267,6 +267,7 @@ export const extraPhrases: Record<string, string> = {
   "正在根据空间目标推演外环…": "Deriving the outer ring from the space goal…",
   "正在流式构建可交互学习微件…": "Building the interactive learning widget…",
   "这张卡片没能生成": "This card could not be built",
+  "这张卡片暂时无法显示，已保留原文": "This card cannot be displayed right now. Its source has been preserved",
   "这种卡片已不再支持": "This card type is no longer supported",
   "正在生成对比与自测题…": "Generating comparisons and a self-test…",
   "步骤 {current} / {total}": "Step {current} / {total}",

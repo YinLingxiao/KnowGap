@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { createContext, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { Component, createContext, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import {
   ArrowRight, CheckCircle2, ChevronLeft, ChevronRight, CircleAlert,
   Lightbulb, LoaderCircle, MessageSquarePlus,
@@ -166,9 +166,32 @@ export function LearningWidget({ rawCode }: { rawCode: string }) {
     <>
       {/* 状态区域先挂载、等生成结束后再写入文本，读屏只会播报一次结果 */}
       <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">{announcement}</span>
-      {content}
+      <WidgetRenderBoundary rawCode={rawCode} resetKey={live ? "streaming" : rawCode}
+        reason={tx("这张卡片暂时无法显示，已保留原文")}>
+        {content}
+      </WidgetRenderBoundary>
     </>
   );
+}
+
+// A malformed or unfinished model card must not take down the conversation.
+// Retry once streaming finishes; do not repeatedly throw for every incoming token.
+class WidgetRenderBoundary extends Component<{
+  rawCode: string; resetKey: string; reason: string; children: ReactNode;
+}, { failed: boolean; resetKey: string }> {
+  state = { failed: false, resetKey: this.props.resetKey };
+
+  static getDerivedStateFromError() { return { failed: true }; }
+
+  static getDerivedStateFromProps(props: { resetKey: string }, state: { resetKey: string }) {
+    return props.resetKey !== state.resetKey ? { failed: false, resetKey: props.resetKey } : null;
+  }
+
+  render() {
+    return this.state.failed
+      ? <WidgetFailure rawCode={this.props.rawCode} reason={this.props.reason} />
+      : this.props.children;
+  }
 }
 
 function WidgetFailure({ rawCode, reason }: { rawCode: string; reason: string }) {
@@ -302,7 +325,9 @@ function ComparisonMatrixWidget({ data }: { data: Record<string, unknown> }) {
   const scope = useWidgetScope();
   const title = String(data.title || tx("核心差异对比"));
   const columns = Array.isArray(data.columns) ? data.columns.map(String) : [];
-  const rows = Array.isArray(data.rows) ? (data.rows as CompareRow[]) : [];
+  // The streaming parser can expose a just-opened row as {}. Wait for its label.
+  const rows = Array.isArray(data.rows) ? data.rows.filter((row): row is CompareRow =>
+    row !== null && typeof row === "object" && typeof row.dimension === "string" && row.dimension.trim().length > 0) : [];
   const [activeDim, setActiveDim] = useState<string>("all");
 
   if (columns.length === 0 || rows.length === 0) return null;

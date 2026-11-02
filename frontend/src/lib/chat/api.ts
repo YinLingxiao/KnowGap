@@ -187,7 +187,33 @@ export function mapQuizAttempt(data: Wire): QuizAttemptResult {
 
 const path = (id: string) => `/api/conversations/${encodeURIComponent(id)}`;
 
+export interface QueuedMessage {
+  id: string;
+  content: string;
+  status: "pending" | "dispatched" | "cancelled";
+  run_id: string | null;
+}
+export interface Outbox { paused: boolean; items: QueuedMessage[] }
+
 export const chatApi = {
+  outbox(id: string): Promise<Outbox> {
+    return request(root, `${path(id)}/outbox`, { cache: "no-store" });
+  },
+  enqueue(id: string, content: string, clientRequestId: string): Promise<QueuedMessage> {
+    return request(root, `${path(id)}/outbox`, { method: "POST", body: JSON.stringify({ content, client_request_id: clientRequestId }) });
+  },
+  editQueued(id: string, itemId: string, content: string): Promise<Outbox> {
+    return request(root, `${path(id)}/outbox/${encodeURIComponent(itemId)}`, { method: "PATCH", body: JSON.stringify({ content }) });
+  },
+  removeQueued(id: string, itemId: string): Promise<Outbox> {
+    return request(root, `${path(id)}/outbox/${encodeURIComponent(itemId)}`, { method: "DELETE" });
+  },
+  resumeQueue(id: string): Promise<Outbox> {
+    return request(root, `${path(id)}/outbox/resume`, { method: "POST" });
+  },
+  subscribe(id: string, runId: string, onEvent: (event: StreamEvent) => void, signal: AbortSignal) {
+    return stream(`${path(id)}/runs/${encodeURIComponent(runId)}/events`, undefined, onEvent, signal, "GET");
+  },
   /** 提交微测作答；同一 actionId 重发安全，题目已作答时返回首次结果（repeated） */
   async submitQuizAttempt(quizId: string, input: { actionId: string; optionIndex: number }): Promise<QuizAttemptResult> {
     return mapQuizAttempt(await request(root, `/api/quizzes/${encodeURIComponent(quizId)}/attempts`, {
@@ -277,8 +303,10 @@ export const chatApi = {
       method: "POST", body: JSON.stringify({ problem_id: problemId }),
     }));
   },
-  async stop(id: string): Promise<boolean> {
-    return (await request<{ stopped: boolean }>(root, `${path(id)}/stop`, { method: "POST" })).stopped;
+  async stop(id: string, runId?: string, clientRequestId?: string): Promise<boolean> {
+    return (await request<{ stopped: boolean }>(root, `${path(id)}/stop`, {
+      method: "POST", ...((runId || clientRequestId) ? { body: JSON.stringify({ run_id: runId, client_request_id: clientRequestId }) } : {}),
+    })).stopped;
   },
   async listProblems(): Promise<Problem[]> {
     const data = await request<Wire[]>(root, "/api/problems");
@@ -542,6 +570,43 @@ export const chatApi = {
 /** 连接建立前失败会抛出 ApiError（此时服务端可能尚未保存消息）；建立后的问题通过事件或 "interrupted" 返回 */
 async function stream(
   url: string, body: string | undefined, onEvent: (event: StreamEvent) => void, signal: AbortSignal,
+  method: "GET" | "POST" = "POST",
+): Promise<"ended" | "interrupted"> {
+  let cursor = "";
+  let currentUrl = url;
+  let reconnecting = false;
+  for (let attempt = 0; attempt < 5 && !signal.aborted; attempt++) {
+    try {
+      const result = await readStream(currentUrl, attempt ? undefined : body, (event) => {
+        if (reconnecting) { reconnecting = false; onEvent({ type: "connection", reconnecting: false }); }
+        onEvent(event);
+      }, signal,
+        attempt ? "GET" : method, (id) => { cursor = id; });
+      if (result === "ended" || signal.aborted || !cursor) return result;
+    } catch (error) {
+      if (!cursor || signal.aborted) throw error;
+    }
+    const split = cursor.lastIndexOf(":");
+    const runId = cursor.slice(0, split);
+    const after = Number(cursor.slice(split + 1));
+    if (split < 0 || !Number.isSafeInteger(after)) return "interrupted";
+    const conversationPath = url.split(/\/(messages|regenerate|runs)\b/)[0];
+    currentUrl = `${conversationPath}/runs/${encodeURIComponent(runId)}/events?after=${after}`;
+    onEvent({ type: "connection", reconnecting: true });
+    if (signal.aborted) return "interrupted";
+    reconnecting = true;
+    await new Promise<void>((resolve) => {
+      const done = () => { window.clearTimeout(timer); signal.removeEventListener("abort", done); resolve(); };
+      const timer = window.setTimeout(done, Math.min(500 * 2 ** attempt, 4000));
+      signal.addEventListener("abort", done, { once: true });
+    });
+  }
+  return "interrupted";
+}
+
+async function readStream(
+  url: string, body: string | undefined, onEvent: (event: StreamEvent) => void, signal: AbortSignal,
+  method: "GET" | "POST", onCursor: (id: string) => void,
 ): Promise<"ended" | "interrupted"> {
   let response: Response;
   // Only the connection phase has a deadline; a long answer may legitimately stream for minutes.
@@ -551,7 +616,7 @@ async function stream(
   signal.addEventListener("abort", abort);
   try {
     response = await fetch(`${root}${url}`, {
-      method: "POST", body, signal: connectTimeout.signal,
+      method, body, signal: connectTimeout.signal,
       headers: { Accept: "text/event-stream", ...authHeader(), ...(body ? { "Content-Type": "application/json" } : {}) },
     });
   } catch {
@@ -586,15 +651,17 @@ async function stream(
     for (;;) {
       const { value, done } = await reader.read();
       if (done) break;
-      buffer += value.replace(/\r\n/g, "\n");
+      buffer = (buffer + value).replace(/\r\n/g, "\n");
       let index;
       while ((index = buffer.indexOf("\n\n")) >= 0) {
         const block = buffer.slice(0, index);
         buffer = buffer.slice(index + 2);
         let type = "message";
+        let eventId = "";
         const data: string[] = [];
         for (const line of block.split("\n")) {
           if (line.startsWith("event:")) type = line.slice(6).trim();
+          else if (line.startsWith("id:")) eventId = line.slice(3).trim();
           else if (line.startsWith("data:")) data.push(line.slice(5).trimStart());
         }
         if (!data.length) continue;
@@ -602,6 +669,7 @@ async function stream(
         if (!event) continue;
         if (event.type === "done" || event.type === "cancelled" || event.type === "error") terminal = true;
         onEvent(event);
+        if (eventId) onCursor(eventId);
       }
     }
     return terminal ? "ended" : "interrupted";
@@ -609,5 +677,7 @@ async function stream(
     return terminal ? "ended" : "interrupted";
   } finally {
     signal.removeEventListener("abort", abort);
+    await reader.cancel().catch(() => undefined);
+    reader.releaseLock();
   }
 }

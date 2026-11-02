@@ -689,7 +689,7 @@ export function SubjectPage({
               return id;
             }}
             onDecideTool={(approvalId, allow) => void chat.decideTool(approvalId, allow)}
-            onSendText={(text) => void chat.sendTo(mainId, text)}
+            onSendText={(text) => chat.sendTo(mainId, text)}
             onOpenWeakPoints={() => showPanel({ mode: "graph" })}
             scrollTarget={scrollTarget}
           />
@@ -736,6 +736,7 @@ export function SubjectPage({
               onChange={(value) => chat.setDraftFor(mainId, value)}
               onSend={() => void chat.sendTo(mainId, chat.draftFor(mainId))}
               onStop={() => void chat.stop(mainId)}
+              onRevise={() => chat.reviseTo(mainId, chat.draftFor(mainId))}
               phase={chat.streamFor(mainId)?.phase ?? null}
               busy={false}
               problems={[]}
@@ -963,7 +964,7 @@ export function SubjectPage({
                   onStartExercise={(problemId) => void chat.startExerciseOn(threadId, problemId)}
                   onOpenMemories={() => showPanel({ mode: "info", section: "memory" })}
                   onDecideTool={(approvalId, allow) => void chat.decideTool(approvalId, allow)}
-                  onSendText={(text) => void chat.sendTo(threadId, text)}
+                  onSendText={(text) => chat.sendTo(threadId, text)}
                   onOpenWeakPoints={() => showPanel({ mode: "graph" })}
                 />
               )}
@@ -977,6 +978,7 @@ export function SubjectPage({
                   onChange={(value) => chat.setDraftFor(threadId, value)}
                   onSend={() => void chat.sendTo(threadId, chat.draftFor(threadId))}
                   onStop={() => void chat.stop(threadId)}
+                  onRevise={() => chat.reviseTo(threadId, chat.draftFor(threadId))}
                   phase={threadPhase}
                   busy={false}
                   problems={chat.problems}

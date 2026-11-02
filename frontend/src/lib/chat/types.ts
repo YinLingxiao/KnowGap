@@ -232,6 +232,7 @@ export type ExecutionStatus = "queued" | "working" | "waiting" | "idle" | "faile
 
 /** 一次发送 / 重新生成的流式事件，已映射为视图模型 */
 export type StreamEvent =
+  | { type: "connection"; reconnecting: boolean }
   | { type: "thread_dispatched"; threadId: string }
   | { type: "start"; conversation: ConversationSummary | null; userMessage: ChatMessage | null;
       assistantMessage: ChatMessage | null; discardedIds: string[]; replayed: boolean; modelNotice: string | null }

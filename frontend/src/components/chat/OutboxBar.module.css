@@ -1,0 +1,11 @@
+.bar { margin: 0 0 8px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 12px; color: var(--text-secondary); background: var(--bg-subtle); font-size: 12px; }
+.bar header, .bar li { display: flex; align-items: center; gap: 10px; }
+.bar header { justify-content: space-between; }
+.bar ol { margin: 6px 0 0; padding: 0; list-style: none; }
+.bar li { padding: 5px 0; }
+.preview { white-space: pre-wrap; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; flex: 1; min-width: 0; }
+.bar button { flex-shrink: 0; padding: 3px 6px; border-radius: 5px; }
+.bar button:hover { background: var(--bg-hover); }
+.bar form { flex: 1; }
+.bar textarea { width: 100%; min-height: 60px; padding: 6px; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 6px; resize: vertical; }
+.bar p { margin: 6px 0 0; color: var(--red); }

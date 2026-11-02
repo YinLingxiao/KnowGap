@@ -26,6 +26,7 @@ import type { ChatMessage } from "@/lib/chat/types";
 import { cx } from "@/lib/cx";
 import type { Problem } from "@/lib/types";
 import { QUOTE_TO_COMPOSER_EVENT, SEND_TO_COMPOSER_EVENT, type ComposerTextDetail } from "./SelectionToolbar";
+import { OutboxBar } from "./OutboxBar";
 import { ImageAttach } from "./widgets/ImageAttach";
 import { ImageThumb } from "./widgets/ImageMarker";
 import { joinDraftImages, splitDraftImages, withLeadingImage } from "./widgets/visionData";
@@ -171,6 +172,7 @@ interface ComposerProps {
   onChange: (value: string) => void;
   onSend: () => void;
   onStop: () => void;
+  onRevise?: () => Promise<boolean> | void;
   phase: StreamPhase | null;
   busy: boolean;
   problems?: Problem[];
@@ -247,7 +249,7 @@ function deriveInstantSuggestion(messages?: ChatMessage[]): string {
 }
 
 export function Composer({
-  value: draft, onChange: onChangeRaw, onSend, onStop, phase, busy, problems = [], onStartExercise, autoFocusKey,
+  value: draft, onChange: onChangeRaw, onSend, onStop, onRevise, phase, busy, problems = [], onStartExercise, autoFocusKey,
   placeholder, hero = false, inputId = COMPOSER_ID,
   conversationId, acceptUnscoped = false, messages, ensureConversation, onFilesCleared,
   modelKey = null, onModelKeyChange, modelClient,
@@ -343,7 +345,8 @@ export function Composer({
   const menuRef = useRef<HTMLDivElement>(null);
   const effortRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<HTMLDivElement>(null);
-  const generating = phase === "connecting" || phase === "streaming";
+  const generating = phase === "connecting" || phase === "streaming" || phase === "reconnecting";
+  const [revising, setRevising] = useState(false);
   const locked = busy || phase === "connecting";
   const uploading = imageUploads > 0 || pendingFiles.some((file) => file.state === "uploading");
 
@@ -469,7 +472,7 @@ export function Composer({
   const restoreDraft = useRef<string | null>(null);
   const [sendNonce, setSendNonce] = useState(0);
   const canSendNow = useRef(false);
-  canSendNow.current = !generating && !locked && !uploading;
+  canSendNow.current = !locked && !uploading;
   useEffect(() => {
     if (!conversationId) return;
     const textFor = (event: Event) => {
@@ -527,7 +530,7 @@ export function Composer({
     if (pendingSend.current !== null) {
       if (value !== pendingSend.current) return;
       pendingSend.current = null;
-      if (!generating && !locked && !uploading) onSend();
+      if (!locked && !uploading) onSend();
       else restoreDraft.current = null;
       return;
     }
@@ -679,7 +682,7 @@ export function Composer({
   };
 
   const canSend = Boolean(value.trim() || parsedDraft.files.length || draftImages.images.length)
-    && !generating && !locked && !uploading;
+    && !locked && !uploading && !revising;
   const activeEffort = EFFORT_OPTIONS.find((item) => item.id === effort) ?? EFFORT_OPTIONS[2];
 
   const acceptGhost = () => {
@@ -1050,6 +1053,14 @@ export function Composer({
   return (
     <div className={cx(styles.composer, hero && styles.hero, dragging && styles.dragging)}>
       {!hero && <PlanBar conversationId={conversationId} busy={generating || busy} />}
+      {!hero && <OutboxBar conversationId={conversationId} running={generating} />}
+      {generating && <div className={styles.generationHint}>
+        <span role="status">{phase === "reconnecting" ? tx("正在接回生成进度…") : tx("可以继续输入，Enter 加入待发送")}</span>
+        {onRevise && <button type="button" disabled={!canSend || revising} onClick={async () => {
+          setRevising(true);
+          try { await onRevise(); } finally { setRevising(false); }
+        }}>{tx("停止并按新要求重答")}</button>}
+      </div>}
       <div
         className={cx(styles.box, locked && styles.locked)}
         onDragEnter={onDragEnter}
@@ -1667,15 +1678,14 @@ export function Composer({
               )}
             </div>}
 
-            {generating ? (
+            {generating && (
               <button className={cx(styles.send, styles.stop)} onClick={onStop} aria-label={tx("停止生成")} title={tx("停止生成")}>
                 <Square size={11} fill="currentColor" aria-hidden />
               </button>
-            ) : (
-              <button className={styles.send} onClick={onSend} disabled={!canSend} aria-label={tx("发送")} title={tx("发送 (Enter)")}>
+            )}
+              <button className={styles.send} onClick={onSend} disabled={!canSend} aria-label={tx(generating ? "加入待发送" : "发送")} title={tx(generating ? "加入待发送 (Enter)" : "发送 (Enter)")}>
                 <ArrowUp size={15} aria-hidden />
               </button>
-            )}
           </div>
         </div>
       </div>

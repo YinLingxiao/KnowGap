@@ -31,6 +31,7 @@ import type { PlanChange } from "@/lib/chat/plan";
 import { AGENDA_TOOLS, AgendaToolCard } from "./AgendaToolCard";
 import { hasVisionMarker } from "./widgets/visionData";
 import { MessageNav } from "./MessageNav";
+import { ReadingProvider, ReadingViewport } from "./ReadingRuntime";
 import { MemoriesByIdContext } from "./widgets/memoryContext";
 import { WidgetScopeContext } from "./widgets/widgetEvents";
 import styles from "./MessageList.module.css";
@@ -63,12 +64,12 @@ const PIN_KEY_PREFIX = "knowgap.pins.v1.";
 const SAVE_TO_PAGE_EVENT = "knowgap:save-to-page";
 
 /** 流式回复先过一道平滑显示，再交给 Markdown 渲染 */
-function SmoothMarkdown({ text, live }: { text: string; live: boolean }) {
-  const shown = useSmoothText(text, live);
+function SmoothMarkdown({ text, live, paused }: { text: string; live: boolean; paused: boolean }) {
+  const shown = useSmoothText(text, live, paused);
   // 卡片 JSON 逐字增长会反复重排，已经开始的卡片直接显示 full 中的当前内容；
   // 平滑显示已追平时无需再扫描，与 fastForwardWidgets 的早退条件一致
-  const display = shown === text ? shown : fastForwardWidgets(shown, text);
-  // 流结束后平滑显示还会追一小段，追完之前卡片仍按「写入中」处理
+  const display = paused || shown === text ? shown : fastForwardWidgets(shown, text);
+  // 选区冻结时保留当前可见内容，解除选区后再显示定稿。
   return <Markdown text={display} live={live || shown !== text} />;
 }
 
@@ -120,7 +121,7 @@ interface MessageListProps {
   onConfirmProposal?: (messageId: string, proposalId: string) => Promise<string>;
   onResumeCheckpoint?: (messageId: string) => Promise<void>;
   onDecideTool?: (approvalId: string, allow: boolean) => void;
-  onSendText?: (text: string) => void;
+  onSendText?: (text: string) => Promise<boolean> | boolean;
   onOpenWeakPoints?: () => void;
   /** 外层若提供导航回调可无刷新打开资料；未提供时复用既有视图恢复机制。 */
   onOpenFile?: (documentId: string, subjectId: string | null) => void;
@@ -254,6 +255,7 @@ export function MessageList({
   }, [conversationSubjectId, missingFileIds]);
   const [settledPrompts, setSettledPrompts] = useState<Set<string>>(new Set());
   const [sentActions, setSentActions] = useState<Set<string>>(new Set());
+  const [pendingActions, setPendingActions] = useState<Set<string>>(new Set());
   const decidePreference = (id: string, allow: boolean) => {
     setSettledPrompts((current) => new Set(current).add(id));
     void chatApi.decidePreference(id, allow).catch(() => {
@@ -266,6 +268,7 @@ export function MessageList({
   };
   const scrollRef = useRef<HTMLDivElement>(null);
   const following = useRef(true);
+  const [readingSelection, setReadingSelection] = useState(false);
   const [showJump, setShowJump] = useState(false);
   const [foldOverride, setFoldOverride] = useState<Record<string, boolean>>({});
   const [savedId, setSavedId] = useState<string | null>(null);
@@ -323,9 +326,16 @@ export function MessageList({
     setShowJump(!near);
   };
 
-  useLayoutEffect(() => {
-    if (following.current) toBottom();
-  }, [messages, toBottom]);
+  useEffect(() => {
+    const selected = () => {
+      const selection = window.getSelection();
+      const active = Boolean(selection && !selection.isCollapsed && selection.anchorNode && scrollRef.current?.contains(selection.anchorNode));
+      setReadingSelection(active);
+      if (active) { following.current = false; setShowJump(true); }
+    };
+    document.addEventListener("selectionchange", selected);
+    return () => document.removeEventListener("selectionchange", selected);
+  }, []);
 
   useEffect(() => {
     if (!scrollTarget) return;
@@ -369,8 +379,10 @@ export function MessageList({
   return (
     <WidgetScopeContext.Provider value={conversationId}>
     <MemoriesByIdContext.Provider value={memoriesById}>
+    <ReadingProvider key={conversationId} messages={messages}>
     <div className={styles.wrap}>
-      <div ref={scrollRef} className={styles.scroll} onScroll={onScroll}>
+      <ReadingViewport ref={scrollRef} className={styles.scroll} role="region" aria-label={tx("会话阅读区")} tabIndex={0}
+        onScroll={onScroll} autoScroll={following.current && !readingSelection}>
         <div className={styles.list} role="log" aria-live="polite" aria-relevant="additions">
           {topSlot}
           {fileNavigationError && <p className={styles.fileNavigationError} role="alert">{fileNavigationError}</p>}
@@ -600,10 +612,10 @@ export function MessageList({
                   <>
                     <div
                       className={cx(streaming && styles.streaming, fold.folded && styles.folded)}
-                      {...(!streaming && { [SELECTABLE_ATTR]: "" })}
+                      {...{ [SELECTABLE_ATTR]: "" }}
                       {...(finished && message.content.length >= 80 ? { "data-coachmark": "select" } : {})}
                     >
-                      <SmoothMarkdown text={message.content} live={streaming} />
+                      <SmoothMarkdown text={message.content} live={streaming} paused={readingSelection} />
                     </div>
                     {fold.long && (
                       <button
@@ -676,10 +688,17 @@ export function MessageList({
                           key={action}
                           type="button"
                           className={styles.nextBtn}
-                          onClick={() => {
-                            setSentActions((current) => new Set(current).add(`${message.id}:${action}`));
-                            if (action === "weak_points") onOpenWeakPoints?.();
-                            else onSendText?.(tx(NEXT_TEXT[action]));
+                          disabled={pendingActions.has(`${message.id}:${action}`)}
+                          onClick={async () => {
+                            const key = `${message.id}:${action}`;
+                            setPendingActions((current) => new Set(current).add(key));
+                            try {
+                              const accepted = action === "weak_points" ? (onOpenWeakPoints?.(), true)
+                                : await onSendText?.(tx(NEXT_TEXT[action]));
+                              if (accepted) setSentActions((current) => new Set(current).add(key));
+                            } finally {
+                              setPendingActions((current) => { const next = new Set(current); next.delete(key); return next; });
+                            }
                           }}
                         >
                           {tx(NEXT_LABEL[action])}
@@ -783,21 +802,22 @@ export function MessageList({
             </div>
           )}
         </div>
-      </div>
+      </ReadingViewport>
       <SelectionToolbar
         scopeRef={scrollRef}
         conversationId={conversationId}
         canSaveToPage={Boolean(conversationSubjectId)}
-        canSend={phase === null || phase === "analyzing"}
+        canSend={phase !== "connecting"}
       />
       {showNav && <MessageNav entries={navEntries} scrollRef={scrollRef} onJump={jumpToMessage} />}
       {showJump && (
-        <button className={styles.jump} onClick={() => { following.current = true; setShowJump(false); toBottom(); }}>
+        <button className={styles.jump} onClick={() => { window.getSelection()?.removeAllRanges(); following.current = true; setReadingSelection(false); setShowJump(false); toBottom(); }}>
           <ArrowDown size={14} aria-hidden />
           {t("messages.backToBottom")}
         </button>
       )}
     </div>
+    </ReadingProvider>
     </MemoriesByIdContext.Provider>
     </WidgetScopeContext.Provider>
   );

@@ -11,6 +11,7 @@
     "postinstall": "node scripts/sync-preview-vendor.mjs"
   },
   "dependencies": {
+    "@assistant-ui/react": "0.15.32",
     "@codemirror/commands": "6.11.1",
     "@codemirror/lang-cpp": "6.0.3",
     "@codemirror/lang-javascript": "6.2.5",

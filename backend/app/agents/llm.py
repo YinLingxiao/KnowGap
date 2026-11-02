@@ -345,6 +345,7 @@ class ChatCompletionsChat:
                         yield "finish", choice.get("finish_reason") or "stop"
                         return
                     finish = "stop"
+                    terminated = False
                     pending: dict[int, dict] = {}
                     async for line in response.aiter_lines():
                         line = line.strip()
@@ -355,6 +356,7 @@ class ChatCompletionsChat:
                             # Gateway keep-alive heartbeat.
                             continue
                         if data == "[DONE]":
+                            terminated = True
                             break
                         chunk = json.loads(data)
                         if not isinstance(chunk, dict):
@@ -393,6 +395,9 @@ class ChatCompletionsChat:
                                     slot["arguments"] += function["arguments"]
                             if choice.get("finish_reason"):
                                 finish = choice["finish_reason"]
+                                terminated = True
+                    if not terminated:
+                        raise ProviderError(502, "模型连接提前断开，已保留收到的内容，请重新生成。")
                     calls = [dict(pending[index], name=pending[index]["name"].strip())
                              for index in sorted(pending) if pending[index]["name"].strip()]
                     if calls:

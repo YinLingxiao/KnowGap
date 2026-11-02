@@ -998,3 +998,6 @@
     animation: none;
   }
 }
+.generationHint { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin: 0 6px 8px; font-size: 12px; color: var(--text-secondary); }
+.generationHint button { flex-shrink: 0; text-decoration: underline; text-underline-offset: 3px; }
+.generationHint button:disabled { opacity: .45; }

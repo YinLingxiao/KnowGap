@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 /** 两次刷新的间隔：Markdown 每次都要重新解析，约 30 次/秒已经足够顺滑 */
 const FRAME_MS = 32;
 /** 每次最多追加的字符数，避免大段文字一下子涌出来 */
-const MAX_STEP = 48;
+const MAX_STEP = 160;
 
 function motionReduced(): boolean {
   return document.documentElement.dataset.motion === "reduced"
@@ -14,23 +14,23 @@ function motionReduced(): boolean {
 
 /**
  * 流式文字的平滑显示：服务端按 token 一团一团地送，直接渲染会一跳一跳。
- * 这里把还没显示的部分按比例匀速放出，积压越多放得越快，几百毫秒内一定追平。
+ * 小段增量按比例放出；积压过多或生成结束时直接追平。
  * 不是已显示文字的延续（重新生成、存储后的核对结果替换）时直接换成新文字。
  */
-export function useSmoothText(target: string, live: boolean): string {
+export function useSmoothText(target: string, live: boolean, paused = false): string {
   const [shown, setShown] = useState(target);
   const latest = useRef(target);
   latest.current = target;
   const continues = target.startsWith(shown);
   const behind = continues && shown.length < target.length;
-  const snap = !continues || (behind && !live && shown === "");
+  const snap = !continues || (behind && (!live || target.length - shown.length > 800));
 
   useEffect(() => {
-    if (snap) setShown(target);
-  }, [snap, target]);
+    if (snap && !paused) setShown(target);
+  }, [snap, target, paused]);
 
   useEffect(() => {
-    if (!behind || snap) return;
+    if (!behind || snap || paused) return;
     if (document.hidden || motionReduced()) {
       setShown(latest.current);
       return;
@@ -51,7 +51,7 @@ export function useSmoothText(target: string, live: boolean): string {
       });
     }, FRAME_MS);
     return () => window.clearTimeout(timer);
-  }, [behind, snap, shown]);
+  }, [behind, snap, shown, paused]);
 
-  return snap ? target : shown;
+  return snap && !paused ? target : shown;
 }

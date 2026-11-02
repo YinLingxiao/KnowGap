@@ -27,7 +27,7 @@ const inlineComponents: Components = {
 };
 
 /** 带公式的短文本（题干、选项、解析、卡片里的说明）。不渲染原始 HTML，也不渲染链接、图片和列表。 */
-export const MathText = memo(function MathText({ text }: { text: string }) {
+export const MathText = memo(function MathText({ text }: { text?: string | null }) {
   return (
     <ReactMarkdown
       remarkPlugins={mathRemarkPlugins}
@@ -36,7 +36,7 @@ export const MathText = memo(function MathText({ text }: { text: string }) {
       unwrapDisallowed
       components={inlineComponents}
     >
-      {normalizeMathDelimiters(text)}
+      {normalizeMathDelimiters(text ?? "")}
     </ReactMarkdown>
   );
 });
