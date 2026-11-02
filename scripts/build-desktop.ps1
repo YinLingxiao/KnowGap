@@ -44,8 +44,8 @@ try {
     $env:NEXT_PUBLIC_DATA_SOURCE = "api"
     $env:NEXT_PUBLIC_API_BASE_URL = "/"
     if (-not $SkipDependencies) {
-        npm ci --no-audit --no-fund
-        Assert-Exit "npm ci (frontend)"
+        npm install --no-audit --no-fund
+        Assert-Exit "npm install (frontend)"
     }
     npm run build
     Assert-Exit "next build"
@@ -81,8 +81,8 @@ try {
         if (-not $env:ELECTRON_BUILDER_BINARIES_MIRROR) { $env:ELECTRON_BUILDER_BINARIES_MIRROR = "https://npmmirror.com/mirrors/electron-builder-binaries/" }
     }
     if (-not $SkipDependencies) {
-        npm ci --no-audit --no-fund
-        Assert-Exit "npm ci (desktop)"
+        npm install --no-audit --no-fund
+        Assert-Exit "npm install (desktop)"
     }
     if (-not (Test-Path 'node_modules\electron\dist\electron.exe')) {
         node node_modules/electron/install.js
