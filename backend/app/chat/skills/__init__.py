@@ -7,7 +7,11 @@ from app.chat.skills.chat_skills import (
 )
 from app.chat.skills.main_skills import MAIN_ROADMAP_SKILL
 from app.chat.skills.file_skills import file_skill_prompt
-from app.chat.skills.thread_skills import THREAD_SKILLS
+from app.chat.skills.thread_skills import THREAD_SKILLS, WIDGET_CAPABILITY, WIDGET_SCHEMA_GUIDE
+from app.chat.skills.visual_guide import VISUAL_CARD_GUIDE
+
+# 控件能力声明与两份规范不随轮次变化，放进系统提示：小模型读得到，也能命中前缀缓存。
+WIDGET_SYSTEM_PROMPT = f"{WIDGET_CAPABILITY}\n\n{WIDGET_SCHEMA_GUIDE}\n\n{VISUAL_CARD_GUIDE}"
 
 _FEYNMAN_RE = re.compile(r"费曼|我来讲|听我讲|挑刺|考官")
 _PRACTICE_RE = re.compile(r"练习|做题|考我|出.*题|测验|刷题|来看看我的解答|对不对|练手|好题|真题|母题")
@@ -16,6 +20,28 @@ _ROADMAP_RE = re.compile(r"计划|路线|怎么学|从哪开始|学习安排|规
 _EXPLAIN_RE = re.compile(r"讲解|原理|为什么|怎么理解|区别|对比|深入|映射|机制|过程|推导")
 _COMPARE_RE = re.compile(r"区别|对比|异同|不同|优缺点|还是|哪几种")
 _CODE_RE = re.compile(r"代码实验|写代码|代码填空|脚手架|补全.*代码|编译运行|code_playground", re.I)
+# 用户明说要可点、可看的东西：优先于出题和对比。
+_VISUAL_INTENT_RE = re.compile(r"可交互|交互|可点|点一下|动画|演示|可视化|画.{0,4}图|模拟|滑块|拖动")
+# 只是在讲结构或过程的话题词：出题、对比的需求优先，其余讲解默认配图示。
+_VISUAL_TOPIC_RE = re.compile(r"树|链表|图论|遍历|排序|堆|栈|队列|指针|状态变化")
+_VISUAL_RECOMMENDATION = "knowgap-visual（必须在回复中嵌入 ```knowgap-visual 可点击的 SVG 图示或动画，不要让用户保存 HTML 文件）"
+
+# 模型说「嵌不了」或把整页 HTML 当文件贴给用户，都是没用上控件的表现。
+_WIDGET_REFUSAL_RE = re.compile(
+    r"嵌(?:入)?不了|(?:无法|没法|不能|不支持)(?:直接)?嵌入"
+    r"|(?:做|放|提供|实现)不了[^。\n]{0,8}(?:可交互|交互|控件|可点)"
+    r"|无法[^。\n]{0,6}(?:可交互|交互式)(?:控件|图|动画|演示)"
+    r"|(?:保存|存|另存)(?:为|成)\s*[\w.-]*\.html"
+    r"|双击[^。\n]{0,15}浏览器|(?:用|在|通过)浏览器打开"
+)
+_WIDGET_BLOCK_RE = re.compile(r"```knowgap-(?:widget|visual)\b")
+_PLAIN_FENCE_RE = re.compile(r"```(?!knowgap-)[\w+-]*[ \t]*\r?\n(.*?)```", re.S)
+_HTML_REQUEST_RE = re.compile(r"html|网页|网站|前端|源码", re.I)
+
+WIDGET_RETRY_NOTICE = (
+    "（系统提示：你能直接在正文输出 ```knowgap-visual 控件（或 ```knowgap-widget 微件），用户无需保存文件或打开浏览器。"
+    "请改写上一条回复：用控件呈现，不要让用户保存文件，也不要说“嵌不了”。）"
+)
 
 
 def recommend_widget(
@@ -28,14 +54,27 @@ def recommend_widget(
     if not sample or len(sample) < 4:
         return None
     if _CODE_RE.search(sample):
-        return "code_playground（建议在回复中嵌入 ```knowgap-widget 的 code_playground 代码脚手架实验台）"
+        return "code_playground（必须在回复中嵌入 ```knowgap-widget 的 code_playground 代码实验台）"
+    if _VISUAL_INTENT_RE.search(sample):
+        return _VISUAL_RECOMMENDATION
     if _PRACTICE_RE.search(sample):
-        return "micro_quiz（建议在回复中嵌入 ```knowgap-widget 的 micro_quiz 随堂微测卡）"
+        return "micro_quiz（必须在回复中嵌入 ```knowgap-widget 的 micro_quiz 随堂微测卡）"
     if _COMPARE_RE.search(sample):
-        return "comparison_matrix 或 step_simulator（建议在回复中嵌入 ```knowgap-widget 交互对比卡或单步推演器）"
+        return "comparison_matrix（必须在回复中嵌入 ```knowgap-widget 交互对比卡）"
+    if _VISUAL_TOPIC_RE.search(sample):
+        return _VISUAL_RECOMMENDATION
     if _EXPLAIN_RE.search(sample) or role == "thread":
-        return "step_simulator（建议在回复中嵌入 ```knowgap-widget 单步状态推演器展示核心过程）"
+        return "step_simulator（必须在回复中嵌入 ```knowgap-widget 单步推演器展示核心过程）"
     return None
+
+
+def refuses_widget(reply: str, user_text: str = "") -> bool:
+    """True when a reply tells the learner to save an HTML file instead of using an inline widget."""
+    if not reply or _WIDGET_BLOCK_RE.search(reply) or _HTML_REQUEST_RE.search(user_text or ""):
+        return False
+    if _WIDGET_REFUSAL_RE.search(reply):
+        return True
+    return any("<!doctype html" in body.lower() for body in _PLAIN_FENCE_RE.findall(reply))
 
 
 def infer_thread_skill(text: str, explicit_skill: str | None = None) -> str:
@@ -99,7 +138,10 @@ __all__ = [
     "MAIN_ROADMAP_SKILL",
     "ONBOARDING_TITLE",
     "THREAD_SKILLS",
+    "WIDGET_RETRY_NOTICE",
+    "WIDGET_SYSTEM_PROMPT",
     "infer_thread_skill",
     "recommend_widget",
+    "refuses_widget",
     "select_skill_prompt",
 ]

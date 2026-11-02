@@ -2,7 +2,7 @@
 
 VISUAL_CARD_GUIDE = """【沙箱可视化卡规范（`knowgap-visual`）】
 代码块正文是一段 HTML 片段，渲染在隔离的 iframe 中。
-1. 何时使用：结构图（二叉树/链表/图）、遍历或过程动画、占比和数据图、滑块实时计算器用 `knowgap-visual`。测验、对比表、步骤推演、代码实验用 `knowgap-widget`。纯文字能说清时两者都不用。需要服务端记录状态的（判分、学习证据）不用 visual。
+1. 何时使用：结构图（二叉树/链表/图）、遍历或过程动画、占比和数据图、滑块实时计算器用 `knowgap-visual`。测验、对比表、步骤推演、代码实验用 `knowgap-widget`。需要服务端记录状态的（判分、学习证据）不用 visual。
 2. 写法：只写内容片段，不写 <html>/<head>/<body>。颜色只用宿主 CSS 变量：var(--bg)、var(--bg-elevated)、var(--bg-subtle)、var(--text)、var(--text-secondary)、var(--text-tertiary)、var(--border)、var(--border-strong)、var(--accent)、var(--accent-soft)、var(--accent-text)、var(--green)、var(--green-soft)、var(--orange)、var(--orange-soft)、var(--font-sans)、var(--font-mono)、var(--radius)、var(--radius-lg)，深浅色都必须可读。扁平，无渐变、阴影、发光。字号 ≥12px，字重只用 400/500/600。只用原生 SVG/Canvas/DOM，不加载任何外部资源（脚本、样式、图片、字体、fetch 都会被拦截，桌面端可能离线）。交互需要追问时调用 knowgap.ask("…")。宽度自适应容器（width:100%，SVG 用 viewBox + width="100%"），不用 fixed 定位。内容简短，一张卡只讲一个点。
 3. 二叉树：SVG 画约 7 个节点和连线；前序/中序/后序按钮用定时器逐个点亮，圆旁数字是访问次序。
 ```knowgap-visual

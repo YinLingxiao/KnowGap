@@ -261,4 +261,4 @@ def test_guard_gaps_drops_unknown_memory_and_truncates_note():
 def test_prompts_no_longer_force_widgets():
     from app.chat.skills.thread_skills import DEEP_EXPLAIN_SKILL, WIDGET_SCHEMA_GUIDE
     assert "必须在正文中嵌入" not in DEEP_EXPLAIN_SKILL and "强制内联" not in DEEP_EXPLAIN_SKILL
-    assert "简单澄清不要用卡片" in DEEP_EXPLAIN_SKILL and "planStepId" in WIDGET_SCHEMA_GUIDE
+    assert "不要用卡片" not in DEEP_EXPLAIN_SKILL + WIDGET_SCHEMA_GUIDE and "planStepId" in WIDGET_SCHEMA_GUIDE
