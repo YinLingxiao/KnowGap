@@ -209,6 +209,7 @@ class MemoryEvidence(BaseModel):
     reason: str
     signal: Literal["supports", "contradicts"]
     created_at: str
+    source: Literal["message_quote", "quiz_attempt"] = "message_quote"
     # False when the source conversation was deleted later; the quote snapshot is kept.
     source_available: bool = True
 

@@ -256,3 +256,16 @@ class PlanStore:
                     step.update(status="done", completed_message_id=message_id)
                     step.pop("_awaiting_seq", None)
             return self._save(db, old, steps, events, message_id)
+
+    def complete_awaiting_step(self, db, conversation_id, student_id, step_id, message_id=None):
+        """学习者在卡片里独立答对：在调用方的事务内把 awaiting_learner 的步骤标 done，返回 {id, title} 或 None。"""
+        old, events, owner = self._load(db, conversation_id, student_id)
+        old, events = self._sync_threads(db, old, events, owner)
+        steps = json.loads(json.dumps(old["steps"]))
+        step = next((s for s in steps if s["id"] == step_id and s["status"] == "awaiting_learner"), None)
+        if step is None:
+            return None
+        step.update(status="done", completed_message_id=message_id)
+        step.pop("_awaiting_seq", None)
+        self._save(db, old, steps, events, message_id)
+        return {"id": step["id"], "title": step["title"]}
