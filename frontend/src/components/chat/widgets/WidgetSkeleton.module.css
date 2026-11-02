@@ -1,0 +1,139 @@
+/* 卡片生成中的骨架：圆角色块轻微脉冲，形状贴近最终卡片，减少流式结束时的跳动 */
+.card {
+  margin: 14px 0;
+  padding: 14px 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-xl);
+  background: var(--bg-elevated);
+}
+
+.visual {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.block {
+  /* 深色主题的两层底色很接近，用轻边框保留占位形状 */
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-subtle);
+  animation: skeleton-pulse 1.8s ease-in-out infinite;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.titleBar {
+  width: 42%;
+  max-width: 240px;
+  height: 16px;
+}
+
+.counterBar {
+  width: 64px;
+  height: 18px;
+  border-radius: 999px;
+}
+
+.stateGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 8px;
+}
+
+.stateCell {
+  height: 52px;
+}
+
+.textBar {
+  width: 88%;
+  height: 14px;
+}
+
+.textBarShort {
+  width: 62%;
+}
+
+.matrixGrid {
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+}
+
+.matrixRow {
+  display: grid;
+  grid-template-columns: 22% 1fr 1fr;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.matrixRow:last-child {
+  border-bottom: 0;
+}
+
+.matrixHead {
+  padding-top: 9px;
+  padding-bottom: 9px;
+  border-bottom-color: var(--border-strong);
+}
+
+.matrixCell {
+  height: 12px;
+}
+
+.matrixHead .matrixCell {
+  height: 9px;
+}
+
+.matrixCellDim {
+  width: 82%;
+}
+
+.editorBlock {
+  height: 220px;
+}
+
+/* 认不出类型时的一行通用骨架（沿用原来的观感） */
+.generic {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0;
+  padding: 12px 16px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+}
+
+.icon {
+  color: var(--accent);
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes skeleton-pulse {
+  50% {
+    opacity: 0.62;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .block,
+  .icon {
+    animation: none;
+  }
+}
+
+:global(html[data-motion="reduced"]) .block,
+:global(html[data-motion="reduced"]) .icon {
+  animation: none;
+}
