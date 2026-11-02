@@ -534,7 +534,6 @@ export const enPhrases: Record<string, string> = {
   "继续发送": "Resume queue",
   "修改待发送内容": "Edit queued message",
   "撤回": "Remove from queue",
-  "会话阅读区": "Conversation reading area",
   "正在接回生成进度…": "Reconnecting to your reply…",
   "可以继续输入，Enter 加入待发送": "Keep typing. Press Enter to queue your next message.",
   "停止并按新要求重答": "Stop and answer with these instructions",

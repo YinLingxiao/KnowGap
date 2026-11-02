@@ -1053,8 +1053,8 @@ export function Composer({
   return (
     <div className={cx(styles.composer, hero && styles.hero, dragging && styles.dragging)}>
       {!hero && <PlanBar conversationId={conversationId} busy={generating || busy} />}
-      {!hero && <OutboxBar conversationId={conversationId} running={generating} />}
-      {generating && <div className={styles.generationHint}>
+      {!hero && <OutboxBar conversationId={conversationId} />}
+      {generating && (phase === "reconnecting" || value.trim()) && <div className={styles.generationHint}>
         <span role="status">{phase === "reconnecting" ? tx("正在接回生成进度…") : tx("可以继续输入，Enter 加入待发送")}</span>
         {onRevise && <button type="button" disabled={!canSend || revising} onClick={async () => {
           setRevising(true);

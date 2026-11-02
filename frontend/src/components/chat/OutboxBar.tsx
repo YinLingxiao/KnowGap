@@ -7,7 +7,7 @@ import { useI18n } from "@/components/LanguageProvider";
 import styles from "./OutboxBar.module.css";
 
 /** The server owns ordering and dispatch. This view only edits saved pending inputs. */
-export function OutboxBar({ conversationId, running }: { conversationId?: string | null; running: boolean }) {
+export function OutboxBar({ conversationId }: { conversationId?: string | null }) {
   const { tx } = useI18n();
   const [queue, setQueue] = useState<Outbox>({ paused: false, items: [] });
   const [error, setError] = useState("");
@@ -54,10 +54,11 @@ export function OutboxBar({ conversationId, running }: { conversationId?: string
     };
   }, [conversationId, refresh]);
   useEffect(() => {
-    if (!conversationId || busy || (!running && !queue.items.length)) return;
+    // Poll only while something is queued; new items announce themselves via knowgap:outbox-updated.
+    if (!conversationId || busy || !queue.items.length) return;
     const timer = window.setInterval(refresh, 1500);
     return () => window.clearInterval(timer);
-  }, [busy, conversationId, queue.items.length, refresh, running]);
+  }, [busy, conversationId, queue.items.length, refresh]);
   const mutate = async (operation: (cid: string) => Promise<Outbox>) => {
     if (!conversationId || busy) return;
     const cid = conversationId;

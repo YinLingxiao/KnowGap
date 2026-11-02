@@ -25,7 +25,6 @@ const js = ts.transpileModule(source, {
 const wakeEvents = loadTs('../src/lib/chat/wakeEvents.ts');
 const loaded = { exports: {} };
 new Function('module', 'exports', 'require', js)(loaded, loaded.exports, (name) => {
-  if (name === './ReadingRuntime') return { ReadingProvider: ({ children }) => children, ReadingViewport: 'div' };
   if (resolveI18n(name)) return resolveI18n(name);
   if (name === 'react') return {
     ...React,

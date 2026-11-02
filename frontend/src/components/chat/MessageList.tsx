@@ -31,7 +31,6 @@ import type { PlanChange } from "@/lib/chat/plan";
 import { AGENDA_TOOLS, AgendaToolCard } from "./AgendaToolCard";
 import { hasVisionMarker } from "./widgets/visionData";
 import { MessageNav } from "./MessageNav";
-import { ReadingProvider, ReadingViewport } from "./ReadingRuntime";
 import { MemoriesByIdContext } from "./widgets/memoryContext";
 import { WidgetScopeContext } from "./widgets/widgetEvents";
 import styles from "./MessageList.module.css";
@@ -267,6 +266,7 @@ export function MessageList({
     });
   };
   const scrollRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const following = useRef(true);
   const [readingSelection, setReadingSelection] = useState(false);
   const [showJump, setShowJump] = useState(false);
@@ -318,12 +318,16 @@ export function MessageList({
     if (element) element.scrollTop = element.scrollHeight;
   }, []);
 
+  const lastScrollTop = useRef(0);
   const onScroll = () => {
     const element = scrollRef.current;
     if (!element) return;
     const near = element.scrollHeight - element.scrollTop - element.clientHeight < 96;
-    following.current = near;
-    setShowJump(!near);
+    // 自动滚到底的那次滚动事件到达时，流式内容可能又长了一截；只有 scrollTop 变小（学习者往上翻）才停止跟随
+    if (near) following.current = true;
+    else if (element.scrollTop < lastScrollTop.current) following.current = false;
+    lastScrollTop.current = element.scrollTop;
+    setShowJump(!following.current);
   };
 
   useEffect(() => {
@@ -336,6 +340,19 @@ export function MessageList({
     document.addEventListener("selectionchange", selected);
     return () => document.removeEventListener("selectionchange", selected);
   }, []);
+
+  useLayoutEffect(() => {
+    if (following.current && !readingSelection) toBottom();
+  }, [messages, readingSelection, toBottom]);
+
+  // 卡片、公式、图片在渲染之后还会继续变高：跟随时一并贴住底部，选中文字阅读时不动
+  useEffect(() => {
+    const list = listRef.current;
+    if (!list || readingSelection) return;
+    const observer = new ResizeObserver(() => { if (following.current) toBottom(); });
+    observer.observe(list);
+    return () => observer.disconnect();
+  }, [readingSelection, toBottom]);
 
   useEffect(() => {
     if (!scrollTarget) return;
@@ -379,11 +396,9 @@ export function MessageList({
   return (
     <WidgetScopeContext.Provider value={conversationId}>
     <MemoriesByIdContext.Provider value={memoriesById}>
-    <ReadingProvider key={conversationId} messages={messages}>
     <div className={styles.wrap}>
-      <ReadingViewport ref={scrollRef} className={styles.scroll} role="region" aria-label={tx("会话阅读区")} tabIndex={0}
-        onScroll={onScroll} autoScroll={following.current && !readingSelection}>
-        <div className={styles.list} role="log" aria-live="polite" aria-relevant="additions">
+      <div ref={scrollRef} className={styles.scroll} onScroll={onScroll}>
+        <div ref={listRef} className={styles.list} role="log" aria-live="polite" aria-relevant="additions">
           {topSlot}
           {fileNavigationError && <p className={styles.fileNavigationError} role="alert">{fileNavigationError}</p>}
           {pinnedMessages.length > 0 && (
@@ -802,7 +817,7 @@ export function MessageList({
             </div>
           )}
         </div>
-      </ReadingViewport>
+      </div>
       <SelectionToolbar
         scopeRef={scrollRef}
         conversationId={conversationId}
@@ -817,7 +832,6 @@ export function MessageList({
         </button>
       )}
     </div>
-    </ReadingProvider>
     </MemoriesByIdContext.Provider>
     </WidgetScopeContext.Provider>
   );
