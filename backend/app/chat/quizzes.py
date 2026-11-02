@@ -48,7 +48,9 @@ def guard_gaps(text: str, allowed_misconceptions: set[str]) -> str:
             widget["note"] = note[:GAP_NOTE_LIMIT]
         elif not isinstance(note, str):
             widget.pop("note", None)
-        return match.group(0)[:match.start(1) - match.start()] + json.dumps(widget, ensure_ascii=False)             + match.group(0)[match.end(1) - match.start():]
+        head = match.group(0)[:match.start(1) - match.start()]
+        tail = match.group(0)[match.end(1) - match.start():]
+        return head + json.dumps(widget, ensure_ascii=False) + tail
     return WIDGET_RE.sub(fix, text or "")
 
 

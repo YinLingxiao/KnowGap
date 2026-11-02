@@ -158,6 +158,9 @@ def test_wrong_answer_records_supporting_evidence_once(tmp_path):
         assert rows[1]["source"] == "quiz_attempt" and rows[1]["attempt_id"] == wrong["attempt_id"]
         assert rows[1]["message_id"] is None and rows[1]["quote"] == "题目：栈的出栈顺序？｜所选：先进先出"
         assert rows[0]["source"] == "message_quote"
+        with store.connection() as db:
+            wire = store._memories(db, student, mid)[0].evidence
+        assert [e.source for e in wire] == ["message_quote", "quiz_attempt"]
         # 重放、repeated、GET 都不再产生证据或变化
         assert attempt(client, alice, f"{reply}:0", "w-1", 0).json()["memory_changes"] == []
         assert attempt(client, alice, f"{reply}:0", "w-2", 1).json()["memory_changes"] == []

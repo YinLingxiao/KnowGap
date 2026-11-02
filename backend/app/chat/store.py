@@ -1464,7 +1464,7 @@ class ChatStore:
                 created_at=row["created_at"], updated_at=row["updated_at"],
                 evidence=[MemoryEvidence(
                     conversation_id=e["conversation_id"], message_id=e["message_id"], quote=e["quote"],
-                    reason=e["reason"], signal=e["signal"], created_at=e["created_at"],
+                    reason=e["reason"], signal=e["signal"], created_at=e["created_at"], source=e["source"],
                     source_available=bool(e["available"]),
                 ) for e in evidence],
             ))
