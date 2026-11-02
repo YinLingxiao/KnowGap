@@ -36,6 +36,7 @@ from app.chat.plan import PlanStore, brief
 from app.chat.checkpoints import MAX_TOOL_ROUNDS, resume_state
 from app.chat.usage import normalize_usage
 from app.chat.schemas import DispatchThread, ProposeThreads, ReportProgress
+from app.chat.quizzes import guard_gaps, seal_quizzes
 from app.chat.skills.problem_drill_skill import SEARCH_TOOL, drill_plan, guard_reply, lesson_first, wants_problems
 from app.chat.coordination import cancel_deliveries, dispatch, next_delivery
 from app.memory.store import new_id
@@ -1019,6 +1020,9 @@ class ChatService:
             if any(quiz_report.values()):  # 有任何核对、替换或清理动作就记一笔
                 # warning 级别：uvicorn 默认不输出应用自己的 info 日志
                 logger.warning("problem_drill quiz check: %s", quiz_report)
+            text = guard_gaps(text, {m.id for m, _ in memories if m.kind == "misconception"})
+            # 定稿前封存题目：存库并抹掉正文里的答案与解析，done 事件和之后的读取都不含答案
+            text = seal_quizzes(text, assistant_id, generation.conversation_id, self.store)
             cited = [source.model_dump() for source in sources if f"[{source.label}]" in text]
             self.store.finish_reply(assistant_id, content=text, status="complete", meta={
                 "context_memory_ids": [m.id for m, _ in memories], "sources": cited, "truncated": finish == "length",
@@ -1083,14 +1087,14 @@ class ChatService:
         except asyncio.CancelledError:
             if generation.streaming:
                 close_tool_batch(tool_messages)
-                self.store.finish_reply(assistant_id, content="".join(parts),
+                self.store.finish_reply(assistant_id, content=seal_quizzes("".join(parts), assistant_id, generation.conversation_id, self.store),
                                         status="failed" if self.closing else "cancelled",
                                         error=INTERRUPTED if self.closing else None,
                                         meta={"tool_calls": tool_log, "tool_messages": tool_messages, **_reasoning_meta(thoughts)})
                 queue.put_nowait(("cancelled", {"message": self._message(student_id, assistant_id)}))
         except ProviderError as exc:
             close_tool_batch(tool_messages)
-            self.store.finish_reply(assistant_id, content="".join(parts), status="failed", error=exc.detail,
+            self.store.finish_reply(assistant_id, content=seal_quizzes("".join(parts), assistant_id, generation.conversation_id, self.store), status="failed", error=exc.detail,
                                     meta={"tool_calls": tool_log, "tool_messages": tool_messages, **_reasoning_meta(thoughts)})
             queue.put_nowait(("error", {
                 "detail": exc.detail, "status_code": exc.status_code,
@@ -1101,7 +1105,7 @@ class ChatService:
             detail = "生成回复时发生内部错误，请重试。"
             try:
                 close_tool_batch(tool_messages)
-                self.store.finish_reply(assistant_id, content="".join(parts), status="failed", error=detail,
+                self.store.finish_reply(assistant_id, content=seal_quizzes("".join(parts), assistant_id, generation.conversation_id, self.store), status="failed", error=detail,
                                         meta={"tool_calls": tool_log, "tool_messages": tool_messages, **_reasoning_meta(thoughts)})
             except Exception:
                 logger.exception("Could not record the failed reply")

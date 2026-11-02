@@ -47,6 +47,8 @@ new Function('module', 'exports', 'require', js)(loaded, loaded.exports, (name) 
   if (name === './widgets/visionData') return { hasVisionMarker: () => false };
   if (name === '@/hooks/useSmoothText') return { useSmoothText: (text) => text };
   if (name === './SelectionToolbar') return { SelectionToolbar: () => null, SELECTABLE_ATTR: 'data-selectable' };
+  if (name === './widgets/widgetEvents') return { WidgetScopeContext: { Provider: ({ children }) => children } };
+  if (name === './widgets/memoryContext') return { MemoriesByIdContext: { Provider: ({ children }) => children } };
   if (name === './WorkingIndicator') return { WorkingIndicator: () => null };
   if (name === './ReasoningBlock') return { ReasoningBlock: () => null };
   if (name === './GeneratedFiles') return { GeneratedFiles: () => null };

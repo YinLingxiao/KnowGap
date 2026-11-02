@@ -36,20 +36,12 @@ import {
 import { cx } from "@/lib/cx";
 import { useI18n } from "@/components/LanguageProvider";
 import base from "../LearningWidget.module.css";
-import { sendNow } from "./widgetEvents";
+import { askInComposer, sendNow, useWidgetScope } from "./widgetEvents";
 import styles from "./CodePlaygroundWidget.module.css";
 import {
   LANGUAGE_LABELS, buildDiagnosisPrompt, countTodos, parseCodePlaygroundSpec,
   type PlaygroundLanguage, type PlaygroundSpec,
 } from "./codePlaygroundModel";
-
-/** 与 LearningWidget.tsx 里的 WIDGET_ASK_EVENT 相同。Composer 监听它并把内容预填进输入框。
- *  这里复制字符串而不是 import，避免两个微件文件互相依赖形成循环。 */
-const WIDGET_ASK_EVENT = "knowgap:widget-ask";
-
-function emitWidgetQuestion(prompt: string) {
-  window.dispatchEvent(new CustomEvent<string>(WIDGET_ASK_EVENT, { detail: prompt }));
-}
 
 /** 后端 ToolchainMissing 的中文说明形如「找不到 node，无法运行 …」；取出缺的工具名 */
 function missingTool(message: string): string | null {
@@ -316,6 +308,7 @@ interface LastRun {
 
 function PlaygroundPanel({ spec, onAsk }: { spec: PlaygroundSpec; onAsk?: (prompt: string) => void }) {
   const { tx } = useI18n();
+  const scope = useWidgetScope();
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const mountedRef = useRef(true);
@@ -412,7 +405,7 @@ function PlaygroundPanel({ spec, onAsk }: { spec: PlaygroundSpec; onAsk?: (promp
         setMissing({ tool, code });
         if (autoCheckedRef.current !== code) {
           autoCheckedRef.current = code;
-          sendNow(buildStaticCheckPrompt(spec, code, tool, tx));
+          sendNow(scope, buildStaticCheckPrompt(spec, code, tool, tx));
         }
       } else {
         setError(message);
@@ -423,7 +416,7 @@ function PlaygroundPanel({ spec, onAsk }: { spec: PlaygroundSpec; onAsk?: (promp
       runningRef.current = false;
       if (mountedRef.current) setRunning(false);
     }
-  }, [spec, stdin]);
+  }, [spec, stdin, scope]);
 
   useEffect(() => {
     runRef.current = run;
@@ -457,7 +450,7 @@ function PlaygroundPanel({ spec, onAsk }: { spec: PlaygroundSpec; onAsk?: (promp
       title: spec.title, language: spec.language, instructions: spec.instructions,
       code: last.code, result: last.result,
     });
-    (onAsk ?? emitWidgetQuestion)(prompt);
+    (onAsk ?? ((text: string) => askInComposer(scope, text)))(prompt);
     setAsked(true);
   };
 
@@ -467,7 +460,7 @@ function PlaygroundPanel({ spec, onAsk }: { spec: PlaygroundSpec; onAsk?: (promp
     const code = view.state.doc.toString();
     autoCheckedRef.current = code;
     setMissing({ tool: missing.tool, code });
-    sendNow(buildStaticCheckPrompt(spec, code, missing.tool, tx));
+    sendNow(scope, buildStaticCheckPrompt(spec, code, missing.tool, tx));
   };
 
   const scaffold = spec.mode === "scaffold";
@@ -517,12 +510,12 @@ function PlaygroundPanel({ spec, onAsk }: { spec: PlaygroundSpec; onAsk?: (promp
           {running ? <LoaderCircle size={14} className={styles.spin} aria-hidden /> : <Play size={14} aria-hidden />}
           <span>{running ? tx("运行中…") : tx("编译并运行")}</span>
         </button>
-        <button type="button" className={base.ctrlBtn} onClick={reset} disabled={running}>
+        <button type="button" className={cx(base.ctrlBtn, styles.controlBtn)} onClick={reset} disabled={running}>
           <RotateCcw size={13} aria-hidden />
           <span>{scaffold ? tx("重置脚手架") : tx("重置代码")}</span>
         </button>
         {failed && (
-          <button type="button" className={base.askAiBtn} onClick={diagnose}>
+          <button type="button" className={cx(styles.textBtn, styles.textBtnAccent)} onClick={diagnose}>
             <Bot size={13} aria-hidden />
             <span>{tx("让 AI 诊断报错原因")}</span>
           </button>
@@ -541,7 +534,7 @@ function PlaygroundPanel({ spec, onAsk }: { spec: PlaygroundSpec; onAsk?: (promp
           <div className={styles.bannerText}>
             <strong>{tx("本机没有 {tool}，没法运行", { tool: missing.tool })}</strong>
             <p>{tx("已请 AI 先读一遍代码，检查结果在下方对话里。")}</p>
-            <button type="button" className={base.askAiBtn} onClick={recheck}>
+            <button type="button" className={cx(styles.textBtn, styles.textBtnAccent)} onClick={recheck}>
               <Bot size={13} aria-hidden />
               <span>{tx("再让 AI 检查一次")}</span>
             </button>

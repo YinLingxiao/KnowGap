@@ -232,6 +232,23 @@ class ChatStore:
                 CREATE UNIQUE INDEX IF NOT EXISTS idx_thread_reports_pending
                     ON thread_reports(thread_id) WHERE state = 'pending';
                 CREATE INDEX IF NOT EXISTS idx_thread_reports_main ON thread_reports(main_id, state);
+                -- 题目与作答只随会话删除；message_id 不设外键，重新生成删除旧回复时记录照留
+                CREATE TABLE IF NOT EXISTS quiz_items (
+                    quiz_id TEXT PRIMARY KEY, message_id TEXT NOT NULL,
+                    conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+                    question TEXT NOT NULL, options_json TEXT NOT NULL, answer_index INTEGER NOT NULL,
+                    explanation TEXT NOT NULL DEFAULT '', meta_json TEXT NOT NULL DEFAULT '{}',
+                    superseded INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_quiz_items_message ON quiz_items(message_id);
+                CREATE TABLE IF NOT EXISTS quiz_attempts (
+                    id TEXT PRIMARY KEY, action_id TEXT NOT NULL UNIQUE,
+                    quiz_id TEXT NOT NULL REFERENCES quiz_items(quiz_id) ON DELETE CASCADE,
+                    conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+                    option_index INTEGER NOT NULL, correct INTEGER NOT NULL, created_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_quiz_attempts_quiz ON quiz_attempts(quiz_id);
+                CREATE INDEX IF NOT EXISTS idx_quiz_attempts_conversation ON quiz_attempts(conversation_id);
             """)
             # NULL subject_id: conversation outside any Subject / general memory that applies everywhere.
             ensure_column(db, "conversations", "subject_id", "TEXT")
@@ -252,6 +269,10 @@ class ChatStore:
             ensure_column(db, "conversations", "compressed_up_to_seq", "INTEGER NOT NULL DEFAULT 0")
             ensure_column(db, "conversations", "model_key", "TEXT")
             ensure_column(db, "conversations", "model_notice_key", "TEXT")
+            # 证据来源：聊天引用（message_quote）或测验作答（quiz_attempt，message_id 留空）
+            ensure_column(db, "learner_memory_evidence", "source", "TEXT NOT NULL DEFAULT 'message_quote'")
+            ensure_column(db, "learner_memory_evidence", "attempt_id", "TEXT")
+            ensure_column(db, "quiz_items", "plan_step_id", "TEXT")
             self._migrate_spaces(db)
             ensure_notes(db)
             from app.chat.onboarding import ensure as ensure_onboarding
@@ -1349,6 +1370,9 @@ class ChatStore:
         with self.connection() as db:
             db.execute("BEGIN IMMEDIATE")
             for message_id in discard:
+                # 旧回复里的题标为作废，题目和作答记录保留
+                db.execute("UPDATE quiz_items SET superseded = 1 WHERE message_id IN "
+                           "(SELECT id FROM conversation_messages WHERE id = ? AND reply_to = ?)", (message_id, reply_to))
                 db.execute("DELETE FROM conversation_messages WHERE id = ? AND reply_to = ?", (message_id, reply_to))
             return self._insert(db, conversation_id, role="assistant", kind="text", content="",
                                 status="streaming", reply_to=reply_to)
@@ -1440,7 +1464,7 @@ class ChatStore:
                 created_at=row["created_at"], updated_at=row["updated_at"],
                 evidence=[MemoryEvidence(
                     conversation_id=e["conversation_id"], message_id=e["message_id"], quote=e["quote"],
-                    reason=e["reason"], signal=e["signal"], created_at=e["created_at"],
+                    reason=e["reason"], signal=e["signal"], created_at=e["created_at"], source=e["source"],
                     source_available=bool(e["available"]),
                 ) for e in evidence],
             ))
@@ -1787,10 +1811,27 @@ class ChatStore:
             )
             return [change] if change else []
 
+    def record_quiz_evidence(
+        self, db, student_id: str, memory_id: str, *, signal: str, quote: str, reason: str,
+        conversation_id: str, attempt_id: str,
+    ) -> MemoryChange | None:
+        """作答产生的误区证据：在调用方的事务里走同一套状态迁移；他人的、被用户纠正过的记忆不动。"""
+        target = db.execute(
+            "SELECT * FROM learner_memories WHERE id = ? AND student_id = ? AND kind = 'misconception' "
+            "AND user_corrected = 0", (memory_id, student_id),
+        ).fetchone()
+        if target is None:
+            return None
+        return self._record_locked(
+            db, student_id, kind="misconception", topic=target["topic"], topic_key=None, summary=target["summary"],
+            quote=quote, reason=reason, signal=signal, related_id=memory_id, conversation_id=conversation_id,
+            message_id=None, subject_id=target["subject_id"], tags=None, source="quiz_attempt", attempt_id=attempt_id,
+        )
+
     def _record_locked(
         self, db, student_id: str, *, kind: str, topic: str, topic_key: str | None, summary: str, quote: str,
         reason: str, signal: str, related_id: str | None, conversation_id: str, message_id: str,
-        subject_id: str | None, tags: list[str] | None,
+        subject_id: str | None, tags: list[str] | None, source: str = "message_quote", attempt_id: str | None = None,
     ) -> MemoryChange | None:
         timestamp = now()
         row = None
@@ -1827,8 +1868,9 @@ class ChatStore:
                        (json.dumps(merged, ensure_ascii=False), memory_id))
         inserted = db.execute(
             "INSERT OR IGNORE INTO learner_memory_evidence"
-            "(memory_id, conversation_id, message_id, quote, reason, signal, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (memory_id, conversation_id, message_id, quote, reason, signal, timestamp),
+            "(memory_id, conversation_id, message_id, quote, reason, signal, created_at, source, attempt_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (memory_id, conversation_id, message_id, quote, reason, signal, timestamp, source, attempt_id),
         ).rowcount
         if not inserted:
             return None

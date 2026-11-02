@@ -7,7 +7,7 @@ import { cx } from "@/lib/cx";
 import base from "../LearningWidget.module.css";
 import { RouteBadge, useImageUrl } from "./VisionBits";
 import { arrowBetween, ellipseOf, parseAnnotatorData } from "./visionData";
-import { askInComposer } from "./widgetEvents";
+import { askInComposer, useWidgetScope } from "./widgetEvents";
 import styles from "./VisionWidgets.module.css";
 
 const CIRCLED = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳";
@@ -22,6 +22,7 @@ export const annotationMarker = (index: number) => CIRCLED[index] ?? String(inde
  */
 export function ImageAnnotatorWidget({ data }: { data: Record<string, unknown> }) {
   const { tx } = useI18n();
+  const scope = useWidgetScope();
   const parsed = useMemo(() => parseAnnotatorData(data), [data]);
   const { title, summary, annotations, aspect, route } = parsed;
   const image = useImageUrl(parsed.imageId);
@@ -94,7 +95,7 @@ export function ImageAnnotatorWidget({ data }: { data: Record<string, unknown> }
           <button
             key={`badge-${i}`}
             type="button"
-            className={cx(base.annoBadge, active === i && base.annoBadgeOn)}
+            className={cx(base.annoBadge, styles.badge, active === i && base.annoBadgeOn)}
             style={{ left: `${anno.box[1] / 10}%`, top: `${anno.box[0] / 10}%`, background: anno.color }}
             aria-pressed={active === i}
             aria-label={tx("批注 {index}：{text}", { index: i + 1, text: tx(anno.text) })}
@@ -132,11 +133,12 @@ export function ImageAnnotatorWidget({ data }: { data: Record<string, unknown> }
           <span className={base.footHint}>{tx("点击图上的编号或下方列表高亮对应批注，再针对这一处追问")}</span>
           <button
             type="button"
-            className={base.askAiBtn}
+            className={cx(base.askAiBtn, styles.askBtn)}
             disabled={!current}
             onClick={() => {
               if (!current || active === null) return;
               askInComposer(
+                scope,
                 tx("关于「{title}」中的批注 {index}：「{text}」，请结合图中这一处详细讲讲错在哪里、应该怎么改。", {
                   title: tx(title),
                   index: annotationMarker(active),
