@@ -92,7 +92,7 @@ function layout(insights: SubjectInsights, fog: FogConcept[], generatedAt: strin
     partial.push({
       id: memory.id, kind: "misconception", ring: "mid", label: memory.topic, summary: memory.summary,
       updatedAt: memory.updatedAt,
-      quotes: memory.evidence.filter((item) => item.signal === "supports" && item.quote.trim()).map((item) => item.quote).slice(0, 3),
+      quotes: memory.evidence.filter((item) => item.source !== "inferred" && item.signal === "supports" && item.quote.trim()).map((item) => item.quote).slice(0, 3),
     });
   }
   for (const thread of insights.threads) {

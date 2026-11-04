@@ -56,6 +56,11 @@ const TOOL_LABELS: Record<string, string> = {
   read_document: "读取文件",
 };
 
+function onlyInferredChanges(changes: ChatMessage["memoryChanges"]): boolean {
+  return changes.length > 0 && changes.every((change) =>
+    change.memory.evidence.length > 0 && change.memory.evidence.every((item) => item.source === "inferred"));
+}
+
 /** 超过该字符数或行数的消息可折叠 */
 const FOLD_CHARS = 650;
 const FOLD_LINES = 14;
@@ -496,7 +501,9 @@ export function MessageList({
                         title={t("messages.viewMemory")}
                       >
                         <Brain size={12} aria-hidden />
-                        {message.memoryChanges[0].action === "created" ? t("messages.memoryCreated") : t("messages.memoryUpdated")}
+                        {onlyInferredChanges(message.memoryChanges)
+                          ? t("messages.memoryInferred")
+                          : message.memoryChanges[0].action === "created" ? t("messages.memoryCreated") : t("messages.memoryUpdated")}
                         {message.memoryChanges[0].memory.summary}
                         {message.memoryChanges.length > 1 && t("messages.memoryMore", { count: message.memoryChanges.length })}
                       </button>

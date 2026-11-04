@@ -28,6 +28,25 @@ export const STATUS_KEY: Record<LearnerMemoryStatus, MessageKey> = {
   uncertain: "memory.status.uncertain",
 };
 
+const ORIGIN_KEY = {
+  inferred: "memory.originInferred",
+  stated: "memory.originStated",
+  quiz: "memory.originQuiz",
+  mixed: "memory.originMixed",
+} as const;
+
+function originOf(memory: LearnerMemory): keyof typeof ORIGIN_KEY | null {
+  const evidence = memory.evidence;
+  if (!evidence.length) return null;
+  if (evidence.every((item) => item.source === "inferred")) return "inferred";
+  const stated = evidence.some((item) => item.source !== "quiz_attempt" && item.source !== "inferred");
+  const quiz = evidence.some((item) => item.source === "quiz_attempt");
+  if (stated && quiz) return "mixed";
+  if (quiz) return "quiz";
+  if (stated) return "stated";
+  return null;
+}
+
 const STATUS_OPTIONS: Record<MemoryKind, LearnerMemoryStatus[]> = {
   misconception: ["suspected", "needs_review", "improving", "resolved"],
   mastery: ["observed", "uncertain"],
@@ -72,6 +91,7 @@ export function MemoryItem({
   const [status, setStatus] = useState(memory.status);
   const [scope, setScope] = useState(memory.subjectId ?? "");
   const scopeName = memory.subjectId ? subjects.find((subject) => subject.id === memory.subjectId)?.name ?? t("memory.scopeDeleted") : t("memory.general");
+  const origin = originOf(memory);
   const [working, setWorking] = useState(false);
   const ref = useRef<HTMLElement>(null);
 
@@ -153,6 +173,11 @@ export function MemoryItem({
       <div className={styles.metaRow}>
         <div className={styles.meta}>
           <span className={cx(styles.scope, !memory.subjectId && styles.scopeGeneral)}>{scopeName}</span>
+          {origin && (
+            <span className={cx(styles.origin, origin === "inferred" && styles.originInferred)}>
+              {t(ORIGIN_KEY[origin])}
+            </span>
+          )}
           <span>{t("memory.evidenceCount", { count: memory.evidence.length })}</span>
           {memory.userCorrected && <span className={styles.corrected}>{t("memory.corrected")}</span>}
           <span>{formatRelativeTime(memory.updatedAt, lang)}</span>
@@ -185,7 +210,11 @@ export function MemoryItem({
                 )}
                 <span className={styles.when}>{formatRelativeTime(item.createdAt, lang)}</span>
               </div>
-              <blockquote className={styles.quote}>{item.quote}</blockquote>
+              {item.source === "inferred" ? (
+                <p className={styles.basis}>{t("memory.basis", { basis: item.quote })}</p>
+              ) : (
+                <blockquote className={styles.quote}>{item.quote}</blockquote>
+              )}
               <p className={styles.reason}>{item.reason}</p>
             </li>
           ))}

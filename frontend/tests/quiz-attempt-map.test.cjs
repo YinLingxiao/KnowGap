@@ -39,3 +39,10 @@ test("证据没有 source 时按原话处理", () => {
   const result = mapQuizAttempt({ ...base, memory_changes: [{ action: "updated", memory: legacy }] });
   assert.equal(result.memoryChanges[0].memory.evidence[0].source, "message_quote");
 });
+
+test("推断证据的 source 原样保留，quote 仍是依据文本", () => {
+  const inferred = { ...memory, evidence: [{ ...memory.evidence[0], source: "inferred", quote: "连续两次把边界写错" }] };
+  const result = mapQuizAttempt({ ...base, memory_changes: [{ action: "created", memory: inferred }] });
+  assert.equal(result.memoryChanges[0].memory.evidence[0].source, "inferred");
+  assert.equal(result.memoryChanges[0].memory.evidence[0].quote, "连续两次把边界写错");
+});

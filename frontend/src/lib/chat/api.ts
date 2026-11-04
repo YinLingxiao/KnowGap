@@ -26,7 +26,7 @@ function mapMemory(data: Wire): LearnerMemory {
     evidence: (data.evidence ?? []).map((item: Wire) => ({
       conversationId: item.conversation_id, messageId: item.message_id, quote: item.quote, reason: item.reason,
       signal: item.signal, createdAt: item.created_at, sourceAvailable: item.source_available,
-      source: item.source === "quiz_attempt" ? "quiz_attempt" : "message_quote",
+      source: item.source === "quiz_attempt" ? "quiz_attempt" : item.source === "inferred" ? "inferred" : "message_quote",
     })),
   };
 }

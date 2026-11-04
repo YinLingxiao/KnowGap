@@ -358,6 +358,22 @@
   color: var(--text-tertiary);
 }
 
+.origin {
+  flex-shrink: 0;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.originInferred {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
 .corrected {
   color: var(--text-secondary);
 }
@@ -433,7 +449,8 @@
   color: var(--text-tertiary);
 }
 
-.quote {
+.quote,
+.basis {
   margin-top: 4px;
   padding: 6px 10px;
   border-left: 2.5px solid var(--accent);
