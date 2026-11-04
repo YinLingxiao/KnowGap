@@ -169,16 +169,6 @@ def guess_knowledge_point(text: str) -> str | None:
     return kp if re.search(r"[一-鿿A-Za-z]", kp) else None
 
 
-# 「先讲概念，再出一道小题」「分步骤带我学」：讲解优先的学习请求，由教学流程出题，不交给真题检索接管
-_LESSON_FIRST_RE = re.compile(r"先讲|先讲解|讲清|讲讲|带我学|分步骤|一步步|循序|从概念|先教")
-_REAL_PROBLEM_RE = re.compile(r"真题|母题|好题|刷题|考研题|竞赛题")
-
-
-def lesson_first(text: str) -> bool:
-    """讲解优先、没有要真题的学习请求：本轮不提供真题检索工具，题目由教学流程现场出。"""
-    return bool(_LESSON_FIRST_RE.search(text or "")) and not _REAL_PROBLEM_RE.search(text or "")
-
-
 def wants_problems(text: str) -> bool:
     """用户本轮是在要题（而不是提交作答、问「对不对」）。"""
     return bool(parse_more_request(text)) or bool(_ASK_RE.search(text or ""))
@@ -190,16 +180,11 @@ def drill_plan(role: str, user_text: str, delegated_task: str | None = None, del
 
     路由判断与 skills.select_skill_prompt 一致。第二项为 None 表示不兜底（如知识点太宽、要等用户补充）。
     """
-    from app.chat.skills import _FEYNMAN_RE, _PRACTICE_RE, infer_thread_skill
+    from app.chat.skills import infer_thread_skill
 
     text = user_text or ""
-    if role == "thread":
-        active = infer_thread_skill(delegated_task or text, delegated_skill) == "socratic_practice"
-    elif role == "chat":
-        active = (not _FEYNMAN_RE.search(text) and bool(_PRACTICE_RE.search(text))
-                  and not lesson_first(text))
-    else:
-        active = False
+    # 普通对话是通用助手，不挂出题带练流程
+    active = role == "thread" and infer_thread_skill(delegated_task or text, delegated_skill) == "socratic_practice"
     if not active:
         return False, None
     more = parse_more_request(text)

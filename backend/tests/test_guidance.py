@@ -35,7 +35,9 @@ def test_quiz_and_weak_points_come_from_the_live_turn(tmp_path):
                            "evidence": "还是先进先出", "reason": "原话", "effect": "reinforces"}]},
     ])
     with TestClient(create_app(isolated_settings(tmp_path), chat_model=model)) as client:
-        conversation = client.post("/api/conversations", json={}).json()
+        # 「考考我」「看看薄弱点」是学习空间的下一步；普通对话里不出现
+        space = client.post("/api/subjects", json={"name": "栈"}).json()
+        conversation = {"id": space["main_conversation_id"]}
         PlanStore(client.app.state.chat_service.store).update(conversation["id"], DEMO_STUDENT, [
             {"title": "做一道练习", "status": "pending", "note": ""},
         ])

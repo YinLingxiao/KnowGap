@@ -5,7 +5,8 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
-from app.chat.agent import CHAT_PROMPT, ROLE_PROMPTS
+from app.chat.agent import ROLE_PROMPTS
+from app.chat.prompts import CONTEXT_PROMPTS
 from app.main import create_app
 from tests.test_acceptance_support import isolated_settings
 from tests.test_chat import FakeChat, context_of, send, transcript_of
@@ -32,7 +33,7 @@ def test_role_policy_and_coordinator_tools_match_the_actual_conversation(tmp_pat
 
     messages, names = model.calls[0]
     assert context_of(messages)["conversation_role"]["role"] == role
-    assert messages[0]["content"].startswith(ROLE_PROMPTS[role] + "\n\n" + CHAT_PROMPT)
+    assert messages[0]["content"].startswith(ROLE_PROMPTS[role] + "\n\n" + CONTEXT_PROMPTS[role])
     assert all(policy not in messages[0]["content"] for other, policy in ROLE_PROMPTS.items() if other != role)
     assert (names & {"dispatch_thread", "propose_threads"}) == (
         {"dispatch_thread", "propose_threads"} if role == "main" else set())

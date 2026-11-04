@@ -39,7 +39,7 @@ from app.chat.streaming import StreamStore
 from app.chat.schemas import DispatchThread, ProposeThreads, ReportProgress
 from app.chat.quizzes import guard_gaps, seal_quizzes
 from app.chat.skills import WIDGET_RETRY_NOTICE, refuses_widget
-from app.chat.skills.problem_drill_skill import SEARCH_TOOL, drill_plan, guard_reply, lesson_first, wants_problems
+from app.chat.skills.problem_drill_skill import SEARCH_TOOL, drill_plan, guard_reply, wants_problems
 from app.chat.coordination import cancel_deliveries, dispatch, next_delivery
 from app.memory.store import new_id
 from app.services.materials import MaterialStore
@@ -875,6 +875,8 @@ class ChatService:
             history = [row for row in history if user_seqs.get(row["reply_to"], row["seq"]) <= user_row["seq"]]
             history.sort(key=lambda row: (user_seqs.get(row["reply_to"], row["seq"]), row["seq"]))
             history, attached_files = prepare_attachment_history(history, self.library, student_id)
+            own_words = next(row["content"] for row in history if row["id"] == generation.user_message_id)
+            image_question = IMAGE_MARKER.sub("", own_words).strip() if IMAGE_MARKER.search(own_words) else None
             image_card = ""
             if not generation.checkpoint:
                 # 续跑时上下文已在检查点里，不再重复调视觉模型
@@ -915,7 +917,7 @@ class ChatService:
                 custom_skills=custom_skills, compressed_summary=compressed_summary,
                 compressed_up_to_seq=compressed_seq,
                 learning_plan=learning_plan, plan_user_events=plan_user_events,
-                attached_files=attached_files, system_turn=event_turn,
+                attached_files=attached_files, system_turn=event_turn, image_question=image_question,
             )
             ctx = ToolContext(
                 workspace_of(self.settings), self.store, student_id, generation.conversation_id,
@@ -964,8 +966,8 @@ class ChatService:
             if ctx.workspace is None:
                 # 读写文件与终端命令属于开发者模式：没有绑定工作区时不提供给模型
                 definitions = [tool for tool in definitions if tool["function"]["name"] not in {"read", "write", "edit", "bash"}]
-            if role["role"] == "chat" and lesson_first(user_text):
-                # 「先讲概念再出题」由教学流程现场出题；顺手检索真题会触发严格溯源，把随堂小题隐藏掉
+            if role["role"] == "chat":
+                # 普通对话是通用助手：不带真题检索；练习参考只在用户自己开始练习时提供（见上）
                 definitions = [tool for tool in definitions if tool["function"]["name"] != SEARCH_TOOL]
             state = generation.checkpoint or {
                 "version": 1, "role": role["role"], "phase": "model", "rounds": 0, "messages": messages,
@@ -1247,7 +1249,10 @@ class ChatService:
             }))
             return
         given = [m.id for m, _ in memories]
-        is_thread = self.store.role_context(generation.conversation_id)["role"] == "thread"
+        role_name = self.store.role_context(generation.conversation_id)["role"]
+        is_thread = role_name == "thread"
+        # 普通对话照常记学习记忆、画像和计划进度，但没有「考考我」「看看薄弱点」这类下一步
+        tutoring = role_name != "chat"
         learning_plan = brief(PlanStore(self.store).read(generation.conversation_id, student_id))
         try:
             raw = await asyncio.wait_for(
@@ -1297,8 +1302,12 @@ class ChatService:
             reply=reply, started=plan_at_start, after=plan,
             repeated=self._repeated_misconception(student_id, generation.conversation_id, result["observations"]),
         )
+        if not tutoring:
+            actions = [action for action in actions if action in ("schedule", "save_note")]
         assistant_meta = {
-            "used_memory_ids": result["used_memory_ids"], "suggested_problem_id": result["suggested_problem_id"],
+            "used_memory_ids": result["used_memory_ids"],
+            # 普通对话只在用户自己开始练习后推荐下一题
+            "suggested_problem_id": result["suggested_problem_id"] if tutoring or exercise is not None else None,
             "next_actions": actions,
         }
         if prompt:

@@ -187,6 +187,8 @@ interface ComposerProps {
   /** 响应没有会话归属（conversationId 为 null）的微件事件；空间里只有主线设为 true */
   acceptUnscoped?: boolean;
   messages?: ChatMessage[];
+  /** 普通（平行）对话是通用助手：不给「考考我」式的本地灰字追问 */
+  generalChat?: boolean;
   /** 首页（还没有对话）上传文件前调用，返回承接文件的对话 ID */
   ensureConversation?: () => Promise<string | null>;
   /** 首页的文件全部被移除、没有可发送的附件时调用 */
@@ -251,7 +253,7 @@ function deriveInstantSuggestion(messages?: ChatMessage[]): string {
 export function Composer({
   value: draft, onChange: onChangeRaw, onSend, onStop, onRevise, phase, busy, problems = [], onStartExercise, autoFocusKey,
   placeholder, hero = false, inputId = COMPOSER_ID,
-  conversationId, acceptUnscoped = false, messages, ensureConversation, onFilesCleared,
+  conversationId, acceptUnscoped = false, messages, generalChat = false, ensureConversation, onFilesCleared,
   modelKey = null, onModelKeyChange, modelClient,
 }: ComposerProps) {
   const { t, tx } = useI18n();
@@ -357,8 +359,8 @@ export function Composer({
       : null;
 
   const instantGhost = useMemo(
-    () => (lastCompletedAssistantId ? deriveInstantSuggestion(messages) : ""),
-    [lastCompletedAssistantId, messages],
+    () => (lastCompletedAssistantId && !generalChat ? deriveInstantSuggestion(messages) : ""),
+    [lastCompletedAssistantId, messages, generalChat],
   );
 
   useEffect(() => {

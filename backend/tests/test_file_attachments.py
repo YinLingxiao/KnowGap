@@ -271,7 +271,8 @@ def test_marker_context_first_excerpt_then_outline_and_scoped_retrieval(tmp_path
         item = first['attached_files'][0]
         assert item['name'] == '课件.pptx' and item['kind'] == 'pptx'
         assert '讲者备注1' in item['excerpt'] and len(item['excerpt']) <= 3000
-        assert 'file_close_read' in first['active_skill']
+        # 普通对话是通用助手：附件按要求直接处理，不套精读带学流程
+        assert '【文件处理】' in first['active_skill'] and 'file_close_read' not in first['active_skill']
         assert {s['document_id'] for s in first['course_sources']} == {info['id']}
         assert {s['page'] for s in first['course_sources']} == {1, 2}
         assert all(s['unit_label'] == '张幻灯片' for s in first['course_sources'])
@@ -343,7 +344,7 @@ def test_excerpt_retry_and_compressed_history_are_deterministic(tmp_path):
     ('帮我检查这份作业 / 试卷', 'file_check_work'),
     ('帮我看懂这张表格', 'file_data_explain'),
 ])
-@pytest.mark.parametrize('role', ['main', 'chat', 'thread'])
+@pytest.mark.parametrize('role', ['main', 'thread'])
 def test_file_skill_intent_overrides_role_and_earlier_intents(text, key, role):
     prompt = select_skill_prompt(role, text, earlier_user_texts=['帮我精读材料'], attached_files=[{'id': 'x'}])
     assert key in prompt
