@@ -46,7 +46,7 @@ def test_profile_notes_skip_rewordings_and_later_turns(tmp_path):
 
 
 def test_compression_replaces_early_turns_in_the_prompt(tmp_path):
-    analyses = [{}, {}, {}, {}, {"summary": "早期讨论了栈的 LIFO。"}, {}]
+    analyses = [{}, {}, {}, {}, {}, {"summary": "早期讨论了栈的 LIFO。"}, {}]
     model = FakeChat(replies=[f"回复{i}" for i in range(1, 6)], analyses=analyses)
     with TestClient(create_app(isolated_settings(tmp_path), chat_model=model)) as client:
         conversation = client.post("/api/conversations", json={}).json()

@@ -55,6 +55,7 @@ IMAGE_FAILED = ("【图片读取失败】学生发了一张图片，但识图没
 logger = logging.getLogger(__name__)
 _PROFILE_LABEL_RE = re.compile(r"^\s*\[(?:Identity|Preference|Context|Activity|Experience)\]\s*")
 ANALYSIS_TIMEOUT = 60
+REVIEW_EVERY_TURNS = 4
 THREAD_CONCURRENCY = 2
 
 
@@ -1130,19 +1131,19 @@ class ChatService:
             if text.strip() and not event_turn:
                 # A regenerated reply must not count the same user turn twice.
                 already_counted = self.store.message_meta(generation.user_message_id).get("note_counted")
-                # A mid-conversation memory note does not replace the ten-turn review;
+                # A mid-conversation memory note does not replace the periodic review;
                 # only the review below resets the counter.
                 count = 0 if already_counted else self.store.bump_note_turns(
                     student_id, False, generation.conversation_id,
                 )
                 self.store.merge_meta(generation.user_message_id, {"note_counted": True})
-                if count >= 10:
+                if count >= REVIEW_EVERY_TURNS:
                     self.store.bump_note_turns(student_id, True, generation.conversation_id)
-                    # Ten counted turns from this conversation, including long messages in full.
+                    # The last counted turns from this conversation, including long messages in full.
                     user_rows = [row for row in history if row["role"] == "user"
                                  and not is_system_event_row(row)
                                  and self.store.message_meta(row["id"]).get("note_counted")]
-                    start_seq = user_rows[-10]["seq"]
+                    start_seq = user_rows[-REVIEW_EVERY_TURNS]["seq"]
                     turns = dialogue([row for row in history if row["seq"] >= start_seq
                                       and not is_system_event_row(row)], bounded=False)
                     turns.append({"role": "assistant", "content": text})
@@ -1289,7 +1290,7 @@ class ChatService:
                 summary=observation["summary"], quote=observation["quote"], reason=observation["reason"],
                 signal=observation["signal"], related_id=observation["related_id"],
                 conversation_id=generation.conversation_id, message_id=user_id,
-                subject_id=subject_id, tags=observation["tags"],
+                subject_id=subject_id, tags=observation["tags"], source=observation["source"],
             )
             changes += [{"action": change.action, "memory_id": change.memory.id} for change in recorded]
         self.store.merge_meta(user_id, {"analyzed": True, "attempt": result["attempt"], "memory_changes": changes})

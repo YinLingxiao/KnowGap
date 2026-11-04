@@ -1,7 +1,8 @@
 """考前急救一页纸: a four-quadrant exam cheat sheet for one learning space.
 
-① 易错红榜 and ② 支线核心结论 come straight from subject_insights() — the model never writes them, so every
-quote is a real learner quote. ③ 公式与适用边界 and ④ 易混对比 + 押题自测 are model-generated; when the model is
+① 易错红榜 and ② 支线核心结论 come straight from subject_insights() — the model never writes them.
+Quoted lines are learner quotes (source != inferred); an inferred-only pitfall shows its summary.
+③ 公式与适用边界 and ④ 易混对比 + 押题自测 are model-generated; when the model is
 missing, fails or times out they come back empty with a notice and ①② are still returned (never a 500).
 
 Successful results are cached in the `subject_cheatsheets` table (created here, not in store.py) under a
@@ -68,7 +69,8 @@ def _fingerprint(insights: dict, notes: str) -> str:
 def pitfalls(insights: dict) -> list[dict]:
     result = []
     for memory in insights["misconceptions"][:MAX_PITFALLS]:
-        quotes = [clip(e["quote"], 90) for e in memory["evidence"] if e["signal"] == "supports" and e["quote"].strip()]
+        quotes = [clip(e["quote"], 90) for e in memory["evidence"]
+                  if e["signal"] == "supports" and e["quote"].strip() and e.get("source") != "inferred"]
         result.append({
             "memory_id": memory["id"], "topic": memory["topic"], "summary": memory["summary"],
             "status": memory["status"], "quotes": quotes[:2],

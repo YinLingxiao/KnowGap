@@ -1767,24 +1767,24 @@ class ChatStore:
     def record_observation(
         self, student_id: str, *, kind: str, topic: str, topic_key: str | None, summary: str, quote: str, reason: str,
         signal: str, related_id: str | None, conversation_id: str, message_id: str,
-        subject_id: str | None = None, tags: list[str] | None = None,
+        subject_id: str | None = None, tags: list[str] | None = None, source: str = "message_quote",
     ) -> MemoryChange | None:
         """Deterministic status transitions; the model only proposes evidence."""
         changes = self.record_observation_changes(
             student_id, kind=kind, topic=topic, topic_key=topic_key, summary=summary, quote=quote, reason=reason,
             signal=signal, related_id=related_id, conversation_id=conversation_id, message_id=message_id,
-            subject_id=subject_id, tags=tags,
+            subject_id=subject_id, tags=tags, source=source,
         )
         return changes[0] if changes else None
 
     def record_observation_changes(
         self, student_id: str, *, kind: str, topic: str, topic_key: str | None, summary: str, quote: str, reason: str,
         signal: str, related_id: str | None, conversation_id: str, message_id: str,
-        subject_id: str | None = None, tags: list[str] | None = None,
+        subject_id: str | None = None, tags: list[str] | None = None, source: str = "message_quote",
     ) -> list[MemoryChange]:
         """Like record_observation, but a mastery that disproves a misconception yields both changes."""
         fields = dict(topic_key=topic_key, quote=quote, reason=reason, conversation_id=conversation_id,
-                      message_id=message_id, subject_id=subject_id, tags=tags)
+                      message_id=message_id, subject_id=subject_id, tags=tags, source=source)
         with self.connection() as db:
             db.execute("BEGIN IMMEDIATE")
             changes = []
@@ -1850,6 +1850,8 @@ class ChatStore:
                 "AND subject_id IS ?",
                 (student_id, kind, topic, scope),
             ).fetchone()
+        if row is not None and row["user_corrected"] and source == "inferred":
+            return None
         if row is None and signal != "supports":
             return None  # Nothing to weaken; counter-evidence alone never creates a memory.
         action = "updated" if row else "created"
@@ -1876,19 +1878,25 @@ class ChatStore:
         ).rowcount
         if not inserted:
             return None
-        signals = [r["signal"] for r in db.execute(
-            "SELECT signal FROM learner_memory_evidence WHERE memory_id = ? ORDER BY id", (memory_id,),
-        )]
-        supports = signals.count("supports")
+        rows = db.execute(
+            "SELECT signal, source FROM learner_memory_evidence WHERE memory_id = ? ORDER BY id", (memory_id,),
+        ).fetchall()
+        signals = [r["signal"] for r in rows]
+        # Inferred evidence counts as half a quote or quiz attempt in the same thresholds.
+        halves = [1 if r["source"] == "inferred" else 2 for r in rows]
+        support_halves = sum(h for s, h in zip(signals, halves) if s == "supports")
         if kind == "misconception":
             last_support = max(i for i, s in enumerate(signals) if s == "supports")
-            after = len(signals) - 1 - last_support
-            status = ("resolved" if after >= 2 else "improving" if after == 1
-                      else "needs_review" if supports >= 2 else "suspected")
+            after_halves = sum(halves[last_support + 1:])
+            status = ("resolved" if after_halves >= 4 else "improving" if after_halves >= 2
+                      else "needs_review" if support_halves >= 4 else "suspected")
         else:
-            status = "observed" if signals[-1] == "supports" else "uncertain"
-        confidence = round(min(0.9, 0.35 + 0.15 * supports) if signals[-1] == "supports"
-                           else max(0.2, 0.5 - 0.1 * (len(signals) - supports)), 2)
+            status = "observed" if signals[-1] == "supports" and support_halves >= 2 else "uncertain"
+        if signals[-1] == "supports":
+            confidence = round(min(0.9, 0.35 + 0.15 * (support_halves / 2)), 2)
+        else:
+            contradict_halves = sum(halves) - support_halves
+            confidence = round(max(0.2, 0.5 - 0.1 * (contradict_halves / 2)), 2)
         db.execute(
             "UPDATE learner_memories SET status = ?, confidence = ?, updated_at = ?, "
             "topic_key = COALESCE(topic_key, ?) WHERE id = ?",
