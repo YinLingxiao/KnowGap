@@ -70,7 +70,10 @@ def run_chat(tmp_path, model, ask=ASK):
     with TestClient(create_app(isolated_settings(tmp_path), chat_model=model)) as client:
         uploaded = client.post("/api/materials", files={"file": ("定积分讲义.md", PAGE.encode(), "text/plain")})
         assert uploaded.status_code == 201, uploaded.text
-        conversation = client.post("/api/conversations", json={}).json()["id"]
+        # 出题带练是学习空间支线的流程；普通对话是通用助手，不挂 problem_drill
+        space = client.post("/api/subjects", json={"name": "定积分"}).json()
+        conversation = client.post(f"/api/subjects/{space['id']}/threads",
+                                   json={"client_request_id": "drill-e2e-thread"}).json()["id"]
         response = client.post(f"/api/conversations/{conversation}/messages",
                                json={"content": ask, "client_request_id": "req-drill-0001"})
         assert response.status_code == 200, response.text

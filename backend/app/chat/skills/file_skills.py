@@ -106,6 +106,23 @@ def file_skill_name(user_text: str) -> str | None:
     return 'file_qa' if text.strip() else None
 
 
-def file_skill_prompt(user_text: str) -> str:
+# 普通对话是通用助手：只保留按要求处理文件的技能，去掉精读带学、批改只给提示、出题、自测这些教学流程。
+PLAIN_FILE_SKILLS = ('file_qa', 'file_summary', 'file_to_notes', 'file_edit', 'file_export')
+PLAIN_FILE_FALLBACK = """【文件处理】
+本轮有附件：按用户的要求直接处理（解读、找错、回答都可以直接给结论）；用户没说要做什么时，先用 3–5 句概括可见内容与覆盖范围（没读到的部分按 reading_notes 如实说明），再问用户想怎么处理这份文件。
+"""
+_TEACHING_LINES = (
+    "- 遵守既有教学原则与学生偏好：先引导，再讲解，不直接替学生完成作业。\n",
+    "5. 是练习或作业类问题时，按既有教学原则先引导，不直接给完整答案。\n",
+    "4. 用少量自测问题引导学生回忆；结尾提示可「存进空间笔记」，未执行保存不得声称已保存。\n",
+)
+
+
+def file_skill_prompt(user_text: str, plain: bool = False) -> str:
     key = file_skill_name(user_text)
-    return (FILE_SKILLS[key] if key else FILE_FALLBACK) + FILE_GROUNDING
+    if not plain:
+        return (FILE_SKILLS[key] if key else FILE_FALLBACK) + FILE_GROUNDING
+    text = (FILE_SKILLS[key] if key in PLAIN_FILE_SKILLS else PLAIN_FILE_FALLBACK) + FILE_GROUNDING
+    for line in _TEACHING_LINES:
+        text = text.replace(line, "")
+    return text

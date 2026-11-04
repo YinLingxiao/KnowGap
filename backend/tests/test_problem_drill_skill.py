@@ -404,17 +404,18 @@ def test_drill_plan_routes_and_builds_forced_search():
     def memory(id, summary):
         return SimpleNamespace(id=id, kind="misconception", status="suspected", topic=KP, summary=summary)
 
-    active, args = drill.drill_plan("chat", "找几道定积分换元法的好题练手",
+    active, args = drill.drill_plan("thread", "找几道定积分换元法的好题练手",
                                     memories=[(memory("m1", "认为换元后积分限不用改"), "subject")])
     assert active and args == {"knowledge_point": "定积分换元法", "misconception_hints": ["换元后积分限不用改"]}
 
-    assert drill.drill_plan("chat", "来几道题考考我微积分") == (True, None)
+    assert drill.drill_plan("thread", "来几道题考考我微积分") == (True, None)
     assert drill.drill_plan("main", "找几道定积分换元法的好题练手") == (False, None)
-    assert drill.drill_plan("chat", "栈和队列有什么区别") == (False, None)
+    # 普通对话是通用助手，不挂出题带练流程
+    assert drill.drill_plan("chat", "找几道定积分换元法的好题练手") == (False, None)
 
     more = drill.build_more_request(KP, "定积分换元-积分限同步变换", ["0123456789abcdef"])
     history = [widget_block({"type": "micro_quiz", "meta": {"fingerprint": "fedcba9876543210"}})]
-    active, args = drill.drill_plan("chat", more, history_texts=history)
+    active, args = drill.drill_plan("thread", more, history_texts=history)
     assert args["pattern"] == "定积分换元-积分限同步变换"
     assert args["exclude_fingerprints"] == ["0123456789abcdef", "fedcba9876543210"]
 
@@ -503,12 +504,3 @@ def test_prompt_variants():
     assert "search_good_problems" in drill.PROBLEM_DRILL_SKILL and "report_progress" in drill.problem_drill_prompt("thread")
     assert drill._REPORT_STEP not in drill.problem_drill_prompt("chat")
     assert drill.VERIFY_DEFINITION["function"]["name"] == drill.VERIFY_TOOL
-
-
-def test_lesson_first_requests_are_not_taken_over_by_problem_search():
-    from app.chat.skills.problem_drill_skill import drill_plan
-
-    lesson = "我想学二叉树的中序遍历，请分步骤带我学：先讲概念，再出一道小题让我做，最后总结"
-    assert drill_plan("chat", lesson) == (False, None)
-    active, _ = drill_plan("chat", "先讲讲二叉树中序遍历，再找几道真题练手")
-    assert active

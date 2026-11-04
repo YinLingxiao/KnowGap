@@ -176,7 +176,8 @@ def history(*user_messages):
 
 
 def context(*messages, user="", memory="", role=None):
-    return learning_context(chat_messages(history(*messages), [], None, [], conversation_role=role,
+    # Prior-knowledge transfer is a learning-space feature; free chats are a general assistant.
+    return learning_context(chat_messages(history(*messages), [], None, [], conversation_role=role or {"role": "thread"},
                                          snapshot=snapshot_text({"user": user, "memory": memory})))
 
 

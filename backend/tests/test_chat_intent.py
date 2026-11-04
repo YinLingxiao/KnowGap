@@ -36,7 +36,8 @@ def test_greeting_keeps_exercise_as_background_and_does_not_force_its_memories(t
         assert context["active_exercise"]["id"] == "stack-sequence-003"
         assert "reference" not in context["active_exercise"]
         assert context["learner_memories"] == []
-        assert all(set(item) == {"id", "title"} for item in context["available_exercises"])
+        # 普通对话不向模型列题库，不主动推荐练习
+        assert "available_exercises" not in context
         assert "仅为背景，不是本轮用户请求" in transcript_of(messages)[-2]["content"]
         assert client.get(f"/api/conversations/{conversation['id']}").json()["active_problem_id"] == "stack-sequence-003"
 

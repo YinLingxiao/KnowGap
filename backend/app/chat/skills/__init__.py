@@ -100,9 +100,15 @@ def select_skill_prompt(
     earlier_user_texts: list[str] | None = None,
     attached_files: list[dict] | None = None,
 ) -> str | None:
-    """Return the role-appropriate Skill SOP to inject into `turn_context.active_skill`."""
+    """Return the role-appropriate Skill SOP to inject into `turn_context.active_skill`.
+
+    Free chats (`chat`) are a general assistant: no keyword-mounted teaching SOP, only the plain
+    attachment rules when files are attached.
+    """
     if attached_files:
-        return file_skill_prompt(user_text)
+        return file_skill_prompt(user_text, plain=role == "chat")
+    if role == "chat":
+        return None
     # A Feynman self-test spans several turns: once the title or an earlier user turn started it,
     # later answers ("栈就是…") keep the challenge instead of falling back to deep_explain.
     # 在函数内导入：problem_drill_skill 依赖 agent_tools，顶层导入会形成循环。
@@ -119,18 +125,8 @@ def select_skill_prompt(
         if skill_key == "socratic_practice":
             return problem_drill_prompt("thread")
         return THREAD_SKILLS.get(skill_key)
-    if role == "main":
-        if _ROADMAP_RE.search(user_text or ""):
-            return MAIN_ROADMAP_SKILL
-        return None
-    if role == "chat":
-        sample = (user_text or "").strip()
-        if feynman_session or _FEYNMAN_RE.search(sample):
-            return THREAD_SKILLS["feynman_challenge"].replace("，并调用 `report_progress` 回报掌握结论", "")
-        if len(sample) >= 8 and not _PRACTICE_RE.search(sample) and _EXPLAIN_RE.search(sample):
-            return THREAD_SKILLS["deep_explain"].replace("，最后调用 `report_progress` 回报进展", "")
-        if _PRACTICE_RE.search(sample):
-            return problem_drill_prompt("chat")
+    if role == "main" and _ROADMAP_RE.search(user_text or ""):
+        return MAIN_ROADMAP_SKILL
     return None
 
 

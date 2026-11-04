@@ -194,8 +194,8 @@ def test_feynman_challenge_sticks_after_the_first_turn():
     feynman = THREAD_SKILLS["feynman_challenge"]
     assert select_skill_prompt("thread", "栈就是一摞盘子", earlier_user_texts=["我来讲讲栈，你当考官挑刺"]) == feynman
     assert select_skill_prompt("thread", "栈就是一摞盘子", conversation_title="费曼自测：栈") == feynman
-    chat = select_skill_prompt("chat", "为什么栈顶先出？我的理解是这样", earlier_user_texts=["听我讲一遍栈"])
-    assert chat == feynman.replace("，并调用 `report_progress` 回报掌握结论", "")
+    # 普通对话是通用助手，不挂费曼流程
+    assert select_skill_prompt("chat", "为什么栈顶先出？我的理解是这样", earlier_user_texts=["听我讲一遍栈"]) is None
     assert select_skill_prompt("thread", "为什么栈顶先出", earlier_user_texts=["讲讲栈"]) != feynman
 
 
@@ -204,7 +204,7 @@ def test_examiner_phrase_stays_on_feynman_route():
     text = "你当考官考我"
     feynman = THREAD_SKILLS["feynman_challenge"]
     assert infer_thread_skill(text) == "feynman_challenge"
-    assert select_skill_prompt("chat", text) == feynman.replace("，并调用 `report_progress` 回报掌握结论", "")
+    assert select_skill_prompt("chat", text) is None
     assert select_skill_prompt("thread", text) == feynman
     assert select_skill_prompt("main", text) is None
     assert drill_plan("chat", text) == (False, None)
@@ -224,7 +224,9 @@ def context(*messages, user=""):
         if index:
             rows.append({"role": "assistant", "content": "好的。", "kind": "text", "status": "complete", "meta_json": "{}"})
         rows.append({"role": "user", "content": text, "kind": "text", "status": "complete", "meta_json": "{}"})
-    return learning_context(chat_messages(rows, [], None, [], snapshot=snapshot_text({"user": user, "memory": ""})))
+    # Prior-knowledge extraction is a learning-space feature; free chats are a general assistant.
+    return learning_context(chat_messages(rows, [], None, [], conversation_role={"role": "thread"},
+                                          snapshot=snapshot_text({"user": user, "memory": ""})))
 
 
 @pytest.mark.parametrize("text,expected", [

@@ -674,6 +674,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
                     conversationId={chat.activeId}
                     acceptUnscoped
                     messages={thread?.messages}
+                    generalChat={chat.activeConversation?.kind === "chat"}
                     value={chat.draft}
                     onChange={chat.setDraft}
                     onSend={() => void chat.sendMessage()}

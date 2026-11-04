@@ -9,6 +9,7 @@ from datetime import date
 from app.chat.prompts import (
     CHAT_PROMPT,
     CHAT_ROLE_PROMPT,
+    CONTEXT_PROMPTS,
     MAIN_ROLE_PROMPT,
     ROLE_PROMPTS,
     THREAD_ROLE_PROMPT,
@@ -224,6 +225,7 @@ def chat_messages(
     compressed_up_to_seq: int = 0,
     learning_plan: dict | None = None, plan_user_events: list[str] | None = None,
     attached_files: list[dict] | None = None, *, system_turn: bool = False,
+    image_question: str | None = None,
 ) -> list[dict]:
     # Ordered from stable to volatile so provider prefix caches cover the prompt and the whole history;
     # only the trailing turn context (and the new message) is fresh input each turn.
@@ -231,6 +233,11 @@ def chat_messages(
     role_name = role_info.get("role", "chat")
     user_texts = [readable_file_markers(row["content"]) for row in history if row["role"] == "user"]
     latest_user = user_texts[-1] if user_texts else ""
+    # On an image turn the latest row holds the vision relay, whose own wording ("讲解这道题…")
+    # must not pick skills or widgets: route on what the student actually typed.
+    image_turn = image_question is not None
+    if image_turn:
+        latest_user = readable_file_markers(image_question)
     if system_turn:
         active_skill = None
     else:
@@ -275,26 +282,32 @@ def chat_messages(
         )
         for anchor in _split_anchors(match.group(1))
     ))
-    reported_prior_knowledge = [] if system_turn else reported_prior_skills(latest_user)
-    stable = {
-        "subject": subject_context(subject) if subject else None,
-        "available_exercises": [{"id": p.id, "title": p.title} for p in PROBLEMS.values()],
-    }
+    # Free chats are a general assistant: memories, preferences, the task plan and exercises the user
+    # started stay; prior-knowledge transfer and exercise recommendations belong to learning spaces only.
+    tutoring = role_name != "chat"
+    if not tutoring:
+        prior_knowledge_anchors = []
+    reported_prior_knowledge = [] if system_turn or not tutoring else reported_prior_skills(latest_user)
+    stable = {"subject": subject_context(subject) if subject else None}
+    if tutoring:
+        stable["available_exercises"] = [{"id": p.id, "title": p.title} for p in PROBLEMS.values()]
     turn = {
         "today": date.today().isoformat(),
-        "latest_user_message": latest_user,
+        # An image sent without words falls back to the relay, which says what to do with it.
+        "latest_user_message": latest_user or (user_texts[-1] if image_turn and user_texts else ""),
         "conversation_role": role_info,
         "active_skill": active_skill,
         "recommended_widget": None if system_turn else recommend_widget(
             role_name, latest_user, role_info.get("delegated_task")),
         "thinking_depth": thinking_depth,
         "teaching_preferences": teaching_preferences,
-        "prior_knowledge_anchors": prior_knowledge_anchors,
         "learner_memories": [memory_brief(m, scope) for m, scope in memories if m.kind != "preference"],
         "preference_evidence": [memory_brief(m, scope) for m, scope in memories if m.kind == "preference"],
         "active_exercise": problem_brief(exercise) if exercise else None,
         "course_sources": [s.model_dump(include={"id", "label", "title", "page", "excerpt"}) for s in sources],
     }
+    if tutoring:
+        turn["prior_knowledge_anchors"] = prior_knowledge_anchors
     if learning_plan:
         turn["learning_plan"] = learning_plan
     if attached_files:
@@ -313,14 +326,17 @@ def chat_messages(
     learning_topic = bool(_LEARNING_TOPIC_RE.search(latest_user)) or (
         role_name == "thread" and user_turns == 1 and bool(role_info.get("delegated_task"))
     )
-    if not system_turn and 1 <= user_turns <= 2 and (learning_topic or reported_prior_knowledge):
+    # Prior-knowledge probing is for starting a topic, not for solving one given problem.
+    concrete_problem = image_turn or exercise is not None
+    if (tutoring and not system_turn and 1 <= user_turns <= 2 and not concrete_problem
+            and (learning_topic or reported_prior_knowledge)):
         turn["transfer_learning_hint"] = (
             TRANSFER_LEARNING_HINT if prior_knowledge_anchors or reported_prior_knowledge else PREREQUISITE_PROBE_HINT
         )
         if (prior_knowledge_anchors or reported_prior_knowledge) and role_name != "main":
             turn["recommended_widget"] = "comparison_matrix（对比旧知机制、新知机制与跨领域负迁移易错点）"
-    role_prompt = ROLE_PROMPTS.get((conversation_role or {}).get("role", "chat"), CHAT_ROLE_PROMPT)
-    system = f"{role_prompt}\n\n{CHAT_PROMPT}"
+    role_prompt = ROLE_PROMPTS.get(role_name, CHAT_ROLE_PROMPT)
+    system = f"{role_prompt}\n\n{CONTEXT_PROMPTS.get(role_name, CHAT_PROMPT)}"
     if role_name != "main":
         system += f"\n\n{WIDGET_SYSTEM_PROMPT}"
     if snapshot:
