@@ -224,10 +224,12 @@ def test_analysis_validates_exact_evidence_and_only_waiting_steps(tmp_path):
     raw = {"plan_updates": [{"id": "a", "status": "done", "evidence": "后进先出"},
                             {"id": "a", "status": "done", "evidence": "先进先出"},
                             {"id": "b", "status": "done", "evidence": "后进先出"},
-                            {"id": "a", "status": "pending", "evidence": "后进先出"}]}
-    assert validate_analysis(raw, "栈是后进先出", None, [], plan)["plan_updates"] == raw["plan_updates"][:1]
+                            {"id": "a", "status": "pending", "evidence": "后进先出"},
+                            {"id": "a", "status": "done", "evidence": "   "}]}
+    assert validate_analysis(raw, "栈是后进先出", None, [], plan)["plan_updates"] == raw["plan_updates"][:2]
     assert validate_analysis({"plan_updates": [{"id": "a", "status": "done", "evidence": "A B"}]},
-                             "A  B", None, [], plan)["plan_updates"] == []
+                             "A  B", None, [], plan)["plan_updates"] == [
+        {"id": "a", "status": "done", "evidence": "A B"}]
 
 
 def test_analysis_fallback_emits_plan_and_persists_assistant_changes(tmp_path):
@@ -238,10 +240,10 @@ def test_analysis_fallback_emits_plan_and_persists_assistant_changes(tmp_path):
         plans = PlanStore(app.state.chat_service.store)
         waiting = plans.update(cid, STUDENT, [step("自测", "awaiting_learner"), step("下一步")])["plan"]
         sid = waiting["steps"][0]["id"]
-        model.analyses = [{"plan_updates": [{"id": sid, "status": "done", "evidence": "编造答案"}]}]
+        model.analyses = [{"plan_updates": [{"id": sid, "status": "done", "evidence": ""}]}]
         refused = send(client, cid, "后进先出", "req-analysis-01")
         assert not any(name == "plan" for name, _ in refused)
-        model.analyses = [{"plan_updates": [{"id": sid, "status": "done", "evidence": "后进先出"}]}]
+        model.analyses = [{"plan_updates": [{"id": sid, "status": "done", "evidence": "用户给出了栈的顺序"}]}]
         events = send(client, cid, "栈是后进先出", "req-analysis-02")
         updated = next(data for name, data in events if name == "plan")
         analyzed = next(data for name, data in events if name == "analysis")

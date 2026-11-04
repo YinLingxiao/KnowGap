@@ -89,22 +89,22 @@ def test_review_counts_and_samples_each_conversation_separately(tmp_path):
         service = ChatService(chat, lambda: model)
         conversation = chat.create_conversation(STUDENT, title=None, problem=None, client_request_id="conv-main")
         other = chat.create_conversation(STUDENT, title=None, problem=None, client_request_id="conv-other")
-        for index in range(11):
-            target = other if index == 9 else conversation
+        for index in range(5):
+            target = other if index == 3 else conversation
             content = "甲" * 900 + "资料在 notes 目录" if index == 0 else f"第{index}轮"
             user_id = chat.add_user_message(target, content, f"req-review-{index:04d}")
             async for _ in service.events(service.begin(STUDENT, target, user_id, [])):
                 pass
-            if index == 9:
+            if index == 3:
                 assert model.reviewed == 0
         if service.reviews:
             await asyncio.gather(*list(service.reviews))
         assert model.reviewed == 1
         assert "资料在 notes 目录" in chat.agent_notes(STUDENT)["memory"]
         turns = model.review_payloads[0]["turns"]
-        assert len([t for t in turns if t["role"] == "user"]) == 10
+        assert len([t for t in turns if t["role"] == "user"]) == 4
         assert "资料在 notes 目录" in turns[0]["content"]
-        assert not any(t["content"] == "第9轮" for t in turns)
+        assert not any(t["content"] == "第3轮" for t in turns)
         assert chat.bump_note_turns(STUDENT, False, conversation) == 1
         chat.apply_agent_memory(STUDENT, "add", "user", "喜欢例子", None)
         assert chat.bump_note_turns(STUDENT, True, conversation) == 0

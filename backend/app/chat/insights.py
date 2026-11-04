@@ -30,6 +30,7 @@ def _evidence(db: sqlite3.Connection, memory_id: str) -> list[dict]:
     return [{
         "quote": row["quote"], "reason": row["reason"], "signal": row["signal"],
         "conversation_id": row["conversation_id"], "message_id": row["message_id"],
+        "source": row["source"] or "message_quote",
         "source_available": bool(row["available"]), "created_at": row["created_at"],
     } for row in rows]
 
