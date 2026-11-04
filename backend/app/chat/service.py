@@ -39,7 +39,7 @@ from app.chat.streaming import StreamStore
 from app.chat.schemas import DispatchThread, ProposeThreads, ReportProgress
 from app.chat.quizzes import guard_gaps, seal_quizzes
 from app.chat.skills import WIDGET_RETRY_NOTICE, refuses_widget
-from app.chat.skills.problem_drill_skill import SEARCH_TOOL, drill_plan, guard_reply, wants_problems
+from app.chat.skills.problem_drill_skill import DRILL_TOOLS, SEARCH_TOOL, drill_plan, guard_reply, wants_problems
 from app.chat.coordination import cancel_deliveries, dispatch, next_delivery
 from app.memory.store import new_id
 from app.services.materials import MaterialStore
@@ -967,8 +967,8 @@ class ChatService:
                 # 读写文件与终端命令属于开发者模式：没有绑定工作区时不提供给模型
                 definitions = [tool for tool in definitions if tool["function"]["name"] not in {"read", "write", "edit", "bash"}]
             if role["role"] == "chat":
-                # 普通对话是通用助手：不带真题检索；练习参考只在用户自己开始练习时提供（见上）
-                definitions = [tool for tool in definitions if tool["function"]["name"] != SEARCH_TOOL]
+                # 普通对话是通用助手：不带真题检索和改编题核对（后者依赖检索结果）；练习参考只在用户自己开始练习时提供（见上）
+                definitions = [tool for tool in definitions if tool["function"]["name"] not in DRILL_TOOLS]
             state = generation.checkpoint or {
                 "version": 1, "role": role["role"], "phase": "model", "rounds": 0, "messages": messages,
                 "parts": parts, "tool_log": tool_log, "tool_messages": tool_messages,

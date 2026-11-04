@@ -68,13 +68,17 @@ def test_explicit_exercise_request_can_fetch_checked_reference(tmp_path, problem
 def test_reference_is_not_exposed_without_an_exercise(tmp_path):
     class NoExercise(FakeChat):
         async def stream(self, messages, tools=None):
-            assert "exercise_reference" not in {tool["function"]["name"] for tool in tools}
+            self.tools = {tool["function"]["name"] for tool in tools}
             yield "text", "你好！"
             yield "finish", "stop"
 
-    with TestClient(create_app(isolated_settings(tmp_path), chat_model=NoExercise())) as client:
+    model = NoExercise()
+    with TestClient(create_app(isolated_settings(tmp_path), chat_model=model)) as client:
         conversation = client.post("/api/conversations", json={}).json()
         send(client, conversation["id"], "你好", "intent-plain-001")
+    assert "exercise_reference" not in model.tools
+    # 普通对话不带练：真题检索和改编题核对都不给
+    assert not model.tools & {"search_good_problems", "verify_problem_variant"}
 
 
 def test_reference_cannot_select_an_unrelated_exercise():

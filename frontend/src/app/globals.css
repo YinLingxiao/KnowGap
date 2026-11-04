@@ -480,8 +480,10 @@ nextjs-portal {
   border: 0;
 }
 
+/* backwards, not both: a filled end state keeps a transform on every row, which makes each row its own
+   stacking context and lets later rows paint over an open row menu */
 [data-stagger] > * {
-  animation: stagger-rise var(--t-enter) var(--ease) both;
+  animation: stagger-rise var(--t-enter) var(--ease) backwards;
 }
 
 [data-stagger] > *:nth-child(1) { animation-delay: 20ms; }
