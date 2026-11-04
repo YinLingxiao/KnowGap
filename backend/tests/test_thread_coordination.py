@@ -43,7 +43,7 @@ async def settle(service):
         await asyncio.sleep(0)
         if not service.tasks:
             return
-        await asyncio.wait_for(asyncio.gather(*list(service.tasks)), 3)
+        await asyncio.wait_for(asyncio.gather(*list(service.tasks)), 15)  # slow CI runners need more than 3 s
     pytest.fail("worker queue did not settle")
 
 

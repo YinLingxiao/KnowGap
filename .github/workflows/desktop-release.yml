@@ -91,7 +91,7 @@ jobs:
 
   publish:
     needs: build
-    if: github.repository == 'YinLingxiao/KnowGap' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && needs.build.outputs.should-publish == 'true'
+    if: github.repository == 'YinLingxiao/KnowGap' && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' && needs.build.outputs.should-publish == 'true'
     runs-on: windows-latest
     timeout-minutes: 10
     permissions:

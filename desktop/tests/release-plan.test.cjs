@@ -50,14 +50,14 @@ test('draft retries and existing tags must belong to the exact workflow commit',
   await assert.rejects(publicationPlan(plan, { ...remote(), repository: 'fork/KnowGap' }), /official/);
 });
 
-test('PR builds cannot publish and only the protected release job receives write permission', () => {
+test('Only a manual run can publish, and only the protected release job receives write permission', () => {
   const workflow = yaml.load(fs.readFileSync(path.join(__dirname, '../../.github/workflows/desktop-release.yml'), 'utf8'));
   assert.equal(workflow.permissions.contents, 'read');
   assert.equal(workflow.jobs.build.permissions, undefined);
   assert.equal(workflow.jobs.publish.needs, 'build');
   assert.match(workflow.jobs.publish.if, /github\.repository == 'YinLingxiao\/KnowGap'/);
   assert.match(workflow.jobs.publish.if, /github\.ref == 'refs\/heads\/main'/);
-  assert.match(workflow.jobs.publish.if, /github\.event_name != 'pull_request'/);
+  assert.match(workflow.jobs.publish.if, /github\.event_name == 'workflow_dispatch'/);
   assert.equal(workflow.jobs.publish.permissions.contents, 'write');
   assert(workflow.jobs.build.steps.some(step => step.run?.includes('smoke-desktop.py')));
 });
