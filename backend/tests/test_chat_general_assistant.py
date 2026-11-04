@@ -31,6 +31,7 @@ def test_chat_gets_general_assistant_prompt_without_learning_contract():
     assert CHAT_PROMPT not in system
     assert "transfer_learning_hint" not in CHAT_CONTEXT_PROMPT and "available_exercises" not in CHAT_CONTEXT_PROMPT
     assert "不要为了考用户而设" in CHAT_CONTEXT_PROMPT  # the plan only tracks multi-step tasks here
+    assert "延伸发问" in CHAT_ROLE_PROMPT and "不考用户的理解" in CHAT_ROLE_PROMPT
     assert "knowgap-widget" in system  # interactive cards stay available
 
 
