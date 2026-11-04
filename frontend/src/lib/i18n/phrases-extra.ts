@@ -376,6 +376,7 @@ export const extraPhrases: Record<string, string> = {
   "这条学习记录已删除或不可见": "This learning record was deleted or is not visible",
   "作答": "Answer",
   "原话": "Your words",
+  "依据：{basis}": "Basis: {basis}",
   "已标记为不准确": "Marked as inaccurate",
   "标记失败，点此重试": "Couldn't mark it, click to retry",
   "这个判断不准确": "This isn't accurate",

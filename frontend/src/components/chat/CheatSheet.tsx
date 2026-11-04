@@ -28,7 +28,7 @@ const PRINT_CSS = `
 
 type Preview = Pick<Sheet["sections"], "pitfalls" | "conclusions">;
 
-/** 模型还在生成时，先用聚合数据把 ① ② 画出来（与后端 pitfalls()/conclusions() 规则一致）。 */
+/** 推断出的依据不是原话，不放进引号里。 */
 function statedQuotes(insights: SubjectInsights | null, memoryId: string, quotes: string[]): string[] {
   const memory = insights?.misconceptions.find((item) => item.id === memoryId);
   if (!memory) return quotes;
@@ -37,6 +37,7 @@ function statedQuotes(insights: SubjectInsights | null, memoryId: string, quotes
   return quotes.filter((quote) => !inferred.has(quote) || stated.has(quote));
 }
 
+/** 模型还在生成时，先用聚合数据把 ① ② 画出来（与后端 pitfalls()/conclusions() 规则一致）。 */
 function previewFrom(insights: SubjectInsights): Preview {
   return {
     pitfalls: insights.misconceptions.slice(0, 8).map((m) => ({
