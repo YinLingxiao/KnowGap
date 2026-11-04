@@ -48,7 +48,7 @@ TRANSFER_LEARNING_GUIDE = """【先验锚点与对比迁移教学】
 DEEP_EXPLAIN_SKILL = f"""【当前挂载 Skill：deep_explain（深度原理精讲）】
 按以下工作流开展本次原理精讲，并结合 turn_context.teaching_preferences 与 USER 画像动态调整：
 1. 开场直奔主线：先用一句话交代讲解脉络（例如：“我先从为什么需要 X 讲起，再通过同一个具体例子逐个对比。”），不要客套寒暄。
-2. 维护学习计划：对照 turn_context.learning_plan，用 `update_plan` 整份更新（保留真实 id）；首次列出 3 个 pending 步骤（例如：设计具体小例子、对比核心机制、独立自测）。实际开始时才设 in_progress；需要学习者回答时设 awaiting_learner，在 note 写问题并停下，答对后才标 done，禁止预填假进度。
+2. 维护学习计划：对照 turn_context.learning_plan，用 `update_plan` 整份更新（保留真实 id）；首次 3 个 pending（如：具体小例子、对比机制、收束要点）。开始才设 in_progress；讲完且用户没说没懂就标 done，不预填。只在要信息、决定或用户要自测时设 awaiting_learner。
 3. 贯穿全文的最小例子 + 按需使用交互微件：构造 1 个极简、具体的例子，后续所有概念对比都在这**同一个例子**上演绎；在这同一个例子上至少嵌入 1 个控件（过程用 `step_simulator` 或 `knowgap-visual` 动画，对比用 `comparison_matrix`），类型可参考 turn_context.recommended_widget。
 4. 记忆自适应：
    - 若 teaching_preferences 偏好“先看结论/对比表”，先给 `comparison_matrix` 微件再用小例子验证；若偏好“先看直观例子”，先给 `step_simulator` 微件再总结定义；若偏好“讲完考一道小题”，在结尾附上 `micro_quiz` 微件。
@@ -69,7 +69,7 @@ SOCRATIC_PRACTICE_SKILL = f"""【当前挂载 Skill：socratic_practice（启发
 
 STUDY_NOTE_BUILDER_SKILL = f"""【当前挂载 Skill：study_note_builder（结构化图解讲义与实验构建）】
 按以下工作流整理结构化讲义或代码演练：
-1. 用 `update_plan` 创建或整份更新讲义/实验的学习步骤（如：梳理核心概念框架、交互推演对比、自测），保留已有真实 id。新步骤先设 pending，实际开始才设 in_progress；自测时设 awaiting_learner 并在 note 写问题，答对才设 done。
+1. 用 `update_plan` 整份更新讲义或实验步骤（如：概念框架、交互推演、收束要点），保留真实 id。先 pending，开始才 in_progress；讲完且用户没说没懂就标 done。只在要信息、决定或用户要自测时设 awaiting_learner。
 2. 在讲义正文中按需嵌入 `knowgap-widget`（如 `step_simulator` 过程推演 + `comparison_matrix` 对比表 + `micro_quiz` 自测题）。
 3. 完成后调用 `report_progress` 记录讲义要点（只写进这条回复，不写回主线）。
 
