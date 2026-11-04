@@ -84,7 +84,7 @@ DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "update_plan",
-            "description": "创建或整份更新本对话学习计划（1~8 步）。保留已有步骤 id；讲完不等于学会，需要作答时设 awaiting_learner 并在 note 写问题，学习者答对后才设 done。返回归一化计划及被拒绝的改动。",
+            "description": "创建或整份更新本对话学习计划（1~8 步）。保留已有步骤 id；讲完且没说没懂就标 done，不预填、不回退。awaiting_learner 仅在要信息、决定或要练习时用。返回归一化计划及被拒绝的改动。",
             "parameters": {
                 "type": "object",
                 "properties": {

@@ -58,6 +58,33 @@ def test_normalization_and_completion_metadata(tmp_path):
     assert brief(done)["progress"] == "2/2"
 
 
+def test_explain_step_reaches_done_without_awaiting_learner(tmp_path):
+    ctx, _store = ctx_for(tmp_path)
+    started = call("update_plan", {"steps": [step("讲栈", "in_progress"), step("对比")]}, ctx)["plan"]
+    assert [s["status"] for s in started["steps"]] == ["in_progress", "pending"]
+    finished = call("update_plan", {"steps": [step("讲栈", "done"), step("对比", "in_progress")]}, ctx)
+    assert [s["status"] for s in finished["plan"]["steps"]] == ["done", "in_progress"]
+    assert finished["rejected_changes"] == []
+
+
+def test_plan_prompts_drop_the_answer_gate():
+    from app.chat.prompts.common import _LEARNING_CONTEXT
+    from app.chat.prompts.thread_worker import THREAD_ROLE_PROMPT
+    from app.chat.skills.thread_skills import (
+        DEEP_EXPLAIN_SKILL, SOCRATIC_PRACTICE_SKILL, STUDY_NOTE_BUILDER_SKILL, WIDGET_SCHEMA_GUIDE,
+    )
+    desc = next(item["function"]["description"] for item in DEFINITIONS if item["function"]["name"] == "update_plan")
+    for text in (_LEARNING_CONTEXT, THREAD_ROLE_PROMPT, DEEP_EXPLAIN_SKILL, STUDY_NOTE_BUILDER_SKILL, desc):
+        assert "答对后才" not in text and "答对才" not in text
+        assert "讲完不等于学会" not in text and "AI 讲完不算完成" not in text
+    assert "没说没懂" in _LEARNING_CONTEXT and "不要为检验理解出题" in _LEARNING_CONTEXT
+    assert "不能回退 done" in _LEARNING_CONTEXT and "最多一个" in _LEARNING_CONTEXT
+    assert "不预填没讲到的" in _LEARNING_CONTEXT and "不用 agenda 工具代替" in _LEARNING_CONTEXT
+    assert "讲完且没说没懂就标 done" in desc and "讲完且没说没懂就标 done" in THREAD_ROLE_PROMPT
+    assert "needs_user=true" in SOCRATIC_PRACTICE_SKILL and "答对" not in SOCRATIC_PRACTICE_SKILL
+    assert "学习者答对后系统会自动把该步骤标为完成" in WIDGET_SCHEMA_GUIDE
+
+
 def test_waiting_requires_new_user_after_entry_not_another_tool_call(tmp_path):
     ctx, store = ctx_for(tmp_path)
     first = store.add_user_message(ctx.conversation_id, "开始", "req-wait-01")
