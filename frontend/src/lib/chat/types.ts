@@ -24,8 +24,8 @@ export interface MemoryEvidence {
   signal: "supports" | "contradicts";
   createdAt: string;
   sourceAvailable: boolean;
-  /** message_quote：对话原话；quiz_attempt：随堂微测作答 */
-  source: "message_quote" | "quiz_attempt";
+  /** message_quote：对话原话；quiz_attempt：随堂微测作答；inferred：依据（不是原话） */
+  source: "message_quote" | "quiz_attempt" | "inferred";
 }
 
 export interface SpaceProgress {

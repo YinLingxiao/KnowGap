@@ -62,8 +62,14 @@ export function GapCard({ data }: { data: Record<string, unknown> }) {
           <ul className={gap.evidence}>
             {evidence.map((item, index) => (
               <li key={`${item.messageId}-${index}`}>
-                <span className={gap.source}>{item.source === "quiz_attempt" ? tx("作答") : tx("原话")}</span>
-                <span>{item.quote || item.reason}</span>
+                {item.source === "inferred" ? (
+                  <span>{tx("依据：{basis}", { basis: item.quote || item.reason })}</span>
+                ) : (
+                  <>
+                    <span className={gap.source}>{item.source === "quiz_attempt" ? tx("作答") : tx("原话")}</span>
+                    <span>{item.quote || item.reason}</span>
+                  </>
+                )}
               </li>
             ))}
           </ul>

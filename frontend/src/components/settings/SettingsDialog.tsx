@@ -1039,6 +1039,18 @@ function evolved(memory: LearnerMemory) {
   return memory.kind === "mastery" || memory.status === "improving" || memory.status === "resolved";
 }
 
+function evidenceLine(
+  tx: (text: string, vars?: Record<string, string | number>) => string,
+  item: LearnerMemory["evidence"][number] | undefined,
+  slot: "first" | "latest" | "basis",
+): string | null {
+  if (!item?.quote) return null;
+  if (item.source === "inferred") return tx("依据：{basis}", { basis: item.quote });
+  if (slot === "first") return tx("最初原话：“{quote}”", { quote: item.quote });
+  if (slot === "latest") return tx("最新原话：“{quote}”", { quote: item.quote });
+  return tx("原话依据：“{quote}”", { quote: item.quote });
+}
+
 function ReflectPane() {
   const { tx } = useI18n();
   const [items, setItems] = useState<LearnerMemory[]>([]);
@@ -1073,8 +1085,10 @@ function ReflectPane() {
 
       <p className={styles.sectionLabel}>{tx("认知蜕变记录（Before vs. After 原话对比）")}</p>
       {evolvedRows.map((memory) => {
-        const first = memory.evidence[0]?.quote;
-        const latest = memory.evidence[memory.evidence.length - 1]?.quote;
+        const firstItem = memory.evidence[0];
+        const latestItem = memory.evidence[memory.evidence.length - 1];
+        const first = evidenceLine(tx, firstItem, "first");
+        const latest = evidenceLine(tx, latestItem, "latest");
         return (
           <div key={memory.id} className={styles.settingRow}>
             <div className={styles.settingRowInfo}>
@@ -1085,8 +1099,8 @@ function ReflectPane() {
                 </span>
               </p>
               <p className={styles.settingRowDesc}>{memory.summary}</p>
-              {first && <p className={styles.quote}>{tx("最初原话：“{quote}”", { quote: first })}</p>}
-              {latest && latest !== first && <p className={styles.quoteAfter}>{tx("最新原话：“{quote}”", { quote: latest })}</p>}
+              {first && <p className={styles.quote}>{first}</p>}
+              {latest && latestItem?.quote !== firstItem?.quote && <p className={styles.quoteAfter}>{latest}</p>}
             </div>
           </div>
         );
@@ -1105,7 +1119,7 @@ function ReflectPane() {
               <div className={styles.settingRowInfo}>
                 <p className={styles.settingRowTitle}>{memory.topic}</p>
                 <p className={styles.settingRowDesc}>{memory.summary}</p>
-                {memory.evidence[0]?.quote && <p className={styles.quote}>{tx("原话依据：“{quote}”", { quote: memory.evidence[0].quote })}</p>}
+                {memory.evidence[0]?.quote && <p className={styles.quote}>{evidenceLine(tx, memory.evidence[0], "basis")}</p>}
               </div>
             </div>
           ))}

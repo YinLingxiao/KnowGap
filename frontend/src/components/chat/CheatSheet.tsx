@@ -29,11 +29,19 @@ const PRINT_CSS = `
 type Preview = Pick<Sheet["sections"], "pitfalls" | "conclusions">;
 
 /** 模型还在生成时，先用聚合数据把 ① ② 画出来（与后端 pitfalls()/conclusions() 规则一致）。 */
+function statedQuotes(insights: SubjectInsights | null, memoryId: string, quotes: string[]): string[] {
+  const memory = insights?.misconceptions.find((item) => item.id === memoryId);
+  if (!memory) return quotes;
+  const stated = new Set(memory.evidence.filter((item) => item.source !== "inferred").map((item) => item.quote));
+  const inferred = new Set(memory.evidence.filter((item) => item.source === "inferred").map((item) => item.quote));
+  return quotes.filter((quote) => !inferred.has(quote) || stated.has(quote));
+}
+
 function previewFrom(insights: SubjectInsights): Preview {
   return {
     pitfalls: insights.misconceptions.slice(0, 8).map((m) => ({
       memoryId: m.id, topic: m.topic, summary: m.summary, status: m.status,
-      quotes: m.evidence.filter((e) => e.signal === "supports" && e.quote.trim()).slice(0, 2).map((e) => e.quote),
+      quotes: m.evidence.filter((e) => e.source !== "inferred" && e.signal === "supports" && e.quote.trim()).slice(0, 2).map((e) => e.quote),
     })),
     conclusions: insights.threads
       .filter((t) => t.status === "resolved" && (t.summary || t.takeaways.length))
@@ -69,6 +77,7 @@ function Quadrant({ index, title, hint, tone, children }: {
 export function CheatSheet({ subject, notes, onClose }: { subject: Subject; notes?: string; onClose: () => void }) {
   const { tx, lang } = useI18n();
   const [sheet, setSheet] = useState<Sheet | null>(null);
+  const [insights, setInsights] = useState<SubjectInsights | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -88,8 +97,13 @@ export function CheatSheet({ subject, notes, onClose }: { subject: Subject; note
 
   useEffect(() => {
     setMounted(true);
+    setInsights(null);
     let alive = true;
-    insightsApi.getInsights(subject.id).then((data) => { if (alive) setPreview(previewFrom(data)); }).catch(() => undefined);
+    insightsApi.getInsights(subject.id).then((data) => {
+      if (!alive) return;
+      setInsights(data);
+      setPreview(previewFrom(data));
+    }).catch(() => undefined);
     void load(false);
     return () => { alive = false; };
     // 只在打开或切换空间时生成一次；notes 变化不自动重算，需点「重新生成」。
@@ -192,7 +206,7 @@ export function CheatSheet({ subject, notes, onClose }: { subject: Subject; note
                         <span className={styles.pill}>{tx(STATUS_LABEL[p.status] ?? p.status)}</span>
                       </div>
                       <Md text={p.summary} />
-                      {p.quotes.map((q) => <blockquote key={q} className={styles.quote}>{tx("「{quote}」", { quote: q })}</blockquote>)}
+                      {statedQuotes(insights, p.memoryId, p.quotes).map((q) => <blockquote key={q} className={styles.quote}>{tx("「{quote}」", { quote: q })}</blockquote>)}
                     </li>
                   ))}
                 </ol>

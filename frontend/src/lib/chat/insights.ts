@@ -17,6 +17,8 @@ export interface InsightEvidence {
   messageId: string | null;
   sourceAvailable: boolean;
   createdAt: string;
+  /** 缺省按原话；inferred 时 quote 是依据，不是原话 */
+  source?: "message_quote" | "quiz_attempt" | "inferred";
 }
 
 export interface InsightMemory {
@@ -110,6 +112,7 @@ function mapMemory(data: Wire): InsightMemory {
     evidence: (data.evidence ?? []).map((e: Wire) => ({
       quote: e.quote, reason: e.reason, signal: e.signal, conversationId: e.conversation_id ?? null,
       messageId: e.message_id ?? null, sourceAvailable: e.source_available, createdAt: e.created_at,
+      ...(e.source === "message_quote" || e.source === "quiz_attempt" || e.source === "inferred" ? { source: e.source } : {}),
     })),
     createdAt: data.created_at, updatedAt: data.updated_at,
     ...(data.source ? { source: data.source } : {}),
