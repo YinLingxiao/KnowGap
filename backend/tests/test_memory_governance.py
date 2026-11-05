@@ -79,38 +79,120 @@ class ReviewChat(FakeChat):
         return {}
 
 
-def test_review_counts_and_samples_each_conversation_separately(tmp_path):
+def review_setup(tmp_path, name="review"):
+    store = Store(tmp_path / f"{name}.sqlite3")
+    store.initialize()
+    chat = ChatStore(store)
+    chat.initialize()
+    model = ReviewChat()
+    return chat, model, ChatService(chat, lambda: model)
+
+
+async def turn(service, chat, conversation, content, request_id):
+    user_id = chat.add_user_message(conversation, content, request_id)
+    async for _ in service.events(service.begin(STUDENT, conversation, user_id, [])):
+        pass
+
+
+async def settle(service):
+    while service.reviews:
+        await asyncio.gather(*list(service.reviews))
+
+
+def test_moving_to_another_conversation_reviews_the_previous_one(tmp_path):
     async def scenario():
-        store = Store(tmp_path / "review.sqlite3")
-        store.initialize()
-        chat = ChatStore(store)
-        chat.initialize()
-        model = ReviewChat()
-        service = ChatService(chat, lambda: model)
+        chat, model, service = review_setup(tmp_path)
         conversation = chat.create_conversation(STUDENT, title=None, problem=None, client_request_id="conv-main")
         other = chat.create_conversation(STUDENT, title=None, problem=None, client_request_id="conv-other")
-        for index in range(5):
-            target = other if index == 3 else conversation
+        for index in range(3):
             content = "甲" * 900 + "资料在 notes 目录" if index == 0 else f"第{index}轮"
-            user_id = chat.add_user_message(target, content, f"req-review-{index:04d}")
-            async for _ in service.events(service.begin(STUDENT, target, user_id, [])):
-                pass
-            if index == 3:
-                assert model.reviewed == 0
-        if service.reviews:
-            await asyncio.gather(*list(service.reviews))
+            await turn(service, chat, conversation, content, f"req-review-{index:04d}")
+        await settle(service)
+        assert model.reviewed == 0 and conversation in service.review_handles
+        await turn(service, chat, other, "换个话题", "req-review-other")
+        await settle(service)
         assert model.reviewed == 1
         assert "资料在 notes 目录" in chat.agent_notes(STUDENT)["memory"]
         turns = model.review_payloads[0]["turns"]
-        assert len([t for t in turns if t["role"] == "user"]) == 4
-        assert "资料在 notes 目录" in turns[0]["content"]
-        assert not any(t["content"] == "第3轮" for t in turns)
-        assert chat.bump_note_turns(STUDENT, False, conversation) == 1
-        chat.apply_agent_memory(STUDENT, "add", "user", "喜欢例子", None)
-        assert chat.bump_note_turns(STUDENT, True, conversation) == 0
-        assert chat.bump_note_turns(STUDENT, False, other) == 2
+        assert [t["content"] for t in turns if t["role"] == "user"][1:] == ["第1轮", "第2轮"]
+        assert "资料在 notes 目录" in turns[0]["content"]  # long messages are reviewed in full
+        assert chat.note_turns(STUDENT, conversation) == 0 and chat.note_turns(STUDENT, other) == 1
+        assert conversation not in service.review_handles and other not in service.review_handles
+        await service.close()
 
     asyncio.run(scenario())
+
+
+def test_a_quiet_conversation_is_reviewed_only_after_three_turns(tmp_path, monkeypatch):
+    monkeypatch.setattr("app.chat.service.REVIEW_IDLE_SECONDS", 0.05)
+
+    async def scenario():
+        chat, model, service = review_setup(tmp_path)
+        conversation = chat.create_conversation(STUDENT, title=None, problem=None, client_request_id="conv-idle")
+        for index in range(2):
+            await turn(service, chat, conversation, f"第{index}轮", f"req-idle-{index:04d}")
+        await asyncio.sleep(0.2)
+        await settle(service)
+        assert model.reviewed == 0 and not service.review_handles
+        await turn(service, chat, conversation, "第2轮", "req-idle-0002")
+        await asyncio.sleep(0.2)
+        await settle(service)
+        assert model.reviewed == 1
+        assert len([t for t in model.review_payloads[0]["turns"] if t["role"] == "user"]) == 3
+        assert chat.note_turns(STUDENT, conversation) == 0
+        await service.close()
+
+    asyncio.run(scenario())
+
+
+def test_a_long_conversation_is_reviewed_every_ten_turns(tmp_path):
+    async def scenario():
+        chat, model, service = review_setup(tmp_path)
+        conversation = chat.create_conversation(STUDENT, title=None, problem=None, client_request_id="conv-long")
+        for index in range(10):
+            await turn(service, chat, conversation, f"第{index}轮", f"req-long-{index:04d}")
+            await settle(service)
+            assert model.reviewed == (1 if index == 9 else 0)
+        assert len([t for t in model.review_payloads[0]["turns"] if t["role"] == "user"]) == 10
+        assert conversation not in service.review_handles
+        await service.close()
+
+    asyncio.run(scenario())
+
+
+def test_turns_left_unreviewed_at_shutdown_are_reviewed_after_restart(tmp_path, monkeypatch):
+    monkeypatch.setattr("app.chat.service.REVIEW_STARTUP_DELAY", 0.05)
+
+    async def first_run():
+        chat, model, service = review_setup(tmp_path, "restart")
+        conversation = chat.create_conversation(STUDENT, title=None, problem=None, client_request_id="conv-restart")
+        for index in range(3):
+            await turn(service, chat, conversation, f"第{index}轮", f"req-restart-{index:04d}")
+        await service.close()  # the idle timer dies with the app
+        assert model.reviewed == 0
+        return conversation
+
+    async def second_run(conversation):
+        chat, model, service = review_setup(tmp_path, "restart")
+        service.recover()
+        await asyncio.sleep(0.2)
+        await settle(service)
+        assert model.reviewed == 1
+        assert chat.note_turns(STUDENT, conversation) == 0
+        await service.close()
+
+    asyncio.run(second_run(asyncio.run(first_run())))
+
+
+def test_note_turn_counter_is_per_conversation(tmp_path):
+    chat, _, _ = review_setup(tmp_path)
+    conversation = chat.create_conversation(STUDENT, title=None, problem=None, client_request_id="conv-a")
+    other = chat.create_conversation(STUDENT, title=None, problem=None, client_request_id="conv-b")
+    assert chat.bump_note_turns(STUDENT, False, conversation) == 1
+    chat.apply_agent_memory(STUDENT, "add", "user", "喜欢例子", None)
+    assert chat.bump_note_turns(STUDENT, True, conversation) == 0
+    assert chat.bump_note_turns(STUDENT, False, other) == 1
+    assert chat.conversations_awaiting_review(1) == [(STUDENT, other)]
 
 
 class MemoryToolChat(FakeChat):

@@ -55,7 +55,12 @@ IMAGE_FAILED = ("【图片读取失败】学生发了一张图片，但识图没
 logger = logging.getLogger(__name__)
 _PROFILE_LABEL_RE = re.compile(r"^\s*\[(?:Identity|Preference|Context|Activity|Experience)\]\s*")
 ANALYSIS_TIMEOUT = 60
-REVIEW_EVERY_TURNS = 4
+# Memory review runs once a conversation goes quiet (or the user moves to another one) with at least
+# REVIEW_MIN_TURNS new turns; a long conversation is also reviewed every REVIEW_MAX_TURNS turns.
+REVIEW_MIN_TURNS = 3
+REVIEW_MAX_TURNS = 10
+REVIEW_IDLE_SECONDS = 300
+REVIEW_STARTUP_DELAY = 60
 THREAD_CONCURRENCY = 2
 
 
@@ -175,6 +180,8 @@ class ChatService:
         self.compressing: set[str] = set()
         # One pending quiet-period timer per main conversation; replaced on every re-schedule.
         self.wake_handles: dict[str, asyncio.TimerHandle] = {}
+        # Pending idle memory reviews: conversation id -> (student id, conversation family root, timer).
+        self.review_handles: dict[str, tuple[str, str, asyncio.TimerHandle]] = {}
         self.closing = False
         self.streams = StreamStore(store)
 
@@ -183,6 +190,9 @@ class ChatService:
         for handle in self.wake_handles.values():
             handle.cancel()
         self.wake_handles.clear()
+        for _, _, handle in self.review_handles.values():
+            handle.cancel()
+        self.review_handles.clear()
         tasks = [*self.tasks, *self.reviews]
         for task in tasks:
             task.cancel()
@@ -219,6 +229,10 @@ class ChatService:
             student_id = self.store.conversation_student(main_id)
             if student_id:
                 self._schedule_wake(student_id, main_id)
+        # Conversations left with unreviewed turns when the app last closed are reviewed shortly after start.
+        for student_id, conversation_id in self.store.conversations_awaiting_review(REVIEW_MIN_TURNS):
+            family = self._thread_parent_id(student_id, conversation_id) or conversation_id
+            self._schedule_review(student_id, conversation_id, family, REVIEW_STARTUP_DELAY)
 
     def is_generating(self, conversation_id: str) -> bool:
         return conversation_id in self.active
@@ -1137,20 +1151,15 @@ class ChatService:
                     student_id, False, generation.conversation_id,
                 )
                 self.store.merge_meta(generation.user_message_id, {"note_counted": True})
-                if count >= REVIEW_EVERY_TURNS:
-                    self.store.bump_note_turns(student_id, True, generation.conversation_id)
-                    # The last counted turns from this conversation, including long messages in full.
-                    user_rows = [row for row in history if row["role"] == "user"
-                                 and not is_system_event_row(row)
-                                 and self.store.message_meta(row["id"]).get("note_counted")]
-                    start_seq = user_rows[-REVIEW_EVERY_TURNS]["seq"]
-                    turns = dialogue([row for row in history if row["seq"] >= start_seq
-                                      and not is_system_event_row(row)], bounded=False)
-                    turns.append({"role": "assistant", "content": text})
-                    task = asyncio.create_task(self._review(student_id, self._background_model(model), turns,
-                                                            generation.conversation_id, assistant_id))
-                    self.reviews.add(task)
-                    task.add_done_callback(self.reviews.discard)
+                family = self._thread_parent_id(student_id, generation.conversation_id) or generation.conversation_id
+                # Moving on to another conversation ends the previous one: review it now instead of waiting.
+                for other, (owner, root, _) in list(self.review_handles.items()):
+                    if owner == student_id and root != family:
+                        self._start_review(student_id, other)
+                if count >= REVIEW_MAX_TURNS:
+                    self._start_review(student_id, generation.conversation_id, model)
+                elif count >= REVIEW_MIN_TURNS:
+                    self._schedule_review(student_id, generation.conversation_id, family, REVIEW_IDLE_SECONDS)
             await asyncio.sleep(0)
             try:
                 if event_turn:
@@ -1219,8 +1228,56 @@ class ChatService:
             elif not self.closing:
                 self.drain_outbox(student_id, generation.conversation_id)
 
+    def _schedule_review(self, student_id: str, conversation_id: str, family: str, delay: float) -> None:
+        if self.closing:
+            return
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return
+        pending = self.review_handles.pop(conversation_id, None)
+        if pending is not None:
+            pending[2].cancel()
+        handle = loop.call_later(delay, self._idle_review, student_id, conversation_id)
+        self.review_handles[conversation_id] = (student_id, family, handle)
+
+    def _idle_review(self, student_id: str, conversation_id: str) -> None:
+        if self.is_generating(conversation_id):
+            # The reply in progress counts its turn and schedules the review again when it ends.
+            self.review_handles.pop(conversation_id, None)
+            return
+        self._start_review(student_id, conversation_id)
+
+    def _start_review(self, student_id: str, conversation_id: str, model=None) -> None:
+        """Review the turns counted since this conversation's last review, then reset its counter."""
+        pending = self.review_handles.pop(conversation_id, None)
+        if pending is not None:
+            pending[2].cancel()
+        if self.closing:
+            return
+        try:
+            count = self.store.note_turns(student_id, conversation_id)
+            history = self.store.history(conversation_id)
+            counted = [row for row in history if row["role"] == "user" and not is_system_event_row(row)
+                       and self.store.message_meta(row["id"]).get("note_counted")]
+            if count < 1 or not counted:
+                return
+            reviewer = self._background_model(model)
+            self.store.bump_note_turns(student_id, True, conversation_id)
+            # Long messages are included in full.
+            start_seq = counted[-min(count, len(counted))]["seq"]
+            turns = dialogue([row for row in history if row["seq"] >= start_seq
+                              and not is_system_event_row(row)], bounded=False)
+            message_id = next((row["id"] for row in reversed(history) if row["role"] == "assistant"), None)
+        except Exception:
+            logger.exception("Could not start the memory review")
+            return
+        task = asyncio.create_task(self._review(student_id, reviewer, turns, conversation_id, message_id))
+        self.reviews.add(task)
+        task.add_done_callback(self.reviews.discard)
+
     async def _review(self, student_id: str, model: ChatModel, turns: list[dict],
-                      conversation_id: str, message_id: str) -> None:
+                      conversation_id: str, message_id: str | None) -> None:
         try:
             raw = await self._complete_json(model, review_messages(self.store.agent_notes(student_id), turns),
                                             conversation_id, message_id, "review")

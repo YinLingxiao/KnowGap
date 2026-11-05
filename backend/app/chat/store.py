@@ -1515,6 +1515,24 @@ class ChatStore:
         with self.connection() as db:
             return bump_turns(db, student_id, reset, conversation_id)
 
+    def note_turns(self, student_id: str, conversation_id: str) -> int:
+        """Counted turns in this conversation since its last memory review."""
+        with self.connection() as db:
+            row = db.execute(
+                "SELECT turns_since_note FROM conversation_note_state WHERE student_id = ? AND conversation_id = ?",
+                (student_id, conversation_id),
+            ).fetchone()
+            return row[0] if row else 0
+
+    def conversations_awaiting_review(self, minimum: int) -> list[tuple[str, str]]:
+        """(student_id, conversation_id) pairs with at least `minimum` turns not yet reviewed."""
+        with self.connection() as db:
+            return [(row[0], row[1]) for row in db.execute(
+                "SELECT n.student_id, n.conversation_id FROM conversation_note_state n "
+                "JOIN conversations c ON c.id = n.conversation_id AND c.student_id = n.student_id "
+                "WHERE n.turns_since_note >= ?", (minimum,),
+            )]
+
     def onboarding_status(self, student_id: str) -> dict:
         with self.connection() as db:
             from app.chat.onboarding import state as read_state
