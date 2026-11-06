@@ -326,6 +326,12 @@ button.searchField:hover {
   background: var(--bg-hover);
 }
 
+/* 菜单只在本行的层叠上下文里有 z-index；行进场动画会让后面的行各自成层，
+   所以把打开菜单的整行抬到兄弟行之上，否则下面的标题会盖住菜单 */
+.menuOpen {
+  z-index: 2;
+}
+
 .itemButton {
   display: flex;
   flex: 1;
