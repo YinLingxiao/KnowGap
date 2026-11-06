@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
+import { createPortal } from "react-dom";
 import {
   Brain, CalendarCheck, ChevronRight, CircleHelp, FolderKanban, ListPlus, Loader, MoreHorizontal, PanelLeftClose, Pencil, Plus,
   Search, Settings, SlidersHorizontal, Trash2, X,
@@ -81,15 +82,53 @@ function ConversationItem({
   const [working, setWorking] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const menuRef = useRef<HTMLLIElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [menuPosition, setMenuPosition] = useState({ left: 0, top: 0 });
+
+  useLayoutEffect(() => {
+    if (mode !== "menu" || !triggerRef.current || !popupRef.current) return;
+    const anchor = triggerRef.current.getBoundingClientRect();
+    const { offsetWidth: width, offsetHeight: height } = popupRef.current;
+    setMenuPosition({
+      left: Math.max(8, Math.min(anchor.right - width, window.innerWidth - width - 8)),
+      top: Math.max(8, Math.min(
+        anchor.bottom + height + 4 <= window.innerHeight - 8
+          ? anchor.bottom + 4 : anchor.top - height - 4,
+        window.innerHeight - height - 8,
+      )),
+    });
+    popupRef.current.querySelector<HTMLButtonElement>("button")?.focus();
+  }, [mode]);
 
   useEffect(() => {
     if (mode === "rename") inputRef.current?.select();
     if (mode !== "menu") return;
     const close = (event: MouseEvent) => {
-      if (!menuRef.current?.contains(event.target as Node)) setMode("view");
+      if (!menuRef.current?.contains(event.target as Node) &&
+          !popupRef.current?.contains(event.target as Node)) setMode("view");
+    };
+    const dismiss = () => setMode("view");
+    const onScroll = (event: Event) => {
+      if (!popupRef.current?.contains(event.target as Node)) dismiss();
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        dismiss();
+        triggerRef.current?.focus();
+      }
     };
     document.addEventListener("mousedown", close);
-    return () => document.removeEventListener("mousedown", close);
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("scroll", onScroll, true);
+    window.addEventListener("resize", dismiss);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("resize", dismiss);
+    };
   }, [mode]);
 
   const save = async () => {
@@ -158,6 +197,7 @@ function ConversationItem({
         {generating && <Loader size={12} className={styles.spin} aria-label={t("sidebar.generating")} />}
       </button>
       <button
+        ref={triggerRef}
         className={styles.more}
         onClick={() => setMode(mode === "menu" ? "view" : "menu")}
         aria-label={t("sidebar.moreActions", { title: conversation.title })}
@@ -166,8 +206,8 @@ function ConversationItem({
       >
         <MoreHorizontal size={15} />
       </button>
-      {mode === "menu" && (
-        <div className={styles.menu} role="menu">
+      {mode === "menu" && createPortal(
+        <div ref={popupRef} className={styles.menu} role="menu" style={menuPosition}>
           <button role="menuitem" onClick={() => { setTitle(conversation.title); setMode("rename"); }}>
             <Pencil size={13} aria-hidden />
             {t("sidebar.rename")}
@@ -176,7 +216,8 @@ function ConversationItem({
             <Trash2 size={13} aria-hidden />
             {t("common.delete")}
           </button>
-        </div>
+        </div>,
+        document.body,
       )}
     </li>
   );

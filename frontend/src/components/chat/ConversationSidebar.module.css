@@ -326,12 +326,6 @@ button.searchField:hover {
   background: var(--bg-hover);
 }
 
-/* 菜单只在本行的层叠上下文里有 z-index；行进场动画会让后面的行各自成层，
-   所以把打开菜单的整行抬到兄弟行之上，否则下面的标题会盖住菜单 */
-.menuOpen {
-  z-index: 2;
-}
-
 .itemButton {
   display: flex;
   flex: 1;
@@ -400,14 +394,15 @@ button.searchField:hover {
   color: var(--text);
 }
 
+/* Rendered in document.body so row animations and sidebar scrolling cannot cover or clip it. */
 .menu {
-  position: absolute;
-  z-index: 30;
-  top: calc(100% + 2px);
-  right: 0;
+  position: fixed;
+  z-index: 80;
   display: flex;
   flex-direction: column;
   min-width: 150px;
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
   padding: 4px;
   border-radius: var(--radius);
   background: var(--bg-elevated);
@@ -432,6 +427,11 @@ button.searchField:hover {
   border-radius: var(--radius-sm);
   font-size: var(--text-sm);
   text-align: left;
+}
+
+.menu button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 
 .menu button:hover {

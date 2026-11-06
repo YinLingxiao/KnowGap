@@ -5,6 +5,7 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 import uvicorn
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import Settings
@@ -19,6 +20,13 @@ class ExportStaticFiles(StaticFiles):
     桌面壳请求的是 `/quick.html`，但浏览器里访问 `/quick`、或以后新增导出路由时
     仍需要一个回退，所以这里把无扩展名路径映射到同名 `.html` 文件。
     """
+
+    def file_response(self, full_path, stat_result, scope, status_code=200):
+        if Path(full_path).suffix == ".html":
+            # Entry pages refer to one export's hashed assets. Always serve the installed page.
+            return FileResponse(full_path, stat_result=stat_result, status_code=status_code,
+                                headers={"Cache-Control": "no-store"})
+        return super().file_response(full_path, stat_result, scope, status_code)
 
     async def get_response(self, path, scope):
         response = await super().get_response(path, scope)
