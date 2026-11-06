@@ -1,4 +1,5 @@
 const { app, BrowserWindow, Menu, Notification, Tray, dialog, globalShortcut, ipcMain, nativeImage, nativeTheme, screen, shell } = require("electron");
+const { createHash } = require("crypto");
 const { spawn } = require("child_process");
 const http = require("http");
 const fs = require("fs");
@@ -19,6 +20,7 @@ let quickWindow = null;
 let quickShortcut = null;
 let quickFallbackTried = false;
 let appOrigin = "";
+let frontendRevision = "";
 let tray = null;
 let quitting = false;
 let updater = null;
@@ -43,6 +45,11 @@ function backendPath() {
 function staticPath() {
   if (app.isPackaged) return path.join(process.resourcesPath, "frontend");
   return path.join(__dirname, "..", "frontend", "out");
+}
+
+function frontendUrl(route) {
+  // New exports get a new navigation URL without changing the storage origin.
+  return `${appOrigin}${route}?build=${frontendRevision}`;
 }
 
 function freePort(wanted = 0) {
@@ -334,12 +341,12 @@ function createQuickWindow() {
   //（新版后端会把无扩展名路由回退到同名 .html），避免浮窗只剩一块空白。
   quickFallbackTried = false;
   quickWindow.webContents.on("did-fail-load", (_event, code, description, url) => {
-    if (quickFallbackTried || !appOrigin || url.endsWith("/quick")) return;
+    if (quickFallbackTried || !appOrigin || url.split("?")[0].endsWith("/quick")) return;
     quickFallbackTried = true;
     console.warn(`[KnowGap] ${url} 加载失败（${code} ${description}），回退到 /quick`);
-    void quickWindow.loadURL(`${appOrigin}/quick`);
+    void quickWindow.loadURL(frontendUrl("/quick"));
   });
-  void quickWindow.loadURL(`${appOrigin}/quick.html`);
+  void quickWindow.loadURL(frontendUrl("/quick.html"));
 }
 
 function showQuickWindow() {
@@ -636,7 +643,8 @@ async function open() {
   rememberPort(port);
   startup?.setStatus("正在打开学习空间");
   appOrigin = `http://127.0.0.1:${port}`;
-  await mainWindow.loadURL(`${appOrigin}/`);
+  frontendRevision = createHash("sha256").update(fs.readFileSync(path.join(folder, "index.html"))).digest("hex");
+  await mainWindow.loadURL(frontendUrl("/"));
   try {
     await startup?.finish();
   } catch (error) {

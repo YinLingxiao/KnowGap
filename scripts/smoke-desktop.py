@@ -26,12 +26,19 @@ def main():
         port = sock.getsockname()[1]
     origin = f"http://127.0.0.1:{port}"
 
-    def get(path, body=None):
+    def get(path, body=None, *, entry_page=False):
         data = json.dumps(body).encode() if body is not None else None
-        request = Request(origin + path, data=data, headers={"Content-Type": "application/json"})
+        headers = {"Content-Type": "application/json"}
+        if entry_page:
+            # Simulate a browser revalidating an entry cached by an older package.
+            headers["If-None-Match"] = "*"
+            headers["If-Modified-Since"] = "Thu, 01 Jan 2099 00:00:00 GMT"
+        request = Request(origin + path, data=data, headers=headers)
         with urlopen(request, timeout=3) as response:
             expected_status = 201 if body is not None else 200
             assert response.status == expected_status, (path, response.status)
+            if entry_page:
+                assert response.headers.get("Cache-Control") == "no-store", path
             return response.read()
 
     def stop(process):
@@ -63,8 +70,8 @@ def main():
 
         process = start()
         try:
-            html = get("/").decode()
-            get("/quick.html")
+            html = get("/", entry_page=True).decode()
+            get("/quick.html", entry_page=True)
             assets = set(re.findall(r'(?:src|href)="(/_next/[^"?#]+)', html))
             assert assets, "No frontend assets were exported"
             for asset in assets:
