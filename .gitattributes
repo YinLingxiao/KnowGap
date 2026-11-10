@@ -1,2 +1,5 @@
+# 文本文件入库统一为 LF，检出时的换行由各自机器的 git 配置决定
+* text=auto
+
 # postinstall 从 node_modules 原样拷来的第三方文件，本身带 CRLF，不做换行转换
 frontend/public/vendor/* -text
