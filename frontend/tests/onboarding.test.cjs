@@ -17,6 +17,7 @@ function loadComponent(name) {
     if (resolveI18n(id)) return resolveI18n(id);
     if (id.endsWith('.css')) return new Proxy({}, { get: (_, key) => key });
     if (id === 'next/image') return { __esModule: true, default: (props) => React.createElement('img', props) };
+    if (id === '@/components/Brand') return { BrandMark: () => React.createElement('svg', { 'aria-hidden': true }), BrandWordmark: () => React.createElement('span', { role: 'img', 'aria-label': 'KnowGap' }), BrandLockup: () => React.createElement('span', { role: 'img', 'aria-label': 'KnowGap' }) };
     if (id === '@/lib/chat/api') return { chatApi: {} };
     if (id === '@/lib/cx') return { cx: (...values) => values.filter(Boolean).join(' ') };
     if (id === './coach') return {};

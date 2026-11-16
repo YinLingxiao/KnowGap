@@ -559,7 +559,7 @@ function createMainWindow() {
     show: false,
     title: "KnowGap",
     icon: path.join(__dirname, "icon.ico"),
-    backgroundColor: nativeTheme.shouldUseDarkColors ? "#08080a" : "#ffffff",
+    backgroundColor: nativeTheme.shouldUseDarkColors ? "#1a1917" : "#fbfaf7",
     ...windowChromeOptions(process.platform, nativeTheme.shouldUseDarkColors),
     autoHideMenuBar: true,
     webPreferences: {

@@ -223,11 +223,6 @@ export function SpacesPage(props: SpacesPageProps) {
                 key={subject.id}
                 className={cx(styles.card, menuId === subject.id && styles.cardMenuOpen)}
                 style={{ "--c": subject.color } as React.CSSProperties}
-                onMouseMove={(event) => {
-                  const rect = event.currentTarget.getBoundingClientRect();
-                  event.currentTarget.style.setProperty("--mx", `${event.clientX - rect.left}px`);
-                  event.currentTarget.style.setProperty("--my", `${event.clientY - rect.top}px`);
-                }}
               >
                 <button className={styles.cardMain} onClick={() => props.onOpen(subject.id)}>
                   <span className={styles.cardIcon} style={{ color: subject.color }} aria-hidden>

@@ -29,9 +29,10 @@
 }
 
 .header h2 {
+  font-family: var(--font-display);
   font-size: var(--text-xl);
   font-weight: 600;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
 }
 
 .date {

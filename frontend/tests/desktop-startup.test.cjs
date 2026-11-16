@@ -9,14 +9,14 @@ const logoPath = path.resolve(__dirname, '../public/brand/knowgap-logo.svg');
 const source = fs.readFileSync(path.join(desktop, 'startup.js'), 'utf8');
 const { buildStartupDocument } = require('../../desktop/startup');
 
-test('startup reuses all five facets of the actual logo and is completely offline', () => {
+test('startup reuses both pages of the actual logo and is completely offline', () => {
   const logoSvg = fs.readFileSync(logoPath, 'utf8');
   for (const dark of [false, true]) {
     const html = buildStartupDocument({ logoSvg, dark, platform: 'win32' });
     assert.ok(html.includes(`data-theme="${dark ? 'dark' : 'light'}"`));
     assert.match(html, /data-platform="win32"/);
-    for (let i = 0; i < 5; i++) assert.ok(html.includes(`class="piece piece-${i}"`));
-    assert.equal((html.match(/<path\b/g) || []).length, 5);
+    for (let i = 0; i < 2; i++) assert.ok(html.includes(`class="piece piece-${i}"`));
+    assert.equal((html.match(/<path\b/g) || []).length, 2);
     assert.doesNotMatch(html, /__THEME__|__PLATFORM__|__STARTUP_LOGO__/);
     assert.match(html, /default-src 'none'/);
     assert.doesNotMatch(html, /<(?:script|link|img)[^>]+(?:src|href)=/);

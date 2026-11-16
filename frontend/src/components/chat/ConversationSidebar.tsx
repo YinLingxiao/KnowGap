@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import Image from "next/image";
+import { BrandMark, BrandWordmark } from "@/components/Brand";
 import { createPortal } from "react-dom";
 import {
   Brain, CalendarCheck, ChevronRight, CircleHelp, FolderKanban, ListPlus, Loader, MoreHorizontal, PanelLeftClose, Pencil, Plus,
@@ -259,8 +259,8 @@ export function ConversationSidebar(props: SidebarProps) {
   return (
     <nav className={styles.sidebar} aria-label={t("sidebar.label")}>
       <header className={styles.brand}>
-        <Image src="/brand/knowgap-logo-v1.png" alt="KnowGap" width={22} height={22} className={styles.logo} />
-        <span className={styles.brandName} aria-hidden>{t("sidebar.brand")}</span>
+        <BrandMark size={24} />
+        <span className={styles.brandName}><BrandWordmark width={112} /></span>
         <button className={styles.iconButton} onClick={props.onCollapse} aria-label={t("sidebar.collapse")} title={t("sidebar.collapse")}>
           <PanelLeftClose size={16} />
         </button>

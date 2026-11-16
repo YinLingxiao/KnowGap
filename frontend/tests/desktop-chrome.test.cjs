@@ -14,8 +14,8 @@ test('Windows and Linux keep native caption buttons with a theme-matched overlay
       assert.equal(options.titleBarStyle, 'hidden');
       assert.equal(options.frame, undefined, 'do not disable the native resize/Snap frame');
       assert.equal(options.titleBarOverlay.height, TITLE_BAR_HEIGHT);
-      assert.equal(options.titleBarOverlay.color, dark ? '#08080a' : '#ffffff');
-      assert.equal(options.titleBarOverlay.symbolColor, dark ? '#989ea8' : '#525866');
+      assert.equal(options.titleBarOverlay.color, dark ? '#1a1917' : '#fbfaf7');
+      assert.equal(options.titleBarOverlay.symbolColor, dark ? '#a3a097' : '#57544c');
     }
   }
   assert.deepEqual(windowChromeOptions('darwin', true), { titleBarStyle: 'hidden' });
@@ -31,7 +31,7 @@ test('native theme changes repaint the caption buttons, but macOS never calls th
     for (const dark of [false, true]) {
       calls.length = 0;
       applyWindowTheme(win, platform, dark);
-      assert.deepEqual(calls[0], ['background', dark ? '#08080a' : '#ffffff']);
+      assert.deepEqual(calls[0], ['background', dark ? '#1a1917' : '#fbfaf7']);
       assert.equal(calls.length, platform === 'darwin' ? 1 : 2);
       if (platform !== 'darwin') assert.equal(calls[1][1].color, calls[0][1]);
     }

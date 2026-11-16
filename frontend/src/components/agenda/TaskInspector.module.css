@@ -218,7 +218,7 @@
 .segOn,
 .segOn:hover {
   background: var(--bg-elevated);
-  box-shadow: var(--specular-top), var(--shadow-card);
+  box-shadow: var(--shadow-card);
   color: var(--text);
 }
 
@@ -313,6 +313,9 @@
 }
 
 .preview {
+  /* 日程是高密度工具界面：备注预览保持无衬线 */
+  --font-read: var(--font-sans);
+  --font-display: var(--font-sans);
   padding: 8px 10px;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);

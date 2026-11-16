@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import Image from "next/image";
+import { BrandLockup } from "@/components/Brand";
 import { ArrowRight } from "lucide-react";
 import { useI18n } from "@/components/LanguageProvider";
 import styles from "./Welcome.module.css";
@@ -31,7 +31,7 @@ export function Welcome({ busy, error, onAnswer, onDemo, onSkip }: WelcomeProps)
   return (
     <div className={styles.wrap}>
       <form className={styles.card} onSubmit={submit}>
-        <Image src="/brand/knowgap-logo-v1.png" alt="" width={36} height={36} className={styles.logo} />
+        <BrandLockup size={36} />
         <h1>{tx("你最近在学什么？")}</h1>
         <p className={styles.lead}>{tx("说一个主题，马上用例子开讲。")}</p>
         <input
@@ -76,7 +76,7 @@ export function ModelGate({ busy, error, configured, onConfigure, onRetry, onLog
   return (
     <div className={styles.wrap}>
       <section className={styles.card} aria-labelledby="model-gate-title" aria-busy={busy}>
-        <Image src="/brand/knowgap-logo-v1.png" alt="" width={36} height={36} className={styles.logo} />
+        <BrandLockup size={36} />
         <h1 id="model-gate-title">{tx("先连上 AI 模型")}</h1>
         <p className={styles.lead}>{tx("填写 OpenAI 兼容服务的地址、Key 和模型名，保存并测试通过后继续。")}</p>
         {busy && <p className={styles.lead} role="status">{tx("正在确认模型和学习进度…")}</p>}

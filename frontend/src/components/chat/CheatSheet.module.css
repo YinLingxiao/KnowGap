@@ -354,6 +354,9 @@
 
 .md {
   min-width: 0;
+  /* 速查表是高密度小格子，阅读字体与标题字体都回到无衬线 */
+  --font-read: var(--font-sans);
+  --font-display: var(--font-sans);
 }
 
 .md > div {

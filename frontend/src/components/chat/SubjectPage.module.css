@@ -1,6 +1,5 @@
 /* 学习空间：Linear 2026 三栏工作台（主协调画布 + 右侧 Peek Inspector 面板） */
 .page {
-  --edge-hi: inset 0 1px 0 rgb(255 255 255 / 6%);
   display: grid;
   flex: 1;
   grid-template-columns: minmax(0, 1fr) minmax(340px, 34%);
@@ -154,7 +153,6 @@
   border: 1px solid var(--border-strong);
   border-radius: 999px;
   background: var(--bg-subtle);
-  box-shadow: var(--edge-hi);
   color: var(--text-secondary);
   font-size: var(--text-xs);
   font-weight: 500;
@@ -227,7 +225,6 @@
   border: 1px solid var(--border-strong);
   border-radius: 999px;
   background: var(--bg-subtle);
-  box-shadow: var(--edge-hi);
 }
 
 .icon:hover,
@@ -319,7 +316,7 @@
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
   background: var(--bg-elevated);
-  box-shadow: var(--shadow-popover), var(--edge-hi); /* taste-skill-ignore */
+  box-shadow: var(--shadow-popover); /* taste-skill-ignore */
   transform-origin: top right;
   animation: subject-pop 180ms var(--ease-spring);
 }
@@ -334,7 +331,6 @@
 @keyframes subject-backdrop {
   from {
     opacity: 0;
-    backdrop-filter: blur(0);
   }
 }
 
@@ -419,7 +415,7 @@
   line-height: var(--leading-ui);
 }
 
-/* 第一层：行动面板（2×2 紧凑行，1px 分割线，顶部镜面高光） */
+/* 第一层：行动面板（2×2 紧凑行，1px 分割线） */
 .starterPills {
   position: relative;
   display: grid;
@@ -431,15 +427,6 @@
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
   background: var(--border-strong);
-}
-
-.starterPills::after {
-  content: "";
-  position: absolute;
-  inset: 0 0 auto;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 16%) 20%, rgb(255 255 255 / 16%) 80%, transparent);
-  pointer-events: none;
 }
 
 .starterPill {
@@ -509,7 +496,6 @@
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-xl);
   background: var(--bg-panel);
-  box-shadow: var(--edge-hi);
 }
 
 .overlay {
@@ -606,7 +592,7 @@
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
   background: var(--bg-elevated);
-  box-shadow: 0 1px 2px rgb(0 0 0 / 18%), var(--edge-hi);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 18%);
   pointer-events: none;
 }
 
@@ -933,7 +919,6 @@
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
   background: var(--bg-elevated);
-  box-shadow: var(--edge-hi);
   color: var(--text);
   font-size: var(--text-xs);
   font-weight: 500;
@@ -1035,7 +1020,6 @@
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
   background: var(--bg-subtle);
-  box-shadow: var(--edge-hi);
   font-size: var(--text-sm);
 }
 
@@ -1094,7 +1078,6 @@
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
   background: var(--bg-subtle);
-  box-shadow: var(--edge-hi);
   color: var(--text);
   font-size: var(--text-xs);
   line-height: var(--leading-read);
@@ -1110,7 +1093,7 @@
 .resolve input:focus {
   border-color: var(--accent);
   background: var(--bg-elevated);
-  box-shadow: 0 0 0 3px var(--accent-soft), var(--edge-hi);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 .aboutField textarea,
@@ -1143,7 +1126,6 @@
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
   background: var(--bg-subtle);
-  box-shadow: var(--edge-hi);
 }
 
 .footprintStat {
@@ -1227,7 +1209,6 @@
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
   background: var(--bg-elevated);
-  box-shadow: var(--edge-hi);
 }
 
 .footprintCard::before {
@@ -1389,7 +1370,6 @@ button.footprintDoneRow:hover {
   border: 1px solid var(--border-strong);
   border-radius: 999px;
   background: var(--bg-subtle);
-  box-shadow: var(--edge-hi);
   font-size: var(--text-xs);
   font-weight: 500;
 }
@@ -1447,7 +1427,6 @@ button.footprintDoneRow:hover {
   place-items: center;
   padding: 24px;
   background: rgb(0 0 0 / 45%);
-  backdrop-filter: blur(8px);
   animation: subject-backdrop 220ms var(--ease-out);
 }
 
@@ -1461,18 +1440,9 @@ button.footprintDoneRow:hover {
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-xl);
   background: var(--bg-elevated);
-  box-shadow: var(--shadow-popover), var(--edge-hi); /* taste-skill-ignore */
+  box-shadow: var(--shadow-popover); /* taste-skill-ignore */
   transform-origin: center;
   animation: subject-modal 280ms var(--ease-spring);
-}
-
-.resolve::before {
-  content: "";
-  position: absolute;
-  inset: 0 20px auto;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 22%), transparent);
-  pointer-events: none;
 }
 
 .resolve h2 {
@@ -1531,7 +1501,6 @@ button.footprintDoneRow:hover {
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
   background: var(--bg-elevated);
-  box-shadow: var(--edge-hi);
 }
 
 .welcomeBlock + .anchorCard {
@@ -1699,7 +1668,7 @@ button.footprintDoneRow:hover {
 .pagesViewOn,
 .pagesViewOn:hover {
   background: var(--bg-elevated);
-  box-shadow: 0 1px 2px rgb(0 0 0 / 18%), var(--edge-hi);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 18%);
   color: var(--text);
 }
 
@@ -1712,7 +1681,6 @@ button.footprintDoneRow:hover {
   border: 1px solid var(--border-strong);
   border-radius: 999px;
   background: var(--bg-subtle);
-  box-shadow: var(--edge-hi);
   color: var(--text-secondary);
   font-size: var(--text-xs);
 }
@@ -1752,7 +1720,6 @@ button.footprintDoneRow:hover {
   padding: 10px 12px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
-  box-shadow: var(--edge-hi);
   overflow-y: auto;
 }
 

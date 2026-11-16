@@ -10,7 +10,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg-elevated);
-  box-shadow: 0 8px 24px rgb(15 23 42 / 12%);
+  box-shadow: var(--shadow-popover);
   color: var(--text);
 }
 

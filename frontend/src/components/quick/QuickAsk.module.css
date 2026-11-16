@@ -19,8 +19,7 @@
   max-width: 608px;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  background: color-mix(in srgb, var(--bg-elevated) 92%, transparent);
-  backdrop-filter: blur(18px) saturate(1.4);
+  background: var(--bg-elevated);
   box-shadow: var(--shadow-popover);
   overflow: hidden;
 }

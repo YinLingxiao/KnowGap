@@ -8,47 +8,50 @@
      卡片和行内代码里常带汉字，用这一套；代码块仍用 --font-mono，保持 ASCII 对齐。 */
   --font-mono-cjk: "JetBrains Mono", "Cascadia Code", "SF Mono", Consolas, "PingFang SC",
     "Microsoft YaHei UI", "Microsoft YaHei", monospace;
+  /* 阅读面（标题与长文正文）用衬线：西文 Source Serif 4，中文思源宋体；界面控件一律 --font-sans */
+  --font-serif: "Source Serif 4 Variable", "Source Serif 4", "Noto Serif SC Variable", "Songti SC", "STSong", Georgia, serif;
+  --font-display: var(--font-serif);
+  --font-read: var(--font-serif);
 
-  /* 浅色模式：浅雾灰侧栏与贴边白色主画布 */
-  --bg-app-shell: #f1f3f6;
-  --bg: #ffffff;
-  --bg-sidebar: #f1f3f6;
-  --bg-panel: #f7f8fa;
+  /* 浅色模式：暖纸色底，侧栏与外壳同色，扁平无渐变 */
+  --bg-app-shell: #f3f1ec;
+  --bg: #fbfaf7;
+  --bg-sidebar: #f3f1ec;
+  --bg-panel: #f6f4ef;
   --bg-elevated: #ffffff;
-  --bg-subtle: #f1f3f6;
-  --bg-hover: rgba(15, 23, 42, 0.05);
-  --bg-active: rgba(15, 23, 42, 0.08);
-  --bg-user-bubble: #eef2ff;
-  --bg-glow: radial-gradient(900px 480px at 18% -8%, rgb(59 130 246 / 6%), transparent 70%);
+  --bg-subtle: #f0eee8;
+  --bg-hover: rgb(41 37 28 / 5%);
+  --bg-active: rgb(41 37 28 / 8%);
+  --bg-user-bubble: #efece5;
 
-  --border: #e4e7ec;
-  --border-subtle: #eceef2;
-  --border-strong: #cfd4dc;
+  --border: #e3e0d8;
+  --border-subtle: #ebe8e1;
+  --border-strong: #cfcbc1;
 
-  --text: #111318;
-  --text-secondary: #525866;
-  --text-tertiary: #667085;
+  --text: #1c1b18;
+  --text-secondary: #57544c;
+  --text-tertiary: #6f6b62;
 
-  --ink-solid: #111318;
-  --ink-solid-hover: #262a34;
+  --ink-solid: #1c1b18;
+  --ink-solid-hover: #33312c;
   --on-ink: #ffffff;
 
-  --accent: #3b82f6;
-  --accent-hover: #2563eb;
-  --accent-text: #2563eb;
-  --accent-soft: rgb(59 130 246 / 10%);
-  --accent-soft-strong: rgb(59 130 246 / 18%);
+  --accent: #2f5fd0;
+  --accent-hover: #2550b8;
+  --accent-text: #2550b8;
+  --accent-soft: rgb(47 95 208 / 9%);
+  --accent-soft-strong: rgb(47 95 208 / 16%);
   --on-accent: #ffffff;
-  --accent-solid: #3b82f6;
-  --accent-solid-hover: #2563eb;
+  --accent-solid: #2f5fd0;
+  --accent-solid-hover: #2550b8;
 
-  --green: #168a53;
-  --green-soft: rgb(22 138 83 / 10%);
-  --red: #d13838;
-  --red-soft: rgb(209 56 56 / 9%);
-  --amber: #a86d0a;
-  --amber-soft: rgb(168 109 10 / 10%);
-  --grey: #828896;
+  --green: #2d7a4f;
+  --green-soft: rgb(45 122 79 / 10%);
+  --red: #c0392f;
+  --red-soft: rgb(192 57 47 / 9%);
+  --amber: #9a6410;
+  --amber-soft: rgb(154 100 16 / 10%);
+  --grey: #85817a;
 
   /* 颜色只表达语义：蓝=强调/进行中/链接，绿=完成/掌握，红=误区/逾期/危险，琥珀=待复习/提醒；
      其余一律中性灰。历史上的 --orange 并入琥珀，避免同一种「提醒」出现两种暖色。 */
@@ -57,10 +60,9 @@
   --on-solid: #ffffff;
   --bg-media: #ffffff;
 
-  --specular-top: inset 0 1px 0 rgba(255, 255, 255, 0.85);
-  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 0 0 1px rgba(15, 23, 42, 0.06);
-  --shadow-elevated: 0 1px 3px rgb(15 23 42 / 5%), 0 8px 24px rgb(15 23 42 / 6%);
-  --shadow-popover: 0 0 0 1px rgb(15 23 42 / 8%), 0 16px 40px rgb(15 23 42 / 14%);
+  --shadow-card: 0 0 0 1px rgb(41 37 28 / 7%);
+  --shadow-elevated: 0 0 0 1px rgb(41 37 28 / 7%), 0 4px 16px rgb(41 37 28 / 6%);
+  --shadow-popover: 0 0 0 1px rgb(41 37 28 / 9%), 0 12px 32px rgb(41 37 28 / 12%);
 
   /* 字号四级：xs 辅助/标签 · sm 界面正文 · md 阅读正文与输入 · lg 小标题；xl 起只给页面级标题。
      --text-2xs 仅限角标、徽章数字、键帽，任何正文/按钮文字不得低于 --text-xs。 */
@@ -113,15 +115,8 @@
   --desktop-titlebar-height: 0px;
 }
 
-/* 英文界面使用本地打包的 Source Serif 4；中文回退到系统字体（苹方 / 微软雅黑 UI）。 */
-html[data-lang="en"] {
-  --font-sans: "Source Serif 4 Variable", "Source Serif 4", Georgia, "Times New Roman",
-    "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, serif;
-}
-
-html[data-lang="en"] body {
-  font-feature-settings: normal;
-}
+/* 阅读正文中英文都默认衬线；这个属性可手动切回无衬线（暂无设置项）。 */
+:root[data-read-font="sans"] { --font-read: var(--font-sans); }
 
 :root[data-text-size="small"] { --text-read: 14px; }
 :root[data-text-size="large"] { --text-read: 16.5px; }
@@ -142,102 +137,98 @@ html[data-lang="en"] body {
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    /* LobeHub & Linear Pure Carbon：纯净深邃碳黑阶梯 */
-    --bg-app-shell: #060608;
-    --bg-sidebar: #09090b;
-    --bg: #08080a;
-    --bg-panel: #101013;
-    --bg-subtle: #141418;
-    --bg-elevated: #141417;
-    --bg-hover: rgba(255, 255, 255, 0.05);
-    --bg-active: rgba(255, 255, 255, 0.08);
-    --bg-user-bubble: #181f2e;
-    --bg-glow: none;
+    /* 暖炭色暗模式：偏暖的深灰阶梯，与浅色纸面同一色温 */
+    --bg-app-shell: #121110;
+    --bg-sidebar: #151412;
+    --bg: #1a1917;
+    --bg-panel: #1f1e1b;
+    --bg-subtle: #24221f;
+    --bg-elevated: #242320;
+    --bg-hover: rgb(255 250 240 / 5%);
+    --bg-active: rgb(255 250 240 / 8%);
+    --bg-user-bubble: #2a2824;
 
-    --border: rgba(255, 255, 255, 0.075);
-    --border-subtle: rgba(255, 255, 255, 0.045);
-    --border-strong: rgba(255, 255, 255, 0.11);
+    --border: rgb(255 250 240 / 8%);
+    --border-subtle: rgb(255 250 240 / 5%);
+    --border-strong: rgb(255 250 240 / 12%);
 
-    --text: #f2f3f5;
-    --text-secondary: #989ea8;
-    --text-tertiary: #6e7480;
+    --text: #ecebe6;
+    --text-secondary: #a3a097;
+    --text-tertiary: #86837b;
 
-    --ink-solid: #ffffff;
-    --ink-solid-hover: #e5e7eb;
-    --on-ink: #08080a;
+    --ink-solid: #ecebe6;
+    --ink-solid-hover: #d9d7d0;
+    --on-ink: #1a1917;
 
-    --accent: #4f80f5;
-    --accent-hover: #6390f8;
-    --accent-text: #82a8ff;
-    --accent-soft: rgb(79 128 245 / 13%);
-    --accent-soft-strong: rgb(79 128 245 / 22%);
+    --accent: #6d93e8;
+    --accent-hover: #86a6ee;
+    --accent-text: #8fb0f2;
+    --accent-soft: rgb(109 147 232 / 13%);
+    --accent-soft-strong: rgb(109 147 232 / 22%);
     --on-accent: #ffffff;
-    --accent-solid: #4f80f5;
-    --accent-solid-hover: #6390f8;
+    --accent-solid: #4770d0;
+    --accent-solid-hover: #5a82dc;
 
-    --green: #3ebd7e;
-    --green-soft: rgb(62 189 126 / 13%);
-    --red: #e56363;
-    --red-soft: rgb(229 99 99 / 13%);
-    --amber: #d9a23b;
-    --amber-soft: rgb(217 162 59 / 13%);
-    --bg-media: #f2f3f5;
-    --grey: #686f7e;
+    --green: #5fb98a;
+    --green-soft: rgb(95 185 138 / 13%);
+    --red: #e0705f;
+    --red-soft: rgb(224 112 95 / 13%);
+    --amber: #d4a24a;
+    --amber-soft: rgb(212 162 74 / 13%);
+    --bg-media: #ecebe6;
+    --grey: #77746c;
 
-    --specular-top: inset 0 1px 0 rgba(255, 255, 255, 0.05);
-    --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.28);
-    --shadow-elevated: 0 8px 28px rgba(0, 0, 0, 0.36);
-    --shadow-popover: 0 20px 48px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.09);
+    --shadow-card: 0 0 0 1px rgb(255 250 240 / 7%);
+    --shadow-elevated: 0 0 0 1px rgb(255 250 240 / 8%), 0 8px 24px rgb(0 0 0 / 35%);
+    --shadow-popover: 0 0 0 1px rgb(255 250 240 / 10%), 0 16px 40px rgb(0 0 0 / 50%);
   }
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg-app-shell: #060608;
-  --bg-sidebar: #09090b;
-  --bg: #08080a;
-  --bg-panel: #101013;
-  --bg-subtle: #141418;
-  --bg-elevated: #141417;
-  --bg-hover: rgba(255, 255, 255, 0.05);
-  --bg-active: rgba(255, 255, 255, 0.08);
-  --bg-user-bubble: #181f2e;
-  --bg-glow: none;
+  --bg-app-shell: #121110;
+  --bg-sidebar: #151412;
+  --bg: #1a1917;
+  --bg-panel: #1f1e1b;
+  --bg-subtle: #24221f;
+  --bg-elevated: #242320;
+  --bg-hover: rgb(255 250 240 / 5%);
+  --bg-active: rgb(255 250 240 / 8%);
+  --bg-user-bubble: #2a2824;
 
-  --border: rgba(255, 255, 255, 0.075);
-  --border-subtle: rgba(255, 255, 255, 0.045);
-  --border-strong: rgba(255, 255, 255, 0.11);
+  --border: rgb(255 250 240 / 8%);
+  --border-subtle: rgb(255 250 240 / 5%);
+  --border-strong: rgb(255 250 240 / 12%);
 
-  --text: #f2f3f5;
-  --text-secondary: #989ea8;
-  --text-tertiary: #6e7480;
+  --text: #ecebe6;
+  --text-secondary: #a3a097;
+  --text-tertiary: #86837b;
 
-  --ink-solid: #ffffff;
-  --ink-solid-hover: #e5e7eb;
-  --on-ink: #08080a;
+  --ink-solid: #ecebe6;
+  --ink-solid-hover: #d9d7d0;
+  --on-ink: #1a1917;
 
-  --accent: #4f80f5;
-  --accent-hover: #6390f8;
-  --accent-text: #82a8ff;
-  --accent-soft: rgb(79 128 245 / 13%);
-  --accent-soft-strong: rgb(79 128 245 / 22%);
+  --accent: #6d93e8;
+  --accent-hover: #86a6ee;
+  --accent-text: #8fb0f2;
+  --accent-soft: rgb(109 147 232 / 13%);
+  --accent-soft-strong: rgb(109 147 232 / 22%);
   --on-accent: #ffffff;
-  --accent-solid: #4f80f5;
-  --accent-solid-hover: #6390f8;
+  --accent-solid: #4770d0;
+  --accent-solid-hover: #5a82dc;
 
-  --green: #3ebd7e;
-  --green-soft: rgb(62 189 126 / 13%);
-  --red: #e56363;
-  --red-soft: rgb(229 99 99 / 13%);
-  --amber: #d9a23b;
-  --amber-soft: rgb(217 162 59 / 13%);
-  --bg-media: #f2f3f5;
-  --grey: #686f7e;
+  --green: #5fb98a;
+  --green-soft: rgb(95 185 138 / 13%);
+  --red: #e0705f;
+  --red-soft: rgb(224 112 95 / 13%);
+  --amber: #d4a24a;
+  --amber-soft: rgb(212 162 74 / 13%);
+  --bg-media: #ecebe6;
+  --grey: #77746c;
 
-  --specular-top: inset 0 1px 0 rgba(255, 255, 255, 0.07);
-  --shadow-card: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 2px 6px rgba(0, 0, 0, 0.32), 0 0 0 1px rgba(255, 255, 255, 0.05);
-  --shadow-elevated: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 10px 30px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.07);
-  --shadow-popover: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 20px 48px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.1);
+  --shadow-card: 0 0 0 1px rgb(255 250 240 / 7%);
+  --shadow-elevated: 0 0 0 1px rgb(255 250 240 / 8%), 0 8px 24px rgb(0 0 0 / 35%);
+  --shadow-popover: 0 0 0 1px rgb(255 250 240 / 10%), 0 16px 40px rgb(0 0 0 / 50%);
 }
 
 *,
@@ -413,7 +404,7 @@ kbd {
   font-variant-ligatures: none;
 }
 
-/* Linear 风格微立体键帽 */
+/* 扁平键帽：只靠细边框与底色区分 */
 kbd {
   display: inline-flex;
   align-items: center;
@@ -423,7 +414,6 @@ kbd {
   border: 1px solid var(--border);
   border-radius: 4px;
   background: var(--bg-subtle);
-  box-shadow: inset 0 -1px 0 var(--border-strong);
   color: var(--text-secondary);
   font-family: var(--font-mono);
   font-size: var(--text-2xs);

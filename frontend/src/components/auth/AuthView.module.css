@@ -1,30 +1,11 @@
 .canvas {
-  /* 登录页粒子背景：浅色为白底蓝点，深色为黑底青点（与预览站点一致） */
-  --auth-particle-bg: #ffffff;
-  --auth-particle-color: #0066cc;
-  --auth-particle-trail: rgba(255, 255, 255, 0.2);
-
   position: relative;
   overflow: hidden;
   min-height: calc(100dvh - var(--desktop-titlebar-height));
   display: grid;
   place-items: center;
   padding: 24px;
-  background: var(--auth-particle-bg);
-}
-
-:global(html[data-theme="dark"]) .canvas {
-  --auth-particle-bg: #08080a;
-  --auth-particle-color: #00f0ff;
-  --auth-particle-trail: rgba(8, 8, 10, 0.1);
-}
-
-@media (prefers-color-scheme: dark) {
-  :global(html:not([data-theme="light"])) .canvas {
-    --auth-particle-bg: #08080a;
-    --auth-particle-color: #00f0ff;
-    --auth-particle-trail: rgba(8, 8, 10, 0.1);
-  }
+  background: var(--bg);
 }
 
 .themeSlot {
@@ -37,9 +18,8 @@
   padding: 3px;
   border: 1px solid var(--border);
   border-radius: calc(var(--radius-sm) + 3px);
-  background: color-mix(in srgb, var(--bg-elevated) 76%, transparent);
+  background: var(--bg-elevated);
   box-shadow: var(--shadow-card);
-  backdrop-filter: blur(8px);
 }
 
 .card {
@@ -61,17 +41,12 @@
   text-align: center;
 }
 
-.logo {
-  width: 40px;
-  height: 40px;
-  filter: drop-shadow(0 6px 16px color-mix(in srgb, var(--accent) 36%, transparent));
-}
-
 .brandHead h1 {
   margin-top: 14px;
+  font-family: var(--font-display);
   font-size: var(--text-2xl);
   font-weight: 600;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
 }
 
 .brandHead p {
@@ -322,8 +297,6 @@
 
 .submitBtn:hover:not(:disabled) {
   background: var(--ink-solid-hover);
-  transform: translateY(-1px);
-  box-shadow: 0 6px 16px color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
 .submitBtn:disabled {

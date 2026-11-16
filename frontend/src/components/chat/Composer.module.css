@@ -1,7 +1,5 @@
-/* 输入框：支持首页大卡片（Hero）与会话底栏（Dock）。Linear 精密工业风：镜面高光 + 细描边胶囊 + 毛玻璃浮层 */
+/* 输入框：支持首页大卡片（Hero）与会话底栏（Dock）。扁平纸面：细描边胶囊 + 实底浮层 */
 .composer {
-  --hl: rgba(255, 255, 255, 0.08);
-  --glass: color-mix(in srgb, var(--bg-elevated) 84%, transparent);
   --bar-bg: color-mix(in srgb, var(--bg-subtle) 70%, transparent);
 
   width: 100%;
@@ -453,7 +451,7 @@
   background: var(--accent);
 }
 
-/* 毛玻璃浮层：+ 菜单 / 思考强度 / 工作区 / 指令与引用 */
+/* 浮层：+ 菜单 / 思考强度 / 工作区 / 指令与引用 */
 .menu,
 .effortMenu,
 .wsPopover,
@@ -464,10 +462,8 @@
   padding: 6px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
-  background: var(--glass);
-  -webkit-backdrop-filter: blur(18px) saturate(1.35);
-  backdrop-filter: blur(18px) saturate(1.35);
-  box-shadow: inset 0 1px 0 var(--hl), var(--shadow-popover);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-popover);
   animation: popover-up 180ms var(--ease-out);
 }
 
@@ -757,7 +753,6 @@
 
 .send:hover:not(:disabled) {
   background: var(--ink-solid-hover);
-  transform: translateY(-1px);
 }
 
 .send:active:not(:disabled) {
@@ -852,7 +847,6 @@
 
 .wsBtnPrimary {
   background: var(--ink-solid);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
   color: var(--on-ink);
 }
 

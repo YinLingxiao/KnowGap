@@ -1,0 +1,17 @@
+.wordmark {
+  display: inline-block;
+  flex-shrink: 0;
+  width: var(--brand-width, 112px);
+  aspect-ratio: 740 / 170;
+  background: currentColor;
+  -webkit-mask: url('/brand/knowgap-wordmark.svg') center / contain no-repeat;
+  mask: url('/brand/knowgap-wordmark.svg') center / contain no-repeat;
+  vertical-align: middle;
+}
+
+.lockup {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--brand-gap, 8px);
+  color: var(--text);
+}

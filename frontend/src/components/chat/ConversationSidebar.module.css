@@ -17,17 +17,12 @@
   padding: 0 4px 0 8px;
 }
 
-.logo {
-  flex-shrink: 0;
-  border-radius: 5px;
-}
-
 .brandName {
+  display: flex;
   flex: 1;
+  align-items: center;
+  min-width: 0;
   color: var(--text);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  letter-spacing: -0.01em;
 }
 
 .iconButton {
@@ -106,7 +101,7 @@
   padding: 0 8px;
   border-radius: var(--radius-sm);
   background: var(--bg-hover);
-  box-shadow: var(--specular-top), 0 0 0 1px var(--border-subtle);
+  box-shadow: 0 0 0 1px var(--border-subtle);
   color: var(--text-tertiary);
   font-size: var(--text-sm);
   text-align: left;
@@ -132,7 +127,7 @@ button.searchField:hover {
 
 .searchFieldActive {
   background: var(--bg-elevated);
-  box-shadow: var(--specular-top), 0 0 0 1px var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
   color: var(--text-secondary);
 }
 
@@ -210,13 +205,12 @@ button.searchField:hover {
   color: var(--text);
 }
 
-/* 选中态：微光表面 + 顶部镜面高光 + 左侧 2px 短指示条 */
+/* 选中态：底色加深 + 左侧 2px 短指示条 */
 .navActive,
 .navActive:hover,
 .active,
 .active:hover {
   background: var(--bg-active);
-  box-shadow: var(--specular-top);
   color: var(--text);
 }
 
@@ -454,7 +448,7 @@ button.searchField:hover {
   border-radius: var(--radius-sm);
   outline: none;
   background: var(--bg-elevated);
-  box-shadow: var(--specular-top), 0 0 0 1px var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
   font-size: var(--text-sm);
 }
 
@@ -488,7 +482,7 @@ button.searchField:hover {
   padding: 0 10px;
   border-radius: var(--radius-sm);
   background: var(--bg-subtle);
-  box-shadow: var(--specular-top), 0 0 0 1px var(--border);
+  box-shadow: 0 0 0 1px var(--border);
   font-size: var(--text-xs);
 }
 
@@ -544,7 +538,6 @@ button.searchField:hover {
   height: 22px;
   border-radius: 6px;
   background: var(--accent-soft-strong);
-  box-shadow: var(--specular-top);
   color: var(--accent-text);
   font-size: 11px;
   font-weight: 600;

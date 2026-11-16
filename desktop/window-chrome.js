@@ -4,8 +4,8 @@ const TITLE_BAR_HEIGHT = 36;
 
 function titleBarOverlay(dark) {
   return {
-    color: dark ? "#08080a" : "#ffffff",
-    symbolColor: dark ? "#989ea8" : "#525866",
+    color: dark ? "#1a1917" : "#fbfaf7",
+    symbolColor: dark ? "#a3a097" : "#57544c",
     height: TITLE_BAR_HEIGHT,
   };
 }
@@ -18,7 +18,7 @@ function windowChromeOptions(platform, dark) {
 }
 
 function applyWindowTheme(win, platform, dark) {
-  win.setBackgroundColor(dark ? "#08080a" : "#ffffff");
+  win.setBackgroundColor(dark ? "#1a1917" : "#fbfaf7");
   if (platform !== "darwin") win.setTitleBarOverlay(titleBarOverlay(dark));
 }
 

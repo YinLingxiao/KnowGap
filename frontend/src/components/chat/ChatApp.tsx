@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Image from "next/image";
+import { BrandMark, BrandWordmark } from "@/components/Brand";
 import {
   ArrowLeftRight, Brain, ChevronRight, CircleAlert, Dumbbell, FileText, Folder,
   Mic, PanelLeftOpen, RotateCcw, X,
@@ -713,8 +713,9 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
             <div className={cx(styles.homeInner, todayStyles.homeContent)}>
               <div className={styles.heroHead}>
                 <div className={styles.brandLine}>
-                  <Image src="/brand/knowgap-logo-v1.png" alt="" width={20} height={20} className={styles.greetingLogo} />
-                  <span>KnowGap AI</span>
+                  <BrandMark size={24} />
+                  <BrandWordmark width={116} />
+                  <span>AI</span>
                 </div>
                 <h2 className={styles.greeting}>
                   <span>{greeting(t, user.displayName)}</span>

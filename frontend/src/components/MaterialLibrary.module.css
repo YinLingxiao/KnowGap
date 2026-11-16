@@ -64,9 +64,10 @@
 }
 
 .title {
+  font-family: var(--font-display);
   font-size: var(--text-2xl);
   font-weight: 600;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
   color: var(--text);
 }
 
@@ -352,8 +353,6 @@
 .cardMenuOpen {
   border-color: color-mix(in srgb, var(--text) 22%, var(--border-strong));
   background: var(--bg-hover);
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-elevated);
 }
 
 .gridCardTop {

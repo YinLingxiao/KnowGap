@@ -11,22 +11,11 @@
   border-radius: var(--radius-xl);
   background: var(--bg);
   color: var(--text);
-  box-shadow: var(--shadow-popover), inset 0 1px 0 rgb(255 255 255 / 6%);
+  box-shadow: var(--shadow-popover);
   animation: settings-pop 280ms var(--ease-spring);
 }
 
-.dialog::before {
-  content: "";
-  position: absolute;
-  inset: 0 24px auto;
-  z-index: 2;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 22%), transparent);
-  pointer-events: none;
-}
-
 .dialog::backdrop {
-  backdrop-filter: blur(8px);
   background: rgb(0 0 0 / 50%);
   animation: fade-in 180ms var(--ease-out);
 }
@@ -111,7 +100,6 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--bg-elevated);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 6%);
 }
 
 .cardWide {
@@ -674,7 +662,6 @@
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
   background: var(--bg-subtle);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 6%);
   color: var(--text-tertiary);
 }
 
@@ -723,7 +710,7 @@
 .navItemActive,
 .navItemActive:hover {
   background: var(--bg-active);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 9%), 0 0 0 1px var(--border);
+  box-shadow: 0 0 0 1px var(--border);
   color: var(--text);
   font-weight: 500;
 }
@@ -813,7 +800,6 @@
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
   background: var(--bg-subtle);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 6%);
 }
 
 .reflectStatValue {
@@ -895,7 +881,6 @@
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
   background: var(--bg-elevated);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 6%);
 }
 
 .skillEditorGrid {
@@ -1135,7 +1120,6 @@
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
   background: var(--bg-elevated);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 6%);
 }
 
 .groupCardHead {

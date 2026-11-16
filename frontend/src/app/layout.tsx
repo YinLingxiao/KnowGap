@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "@fontsource-variable/geist";
 import "@fontsource-variable/source-serif-4";
+import "@fontsource-variable/noto-serif-sc";
 import "katex/dist/katex.min.css";
 import { LanguageProvider } from "@/components/LanguageProvider";
 import { zh } from "@/lib/i18n/messages";
@@ -8,7 +9,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: zh["app.title"],
-  icons: { icon: "/brand/knowgap-logo-v1.png", apple: "/brand/knowgap-logo-v1.png" },
+  icons: { icon: "/brand/knowgap-app-icon.svg", apple: "/brand/knowgap-app-icon.png" },
   description: zh["app.description"],
 };
 
@@ -16,8 +17,8 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
-    { media: "(prefers-color-scheme: dark)", color: "#111215" },
+    { media: "(prefers-color-scheme: light)", color: "#fbfaf7" },
+    { media: "(prefers-color-scheme: dark)", color: "#1a1917" },
   ],
 };
 
@@ -28,7 +29,7 @@ const THEME_SCRIPT = `(function(){try{var t=localStorage.getItem("knowgap.theme"
  *  否则带 background-color 过渡的卡片/按钮会比页面底色慢半拍，切换瞬间出现黑卡片 */
 const SYSTEM_THEME_SCRIPT = `(function(){try{var root=document.documentElement,timer=0;window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change",function(){if(root.dataset.theme)return;root.classList.add("theme-switching");clearTimeout(timer);timer=setTimeout(function(){root.classList.remove("theme-switching");},260);});}catch(e){}})();`;
 
-/** 首帧前恢复界面语言，避免英文用户看到中文闪烁，并让 Source Serif 4 立即生效。 */
+/** 首帧前恢复界面语言，避免英文用户看到中文闪烁，并让英文界面的阅读字体（衬线）立即生效。 */
 const LANGUAGE_SCRIPT = `(function(){try{var l=localStorage.getItem("knowgap.language");if(l!=="en"&&l!=="zh")l="zh";document.documentElement.lang=l==="en"?"en":"zh-CN";document.documentElement.dataset.lang=l;}catch(e){}})();`;
 
 /** 在首帧前预留桌面标题栏高度；浏览器与快问浮窗不启用。 */

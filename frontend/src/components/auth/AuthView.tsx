@@ -1,13 +1,12 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import Image from "next/image";
+import { BrandMark, BrandWordmark } from "@/components/Brand";
 import { Eye, EyeOff, MailCheck } from "lucide-react";
 import { sendEmailCode } from "@/lib/api/auth";
 import { useI18n } from "@/components/LanguageProvider";
 import { cx } from "@/lib/cx";
 import { ThemeToggle } from "../ThemeToggle";
-import { InteractiveParticleBackground } from "./InteractiveParticleBackground";
 import styles from "./AuthView.module.css";
 
 const EMAIL_CHECK = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
@@ -119,13 +118,13 @@ export function AuthView({
 
   return (
     <div className={styles.canvas}>
-      <InteractiveParticleBackground />
       <div className={styles.themeSlot}>
         <ThemeToggle />
       </div>
       <section className={styles.card} aria-labelledby="auth-title">
         <div className={styles.brandHead}>
-          <Image src="/brand/knowgap-logo-v1.png" alt="" width={36} height={36} className={styles.logo} />
+          <BrandMark size={48} />
+          <BrandWordmark width={154} />
           <h1 id="auth-title">{mode === "login" ? t("auth.loginTitle") : t("auth.registerTitle")}</h1>
           <p>{t("auth.subtitle")}</p>
         </div>

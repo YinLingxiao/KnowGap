@@ -21,10 +21,11 @@
 .pageTitle {
   margin: 0;
   padding: 16px 8px 8px;
-  font-size: 24px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  line-height: 1.2;
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: var(--leading-tight);
 }
 
 .sheet {
@@ -121,7 +122,7 @@
 .switchOn,
 .switchOn:hover {
   background: var(--bg-elevated);
-  box-shadow: var(--specular-top), var(--shadow-card);
+  box-shadow: var(--shadow-card);
   color: var(--text);
 }
 
@@ -153,7 +154,6 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--bg-subtle);
-  box-shadow: var(--specular-top);
   color: var(--text-secondary);
   font-size: var(--text-xs);
   font-weight: 500;

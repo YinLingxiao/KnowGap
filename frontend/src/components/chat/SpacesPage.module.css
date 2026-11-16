@@ -50,10 +50,11 @@
 }
 
 .header h1 {
+  font-family: var(--font-display);
   font-size: var(--text-2xl);
   font-weight: 600;
   line-height: var(--leading-tight);
-  letter-spacing: -0.015em;
+  letter-spacing: 0;
   color: var(--text);
 }
 
@@ -100,7 +101,7 @@
 .layoutBtnOn {
   background: var(--bg-elevated);
   color: var(--text);
-  box-shadow: var(--specular-top), 0 1px 2px rgba(0, 0, 0, 0.16);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.16);
 }
 
 .iconBtn {
@@ -312,11 +313,6 @@
   height: 100%;
 }
 
-.listMode .card:hover,
-.listMode .card:focus-within {
-  transform: none;
-}
-
 .listMode .cardMain {
   flex-direction: row;
   align-items: center;
@@ -367,27 +363,10 @@
   opacity: 0.85;
 }
 
-.card::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: radial-gradient(260px circle at var(--mx, 50%) var(--my, 0%), color-mix(in srgb, var(--c, var(--accent)) 14%, transparent), transparent 70%);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 240ms var(--ease-out);
-}
-
 .card:hover,
 .card:focus-within,
 .cardMenuOpen {
   border-color: color-mix(in srgb, var(--c, var(--accent)) 45%, var(--border-strong));
-  transform: translateY(-3px);
-  box-shadow: var(--shadow-elevated);
-}
-
-.card:hover::after {
-  opacity: 1;
 }
 
 .cardMain {

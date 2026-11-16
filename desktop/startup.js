@@ -1,20 +1,21 @@
 const fs = require("fs");
 const path = require("path");
 
-function buildStartupDocument({ logoSvg, dark, platform }) {
-  // Animate the existing brand's actual facets, without maintaining a second logo.
+function buildStartupDocument({ logoSvg, wordmarkSvg = "", dark, platform }) {
+  // Animate the two pages from the shared brand asset.
   let part = 0;
   const mark = logoSvg.replace(/<path\b[\s\S]*?\/>/g, (svgPath) =>
     `<g class="piece piece-${part++}">${svgPath}</g>`);
   return fs.readFileSync(path.join(__dirname, "startup.html"), "utf8")
     .replace("__THEME__", dark ? "dark" : "light")
     .replace("__PLATFORM__", ["win32", "darwin", "linux"].includes(platform) ? platform : "linux")
-    .replace("__STARTUP_LOGO__", mark);
+    .replace("__STARTUP_LOGO__", mark)
+    .replace("__STARTUP_WORDMARK__", wordmarkSvg || "KnowGap");
 }
 
 function createStartup(win, { logoPath, dark, platform }) {
   const { WebContentsView } = require("electron");
-  const html = buildStartupDocument({ logoSvg: fs.readFileSync(logoPath, "utf8"), dark, platform });
+  const html = buildStartupDocument({ logoSvg: fs.readFileSync(logoPath, "utf8"), wordmarkSvg: fs.readFileSync(path.join(path.dirname(logoPath), "knowgap-wordmark.svg"), "utf8"), dark, platform });
   // Keep the real app loading behind a temporary transparent view. Navigation
   // never replaces the splash's renderer, so the handoff can genuinely crossfade.
   const view = new WebContentsView({

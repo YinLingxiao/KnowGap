@@ -13,16 +13,13 @@
   gap: 12px;
 }
 
-.logo {
-  border-radius: 8px;
-}
-
 .card h1 {
   margin: 4px 0 0;
   color: var(--text);
+  font-family: var(--font-display);
   font-size: var(--text-2xl);
   font-weight: 600;
-  letter-spacing: -0.03em;
+  letter-spacing: 0;
 }
 
 .lead {

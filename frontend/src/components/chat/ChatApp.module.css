@@ -76,7 +76,6 @@
   top: var(--desktop-titlebar-height);
   border: 0;
   background: rgb(0 0 0 / 42%);
-  backdrop-filter: blur(3px);
   opacity: 0;
   pointer-events: none;
   transition: opacity var(--t-ui) var(--ease-out);
@@ -111,8 +110,7 @@
   height: 44px;
   padding: 0 12px 0 14px;
   border-bottom: 1px solid var(--border-subtle);
-  background: color-mix(in srgb, var(--bg) 86%, transparent);
-  backdrop-filter: blur(12px);
+  background: var(--bg);
 }
 
 .topbarActions {
@@ -134,7 +132,6 @@
   color: var(--text-secondary);
   font-size: var(--text-xs);
   font-weight: 500;
-  box-shadow: var(--specular-top);
   transition:
     background-color var(--t-hover) var(--ease-out),
     border-color var(--t-hover) var(--ease-out),
@@ -458,16 +455,13 @@
   align-items: center;
   justify-content: center;
   gap: 10px;
+  font-family: var(--font-display);
   font-size: var(--text-3xl);
   font-weight: 600;
   line-height: var(--leading-tight);
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
   text-align: center;
   color: var(--text);
-}
-
-.greetingLogo {
-  border-radius: var(--radius-sm);
 }
 
 /* LobeHub 风格：输入框正下方的细长水平快捷条 */
@@ -878,7 +872,6 @@
   border-color: color-mix(in srgb, var(--text) 22%, var(--border-strong));
   background: var(--bg-hover);
   color: var(--text);
-  transform: translateY(-1px);
 }
 
 /* 候选画像核对卡片 */

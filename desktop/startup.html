@@ -8,18 +8,18 @@
   <style>
     :root {
       color-scheme: light;
-      --bg: #ffffff;
-      --text: #111318;
-      --muted: #525866;
-      --accent: #3b82f6;
+      --bg: #fbfaf7;
+      --text: #1c1b18;
+      --muted: #57544c;
+      --accent: #2f5fd0;
       --ease: cubic-bezier(0.16, 1, 0.3, 1);
     }
     :root[data-theme="dark"] {
       color-scheme: dark;
-      --bg: #08080a;
-      --text: #f2f3f5;
-      --muted: #989ea8;
-      --accent: #4f80f5;
+      --bg: #1a1917;
+      --text: #ecebe6;
+      --muted: #a3a097;
+      --accent: #6d93e8;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { width: 100%; height: 100%; overflow: hidden; background: transparent; }
@@ -51,6 +51,7 @@
     }
     .mark { width: 88px; height: 88px; margin-bottom: 20px; }
     .mark svg { display: block; width: 100%; height: 100%; overflow: visible; }
+    h1 svg { display: block; width: 180px; height: auto; }
     .piece { transform-box: fill-box; transform-origin: center; }
     .piece-0 { animation: foundation-in 640ms var(--ease) both; }
     .piece-1 { animation: upper-in 640ms 55ms var(--ease) both; }
@@ -83,14 +84,14 @@
       width: 3px;
       height: 3px;
       border-radius: 50%;
-      background: var(--accent);
+      background: var(--text);
       animation: working 1400ms 700ms ease-in-out infinite;
     }
     .activity i:nth-child(2) { animation-delay: 850ms; }
     .activity i:nth-child(3) { animation-delay: 1000ms; }
     :root[data-paused] *, :root[data-finishing] * { animation-play-state: paused !important; }
-    @keyframes foundation-in { from { opacity: 0; transform: translateX(-140px); } }
-    @keyframes upper-in { from { opacity: 0; transform: translate(125px, -125px); } }
+    @keyframes foundation-in { from { opacity: 0; transform: translateX(-12px); } }
+    @keyframes upper-in { from { opacity: 0; transform: translateX(12px); } }
     @keyframes lower-in { from { opacity: 0; transform: translate(125px, 125px); } }
     @keyframes connection-in { from { opacity: 0; transform: scale(0.72); } }
     @keyframes spark-in { from { opacity: 0; transform: scale(0.55); } }
@@ -107,7 +108,7 @@
     <div class="drag" aria-hidden="true"></div>
     <div class="identity">
       <div class="mark" aria-hidden="true">__STARTUP_LOGO__</div>
-      <h1>KnowGap</h1>
+      <h1 aria-label="KnowGap">__STARTUP_WORDMARK__</h1>
     </div>
     <div class="status" role="status" aria-live="polite">
       <span class="activity" aria-hidden="true"><i></i><i></i><i></i></span>
