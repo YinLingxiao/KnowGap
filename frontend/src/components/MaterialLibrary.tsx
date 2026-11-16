@@ -9,7 +9,7 @@ import { MaterialPreviewPanel } from "./MaterialPreviewPanel";
 import { useI18n } from "@/components/LanguageProvider";
 import { createMaterialClient } from "@/lib/api/material-client";
 import { toApiError } from "@/lib/api/errors";
-import { DOCUMENT_EXTENSIONS } from "@/lib/chat/attachments";
+import { DOCUMENT_EXTENSIONS, MAX_UPLOAD_BYTES } from "@/lib/chat/attachments";
 import type { Subject } from "@/lib/chat/types";
 import { cx } from "@/lib/cx";
 import { errorText } from "@/lib/i18n/errors";
@@ -22,7 +22,6 @@ type ViewMode = "grid" | "list";
 type KindFilter = "all" | "pdf" | "md" | "txt" | "csv" | "docx" | "pptx" | "xlsx";
 type ScopeFilter = "all" | "general" | string;
 const UPLOAD_EXTENSION_RE = /\.(pdf|txt|md|csv|docx|doc|pptx|ppt|xlsx|xls)$/i;
-const MAX_UPLOAD_BYTES = 20 * 1024 * 1024; // 与后端 MAX_UPLOAD_BYTES 一致
 
 type MaterialKind = "pdf" | "md" | "txt" | "csv" | "docx" | "pptx" | "xlsx";
 

@@ -37,7 +37,7 @@ import { CreateSpaceDialog } from "./CreateSpaceDialog";
 import { CoachmarkHost } from "../onboarding/Coachmark";
 import { GettingStarted } from "../onboarding/GettingStarted";
 import { HelpCenter, type HelpAction } from "../onboarding/HelpCenter";
-import { ModelGate, Welcome } from "../onboarding/Welcome";
+import { ModelGuide, StartupStatus, Welcome } from "../onboarding/Welcome";
 import { CHEATSHEET_OPENED_EVENT, OPEN_SPACE_PANEL_EVENT, cheatsheetSeenKey } from "../onboarding/coach";
 import { SpacesPage } from "./SpacesPage";
 import { AgendaPage } from "../agenda/AgendaPage";
@@ -56,10 +56,10 @@ function viewKey(userId: string) {
 }
 
 const STARTERS = [
-  { icon: ArrowLeftRight, label: "对比迁移学习", color: "#f43f5e", text: "我之前学过 [某基础]，请用对比迁移的方式帮我理解当前概念，并列出异同点：" },
-  { icon: Mic, label: "费曼反转自测", color: "#3b82f6", text: "我想用费曼学习法自测：请你扮演有疑惑的同桌听我讲，并在我讲漏边界条件时追问我：" },
-  { icon: Dumbbell, label: "联网搜真题练习", color: "#10b981", text: "请帮我搜几道关于「在此填写知识点」的经典真题或母题来练手：" },
-  { icon: FileText, label: "编程代码实验台", color: "#f59e0b", text: "请先讲清「在此填写编程/算法概念」的核心原理，然后给我一个带 TODO 挖空的 `code_playground` 代码实验台让我动手补全并运行：" },
+  { icon: ArrowLeftRight, label: "对比着学", hint: "对比迁移学习", color: "#f43f5e", text: "我之前学过 [某基础]，请用对比迁移的方式帮我理解当前概念，并列出异同点：" },
+  { icon: Mic, label: "讲给 AI 听", hint: "费曼反转自测", color: "#3b82f6", text: "我想用费曼学习法自测：请你扮演有疑惑的同桌听我讲，并在我讲漏边界条件时追问我：" },
+  { icon: Dumbbell, label: "找真题练手", hint: "联网搜真题练习", color: "#10b981", text: "请帮我搜几道关于「在此填写知识点」的经典真题或母题来练手：" },
+  { icon: FileText, label: "动手写代码", hint: "编程代码实验台", color: "#f59e0b", text: "请先讲清「在此填写编程/算法概念」的核心原理，然后给我一个带 TODO 挖空的 `code_playground` 代码实验台让我动手补全并运行：" },
 ];
 
 /** 主区域显示什么：对话、学习空间总览、某个学习空间，或通用资料 */
@@ -90,8 +90,11 @@ function isTyping(target: EventTarget | null) {
   return target instanceof HTMLElement && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
 }
 
-function modelNotReady(message?: string | null) {
-  return Boolean(message && message.includes("模型未配置"));
+/** 配置类的模型错误（没填、地址或密钥不对、被拒绝）：重试没有用，要带用户去接模型。
+ *  限流、超时这类临时问题不算，仍然走普通的失败提示。按后端返回的中文原文判断。 */
+const MODEL_SETUP_MARKS = ["模型未配置", "地址无效", "密钥", "拒绝访问", "认证方式", "API Key"];
+function modelSetupIssue(message?: string | null) {
+  return Boolean(message && MODEL_SETUP_MARKS.some((mark) => message.includes(mark)));
 }
 
 function AuthenticatedChat({ user, onLogout, onRename }: {
@@ -133,6 +136,9 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
   const [welcomeBusy, setWelcomeBusy] = useState(false);
   const [welcomeError, setWelcomeError] = useState("");
   const [hiddenModelFail, setHiddenModelFail] = useState<string | null>(null);
+  /** 用户从引导卡片去接模型：接好后把刚才失败的那次自动重发 */
+  const resumeAfterModel = useRef(false);
+  const retryFailedRef = useRef<() => void>(() => undefined);
 
   useEffect(() => {
     const query = window.matchMedia(NARROW);
@@ -242,19 +248,27 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
     if (opener) await chat.sendTo(conversationId, opener);
   }, [chat, narrow, setView]);
 
-  const answerWelcome = useCallback(async (text: string) => {
+  const answerWelcome = useCallback(async (text: string, file?: File) => {
     if (welcomeBusy) return;
     setWelcomeBusy(true);
     setWelcomeError("");
     try {
       const result = await chatApi.welcome(text);
+      if (file) {
+        // 先传完再发开场白，第一轮讲解才能检索到；传不上去不拦路
+        try {
+          await createMaterialClient().upload(file, result.subjectId);
+        } catch {
+          push({ tone: "error", title: tx("资料没传上去，进空间后可以再传。") });
+        }
+      }
       await enterSpace(result.subjectId, result.conversationId, result.opener);
     } catch (error) {
       setWelcomeError(error instanceof Error ? error.message : tx("没能建好空间，请重试。"));
     } finally {
       setWelcomeBusy(false);
     }
-  }, [enterSpace, tx, welcomeBusy]);
+  }, [enterSpace, push, tx, welcomeBusy]);
 
   const browseDemo = useCallback(async () => {
     if (welcomeBusy) return;
@@ -364,6 +378,12 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
     }
   }, [checkModel]);
 
+  useEffect(() => {
+    if (!resumeAfterModel.current || modelChecking || modelError || modelConfigured !== true) return;
+    resumeAfterModel.current = false;
+    retryFailedRef.current();
+  }, [modelChecking, modelConfigured, modelError]);
+
   const openMemories = (ids: string[] = []) => {
     setMemoryFocus(ids);
     setMemoryOpen(true);
@@ -416,41 +436,53 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
   const shownFailure = failure ?? blankFailure ?? spaceFailure;
   const watched = view.type === "subject" ? spaceMessages : messages;
   const latestAssistant = [...watched].reverse().find((message) => message.role === "assistant");
-  const failedReply = latestAssistant?.status === "failed" && modelNotReady(latestAssistant.error)
+  const failedReply = latestAssistant?.status === "failed" && modelSetupIssue(latestAssistant.error)
     && hiddenModelFail !== latestAssistant.id ? latestAssistant : null;
   const replyGap = !shownFailure ? failedReply : null;
   const failureMessage = shownFailure ? errorText(shownFailure.error, t, lang) : replyGap?.error ?? "";
-  const offerSettings = modelNotReady(failureMessage);
-  const modelBanner = modelConfigured === false ? (
+  const needsModel = shownFailure ? modelSetupIssue(shownFailure.error.message) : Boolean(replyGap);
+  const retryFailed = () => {
+    if (replyGap) void chat.regenerate(replyGap.conversationId);
+    else if (shownFailure) void chat.sendMessage();
+  };
+  retryFailedRef.current = retryFailed;
+  const dismissFailure = () => {
+    if (replyGap) setHiddenModelFail(replyGap.id);
+    chat.dismissSendFailure();
+  };
+  const modelBanner = modelConfigured === false && !needsModel ? (
     <div className={styles.modelBanner} role="status">
       <span>{t("chat.modelMissing")}</span>
       <button type="button" onClick={() => openSettings("models")}>{t("chat.goSettings")}</button>
     </div>
   ) : null;
-  const failureBar = (shownFailure || replyGap) && (
+  const failureBar = needsModel ? (
+    <div className={styles.modelGuide}>
+      <ModelGuide
+        detail={failureMessage}
+        onConnect={() => {
+          resumeAfterModel.current = true;
+          openSettings("models");
+        }}
+        onRetry={retryFailed}
+        onDismiss={dismissFailure}
+      />
+    </div>
+  ) : (shownFailure || replyGap) && (
     <div className={styles.sendFailure} role="alert">
       <CircleAlert size={14} aria-hidden />
       <span className={styles.sendFailureText}>
         {t("chat.sendFailed")}{failureMessage}
         {shownFailure && shownFailure.error.kind !== "conflict" && t("chat.sendInputKept")}
       </span>
-      {offerSettings && (
-        <button type="button" onClick={() => openSettings("models")}>{t("chat.goSettings")}</button>
-      )}
       {shownFailure?.error.kind === "conflict" && chat.activeId ? (
         <button onClick={() => { chat.dismissSendFailure(); void chat.loadConversation(chat.activeId!); }}>{t("chat.refreshConversation")}</button>
       ) : (
-        <button onClick={() => {
-          if (replyGap) void chat.regenerate(replyGap.conversationId);
-          else void chat.sendMessage();
-        }}>{t("common.retry")}</button>
+        <button onClick={retryFailed}>{t("common.retry")}</button>
       )}
       <button
         className={styles.dismiss}
-        onClick={() => {
-          if (replyGap) setHiddenModelFail(replyGap.id);
-          chat.dismissSendFailure();
-        }}
+        onClick={dismissFailure}
         aria-label={t("chat.dismissNotice")}
       >
         <X size={13} />
@@ -458,8 +490,8 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
     </div>
   );
 
-  const modelBlocked = modelConfigured !== true || modelChecking || Boolean(modelError);
-  const appBlocked = modelBlocked || gate !== "app";
+  // 不设模型关卡：没接模型也能进引导和应用，调用失败时再由 ModelGuide 带用户去接
+  const appBlocked = gate !== "app";
 
   return (
     <div className={cx(styles.app, (appBlocked || !sidebarOpen) && styles.sidebarClosed, narrow && styles.narrow)} data-coachmark="spotlight">
@@ -510,12 +542,9 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
       </aside>
 
       <main className={styles.main}>
-        {modelBlocked || gate === "checking" ? (
-          <ModelGate
-            busy={modelChecking || (gate === "checking" && !welcomeError)}
-            error={modelError || (gate === "checking" ? welcomeError : "")}
-            configured={modelConfigured}
-            onConfigure={() => openSettings("models")}
+        {gate === "checking" ? (
+          <StartupStatus
+            error={welcomeError}
             onRetry={() => { void checkModel(); void checkOnboarding(); }}
             onLogout={onLogout}
           />
@@ -523,7 +552,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
           <Welcome
             busy={welcomeBusy}
             error={welcomeError}
-            onAnswer={(text) => void answerWelcome(text)}
+            onAnswer={(text, file) => void answerWelcome(text, file)}
             onDemo={() => void browseDemo()}
             onSkip={() => void skipWelcome()}
           />
@@ -757,11 +786,12 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
               <div className={styles.lobeStrip}>
                 <div className={styles.stripLeft}>
                   <span className={styles.stripLabel}>{t("chat.quick")}</span>
-                  {STARTERS.map(({ icon: Icon, label, color, text }) => (
+                  {STARTERS.map(({ icon: Icon, label, hint, color, text }) => (
                     <button
                       key={label}
                       type="button"
                       className={styles.stripItem}
+                      title={tx(hint)}
                       onClick={() => {
                         chat.setDraft(tx(text));
                         document.getElementById(COMPOSER_ID)?.focus();

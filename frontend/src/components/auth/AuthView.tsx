@@ -126,7 +126,6 @@ export function AuthView({
           <BrandMark size={48} />
           <BrandWordmark width={154} />
           <h1 id="auth-title">{mode === "login" ? t("auth.loginTitle") : t("auth.registerTitle")}</h1>
-          <p>{t("auth.subtitle")}</p>
         </div>
 
         <div className={styles.modeSwitch} role="tablist" aria-label={t("auth.modeAria")}>

@@ -45,6 +45,61 @@
   border-color: var(--accent);
 }
 
+.attach,
+.file {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 6px;
+  max-width: 100%;
+  min-height: 28px;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.attach {
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+}
+
+.attach:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.attach:disabled {
+  opacity: 0.55;
+}
+
+.file {
+  padding: 4px 4px 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
+  color: var(--text);
+}
+
+.fileName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file button {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+}
+
+.file button:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
 .examples {
   display: flex;
   flex-wrap: wrap;
@@ -113,6 +168,95 @@
   font-size: var(--text-xs);
 }
 
+/* 模型没接好时的引导卡片：出现在对话里原本显示发送失败的位置 */
+.guide {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid color-mix(in srgb, var(--amber) 40%, var(--border));
+  border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-card);
+  color: var(--text);
+  text-align: left;
+}
+
+.guideHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--amber);
+}
+
+.guideHead h2 {
+  flex: 1;
+  min-width: 0;
+  color: var(--text);
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.guideClose {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+}
+
+.guideClose:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.guideDetail {
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--amber-soft);
+  color: var(--text);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.guideLead {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  line-height: var(--leading-ui);
+}
+
+.guideActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.guideActions .primary {
+  margin-top: 0;
+  padding: 0 14px;
+}
+
+.secondary {
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text);
+  font-size: var(--text-sm);
+}
+
+.secondary:hover {
+  background: var(--bg-hover);
+}
+
+.guide button:focus-visible,
 .card button:focus-visible {
   outline: var(--focus-ring);
   outline-offset: 3px;

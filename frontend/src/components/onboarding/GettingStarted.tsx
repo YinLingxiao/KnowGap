@@ -31,7 +31,9 @@ const ITEMS = [
 export function GettingStarted(props: GettingStartedProps) {
   const { tx } = useI18n();
   const { userId } = props;
-  const [flags, setFlags] = useState({ explained: false, answered: false, scheduled: false });
+  const [flags, setFlags] = useState<{ space: boolean | null; explained: boolean; answered: boolean; scheduled: boolean }>(
+    { space: null, explained: false, answered: false, scheduled: false },
+  );
   const [sheet, setSheet] = useState(false);
   const [hidden, setHidden] = useState(false);
   const [celebrating, setCelebrating] = useState(false);
@@ -65,7 +67,8 @@ export function GettingStarted(props: GettingStartedProps) {
   }, [userId]);
 
   const done = {
-    space: props.hasSpace,
+    // 后端的答案不把演示空间算进来；还没取到时先按现有空间判断
+    space: flags.space ?? props.hasSpace,
     explained: flags.explained,
     answered: flags.answered,
     scheduled: flags.scheduled,

@@ -59,6 +59,14 @@ function place(id: CoachId, node: HTMLElement): Box | null {
     if (rect.width < 520) return null;
     return { top: rect.top - 1, right: Math.max(8, vw - rect.right), inline: true };
   }
+  if (id === "thread") {
+    // 锚点在右侧面板顶栏时，正下方是面板的说明文字：改放到面板可见区域的右下角
+    const panel = node.closest("aside");
+    if (panel) {
+      const host = panel.getBoundingClientRect();
+      return { top: Math.min(host.bottom, vh) - BUBBLE_H - 16, right: Math.max(8, vw - Math.min(host.right, vw) + 16) };
+    }
+  }
   const visibleBottom = Math.min(rect.bottom, vh);
   if (visibleBottom - Math.max(rect.top, 0) > vh * 0.5) {
     // 整页锚点（日程页、整个应用）：像通知一样放在可见区域右下角

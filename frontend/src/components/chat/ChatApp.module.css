@@ -271,6 +271,11 @@
   width: 100%;
 }
 
+.modelGuide {
+  width: min(640px, 100%);
+  margin: 0 auto 10px;
+}
+
 .modelBanner {
   display: flex;
   align-items: center;

@@ -9,12 +9,12 @@ from pathlib import Path
 
 from app.chat.store import ChatStore
 from app.config import Settings
+from app.demo.markers import AGENDA_PREFIX, REQUEST_PREFIX
 from app.memory.curated import join_entries, split_entries
 from app.memory.store import Store
 from app.models.schemas import DEMO_STUDENT
 from app.services.materials import MaterialStore
 
-REQUEST_PREFIX = "seed-demo-"
 PROFILE_MARK = "（演示档案）"
 DS_NAME = "数据结构（演示）"
 CIRCUIT_NAME = "电路原理（演示）"
@@ -31,8 +31,6 @@ PROFILE_ENTRIES = (
     "[Experience] 演示经验：易混概念用对照表记，比只背定义记得住（演示档案）",
 )
 
-
-AGENDA_PREFIX = "task-seed-demo-"
 
 
 def _subject_id(db, student_id: str, name: str) -> str | None:

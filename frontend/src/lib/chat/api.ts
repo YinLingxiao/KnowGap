@@ -386,9 +386,11 @@ export const chatApi = {
   async skipOnboarding(): Promise<void> {
     await request(root, "/api/onboarding/skip", { method: "POST" });
   },
-  async checklist(): Promise<{ explained: boolean; answered: boolean; scheduled: boolean }> {
+  /** 只统计学生自己做过的事，导入的演示数据不算；space 在旧后端上可能缺失 */
+  async checklist(): Promise<{ space: boolean | null; explained: boolean; answered: boolean; scheduled: boolean }> {
     const data = await request<Wire>(root, "/api/onboarding/checklist", { cache: "no-store" });
     return {
+      space: typeof data.space === "boolean" ? data.space : null,
       explained: Boolean(data.explained), answered: Boolean(data.answered),
       scheduled: Boolean(data.scheduled),
     };

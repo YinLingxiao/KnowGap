@@ -12,6 +12,7 @@ import sqlite3
 import unicodedata
 from datetime import datetime, timedelta, timezone
 
+from app.demo.markers import AGENDA_PREFIX, REQUEST_PREFIX
 from app.chat.schemas import (
     ChatMessage, Conversation, ConversationSummary, DispatchedThread, ExerciseAttempt, LearnerMemory, MemoryChange,
     MemoryEvidence, SystemEvent, ToolCallRecord, PreferencePrompt,
@@ -1570,29 +1571,45 @@ class ChatStore:
             return state(db, student_id)
 
     def learning_checklist(self, student_id: str) -> dict:
+        """上手清单只认学生自己做过的事：导入的演示数据不算，在演示空间里真实发生的对话照常算。"""
+        demo = f"{REQUEST_PREFIX}%"
+        # 演示消息有三种：带演示标记的用户消息、通过 reply_to 指向它的回复、
+        # 以及演示会话里不挂在任何提问下的支线结论卡片
+        own_message = (
+            "COALESCE(m.client_request_id, '') NOT LIKE ? AND NOT EXISTS ("
+            "SELECT 1 FROM conversation_messages u WHERE u.id = m.reply_to AND u.client_request_id LIKE ?) "
+            "AND NOT (m.reply_to IS NULL AND COALESCE(c.client_request_id, '') LIKE ?)"
+        )
+        marks = (demo, demo, demo)
         with self.connection() as db:
             tables = {row["name"] for row in db.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+            space = db.execute(
+                "SELECT 1 FROM subjects s WHERE s.student_id = ? AND NOT EXISTS ("
+                "SELECT 1 FROM conversations c WHERE c.id = s.main_conversation_id AND c.client_request_id LIKE ?) LIMIT 1",
+                (student_id, demo),
+            ).fetchone()
             explained = db.execute(
                 "SELECT 1 FROM conversation_messages m JOIN conversations c ON c.id = m.conversation_id "
                 "WHERE c.student_id = ? AND m.role = 'assistant' AND m.status = 'complete' "
-                "AND length(m.content) >= 80 AND c.title NOT LIKE '初识引导%' LIMIT 1",
-                (student_id,),
+                f"AND length(m.content) >= 80 AND c.title NOT LIKE '初识引导%' AND {own_message} LIMIT 1",
+                (student_id, *marks),
             ).fetchone()
             answered = db.execute(
                 "SELECT 1 FROM conversation_messages m JOIN conversations c ON c.id = m.conversation_id "
                 "WHERE c.student_id = ? AND ("
                 "m.meta_json LIKE '%\"assessment\": \"correct\"%' OR "
                 "(m.meta_json LIKE '%\"from\": \"awaiting_learner\"%' AND m.meta_json LIKE '%\"to\": \"done\"%')"
-                ") LIMIT 1",
-                (student_id,),
+                f") AND {own_message} LIMIT 1",
+                (student_id, *marks),
             ).fetchone()
             scheduled = None
             if "agenda_tasks" in tables:
                 scheduled = db.execute(
-                    "SELECT 1 FROM agenda_tasks WHERE student_id = ? AND source = 'ai_breakdown' LIMIT 1",
-                    (student_id,),
+                    "SELECT 1 FROM agenda_tasks WHERE student_id = ? AND source = 'ai_breakdown' AND id NOT LIKE ? LIMIT 1",
+                    (student_id, f"{AGENDA_PREFIX}%"),
                 ).fetchone()
         return {
+            "space": space is not None,
             "explained": explained is not None,
             "answered": answered is not None,
             "scheduled": scheduled is not None,

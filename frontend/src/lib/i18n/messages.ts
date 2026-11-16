@@ -602,7 +602,7 @@ export const zh = {
 
   "auth.loginTitle": "欢迎回到 KnowGap",
   "auth.registerTitle": "创建你的学习账号",
-  "auth.subtitle": "把一次提问，接成持续的学习",
+  "auth.subtitle": "从一个问题开始，慢慢弄懂",
   "auth.modeAria": "登录或注册",
   "auth.loginTab": "邮箱登录",
   "auth.registerTab": "邮箱注册",
@@ -1236,7 +1236,7 @@ export const en: Record<MessageKey, string> = {
 
   "auth.loginTitle": "Welcome back to KnowGap",
   "auth.registerTitle": "Create your learning account",
-  "auth.subtitle": "Turn one question into continuous learning",
+  "auth.subtitle": "Start with a question. Learn at your own pace.",
   "auth.modeAria": "Sign in or register",
   "auth.loginTab": "Email sign in",
   "auth.registerTab": "Email sign up",

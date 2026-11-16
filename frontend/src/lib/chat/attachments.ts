@@ -22,6 +22,9 @@ export interface FileAttachment {
   notes: string[];
 }
 
+/** 单份资料的上传上限，与后端 MAX_UPLOAD_BYTES 一致 */
+export const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
+
 /** 文件选择器的 accept：图片仍走视觉上传，其余文档走附件上传 */
 export const DOCUMENT_EXTENSIONS = [".pdf", ".docx", ".doc", ".pptx", ".ppt", ".xlsx", ".xls", ".txt", ".md", ".csv"] as const;
 const IMAGE_EXTENSIONS = [".png", ".jpg", ".jpeg", ".webp"] as const;
