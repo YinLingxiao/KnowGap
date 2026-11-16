@@ -12,7 +12,7 @@ const js = ts.transpileModule(source, {
 }).outputText;
 const mod = { exports: {} };
 new Function('module', 'exports', 'require', js)(mod, mod.exports, require);
-const { VISUAL_MSG, THEME_VARS, readThemeVars, extractVisualBody, buildVisualSrcdoc } = mod.exports;
+const { VISUAL_MSG, THEME_VARS, KIT_CLASSES, readThemeVars, extractVisualBody, buildVisualSrcdoc } = mod.exports;
 
 const CSP = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; font-src data:">`;
 
@@ -127,13 +127,16 @@ function runBridge(hasObserver) {
 test('bridge reports height once per frame, ask, error, and theme', () => {
   const ctx = runBridge(true);
   assert.equal(ctx.messages.length, 0);
+  ctx.listeners['doc:DOMContentLoaded']();
+  assert.equal(ctx.messages.length, 1);
+  assert.equal(ctx.messages[0].type, 'knowgap-visual:height');
+  assert.equal(ctx.messages[0].height, 90);
   ctx.fireResize();
   ctx.fireResize();
   assert.equal(ctx.raf.length, 1);
   ctx.raf[0]();
-  assert.equal(ctx.messages[0].type, 'knowgap-visual:height');
-  assert.equal(ctx.messages[0].height, 90);
-  ctx.listeners['doc:DOMContentLoaded']();
+  assert.equal(ctx.messages[1].type, 'knowgap-visual:height');
+  assert.equal(ctx.messages[1].height, 90);
   ctx.listeners['win:load']();
   assert.equal(ctx.messages.length, 3);
   ctx.sandbox.knowgap.ask('x'.repeat(800));
@@ -158,8 +161,73 @@ test('bridge reports height once per frame, ask, error, and theme', () => {
 
 test('bridge falls back to load and resize without ResizeObserver', () => {
   const ctx = runBridge(false);
+  ctx.listeners['doc:DOMContentLoaded']();
   ctx.listeners['win:load']();
   ctx.listeners['win:resize']();
-  assert.deepEqual(ctx.messages.map((message) => message.type), ['knowgap-visual:height', 'knowgap-visual:height']);
-  assert.equal(ctx.listeners['doc:DOMContentLoaded'] !== undefined, true);
+  assert.deepEqual(ctx.messages.map((message) => message.type), Array(3).fill('knowgap-visual:height'));
+});
+
+test('bridge sends no height before DOMContentLoaded', () => {
+  // 文档只有 <head> 时 ResizeObserver 就会触发，此刻的高度只有几像素，上报会让卡片先缩成一小条
+  const ctx = runBridge(true);
+  ctx.fireResize();
+  ctx.raf.splice(0).forEach((frame) => frame());
+  ctx.listeners['win:load']();
+  assert.deepEqual(ctx.messages, []);
+  ctx.listeners['doc:DOMContentLoaded']();
+  assert.equal(ctx.messages.length, 1);
+  assert.equal(ctx.messages[0].height, 90);
+  // 之后照常：每帧合并一次
+  ctx.fireResize();
+  ctx.fireResize();
+  assert.equal(ctx.raf.length, 1);
+  ctx.raf.splice(0).forEach((frame) => frame());
+  assert.equal(ctx.messages.length, 2);
+
+  const fallback = runBridge(false);
+  fallback.listeners['win:resize']();
+  fallback.listeners['win:load']();
+  assert.deepEqual(fallback.messages, []);
+  fallback.listeners['doc:DOMContentLoaded']();
+  assert.equal(fallback.messages.length, 1);
+});
+
+test('every kit class the prompt tells the model to use exists in the sandbox stylesheet', () => {
+  const guide = fs.readFileSync(path.join(__dirname, '../../backend/app/chat/prompts/zh/widgets.yaml'), 'utf8');
+  const named = [...new Set(guide.match(/\bkg-[a-z]+/g) || [])];
+  assert.ok(named.length >= 10, 'the visual guide should document the kit');
+  const shipped = new Set(KIT_CLASSES.map((name) => name.slice(1)));
+  assert.deepEqual(named.filter((name) => !shipped.has(name)), []);
+  const html = buildVisualSrcdoc('<p>x</p>', {});
+  for (const name of named) assert.ok(html.includes('.' + name), `${name} missing from srcdoc`);
+});
+
+test('the kit ships timeline, flow, array-cell and chart components', () => {
+  for (const name of [
+    '.kg-timeline', '.kg-event', '.kg-flow', '.kg-box', '.kg-cells', '.kg-cell',
+    '.kg-axis', '.kg-gridline', '.kg-plot', '.kg-point',
+  ]) {
+    assert.ok(KIT_CLASSES.includes(name), name);
+  }
+  const html = buildVisualSrcdoc('', {});
+  // 箭头、圆点、下标都靠 CSS 画，不需要额外标记
+  assert.ok(html.includes('.kg-flow>.kg-box+.kg-box::before'));
+  assert.ok(html.includes('.kg-flow>.kg-box+.kg-box::after'));
+  assert.ok(html.includes('.kg-event:last-child::after'));
+  assert.ok(html.includes('content:attr(data-i)'));
+  // 伪元素不在 * 的范围内，减弱动效的规则要单独写上它们
+  assert.ok(html.includes('*::before,*::after{transition:none!important'));
+});
+
+test('kit stylesheet stays flat and uses host colours, readable sizes and the three type weights', () => {
+  const html = buildVisualSrcdoc('', {});
+  const css = (html.match(/<style>(html,body[\s\S]*?)<\/style>/) || [])[1] || '';
+  assert.ok(css.includes('.kg-timeline'));
+  assert.equal(/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(|gradient\(|shadow|blur\(/i.test(css), false);
+  const sizes = [...css.matchAll(/font(?:-size)?:[^;}]*?(\d+(?:\.\d+)?)px/g)].map((match) => Number(match[1]));
+  assert.ok(sizes.length > 20);
+  assert.deepEqual(sizes.filter((size) => size < 12), []);
+  const weights = [...css.matchAll(/font-weight:(\d+)|font:(\d{3}) /g)].map((match) => Number(match[1] || match[2]));
+  assert.ok(weights.length > 10);
+  assert.deepEqual(weights.filter((weight) => ![400, 500, 600].includes(weight)), []);
 });

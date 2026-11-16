@@ -29,6 +29,7 @@ import { ThreadProposals } from "./ThreadProposals";
 import { VisionMarkedText } from "./widgets/ImageMarker";
 import type { PlanChange } from "@/lib/chat/plan";
 import { AGENDA_TOOLS, AgendaToolCard } from "./AgendaToolCard";
+import { WEB_SEARCH_TOOL, WebSearchCard, parseWebSearch } from "./WebSearchCard";
 import { hasVisionMarker } from "./widgets/visionData";
 import { MessageNav } from "./MessageNav";
 import { MemoriesByIdContext } from "./widgets/memoryContext";
@@ -47,6 +48,7 @@ const TOOL_LABELS: Record<string, string> = {
   edit: "修改工作区文件",
   bash: "执行终端命令",
   session_search: "检索历史会话",
+  web_search: "联网搜索",
   memory: "更新长期笔记",
   agenda_list: "查看日程",
   agenda_add: "写入日程",
@@ -551,9 +553,11 @@ export function MessageList({
             const isLast = message === last && message.replyTo === lastUser?.id;
             // 计划属于整段对话，由输入框上方的计划条展示；这里只在发生变化的回复里留一行时间线标记
             const planMarks = planMarksOf(message.planChanges);
-            const visibleTools = message.toolCalls.filter((call) => ![
+            // 联网搜索有自己的结果卡片；输出解析不了的那几次留在下面的通用清单里
+               const webCalls = message.toolCalls.filter((call) => call.name === WEB_SEARCH_TOOL && (!call.output || parseWebSearch(call.output)));
+               const visibleTools = message.toolCalls.filter((call) => ![
               "dispatch_thread", "propose_threads", "report_progress", "exercise_reference", "plan_steps", "update_plan",
-            ].includes(call.name) && !AGENDA_TOOLS.has(call.name));
+            ].includes(call.name) && !AGENDA_TOOLS.has(call.name) && !webCalls.includes(call));
             const runningTool = streaming ? visibleTools.find((call) => !call.output) : undefined;
             const agendaCalls = message.toolCalls.filter((call) => AGENDA_TOOLS.has(call.name) && call.name !== "agenda_list");
             const used = message.usedMemoryIds.filter((id) => memoriesById[id]);
@@ -584,6 +588,7 @@ export function MessageList({
                   </div>
                 )}
                 {agendaCalls.map((call) => <AgendaToolCard key={call.id} call={call} />)}
+               {webCalls.map((call) => <WebSearchCard key={call.id} call={call} />)}
                 {visibleTools.length > 0 && (
                   <div className={cx(styles.toolChecklist, styles.traceBox)}>
                     <div className={styles.traceHead}>

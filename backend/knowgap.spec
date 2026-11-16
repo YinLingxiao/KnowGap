@@ -17,7 +17,9 @@ a = Analysis(
     ["desktop_entry.py"],
     pathex=["."],
     binaries=collect_dynamic_libs("pypdfium2_raw") + collect_dynamic_libs("pypdfium2"),
-    datas=collect_data_files("reportlab") + collect_data_files("pypdfium2") + collect_data_files("pypdfium2_raw"),
+    # app 下的提示词 YAML 是运行时读取的数据文件，不会随 .py 自动进包
+    datas=collect_data_files("reportlab") + collect_data_files("pypdfium2") + collect_data_files("pypdfium2_raw")
+    + collect_data_files("app", includes=["**/*.yaml"]),
     hiddenimports=hidden,
     hookspath=[],
     hooksconfig={},

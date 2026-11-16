@@ -1,7 +1,7 @@
 """Conservative resume policy. External effects and SQLite cannot commit atomically."""
 
 # Only these tools are safe to repeat when a crash left their result uncertain.
-READ_ONLY_TOOLS = {"read", "session_search", "exercise_reference"}
+READ_ONLY_TOOLS = {"read", "session_search", "exercise_reference", "web_search"}
 MAX_TOOL_ROUNDS = 16
 
 

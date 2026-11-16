@@ -7,11 +7,11 @@ from app.chat.skills.chat_skills import (
 )
 from app.chat.skills.main_skills import MAIN_ROADMAP_SKILL
 from app.chat.skills.file_skills import file_skill_prompt
-from app.chat.skills.thread_skills import THREAD_SKILLS, WIDGET_CAPABILITY, WIDGET_SCHEMA_GUIDE
+from app.chat.skills.thread_skills import THREAD_SKILLS, WIDGET_CAPABILITY, WIDGET_CRAFT_GUIDE, WIDGET_SCHEMA_GUIDE
 from app.chat.skills.visual_guide import VISUAL_CARD_GUIDE
 
 # 控件能力声明与两份规范不随轮次变化，放进系统提示：小模型读得到，也能命中前缀缓存。
-WIDGET_SYSTEM_PROMPT = f"{WIDGET_CAPABILITY}\n\n{WIDGET_SCHEMA_GUIDE}\n\n{VISUAL_CARD_GUIDE}"
+WIDGET_SYSTEM_PROMPT = f"{WIDGET_CAPABILITY}\n\n{WIDGET_SCHEMA_GUIDE}\n\n{WIDGET_CRAFT_GUIDE}\n\n{VISUAL_CARD_GUIDE}"
 
 _FEYNMAN_RE = re.compile(r"费曼|我来讲|听我讲|挑刺|考官")
 _PRACTICE_RE = re.compile(r"练习|做题|考我|出.*题|测验|刷题|来看看我的解答|对不对|练手|好题|真题|母题")

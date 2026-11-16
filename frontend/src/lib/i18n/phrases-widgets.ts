@@ -127,5 +127,17 @@ export const widgetPhrases: Record<string, string> = {
   "正在生成图示…": "Generating the diagram…",
   "图示没能生成": "The diagram could not be generated",
   "交互图示": "Interactive diagram",
+  "生成中": "Generating",
+  "分步推演": "Step by step",
+  "概念对比": "Comparison",
+  "随堂小测": "Quick check",
+  "代码实验台": "Code lab",
+  "结论": "Bottom line",
+  "看提示": "Show a hint",
+  "重置": "Reset",
+  "自动播放": "Autoplay",
+  "暂停": "Pause",
+  "重新播放": "Replay",
+  "高亮这一列，再点一次取消": "Highlight this column; click again to clear",
 };
 

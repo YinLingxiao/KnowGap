@@ -1,11 +1,123 @@
 /* 沙箱交互图示。外壳跟学习卡片同一套表面，内容在 iframe 里。 */
 
-.visualCard {
-  margin: 14px 0;
-  padding: 14px;
+.visualCard,
+.building {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 16px 0;
+  padding: 16px 18px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-xl);
   background: var(--bg-elevated);
+  box-shadow: var(--shadow-card);
+}
+
+/* 和学习卡片同一套类型标识：小图标 + 类型名，右侧放卡片自己的操作 */
+.kindRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.kindIcon {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+}
+
+.resetBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  margin-left: auto;
+  padding: 0 8px;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  letter-spacing: 0;
+}
+
+.resetBtn:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+/* 生成中：顶边一条推进的细线，标题先到先显示，下面留出图的位置 */
+.building {
+  overflow: hidden;
+}
+
+.building::before {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 28%;
+  height: 2px;
+  background: var(--accent);
+  content: "";
+  animation: building-sweep 1.5s var(--ease) infinite;
+}
+
+@keyframes building-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+
+  to {
+    transform: translateX(360%);
+  }
+}
+
+.liveTag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--accent-text);
+  letter-spacing: 0;
+}
+
+.liveDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.buildingTitle {
+  color: var(--text);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  line-height: var(--leading-tight);
+}
+
+.buildingStage {
+  height: 120px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-subtle);
+  animation: pulse 1.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .building::before,
+  .liveDot,
+  .buildingStage {
+    animation: none;
+  }
 }
 
 .frame {
@@ -13,24 +125,6 @@
   width: 100%;
   border: 0;
   background: transparent;
-}
-
-.skeletonCard {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 12px 0;
-  padding: 12px 16px;
-  border: 1px dashed var(--border-strong);
-  border-radius: var(--radius-lg);
-  background: var(--bg-subtle);
-  color: var(--text-secondary);
-  font-size: var(--text-xs);
-}
-
-.skeletonIcon {
-  color: var(--accent);
-  animation: pulse 1.4s ease-in-out infinite;
 }
 
 @keyframes pulse {
@@ -63,10 +157,4 @@
   font-family: var(--font-mono-cjk);
   white-space: pre-wrap;
   word-break: break-all;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .skeletonIcon {
-    animation: none;
-  }
 }

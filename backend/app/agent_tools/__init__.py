@@ -9,6 +9,7 @@ from app.agent_tools import bash as bash_tool
 from app.agent_tools import documents as document_tools
 from app.agent_tools import files
 from app.agent_tools import problem_search
+from app.agent_tools import web_search
 from app.agent_tools.guard import (
     ToolError, check_content_security_blacklist, check_security_blacklist, enforce_security_blacklist,
 )
@@ -207,6 +208,7 @@ DEFINITIONS = [
     },
     problem_search.DEFINITION,
     problem_drill_skill.VERIFY_DEFINITION,
+    web_search.DEFINITION,
 ]
 
 NEEDS_APPROVAL = {"write", "edit", "bash"}
@@ -378,6 +380,8 @@ async def run(name: str, arguments: dict, ctx) -> str:
             text = await problem_search.run(arguments, ctx)
         elif name == problem_drill_skill.VERIFY_TOOL:
             text = await problem_drill_skill.run_verify(arguments, ctx)
+        elif name == web_search.TOOL_NAME:
+            text = await web_search.run(arguments, ctx)
         elif name in document_tools.NAMES:
             text = await asyncio.to_thread(document_tools.run, name, arguments, ctx)
         elif name in agenda_tools.NAMES:

@@ -1,15 +1,24 @@
-"""Standalone role prompt for free/parallel conversations (`chat`): a general assistant, not a tutor."""
+"""Prompts for free/parallel conversations (`chat`): a general assistant, not a tutor.
 
-CHAT_ROLE_PROMPT = """当前角色：普通对话（chat），一个通用 AI 助手。用户问什么就答什么，不套用固定的教学流程。
-这里没有主线与支线的分工，不要求用户创建学习空间，也不声称已经创建或分派支线。
-回答原则：
-- 直接给出清晰、正确的回答，篇幅与问题匹配：简单问题简短回答，用户要答案就给答案，不卖关子。
-- 讲一道具体的题：按解题顺序讲清思路、关键步骤和答案即可。
-- 不主动出题，简单问答不建计划；只有用户要求练习、自测或想自己想时，才出题或给提示。
-- 延伸发问：用户说「直接告诉我」「只要答案」「简单说」之类，或是纯事实问答、寒暄时，答完就停，结尾不加任何问题。
-  其他情况下，回答完整之后，话题有值得往下走的方向时，在结尾用一句话提一个延伸问题，例如要不要看相关方法、同类题、背后原理，或问用户的用途以便讲得更贴合；方向结合 USER 画像与 teaching_preferences（如备考就往易错点和同类题延伸）。
-  只问一个，用户可以不理：不考用户的理解，不要求作答，不设 awaiting_learner。问题有歧义时，可以先问一句澄清再回答。
-- 用户给出自己的理解、推导、作品或代码：先确认对的部分，再具体指出问题和原因；没有问题就明确说没问题。
-- 结合 turn_context.teaching_preferences 与 USER 画像调整讲法；learner_memories 相关时自然参考，不逐条复述。
-- 可交互卡片：凡是能用控件表达的内容（结构、过程、推导步骤、对比、数值或公式随参数变化），尽量用 ```knowgap-visual 或 ```knowgap-widget 呈现，再配简短文字。控件用来把答案讲清楚，不是额外附加的练习：micro_quiz 只在用户要练习或自测时用。
-用户可以随时换话题、补充条件、要求更详细的解释或直接看答案，照做即可。"""
+The text lives in `zh/parallel_chat.yaml` (role, intro, background, context contract) and
+`zh/shared.yaml` (audience, format, tools). This module only decides the assembly order.
+"""
+
+from app.chat.prompts.common import SHARED_PROMPTS
+from app.services.prompt import get_prompt_manager, prompt_text
+
+CHAT_PROMPTS = get_prompt_manager().load_prompts("chat", "parallel_chat")
+
+CHAT_ROLE_PROMPT = prompt_text(CHAT_PROMPTS, "role")
+
+# Identity first, the per-turn context contract and tool rules last; blank lines set off the format rules.
+CHAT_CONTEXT_PROMPT = "\n".join([
+    prompt_text(CHAT_PROMPTS, "system", "intro"),
+    prompt_text(SHARED_PROMPTS, "audience"),
+    prompt_text(CHAT_PROMPTS, "system", "background"),
+    "",
+    prompt_text(SHARED_PROMPTS, "format"),
+    "",
+    prompt_text(CHAT_PROMPTS, "system", "context"),
+    prompt_text(SHARED_PROMPTS, "tools"),
+])

@@ -3,6 +3,8 @@ uvicorn[standard]
 pydantic
 pydantic-settings
 python-dotenv
+# 提示词按智能体存成 YAML（app/*/prompts/<语言>/*.yaml），由 app/services/prompt 加载
+pyyaml>=6,<7
 httpx[socks]>=0.28,<1
 google-auth[requests]>=2.40,<3
 pyjwt[crypto]>=2.9,<3

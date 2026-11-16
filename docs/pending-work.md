@@ -210,7 +210,7 @@ npm run build
 - 主线分支：每个支线在现有的 `id / title / thread_status / execution_status` 之外增加 `progress_summary`（取该支线最新一条 assistant 消息的 `meta.progress_summary`，无则省略。注意 `_summary` 里的 `latest` 可能是用户消息，不能直接复用；用一条查询批量取出，不要每个支线查一次）。`preview` 保留但保持短。
 - 数量上限：未解决的最近 20 个给完整字段；已解决的最近 10 个只给 `id / title / thread_status`。上限写成模块级常量。
 - 支线分支：`main_recent` 不能再包含进展卡片。清理迁移（任务 C）完成后卡片已不存在，这里**不需要**再加过滤，但要有测试证明。
-- `prompts/main_coordinator.py` 第 1 条规则写着“询问已有任务的状态……直接简短回答”，这依赖上面的 `threads` 数据；除非测试表明需要，不要改提示词。
+- `prompts/main_coordinator.py` 第 1 条规则写着“询问已有任务的状态……直接简短回答”，这依赖上面的 `threads` 数据；除非测试表明需要，不要改提示词。（提示词文字现已迁到 `backend/app/chat/prompts/zh/main_coordinator.yaml`，`main_coordinator.py` 只负责拼装。）
 
 #### 迁移
 
@@ -436,7 +436,7 @@ npm run build
 - 新增 `agent_config` 的 `coordinator_wakeup`，默认 **True**：在 `services/ai_settings.py` 的 `agent_config()` 读出，并在更新逻辑（约 170–181 行）里加入对应字段，使用方式沿用 `service._agent_flag`。**不需要**做设置界面。
 - 关闭时：不写汇报、不投递；已有的待投递汇报保持 `pending`，不要删除。
 
-**E10. 提示词**（`backend/app/chat/prompts/main_coordinator.py`，追加一段，不改动现有规则）
+**E10. 提示词**（`backend/app/chat/prompts/main_coordinator.py`，追加一段，不改动现有规则）（提示词文字现已迁到 `backend/app/chat/prompts/zh/main_coordinator.yaml`，`main_coordinator.py` 只负责拼装。）
 建议文本（可微调措辞，但这几条语义不能少）：
 
 ```

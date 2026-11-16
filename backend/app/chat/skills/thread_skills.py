@@ -1,42 +1,12 @@
 """Execution Skills prioritized for injection into Learning Space Threads (`thread`)."""
 
-WIDGET_CAPABILITY = """【界面能力（必须知道）】
-你的回复由 KnowGap 前端渲染，在聊天正文里写 ```knowgap-widget（JSON 微件）或 ```knowgap-visual（HTML/SVG 沙箱卡）代码块，就会直接变成可点击、可操作的控件，用户无需保存文件或打开浏览器。
-- 严禁说“聊天窗口里做不了可交互控件”“请复制保存成 .html 打开”之类的话；历史回复里若这样说过，那是错的，本轮直接改用控件。
-- 用户提到 可交互/可点/动画/演示/可视化/画个图/模拟/让我试试/拖动/滑块 时，本轮必须输出控件。
-- 讲解结构（树、链表、图、栈、队列、数组）、过程（遍历、排序、状态变化、推导步骤）、数值关系（比例、公式随参数变化）时，默认至少放 1 个控件，再配文字。
-- 选型：结构图、动画、滑块用 knowgap-visual；分步推演用 step_simulator；概念对比用 comparison_matrix；讲完检验用 micro_quiz；编程动手用 code_playground。
-- turn_context.recommended_widget 非 null 时，本轮按它输出对应控件。
-- 只有寒暄、一句话澄清、纯事实问答时不放控件。"""
+from app.services.prompt import get_prompt_manager, prompt_text
 
-WIDGET_SCHEMA_GUIDE = """【内联可交互学习微件规范（`knowgap-widget`）】
-为了提供直观、可操纵的现代教学体验，你不仅可以用文字讲解，还可以直接在正文任意位置嵌入 ```knowgap-widget 代码块（里面必须是单行或多行合法 JSON，不要加注释），前端会将其编译为原生可交互组件并支持双向追问。支持以下 5 种类型：
-1. 单步状态推演器（适合机制流程、映射演化、算法步骤、历史/反应过程）：
-```knowgap-widget
-{"type":"step_simulator","title":"推演标题","steps":[{"label":"第1步名称","detail":"本步核心变化说明","state":[{"key":"变量/槽位","value":"当前值","highlight":true}]}]}
-```
-2. 交互式对比矩阵（适合 2～4 个易混概念、机制或方案的多维度对比）：
-```knowgap-widget
-{"type":"comparison_matrix","title":"对比标题","columns":["方案A","方案B"],"rows":[{"dimension":"核心原理","values":["A的做法","B的做法"],"takeaway":"一句话本质区别"}]}
-```
-3. 随堂微测验（适合讲完概念后的 30 秒互动检验）：
-```knowgap-widget
-{"type":"micro_quiz","question":"简短检验问题","options":["选项A","选项B","选项C"],"answerIndex":0,"explanation":"为什么选该项的一句话解析"}
-```
-micro_quiz 可选字段 planStepId：仅当 turn_context.learning_plan 里有 awaiting_learner 步骤、且这道题正是在检验该步骤时，填该步骤的真实 id（形如 step-…）；学习者答对后系统会自动把该步骤标为完成，其余情况不要写。
-4. 代码实验台（适合讲完编程或算法实现类概念后，让学生在本机真实沙盒里填空、编译、排错；本轮主题是编程或算法实现且需要动手验证时才选用本类型）：
-```knowgap-widget
-{"type":"code_playground","title":"补全：求平方","language":"python","mode":"scaffold","instructions":"读入一个整数，输出它的平方。补全 TODO 处的代码。","starter_code":"n = int(input())\\n# TODO: 请在此处补全：计算 n 的平方并赋给 result\\nprint(result)","test_cases":[{"name":"用例1","input":"3","expected":"9"},{"name":"用例2","input":"-4","expected":"16"}]}
-```
-code_playground 的三步教学流程：
-- 第一步，先用文字把核心原理讲清楚（为什么这样做、关键一步是什么），再放微件，不要一上来就丢代码。
-- 第二步，给出带挖空的脚手架：Python 用 `# TODO: 请在此处补全…`，JavaScript、C、C++ 用 `// TODO: 请在此处补全…`；上下游框架代码写完整，只在最关键的 1～3 处留空缺。想让学生从零写，就把 mode 设为 "free"，starter_code 只放最小骨架。
-- 第三步，学生点「编译并运行」后，会把「代码 + 真实编译器/解释器报错」发回给你。先指出报错对应的原理和行号，再给最小提示，不要直接贴完整答案；通过后再出一个变式。
-5. 缺口卡（学习者再次触及 turn_context 里已记录的误区时，轻轻提示“这里和你之前的卡点有关”；memoryId 必须原样取自 turn_context 给出的误区 id，不得编造，没有对应误区就不要用）：
-```knowgap-widget
-{"type":"gap","memoryId":"lmem_xxx","note":"一句话说明为何此时提起，不超过 120 字"}
-```
-字段约束：language 只能是 python、javascript、c、cpp 之一；starter_code 里的换行必须写成 `\\n`，引号要转义；test_cases 最多 10 组，input 是标准输入，expected 是期望的标准输出；代码不要读写文件、联网、读环境变量或启动子进程，这些会被沙盒的安全黑名单直接拦截。"""
+# 控件规范的文字在 prompts/zh/widgets.yaml；这里只取出来给技能和系统提示用
+WIDGET_PROMPTS = get_prompt_manager().load_prompts("chat", "widgets")
+WIDGET_CAPABILITY = prompt_text(WIDGET_PROMPTS, "capability")
+WIDGET_SCHEMA_GUIDE = prompt_text(WIDGET_PROMPTS, "schema")
+WIDGET_CRAFT_GUIDE = prompt_text(WIDGET_PROMPTS, "craft")
 
 TRANSFER_LEARNING_GUIDE = """【先验锚点与对比迁移教学】
 结合 turn_context.prior_knowledge_anchors、经本轮原文核实的 reported_prior_knowledge 及交办任务中的明确旧知，选择与新课题相关的技能作为锚点。

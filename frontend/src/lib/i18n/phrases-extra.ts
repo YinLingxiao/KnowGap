@@ -384,4 +384,6 @@ export const extraPhrases: Record<string, string> = {
   "请针对「{topic}」出一道随堂微测题，检验我是否已经弄清楚。": "Give me a quick quiz question on \u201c{topic}\u201d to check whether I've understood it.",
   "已记入学习记录：{topic}": "Added to your learning record: {topic}",
   "学习计划「{title}」已完成": "Learning plan step \u201c{title}\u201d completed",
+  "正在联网搜索…": "Searching the web…",
+  "{count} 条结果": "{count} results",
 };

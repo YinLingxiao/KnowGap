@@ -1,5 +1,7 @@
-/* 可交互学习微件（GPT-6 Intelligent UI / A2UI 风格：原生主题、60fps 本地响应、双向语义回流）
-   扁平仪表盘：细描边 + 等宽胶囊标签 + 斑马纹矩阵 + 按压微缩放 */
+/* 可交互学习卡片。
+   每张卡同一套抬头（类型标识 → 标题 → 一句说明），正文按类型各有自己的主视觉：
+   分步推演是进度轨和步骤舞台，概念对比是表格和结论，小测是字母徽标的选项。
+   颜色只表达语义（强调、对、错、提醒），区分类型靠图标和版式，不靠色相。 */
 .skeletonCard {
   display: flex;
   align-items: center;
@@ -28,32 +30,73 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  margin: 14px 0;
-  padding: 14px 16px;
+  gap: 14px;
+  margin: 16px 0;
+  padding: 16px 18px 14px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-xl);
   background: var(--bg-elevated);
   box-shadow: var(--shadow-card);
-  animation: widget-enter 220ms var(--ease-out);
+  animation: widget-enter 260ms var(--ease-out);
 }
 
 @keyframes widget-enter {
   from {
     opacity: 0;
-    transform: translateY(6px) scale(0.985);
+    transform: translateY(6px);
   }
 }
 
+/* 抬头：类型标识是小字一行，标题用阅读面的衬线，和正文标题同一种气质 */
+.cardHead {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.cardKind {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.kindIcon {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+}
+
+.cardAside {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-left: auto;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+
+/* 代码实验台、图片批注、电路拓扑沿用的一行式抬头：标题在左，状态胶囊在右 */
 .widgetHead {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin: -2px -4px 0;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--border);
 }
 
 .widgetTitleWrap {
@@ -64,10 +107,53 @@
   min-width: 0;
 }
 
+.stepCounter,
+.metaChip {
+  padding: 1px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
 .widgetTitle {
   color: var(--text);
-  font-size: var(--text-md);
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
   font-weight: 600;
+  line-height: var(--leading-tight);
+  letter-spacing: 0;
+  text-wrap: balance;
+}
+
+.cardSubtitle {
+  color: var(--text-secondary);
+  font-size: var(--text-md);
+  line-height: var(--leading-ui);
+}
+
+/* 「生成中」只在流式预览的外层里出现 */
+.liveTag {
+  display: none;
+  align-items: center;
+  gap: 5px;
+  color: var(--accent-text);
+  letter-spacing: 0;
+}
+
+.liveWrap .liveTag {
+  display: inline-flex;
+}
+
+.liveDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: pulse 1.2s ease-in-out infinite;
 }
 
 /* 微测：题干是整张卡的主角，比正文略大；嵌在对话里不能压过上下文，所以不超过 17px */
@@ -97,25 +183,51 @@
   font-size: var(--text-sm);
 }
 
-.stepCounter {
-  flex-shrink: 0;
-  padding: 2px 8px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--bg-subtle);
-  color: var(--text-secondary);
-  font-size: var(--text-xs);
-  font-variant-numeric: tabular-nums;
+/* 流式中的半成品卡片：内容边到边显示，交互要等 JSON 完整后才开放（外层 inert）。
+   顶边一条来回推进的细线表示还在写；新到的行、选项、格子各自淡入，不整卡闪动。 */
+.liveWrap > .widgetCard {
+  overflow: hidden;
+  animation: none;
 }
 
-/* 流式中的半成品卡片：内容边到边显示，交互要等 JSON 完整后才开放（外层 inert） */
-.liveWrap > .widgetCard {
-  animation: none;
-  border-style: dashed;
+.liveWrap > .widgetCard::before {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 28%;
+  height: 2px;
+  background: var(--accent);
+  content: "";
+  animation: live-sweep 1.5s var(--ease) infinite;
+}
+
+@keyframes live-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+
+  to {
+    transform: translateX(360%);
+  }
 }
 
 .liveWrap .widgetFoot {
   opacity: 0.45;
+}
+
+.liveWrap .matrixTable tbody tr,
+.liveWrap .quizOptionBtn,
+.liveWrap .stateCell,
+.liveWrap .dimPill,
+.liveWrap .takeawayList > div {
+  animation: part-in 260ms var(--ease-out) backwards;
+}
+
+@keyframes part-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
 }
 
 /* 回复结束仍解析不出来，或类型已不再支持 */
@@ -145,7 +257,94 @@
   word-break: break-all;
 }
 
-/* 1. step_simulator 状态网格 */
+/* 1. step_simulator：进度轨 → 步骤舞台 → 状态格 */
+.stepRail {
+  display: flex;
+  gap: 4px;
+  /* 每段上下各有 6px 的可点留白，往回收一点，免得进度轨和抬头、舞台之间显得太空 */
+  margin: -6px 0 -4px;
+}
+
+/* 可点区域 16px 高，看得见的只有中间 4px 的一段 */
+.railSeg {
+  flex: 1;
+  min-width: 10px;
+  height: 16px;
+  padding: 6px 0;
+  border: 0;
+  background: transparent;
+}
+
+.railSeg::before {
+  display: block;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--border-strong);
+  content: "";
+  transition: background-color 200ms var(--ease-out);
+}
+
+.railSeg:hover::before {
+  background: color-mix(in srgb, var(--accent) 60%, var(--border-strong));
+}
+
+.railSegDone::before {
+  background: color-mix(in srgb, var(--accent) 42%, var(--border-strong));
+}
+
+.railSegOn::before,
+.railSegOn:hover::before {
+  background: var(--accent);
+}
+
+.railSeg:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 0;
+}
+
+.stepStage {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: stage-in 220ms var(--ease-out);
+}
+
+@keyframes stage-in {
+  from {
+    opacity: 0;
+    transform: translateX(8px);
+  }
+}
+
+.liveWrap .stepStage {
+  animation: none;
+}
+
+.stepLine {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.stepNum {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.stepText {
+  min-width: 0;
+  padding-top: 2px;
+}
+
 .stateGrid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
@@ -160,13 +359,26 @@
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg-subtle);
-  transition: border-color 180ms var(--ease-out), background-color 180ms var(--ease-out), transform 180ms var(--ease-spring);
+  transition: border-color 180ms var(--ease-out), background-color 180ms var(--ease-out);
 }
 
 .stateCellActive {
-  border-color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
   background: var(--accent-soft);
-  transform: translateY(-1px);
+}
+
+.stateValRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+}
+
+/* 上一步的值：划掉放在新值前面，一眼看出这一步改了什么 */
+.statePrev {
+  color: var(--text-tertiary);
+  font-family: var(--font-mono-cjk);
+  font-size: var(--text-xs);
 }
 
 .stateKey {
@@ -176,30 +388,23 @@
 
 .stateVal {
   color: var(--text);
-  font-family: inherit;
+  font-family: var(--font-mono-cjk);
   font-size: var(--text-md);
   font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
 
-.stepBody {
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  background: var(--bg-subtle);
-}
-
 .stepLabel {
   color: var(--text);
-  font-size: var(--text-md);
+  font-size: var(--text-lg);
   font-weight: 600;
-  line-height: var(--leading-ui);
+  line-height: var(--leading-tight);
 }
 
 .stepDetail {
   margin-top: 4px;
   color: var(--text-secondary);
-  font-size: var(--text-md);
+  font-size: var(--text-read);
   line-height: var(--leading-read);
 }
 
@@ -211,11 +416,12 @@
   justify-content: space-between;
   gap: 10px;
   padding-top: 10px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--border-subtle);
 }
 
 .stepControls {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
 }
@@ -251,6 +457,18 @@
   opacity: 0.4;
 }
 
+/* 「下一步」是这张卡的主操作，用墨色实底 */
+.ctrlBtnPrimary {
+  border-color: var(--ink-solid);
+  background: var(--ink-solid);
+  color: var(--on-ink);
+}
+
+.ctrlBtnPrimary:hover:not(:disabled) {
+  border-color: var(--ink-solid-hover);
+  background: var(--ink-solid-hover);
+}
+
 /* 卡片底栏的次要操作：用文字按钮，不与上一步/下一步抢视觉重量 */
 .textAction {
   display: inline-flex;
@@ -280,7 +498,6 @@
 }
 
 .ctrlBtn:focus-visible,
-.stepDot:focus-visible,
 .textAction:focus-visible,
 .askAiBtn:focus-visible,
 .dimPill:focus-visible,
@@ -294,25 +511,6 @@
 /* 胶囊在横向滚动容器里，内嵌焦点环不会被裁掉 */
 .dimPill:focus-visible {
   outline-offset: -2px;
-}
-
-.stepDots {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.stepDot {
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  background: var(--border-strong);
-  transition: width 180ms var(--ease-spring), background-color 180ms var(--ease-out);
-}
-
-.stepDotOn {
-  width: 18px;
-  background: var(--accent);
 }
 
 .askAiBtn {
@@ -406,7 +604,7 @@
   overflow-x: auto;
   /* 明确关掉纵向溢出，卡片内部只保留横向滚动 */
   overflow-y: hidden;
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   scrollbar-color: var(--border-strong) transparent;
   scrollbar-width: thin;
@@ -438,13 +636,19 @@
   border-bottom: 0;
 }
 
+/* 列名是被比较的对象，要比格子里的内容更醒目；第一列只是维度标签，退到次要 */
 .matrixTable th {
   background: var(--bg-subtle);
   border-bottom-color: var(--border-strong);
-  color: var(--text-secondary);
+  color: var(--text);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.matrixTable th:first-child {
+  color: var(--text-tertiary);
   font-size: var(--text-xs);
   font-weight: 500;
-  letter-spacing: 0.01em;
 }
 
 /* 第一列允许换行并限宽，别再被最长的维度名撑成半个表格 */
@@ -453,8 +657,59 @@
 }
 
 .dimCell {
-  color: var(--text);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
   font-weight: 500;
+}
+
+/* 列聚焦：点列名高亮整列、把其余的值列压暗一点，方便纵向比一个对象。颜色只表达「选中」，用和维度胶囊同一个强调色。 */
+.colHead,
+.colCell {
+  transition:
+    background-color 180ms var(--ease-out),
+    opacity 180ms var(--ease-out);
+}
+
+/* 列名按钮：字号字重都沿用 th，平时看不出是按钮；负边距把可点区域向 th 的内边距里撑开，不改变表头的版面 */
+.colBtn {
+  display: block;
+  width: calc(100% + 16px);
+  margin: -4px -8px;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: break-word;
+}
+
+.colBtn:hover {
+  background: var(--bg-hover);
+}
+
+/* 表头在横向滚动容器里，外描边会被裁掉，焦点环收进按钮里面 */
+.colBtn:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: -2px;
+}
+
+/* 纯文本列名只给堆叠布局下的读屏用，表格布局里不渲染，免得和按钮重复朗读 */
+.colName {
+  display: none;
+}
+
+.matrixTable .colHeadOn {
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg-subtle));
+  color: var(--accent-text);
+}
+
+.matrixTable .colOn {
+  background: var(--accent-soft);
+}
+
+.matrixTable .colDim {
+  opacity: 0.55;
 }
 
 /* 卡片较窄（支线面板）：每个维度堆成一块，列名放在每段内容前面 */
@@ -505,19 +760,59 @@
     font-weight: 500;
     content: attr(data-label);
   }
+
+  /* 列聚焦只属于表格布局。堆叠时表头被裁成 1px、只留给读屏：
+     里面的按钮会被 Tab 到却看不见，所以整个 display: none（同时退出焦点顺序），改露出纯文本列名；
+     已经选中的高亮和压暗也一并取消，免得切窄后留下说不清来由的半透明列 */
+  .matrixTable .colBtn {
+    display: none;
+  }
+
+  .matrixTable .colName {
+    display: inline;
+  }
+
+  .matrixTable .colHeadOn,
+  .matrixTable .colOn {
+    background: transparent;
+  }
+
+  .matrixTable .colDim {
+    opacity: 1;
+  }
 }
 
 .matrixTakeaway {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  padding: 8px 12px;
-  border: 1px solid var(--border);
+  padding: 9px 12px;
   border-radius: var(--radius);
-  background: var(--bg-subtle);
-  color: var(--text-secondary);
+  background: var(--amber-soft);
+  color: var(--text);
   font-size: var(--text-md);
   line-height: var(--leading-read);
+}
+
+/* 整张对比的一句结论：墨色小标签开头，是读完表格后该带走的那句话 */
+.matrixSummary {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  color: var(--text);
+  font-size: var(--text-read);
+  font-weight: 500;
+  line-height: var(--leading-read);
+}
+
+.summaryTag {
+  flex-shrink: 0;
+  padding: 1px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--ink-solid);
+  color: var(--on-ink);
+  font-size: var(--text-xs);
+  font-weight: 600;
 }
 
 .matrixTakeaway > span,
@@ -595,13 +890,41 @@
   background: var(--orange-soft);
 }
 
+/* 字母徽标同时充当单选圈：选中变实心强调色，揭晓后对的变绿、选错的变琥珀 */
 .quizOptionLetter {
+  display: grid;
   flex-shrink: 0;
-  width: 16px;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  background: var(--bg-elevated);
   color: var(--text-secondary);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  text-align: center;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  transition:
+    background-color var(--t-hover) var(--ease-out),
+    border-color var(--t-hover) var(--ease-out),
+    color var(--t-hover) var(--ease-out);
+}
+
+.quizOptionPicked .quizOptionLetter {
+  border-color: var(--accent-solid);
+  background: var(--accent-solid);
+  color: var(--on-accent);
+}
+
+.quizOptionRight .quizOptionLetter {
+  border-color: var(--green);
+  background: var(--green);
+  color: var(--on-solid);
+}
+
+.quizOptionWrong .quizOptionLetter {
+  border-color: var(--orange);
+  background: var(--orange);
+  color: var(--on-solid);
 }
 
 .quizOptionText {
@@ -609,21 +932,22 @@
   line-height: var(--leading-ui);
 }
 
-/* 单选圆圈：空心是未选，选中后实心主题色，避免灰色实心圆像禁用 */
-.quizRadio {
-  flex-shrink: 0;
-  width: 18px;
-  height: 18px;
-  border: 1.5px solid var(--border-strong);
-  border-radius: 50%;
-  transition:
-    border-color var(--t-hover) var(--ease-out),
-    box-shadow var(--t-hover) var(--ease-out);
+.hintToggle {
+  align-self: flex-start;
+  margin: -4px 0 -2px -8px;
 }
 
-.quizRadioOn {
-  border-color: var(--accent);
-  box-shadow: inset 0 0 0 4px var(--bg-elevated), inset 0 0 0 9px var(--accent);
+.quizHintBox {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 9px 12px;
+  border-radius: var(--radius);
+  background: var(--amber-soft);
+  color: var(--text);
+  font-size: var(--text-md);
+  line-height: var(--leading-read);
+  animation: part-in 220ms var(--ease-out);
 }
 
 .quizSubmit {
@@ -675,6 +999,51 @@
   color: var(--orange);
 }
 
+/* 揭晓反馈：答对时对勾轻轻弹出，答错时选错的那一项左右轻晃一次。
+   只在刚提交的那一刻播（是否播由组件决定，恢复出来的历史作答不播），都在 300ms 以内、幅度很小。 */
+.iconPop {
+  transform-origin: center;
+  animation: icon-pop 240ms var(--ease-out);
+}
+
+@keyframes icon-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+
+  60% {
+    opacity: 1;
+    transform: scale(1.12);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+.quizOptionShake {
+  animation: quiz-shake 280ms ease-in-out;
+}
+
+@keyframes quiz-shake {
+  20% {
+    transform: translateX(-4px);
+  }
+
+  40% {
+    transform: translateX(4px);
+  }
+
+  60% {
+    transform: translateX(-3px);
+  }
+
+  80% {
+    transform: translateX(2px);
+  }
+}
+
 .quizFeedback {
   display: flex;
   flex-direction: column;
@@ -683,6 +1052,12 @@
   border-radius: var(--radius-lg);
   font-size: var(--text-md);
   line-height: var(--leading-read);
+}
+
+.feedbackTitle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .feedbackRight {
@@ -704,6 +1079,30 @@
 .askAiBtn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+/* 代码实验台的流式预览：代码按到达顺序往下长，末尾一个闪动的光标；写完后换成编辑器 */
+.codePreview {
+  max-height: 280px;
+  margin: 0;
+  padding: 10px 12px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-subtle);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: 1.65;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  tab-size: 4;
+}
+
+.codeCaret::after {
+  color: var(--accent);
+  content: "▍";
+  animation: pulse 1s steps(2, jump-none) infinite;
 }
 
 /* 5. code_playground 代码填空 */
@@ -1013,7 +1412,19 @@
 
 @media (prefers-reduced-motion: reduce) {
   .widgetCard,
-  .skeletonIcon {
+  .skeletonIcon,
+  .stepStage,
+  .liveDot,
+  .codeCaret::after,
+  .quizHintBox,
+  .iconPop,
+  .quizOptionShake,
+  .liveWrap > .widgetCard::before,
+  .liveWrap .matrixTable tbody tr,
+  .liveWrap .quizOptionBtn,
+  .liveWrap .stateCell,
+  .liveWrap .dimPill,
+  .liveWrap .takeawayList > div {
     animation: none;
   }
 
@@ -1024,8 +1435,23 @@
   .quizOptionBtn,
   .netPick,
   .stateCell,
-  .stepDot,
+  .railSeg::before,
+  .quizOptionLetter,
+  .colHead,
+  .colCell,
   .matrixTable tbody tr {
     transition: none;
   }
+}
+
+/* 应用里的「界面动效：减弱」开关改的是 <html data-motion>，不是系统媒体查询，这里单独关掉新增的动效。
+   globals.css 已经把所有动画时长压到近 0，这里是明确关闭，不靠时长归零 */
+:root[data-motion="reduced"] .iconPop,
+:root[data-motion="reduced"] .quizOptionShake {
+  animation: none;
+}
+
+:root[data-motion="reduced"] .colHead,
+:root[data-motion="reduced"] .colCell {
+  transition: none;
 }
