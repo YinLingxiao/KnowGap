@@ -32,7 +32,7 @@
 | 边框 | `--border` / `--border-strong` | `#e3e0d8` / `#cfcbc1` | 暖白 8% / 12% |
 | 文字三级 | `--text` / `--text-secondary` / `--text-tertiary` | `#1c1b18` / `#57544c` / `#6f6b62` | `#ecebe6` / `#a3a097` / `#86837b` |
 | 强调 | `--accent` / `--accent-text` / `--accent-soft` | `#2f5fd0` 系 | `#6d93e8` 系 |
-| 实心按钮 | `--accent-solid` | `#2f5fd0`（白字对比度 ≥ 4.5） | `#4770d0`（同样 ≥ 4.5） |
+| 实心按钮 | `--accent-solid` | `#2f5fd0`（白字对比度 ≥ 4.5） | `#4770d0`（同样 ≥ 4.5）；两套主题悬停都是加深，不提亮 |
 | 语义 | `--green` `--red` `--amber`（`--orange` 是琥珀的别名） | 结论、记忆状态、错误 | 深色下提亮 |
 | 阴影 | `--shadow-card` / `--shadow-elevated` / `--shadow-popover` | 1px 暖色描边；浮层再加一层柔和投影 | 同左 |
 

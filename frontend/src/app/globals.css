@@ -1,7 +1,7 @@
 :root {
   color-scheme: light;
 
-  --font-sans: "Geist Variable", "Inter Variable", "Inter", "PingFang SC",
+  --font-sans: "Geist Variable", "Inter", "PingFang SC",
     "Microsoft YaHei UI", "Microsoft YaHei", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", "Cascadia Code", "SF Mono", Consolas, monospace;
   /* 等宽字体栈里没有中文字体，汉字会掉到系统默认等宽（Windows 上是宋体）。
@@ -167,7 +167,7 @@
     --accent-soft-strong: rgb(109 147 232 / 22%);
     --on-accent: #ffffff;
     --accent-solid: #4770d0;
-    --accent-solid-hover: #5a82dc;
+    --accent-solid-hover: #3f67c6;
 
     --green: #5fb98a;
     --green-soft: rgb(95 185 138 / 13%);
@@ -215,7 +215,7 @@
   --accent-soft-strong: rgb(109 147 232 / 22%);
   --on-accent: #ffffff;
   --accent-solid: #4770d0;
-  --accent-solid-hover: #5a82dc;
+  --accent-solid-hover: #3f67c6;
 
   --green: #5fb98a;
   --green-soft: rgb(95 185 138 / 13%);
