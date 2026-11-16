@@ -715,7 +715,6 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
                 <div className={styles.brandLine}>
                   <BrandMark size={24} />
                   <BrandWordmark width={116} />
-                  <span>AI</span>
                 </div>
                 <h2 className={styles.greeting}>
                   <span>{greeting(t, user.displayName)}</span>
