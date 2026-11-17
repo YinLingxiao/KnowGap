@@ -1,4 +1,4 @@
-"""Regressions for defects found by the 4-node x 40-turn end-to-end QA run (reports/qa_node_*.md)."""
+"""Regressions for defects found by the 4-node x 40-turn end-to-end QA run (the original QA reports are in git history)."""
 
 import asyncio
 import json
