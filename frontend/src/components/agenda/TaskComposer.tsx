@@ -1,11 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Bell, CalendarDays, Check, ChevronDown, Flag, Folder, Inbox, Loader, Plus, Sparkles, Tag, X } from "lucide-react";
+import { Bell, CalendarDays, Check, ChevronDown, Flag, Folder, Inbox, Loader, Plus, Tag, X } from "lucide-react";
 import { agendaApi } from "@/lib/agenda/api";
 import { formatYmd, parseQuickAdd, type QuickAddFields, type QuickAddToken } from "@/lib/agenda/quickAdd";
 import { AGENDA_CHANGED_EVENT, COMPOSE_TASK_EVENT, type ComposeTaskDetail, type TaskPriority } from "@/lib/agenda/types";
-import AiBreakdownDialog from "./AiBreakdownDialog";
 import styles from "./TaskComposer.module.css";
 
 type Subject = { id: string; name: string; color: string; deadline: string | null };
@@ -46,7 +45,6 @@ export function TaskComposer({ subjects }: { subjects: Subject[] }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [confirmClose, setConfirmClose] = useState(false);
-  const [aiOpen, setAiOpen] = useState(false);
   const [toast, setToast] = useState("");
   const parsed = useMemo(() => parseQuickAdd(text, new Date(), subjects, ignored), [text, subjects, ignored]);
   const fields = { ...parsed.fields,
@@ -237,7 +235,6 @@ export function TaskComposer({ subjects }: { subjects: Subject[] }) {
         </div>}
         {parsed.tokens.length > 0 && <div className={styles.recognized} aria-label="已识别的片段，点击取消识别"><span>已识别</span>{parsed.tokens.map(token => <button type="button" key={`${token.key}:${token.start}`} title={`取消识别「${token.raw}」，文字保留在标题中`} onClick={() => cancelToken(token)}>{token.raw}<X size={10} /></button>)}</div>}
         {text && <p className={styles.hint}>将添加：{parsed.title || "请补充任务名称"}{parsed.title.length > 200 ? "（任务名称最多 200 字）" : ""}</p>}
-        <button type="button" className={styles.ai} disabled={!validTitle} onClick={() => setAiOpen(true)}><Sparkles size={14} aria-hidden />让 AI 拆解</button>
       </fieldset>
       {error && <p className={styles.error} role="alert">{error}</p>}
       {open && toast && <div className={styles.inlineSuccess} role="status"><Check size={14} /><span>{toast}</span><button type="button" onClick={() => { window.dispatchEvent(new Event("knowgap:open-agenda")); setToast(""); close(); }}>查看日程</button></div>}
@@ -249,7 +246,6 @@ export function TaskComposer({ subjects }: { subjects: Subject[] }) {
       </footer>
       <p className={styles.shortcuts}>Enter 添加 · Ctrl / ⌘ + Enter 连续添加 · Esc 关闭</p>
     </dialog>
-    <AiBreakdownDialog open={aiOpen} subjects={subjects} initialGoal={parsed.title} defaultSubjectId={fields.subjectId} onClose={() => { setAiOpen(false); input.current?.focus(); }} onCreated={() => { setAiOpen(false); setOpen(false); setToast("已添加 AI 拆解任务"); }} />
     {!open && toast && <div className={styles.toast} role="status"><Check size={16} /><span>{toast}</span><button type="button" onClick={() => { window.dispatchEvent(new Event("knowgap:open-agenda")); setToast(""); }}>查看日程</button><button type="button" aria-label="关闭添加成功提示" onClick={() => setToast("")}><X size={14} /></button></div>}
   </>;
 }
