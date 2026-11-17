@@ -1,6 +1,6 @@
 {
   "name": "knowgap-desktop",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "description": "KnowGap 桌面端：本地学习助手",
   "author": "KnowGap",
   "private": true,
@@ -20,12 +20,35 @@
   "build": {
     "appId": "app.knowgap.desktop",
     "productName": "KnowGap",
-    "directories": { "output": "dist" },
-    "files": ["main.js", "preload.js", "updater.js", "window-chrome.js", "startup.js", "startup.html", "icon.ico", "icon.png"],
-    "publish": [{ "provider": "github", "owner": "YinLingxiao", "repo": "KnowGap" }],
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "updater.js",
+      "window-chrome.js",
+      "startup.js",
+      "startup.html",
+      "icon.ico",
+      "icon.png"
+    ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "YinLingxiao",
+        "repo": "KnowGap"
+      }
+    ],
     "extraResources": [
-      { "from": "../frontend/out", "to": "frontend" },
-      { "from": "../backend/dist/knowgap", "to": "backend" }
+      {
+        "from": "../frontend/out",
+        "to": "frontend"
+      },
+      {
+        "from": "../backend/dist/knowgap",
+        "to": "backend"
+      }
     ],
     "win": {
       "target": "nsis",
@@ -40,7 +63,9 @@
       "shortcutName": "KnowGap",
       "installerIcon": "icon.ico",
       "uninstallerIcon": "icon.ico",
-      "installerLanguages": ["zh_CN"],
+      "installerLanguages": [
+        "zh_CN"
+      ],
       "language": "2052",
       "include": "installer.nsh",
       "runAfterFinish": true
