@@ -48,7 +48,7 @@ const GROUPS: Array<{ title: string; items: Array<{ action: HelpAction; title: s
 const KEYS = [
   ["Q", "记一条任务"],
   ["Alt+Space", "随时快问"],
-  ["/", "技能与命令"],
+  ["/", "聚焦输入框"],
   ["Esc", "关闭当前浮层"],
   ["Enter", "发送"],
 ];

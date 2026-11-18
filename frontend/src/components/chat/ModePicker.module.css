@@ -1,0 +1,58 @@
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 2px 14px 6px;
+}
+
+.heroBar {
+  padding: 4px 16px 8px;
+}
+
+.chip {
+  flex-shrink: 0;
+  min-height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  transition:
+    background-color var(--t-hover) var(--ease-out),
+    border-color var(--t-hover) var(--ease-out),
+    color var(--t-hover) var(--ease-out);
+}
+
+.chip:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.chip:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.chip:disabled {
+  opacity: 0.45;
+}
+
+.chipOn {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+.chipOn:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--accent-soft-strong);
+  color: var(--accent-text);
+}

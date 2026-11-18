@@ -5,14 +5,13 @@ import {
   COACH_COPY, COACH_IDS, LEGACY_COACH_IDS, coachSeenKey, coachSessionKey,
   type CoachId,
 } from "./coach";
-import { cx } from "@/lib/cx";
 import { useI18n } from "@/components/LanguageProvider";
 import styles from "./Coachmark.module.css";
 
 const LEGACY = new Set<CoachId>(LEGACY_COACH_IDS);
 
 function anchorFor(id: CoachId): HTMLElement | null {
-  const selector = id === "plan" ? '[aria-label="学习计划"]' : id === "slash" ? "#chat-input" : `[data-coachmark="${id}"]`;
+  const selector = id === "plan" ? '[aria-label="学习计划"]' : `[data-coachmark="${id}"]`;
   // 面板全屏时主线是 inert 的：气泡不能指向被盖住的控件，退出全屏后再出现
   return [...document.querySelectorAll<HTMLElement>(selector)].find((node) => !node.closest("[inert]")) ?? null;
 }
@@ -45,7 +44,7 @@ function blockingInput() {
   return !emptyComposer();
 }
 
-type Box = { top: number; left?: number; right?: number; inline?: boolean };
+type Box = { top: number; left?: number; right?: number };
 
 const BUBBLE_H = 44;
 
@@ -54,11 +53,6 @@ function place(id: CoachId, node: HTMLElement): Box | null {
   const rect = node.getBoundingClientRect();
   const vw = window.innerWidth;
   const vh = window.innerHeight;
-  if (id === "slash") {
-    // 只在输入框为空时出现：收进输入框第一行的右侧，那里没有文字；太窄放不下就不提示
-    if (rect.width < 520) return null;
-    return { top: rect.top - 1, right: Math.max(8, vw - rect.right), inline: true };
-  }
   if (id === "thread") {
     // 锚点在右侧面板顶栏时，正下方是面板的说明文字：改放到面板可见区域的右下角
     const panel = node.closest("aside");
@@ -82,42 +76,21 @@ export function CoachmarkHost({ userId, enabled }: { userId: string; enabled: bo
   const [current, setCurrent] = useState<CoachId | null>(null);
   const [box, setBox] = useState<Box | null>(null);
   const [paused, setPaused] = useState(false);
-  const [slashArmed, setSlashArmed] = useState(false);
   const currentRef = useRef<CoachId | null>(null);
   currentRef.current = current;
 
   useEffect(() => {
     const sync = () => setPaused(blockingInput());
-    const arm = () => {
-      if (emptyComposer() && !seen(userId, "slash")) setSlashArmed(true);
-    };
-    const onFocus = (event: FocusEvent) => {
-      const target = event.target;
-      if (target instanceof HTMLTextAreaElement && target.id === "chat-input" && target.value.length === 0 && !seen(userId, "slash")) {
-        setSlashArmed(true);
-      }
-      sync();
-    };
-    arm();
-    const frame = window.requestAnimationFrame(arm);
     sync();
-    document.addEventListener("focusin", onFocus);
+    document.addEventListener("focusin", sync);
     document.addEventListener("focusout", sync);
     document.addEventListener("input", sync);
     return () => {
-      window.cancelAnimationFrame(frame);
-      document.removeEventListener("focusin", onFocus);
+      document.removeEventListener("focusin", sync);
       document.removeEventListener("focusout", sync);
       document.removeEventListener("input", sync);
     };
-  }, [userId]);
-
-  useEffect(() => {
-    if (paused && currentRef.current === "slash") {
-      localStorage.setItem(coachSeenKey(userId, "slash"), "1");
-      setSlashArmed(false);
-    }
-  }, [paused, userId]);
+  }, []);
 
   useEffect(() => {
     if (!enabled || paused) {
@@ -128,11 +101,11 @@ export function CoachmarkHost({ userId, enabled }: { userId: string; enabled: bo
     const pick = () => {
       const shown = sessionIds(userId);
       const legacyShown = shown.filter((id) => LEGACY.has(id as CoachId));
-      const order = COACH_IDS.filter((id) => id !== "slash" && (id !== "spotlight" || Boolean(window.knowgap)));
+      const order = COACH_IDS.filter((id) => id !== "spotlight" || Boolean(window.knowgap));
       const sticky = currentRef.current;
       let next: CoachId | null = null;
       let node: HTMLElement | null = null;
-      if (sticky && sticky !== "slash" && !seen(userId, sticky)) {
+      if (sticky && !seen(userId, sticky)) {
         const stuck = anchorFor(sticky);
         if (stuck) {
           next = sticky;
@@ -149,13 +122,6 @@ export function CoachmarkHost({ userId, enabled }: { userId: string; enabled: bo
           next = id;
           node = found;
           break;
-        }
-      }
-      if (!next && slashArmed && !seen(userId, "slash") && emptyComposer()) {
-        const found = anchorFor("slash");
-        if (found) {
-          next = "slash";
-          node = found;
         }
       }
       const spot = next && node ? place(next, node) : null;
@@ -186,12 +152,12 @@ export function CoachmarkHost({ userId, enabled }: { userId: string; enabled: bo
       window.removeEventListener("resize", schedule);
       window.removeEventListener("scroll", schedule, true);
     };
-  }, [enabled, paused, slashArmed, userId]);
+  }, [enabled, paused, userId]);
 
   if (!current || !box) return null;
   return (
     <div
-      className={cx(styles.bubble, box.inline && styles.inline)}
+      className={styles.bubble}
       style={{ top: box.top, left: box.left, right: box.right }}
       role="dialog"
       aria-label={tx(COACH_COPY[current])}
@@ -201,7 +167,6 @@ export function CoachmarkHost({ userId, enabled }: { userId: string; enabled: bo
         type="button"
         onClick={() => {
           localStorage.setItem(coachSeenKey(userId, current), "1");
-          if (current === "slash") setSlashArmed(false);
           setCurrent(null);
         }}
       >

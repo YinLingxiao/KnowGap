@@ -4,6 +4,7 @@ import { authHeader, mapSource, request, type WireSource } from "@/lib/api/http-
 import { API_BASE_URL } from "@/lib/config";
 import type { Problem } from "@/lib/types";
 import { mapPlan, mapPlanChanges } from "./plan";
+import type { ChatMode } from "./modes";
 import type {
   ChatMessage, Conversation, ConversationSummary, GeneratedFile, LearnerMemory, LearnerMemoryStatus, MemoryChange, SpaceInput,
   QuizAttemptResult, StreamEvent, Subject, TokenUsage, SpaceUsage,
@@ -11,6 +12,12 @@ import type {
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- wire payloads are mapped field by field below */
 type Wire = any;
+
+interface SendMessageBody {
+  content: string;
+  client_request_id: string;
+  mode?: ChatMode;
+}
 
 function mapUsage(data: Wire): TokenUsage {
   return { requests: data.requests, reportedRequests: data.reported_requests,
@@ -561,8 +568,13 @@ export const chatApi = {
       method: "POST", body: JSON.stringify({ allow }),
     });
   },
-  sendMessage(id: string, content: string, clientRequestId: string, onEvent: (event: StreamEvent) => void, signal: AbortSignal) {
-    return stream(`${path(id)}/messages`, JSON.stringify({ content, client_request_id: clientRequestId }), onEvent, signal);
+  sendMessage(id: string, content: string, clientRequestId: string, onEvent: (event: StreamEvent) => void, signal: AbortSignal, mode?: ChatMode) {
+    const body: SendMessageBody = {
+      content,
+      client_request_id: clientRequestId,
+      ...(mode ? { mode } : {}),
+    };
+    return stream(`${path(id)}/messages`, JSON.stringify(body), onEvent, signal);
   },
   regenerate(id: string, onEvent: (event: StreamEvent) => void, signal: AbortSignal) {
     return stream(`${path(id)}/regenerate`, undefined, onEvent, signal);

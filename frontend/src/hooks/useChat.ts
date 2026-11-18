@@ -6,6 +6,7 @@ import { ApiError, toApiError } from "@/lib/api/errors";
 import { chatApi } from "@/lib/chat/api";
 import { parseFileMarkers } from "@/lib/chat/attachments";
 import { PLAN_EVENT, type PlanEventDetail } from "@/lib/chat/plan";
+import type { ChatMode } from "@/lib/chat/modes";
 import type {
   ChatMessage, Conversation, ConversationSummary, LearnerMemory, LearnerMemoryStatus, SpaceInput, StreamEvent, Subject,
 } from "@/lib/chat/types";
@@ -83,6 +84,12 @@ export function useChat(notify: Notify, userId: string) {
   const [threads, setThreads] = useState<Record<string, Thread>>({});
   const [streams, setStreams] = useState<Record<string, StreamHandle>>({});
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [mode, setModeState] = useState<ChatMode | null>(null);
+  const modeRef = useRef<ChatMode | null>(null);
+  const setMode = useCallback((next: ChatMode | null) => {
+    modeRef.current = next;
+    setModeState(next);
+  }, []);
   const [creating, setCreating] = useState(false);
   const [sendFailure, setSendFailure] = useState<SendFailure | null>(null);
   const [problems, setProblems] = useState<Problem[]>([]);
@@ -257,8 +264,9 @@ export function useChat(notify: Notify, userId: string) {
     setPendingModelKey(null);
     setDraftSubjectId(subjectId);
     setSendFailure(null);
+    setMode(null);
     setActiveId(null);
-  }, [discardDraftConversation, setActiveId]);
+  }, [discardDraftConversation, setActiveId, setMode]);
 
   const loadConversation = useCallback(async (id: string) => {
     setThreads((all) => ({ ...all, [id]: { messages: all[id]?.messages ?? [], loading: true, error: null } }));
@@ -287,10 +295,11 @@ export function useChat(notify: Notify, userId: string) {
 
   const openConversation = useCallback((id: string) => {
     setSendFailure(null);
+    setMode(null);
     setActiveId(id);
     setFollows((all) => ({ ...all, [id]: (all[id] ?? 0) + 1 }));
     void loadConversation(id);
-  }, [loadConversation, setActiveId]);
+  }, [loadConversation, setActiveId, setMode]);
 
   // 首次加载：题目、会话列表、记忆；恢复刷新前打开的会话
   useEffect(() => {
@@ -478,7 +487,7 @@ export function useChat(notify: Notify, userId: string) {
     }
   }, [endStream, loadConversation, loadMemories, loadSubjects, notify, patchMessages, refreshList, setPhase, t, upsertSummary]);
 
-  const sendTo = useCallback(async (id: string, text: string, afterStop = false) => {
+  const sendTo = useCallback(async (id: string, text: string, afterStop = false, sendMode: ChatMode | null = modeRef.current) => {
     const trimmed = text.trim();
     if (!trimmed) return false;
     if (sending.current.has(id)) return false;
@@ -500,7 +509,7 @@ export function useChat(notify: Notify, userId: string) {
         return true;
       }
       // Release the sending lock once the receipt arrives, so another prompt can be queued.
-      await runStream(id, (onEvent, signal) => chatApi.sendMessage(id, trimmed, requestId, onEvent, signal), () => {
+      await runStream(id, (onEvent, signal) => chatApi.sendMessage(id, trimmed, requestId, onEvent, signal, sendMode ?? undefined), () => {
         acknowledge(); sending.current.delete(id);
       });
       return true;
@@ -548,10 +557,11 @@ export function useChat(notify: Notify, userId: string) {
   }, [activeId, draftSubjectId, subjects]);
 
   const sendMessage = useCallback(async (override?: string) => {
+    const selectedMode = modeRef.current;
     const key = activeId ?? NEW;
     const text = (override ?? drafts[key] ?? "").trim();
     if (!text || creating) return false;
-    if (activeId) return sendTo(activeId, text);
+    if (activeId) return sendTo(activeId, text, false, selectedMode);
     const draftId = draftConvRef.current;
     if (draftId) {
       draftConvRef.current = null;
@@ -563,7 +573,7 @@ export function useChat(notify: Notify, userId: string) {
       await applyPendingModel(draftId);
       setDrafts((all) => ({ ...all, [draftId]: text, [NEW]: "" }));
       setActiveId(draftId);
-      return sendTo(draftId, text);
+      return sendTo(draftId, text, false, selectedMode);
     }
     if (draftSubjectId) {
       const mainId = subjects.find((item) => item.id === draftSubjectId)?.mainConversationId;
@@ -573,7 +583,7 @@ export function useChat(notify: Notify, userId: string) {
           putConversation(await chatApi.getConversation(mainId));
         } catch { /* 流式结果仍会补上这条消息 */ }
         await applyPendingModel(mainId);
-        return sendTo(mainId, text);
+        return sendTo(mainId, text, false, selectedMode);
       }
     }
     let id = "";
@@ -592,7 +602,7 @@ export function useChat(notify: Notify, userId: string) {
       delete pending.current[NEW];
       setActiveId(id);
       setCreating(false);
-      return await sendTo(id, text);
+      return await sendTo(id, text, false, selectedMode);
     } catch (error) {
       setSendFailure({ conversationId: id || null, error: toApiError(error) });
       return false;
@@ -841,7 +851,7 @@ export function useChat(notify: Notify, userId: string) {
     subjects, loadSubjects, createSubject, updateSubject, deleteSubject, draftSubjectId, moveConversation, threadDispatch,
     conversations, listLoading, listError, refreshList,
     activeId, activeConversation, activeThread: activeThread ?? null, restored,
-    streams, activeStream, creating,
+    streams, activeStream, creating, mode, setMode,
     draft: drafts[draftKey] ?? "", setDraft,
     draftFor: (id: string) => drafts[id] ?? "",
     setDraftFor: (id: string, value: string) => setDrafts((all) => ({ ...all, [id]: value })),

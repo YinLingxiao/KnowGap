@@ -177,6 +177,29 @@ test('a deleted model announces the fallback before the reply', async () => {
   }
 });
 
+test('mode is optional and only sent when the composer has a selection', async () => {
+  const previousWindow = global.window;
+  global.window = { setTimeout, clearTimeout };
+  const bodies = [];
+  global.fetch = async (_url, options) => {
+    bodies.push(JSON.parse(options.body));
+    return new Response('event: done\ndata: {"message":null}\n\n', {
+      status: 200, headers: { 'Content-Type': 'text/event-stream' },
+    });
+  };
+  try {
+    const modes = ['explain', 'solve', 'practice', 'plan', 'research', 'organize'];
+    for (const mode of modes) {
+      await chatApi.sendMessage('c1', '问题', `req-${mode}`, () => {}, new AbortController().signal, mode);
+    }
+    await chatApi.sendMessage('c1', '问题', 'req-general', () => {}, new AbortController().signal);
+    assert.deepEqual(bodies.map((body) => body.mode), [...modes, undefined]);
+    assert.equal('mode' in bodies.at(-1), false);
+  } finally {
+    global.window = previousWindow;
+  }
+});
+
 test('skip is separate from completion and confirmation failures propagate', async () => {
   global.fetch = async (url) => {
     assert.ok(url.endsWith('/api/onboarding/skip'));

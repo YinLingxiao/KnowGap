@@ -2,13 +2,12 @@
 
 import {
   useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type ClipboardEvent, type DragEvent, type KeyboardEvent,
-  type ReactNode,
 } from "react";
 import {
-  ArrowLeftRight, ArrowUp, AtSign, Bold, Check, ChevronDown, ChevronLeft, ChevronRight, Code, Dumbbell,
-  FileText, FolderOpen, Italic, Layers, List, ListChecks, ListOrdered, ListTodo, MessageSquareQuote, Mic,
-  NotebookPen, Paperclip, Plus, ShieldCheck, Sigma, Sparkles, Square, SquareCode, Strikethrough, Target,
-  Type, Workflow,
+  ArrowUp, AtSign, Bold, Check, ChevronDown, ChevronLeft, ChevronRight, Code, Dumbbell,
+  FileText, FolderOpen, Italic, Layers, List, ListOrdered, ListTodo, MessageSquareQuote, Mic,
+  Paperclip, Plus, ShieldCheck, Sigma, Sparkles, Square, SquareCode, Strikethrough, Target,
+  Type,
 } from "lucide-react";
 import type { StreamPhase } from "@/hooks/useChat";
 import { useI18n } from "@/components/LanguageProvider";
@@ -20,8 +19,10 @@ import {
 } from "@/lib/chat/attachments";
 import { useDevMode } from "@/lib/devMode";
 import { ModelPicker, supportsReasoning } from "./ModelPicker";
+import { ModePicker } from "./ModePicker";
 import { PlanBar } from "./PlanBar";
 import { chatApi } from "@/lib/chat/api";
+import type { ChatMode } from "@/lib/chat/modes";
 import type { ChatMessage } from "@/lib/chat/types";
 import { cx } from "@/lib/cx";
 import type { Problem } from "@/lib/types";
@@ -70,66 +71,6 @@ function hasFiles(event: DragEvent): boolean {
   return Array.from(event.dataTransfer.types).includes("Files");
 }
 
-interface SlashCommand {
-  id: string;
-  label: string;
-  desc: string;
-  prompt: string;
-  icon: ReactNode;
-}
-
-const SLASH_COMMANDS: SlashCommand[] = [
-  {
-    id: "transfer",
-    label: "对比迁移学习",
-    desc: "用已学过的知识类比理解当前概念",
-    prompt: "我之前学过 [某基础]，请用对比迁移的方式帮我理解当前概念，并列出异同点：",
-    icon: <ArrowLeftRight size={14} aria-hidden />,
-  },
-  {
-    id: "feynman",
-    label: "费曼反转自测",
-    desc: "你讲给 AI 听，由 AI 挑刺追问",
-    prompt: "我想用费曼学习法自测：请你扮演有疑惑的同桌听我讲，并在我讲漏边界条件时追问我：",
-    icon: <Mic size={14} aria-hidden />,
-  },
-  {
-    id: "quiz",
-    label: "随堂微测验",
-    desc: "出一道交互式检测题考考我",
-    prompt: "请针对刚才讲的核心概念，出一道带 `micro_quiz` 交互微件的随堂检测题考考我。",
-    icon: <ListChecks size={14} aria-hidden />,
-  },
-  {
-    id: "sim",
-    label: "分步推演模拟",
-    desc: "一步步演示机制的状态变化",
-    prompt: "请用 `step_simulator` 分步推演微件，一步步演示这个机制的状态变化过程。",
-    icon: <Workflow size={14} aria-hidden />,
-  },
-  {
-    id: "drill",
-    label: "联网搜真题练习",
-    desc: "检索真实考研/竞赛母题并生成靶向测验卡",
-    prompt: "请帮我搜几道关于「在此填写知识点」的经典真题或母题来练手：",
-    icon: <Dumbbell size={14} aria-hidden />,
-  },
-  {
-    id: "code",
-    label: "编程代码实验台",
-    desc: "生成带 TODO 挖空的脚手架并在本地沙盒编译运行",
-    prompt: "请先讲清「在此填写编程/算法概念」的核心原理，然后给我一个带 TODO 挖空的 `code_playground` 代码实验台让我动手补全并运行：",
-    icon: <FileText size={14} aria-hidden />,
-  },
-  {
-    id: "note",
-    label: "结构化讲义整理",
-    desc: "把讨论要点整理成复习讲义",
-    prompt: "请把我们讨论的要点整理成一份带对比表与微测验的结构化复习讲义。",
-    icon: <NotebookPen size={14} aria-hidden />,
-  },
-];
-
 interface MentionItem {
   key: string;
   kind: "skill" | "file";
@@ -138,19 +79,16 @@ interface MentionItem {
 }
 
 interface InputTrigger {
-  kind: "slash" | "at";
-  /** 触发符号 `/` 或 `@` 在文本中的下标 */
+  /** 触发符号 `@` 在文本中的下标 */
   start: number;
   query: string;
 }
 
-/** 光标前紧邻的 `/xxx`（行首或空格后）或 `@xxx` 片段 */
+/** 光标前紧邻的 `@xxx` 片段 */
 function detectTrigger(text: string, caret: number): InputTrigger | null {
   const before = text.slice(0, caret);
-  const slash = /(?:^|\s)\/([A-Za-z]*)$/.exec(before);
-  if (slash) return { kind: "slash", start: caret - slash[1].length - 1, query: slash[1].toLowerCase() };
   const at = /(?:^|\s)@([^\s@]*)$/.exec(before);
-  if (at) return { kind: "at", start: caret - at[1].length - 1, query: at[1].toLowerCase() };
+  if (at) return { start: caret - at[1].length - 1, query: at[1].toLowerCase() };
   return null;
 }
 
@@ -197,6 +135,9 @@ interface ComposerProps {
   modelKey?: string | null;
   onModelKeyChange?: (modelKey: string | null) => Promise<boolean> | boolean;
   modelClient?: ModelLibraryClient;
+  /** 当前回答模式；null 表示通用 */
+  mode?: ChatMode | null;
+  onModeChange?: (mode: ChatMode | null) => void;
 }
 
 export const COMPOSER_ID = "chat-input";
@@ -254,7 +195,7 @@ export function Composer({
   value: draft, onChange: onChangeRaw, onSend, onStop, onRevise, phase, busy, problems = [], onStartExercise, autoFocusKey,
   placeholder, hero = false, inputId = COMPOSER_ID,
   conversationId, acceptUnscoped = false, messages, generalChat = false, ensureConversation, onFilesCleared,
-  modelKey = null, onModelKeyChange, modelClient,
+  modelKey = null, onModelKeyChange, modelClient, mode = null, onModeChange,
 }: ComposerProps) {
   const { t, tx } = useI18n();
   const resolvedPlaceholder = placeholder ?? t("composer.continue");
@@ -868,26 +809,23 @@ export function Composer({
       setTrigger(null);
       return;
     }
-    if (next?.kind === "at") loadMentions();
-    const same = trigger && next && trigger.kind === next.kind && trigger.start === next.start && trigger.query === next.query;
+    if (next) loadMentions();
+    const same = trigger && next && trigger.start === next.start && trigger.query === next.query;
     if (same) return;
     setTrigger(next);
     setActiveIdx(0);
   };
 
-  const slashItems = trigger?.kind === "slash"
-    ? SLASH_COMMANDS.filter((cmd) => cmd.id.startsWith(trigger.query))
-    : [];
-  const mentionItems = trigger?.kind === "at"
+  const mentionItems = trigger
     ? [
         ...mentions.filter((m) => m.kind === "skill" && m.name.toLowerCase().includes(trigger.query)).slice(0, 6),
         ...mentions.filter((m) => m.kind === "file" && m.name.toLowerCase().includes(trigger.query)).slice(0, 10),
       ]
     : [];
-  const popupOpen = trigger !== null && (trigger.kind === "at" || slashItems.length > 0);
-  const popupCount = trigger?.kind === "slash" ? slashItems.length : mentionItems.length;
+  const popupOpen = trigger !== null;
+  const popupCount = mentionItems.length;
 
-  const insertAtTrigger = (insert: string, selectPlaceholder = false) => {
+  const insertAtTrigger = (insert: string) => {
     if (!trigger) return;
     const end = trigger.start + 1 + trigger.query.length;
     onChange(value.slice(0, trigger.start) + insert + value.slice(end));
@@ -898,22 +836,14 @@ export function Composer({
       const el = textareaRef.current;
       if (!el) return;
       el.focus();
-      const holder = selectPlaceholder ? insert.indexOf("[某基础]") : -1;
-      if (holder >= 0) el.setSelectionRange(base + holder, base + holder + "[某基础]".length);
-      else el.setSelectionRange(base + insert.length, base + insert.length);
+      el.setSelectionRange(base + insert.length, base + insert.length);
     });
   };
 
-  const pickSlash = (cmd: SlashCommand) => insertAtTrigger(tx(cmd.prompt), true);
   const pickMention = (item: MentionItem) => insertAtTrigger(`@[${item.name}] `);
   const pickActive = (index: number) => {
-    if (trigger?.kind === "slash") {
-      const cmd = slashItems[index];
-      if (cmd) pickSlash(cmd);
-    } else {
-      const item = mentionItems[index];
-      if (item) pickMention(item);
-    }
+    const item = mentionItems[index];
+    if (item) pickMention(item);
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -1027,12 +957,8 @@ export function Composer({
   };
 
   const skillItems = useMemo(() => {
-    const customSkills = mentions.filter((m) => m.kind === "skill");
-    return {
-      builtin: SLASH_COMMANDS,
-      custom: customSkills,
-      totalCount: SLASH_COMMANDS.length + customSkills.length,
-    };
+    const custom = mentions.filter((m) => m.kind === "skill");
+    return { custom, totalCount: custom.length };
   }, [mentions]);
 
   const openPlusMenu = () => {
@@ -1166,71 +1092,38 @@ export function Composer({
         )}
 
         {popupOpen && trigger && (
-          <div className={styles.cmdMenu} role="listbox" id={popupId} aria-label={trigger.kind === "slash" ? tx("快捷指令") : tx("引用")}>
-            {trigger.kind === "slash" ? (
-              <>
-                <p className={styles.menuLabel}>
-                  <Sparkles size={12} aria-hidden />
-                  {tx("快捷指令")}
-                </p>
-                <div className={styles.cmdScroll}>
-                  {slashItems.map((cmd, idx) => (
-                    <button
-                      key={cmd.id}
-                      type="button"
-                      role="option"
-                      aria-selected={idx === activeIdx}
-                      className={cx(styles.cmdItem, idx === activeIdx && styles.cmdItemActive)}
-                      ref={(el) => { if (el && idx === activeIdx) el.scrollIntoView({ block: "nearest" }); }}
-                      onMouseDown={(e) => e.preventDefault()}
-                      onMouseEnter={() => setActiveIdx(idx)}
-                      onClick={() => pickSlash(cmd)}
-                    >
-                      <span className={styles.cmdIcon}>{cmd.icon}</span>
-                      <span className={styles.cmdBody}>
-                        <span className={styles.cmdTitle}>{tx(cmd.label)}</span>
-                        <span className={styles.cmdDesc}>{tx(cmd.desc)}</span>
-                      </span>
-                      <code className={styles.cmdKey}>/{cmd.id}</code>
-                    </button>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <>
-                <p className={styles.menuLabel}>
-                  <AtSign size={12} aria-hidden />
-                  {tx("引用 Skill 或工作区文件")}
-                </p>
-                <div className={styles.cmdScroll}>
-                  {mentionItems.map((item, idx) => (
-                    <button
-                      key={item.key}
-                      type="button"
-                      role="option"
-                      aria-selected={idx === activeIdx}
-                      className={cx(styles.cmdItem, idx === activeIdx && styles.cmdItemActive)}
-                      ref={(el) => { if (el && idx === activeIdx) el.scrollIntoView({ block: "nearest" }); }}
-                      onMouseDown={(e) => e.preventDefault()}
-                      onMouseEnter={() => setActiveIdx(idx)}
-                      onClick={() => pickMention(item)}
-                    >
-                      <span className={styles.cmdIcon}>
-                        {item.kind === "skill" ? <Sparkles size={14} aria-hidden /> : <FileText size={14} aria-hidden />}
-                      </span>
-                      <span className={styles.cmdBody}>
-                        <span className={styles.cmdTitle}>{item.name}</span>
-                        <span className={styles.cmdDesc}>{item.hint}</span>
-                      </span>
-                      <span className={styles.cmdTag}>{item.kind === "skill" ? "Skill" : tx("文件")}</span>
-                    </button>
-                  ))}
-                  {popupCount === 0 && (
-                    <p className={styles.cmdEmpty}>{mentionsLoading ? tx("正在读取 Skills 与工作区文件…") : tx("没有匹配的 Skill 或文件")}</p>
-                  )}
-                </div>
-              </>
-            )}
+          <div className={styles.cmdMenu} role="listbox" id={popupId} aria-label={tx("引用")}>
+            <p className={styles.menuLabel}>
+              <AtSign size={12} aria-hidden />
+              {tx("引用 Skill 或工作区文件")}
+            </p>
+            <div className={styles.cmdScroll}>
+              {mentionItems.map((item, idx) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  role="option"
+                  aria-selected={idx === activeIdx}
+                  className={cx(styles.cmdItem, idx === activeIdx && styles.cmdItemActive)}
+                  ref={(el) => { if (el && idx === activeIdx) el.scrollIntoView({ block: "nearest" }); }}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onMouseEnter={() => setActiveIdx(idx)}
+                  onClick={() => pickMention(item)}
+                >
+                  <span className={styles.cmdIcon}>
+                    {item.kind === "skill" ? <Sparkles size={14} aria-hidden /> : <FileText size={14} aria-hidden />}
+                  </span>
+                  <span className={styles.cmdBody}>
+                    <span className={styles.cmdTitle}>{item.name}</span>
+                    <span className={styles.cmdDesc}>{item.hint}</span>
+                  </span>
+                  <span className={styles.cmdTag}>{item.kind === "skill" ? "Skill" : tx("文件")}</span>
+                </button>
+              ))}
+              {popupCount === 0 && (
+                <p className={styles.cmdEmpty}>{mentionsLoading ? tx("正在读取 Skills 与工作区文件…") : tx("没有匹配的 Skill 或文件")}</p>
+              )}
+            </div>
           </div>
         )}
 
@@ -1271,6 +1164,8 @@ export function Composer({
             )}
           </div>
         </div>
+
+        {onModeChange && <ModePicker value={mode} onChange={onModeChange} hero={hero} disabled={locked} />}
 
         <div className={styles.toolbar}>
           <div className={styles.leftTools}>
@@ -1480,36 +1375,8 @@ export function Composer({
                           <ChevronLeft size={14} aria-hidden />
                           <span>{tx("返回")}</span>
                         </button>
-                        <span className={styles.lobeSubheadHint}>{tx("输入 / 也可快速唤出")}</span>
                       </div>
                       <div className={styles.cmdScroll}>
-                        {skillItems.builtin.map((cmd) => (
-                          <button
-                            key={cmd.id}
-                            type="button"
-                            role="menuitem"
-                            className={styles.cmdItem}
-                            onClick={() => {
-                              setMenuOpen(false);
-                              setPlusPane("root");
-                              onChange(cmd.prompt);
-                              requestAnimationFrame(() => {
-                                const el = textareaRef.current;
-                                if (el) {
-                                  el.focus();
-                                  el.setSelectionRange(cmd.prompt.length, cmd.prompt.length);
-                                }
-                              });
-                            }}
-                          >
-                            <span className={styles.cmdIcon}>{cmd.icon}</span>
-                            <span className={styles.cmdBody}>
-                              <span className={styles.cmdTitle}>{cmd.label}</span>
-                              <span className={styles.cmdDesc}>{cmd.desc}</span>
-                            </span>
-                            <code className={styles.cmdTag}>/{cmd.id}</code>
-                          </button>
-                        ))}
                         {skillItems.custom.map((sk) => (
                           <button
                             key={sk.key}
@@ -1532,6 +1399,9 @@ export function Composer({
                             <span className={styles.cmdTag}>{tx("自定义")}</span>
                           </button>
                         ))}
+                        {skillItems.totalCount === 0 && (
+                          <p className={styles.cmdEmpty}>{tx("没有匹配的 Skill 或文件")}</p>
+                        )}
                       </div>
                     </>
                   )}
