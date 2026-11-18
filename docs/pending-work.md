@@ -583,7 +583,7 @@ npm run build
 |---|---|
 | `components/chat/widgets/VivaRadarWidget.tsx`、`VivaRadarWidget.module.css` | 删除 |
 | `components/chat/LearningWidget.tsx` | 删除 `VivaRadarWidget` 的 import 和 `type === "viva_radar"` 分支（约 17、98–100 行） |
-| `components/chat/Composer.tsx` | 删除 `SLASH_COMMANDS` 里 `id: "viva"` 那一项（约 107–113 行）；`Radar` 图标只被这一处使用，一并删除 import（约 10 行） |
+| `components/chat/Composer.tsx` | 删除内置技能列表里 `id: "viva"` 那一项（约 107–113 行；该内置列表现已在 F3 移除）；`Radar` 图标只被这一处使用，一并删除 import（约 10 行） |
 | `components/chat/ChatApp.tsx` | 删除 `else if (action === "viva") openMain("/viva ");`（约 907 行） |
 | `components/onboarding/HelpCenter.tsx` | 删除 `HelpAction` 联合里的 `"viva"`、“口试式追问”条目、`KEYS` 里的 `["/viva", ...]` 一行 |
 | `components/onboarding/coach.ts` | `slash` 引导文案“输入 / 选技能，比如 /viva 模拟复试”改为举一个现有命令（用菜单里的名称，例如“随堂微测验”），对应的 i18n 词条同步改 |

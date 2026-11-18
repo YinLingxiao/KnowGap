@@ -869,7 +869,7 @@
   }
 }
 
-/* `/` 快捷指令与 `@` 引用菜单（向上弹出，首页 Hero 向下） */
+/* `@` 引用菜单（向上弹出，首页 Hero 向下） */
 .cmdMenu {
   z-index: 40;
   right: 0;
@@ -960,7 +960,6 @@
   white-space: nowrap;
 }
 
-.cmdKey,
 .cmdTag {
   flex-shrink: 0;
   padding: 1px 5px;
@@ -968,13 +967,9 @@
   border-radius: 4px;
   background: var(--bg-subtle);
   color: var(--text-tertiary);
-  font-family: var(--font-mono);
+  font-family: inherit;
   font-size: var(--text-2xs);
   line-height: var(--leading-ui);
-}
-
-.cmdTag {
-  font-family: inherit;
 }
 
 .cmdEmpty {

@@ -70,6 +70,7 @@ export const onboardingPhrases: Record<string, string> = {
   "在空间顶栏打开": "Open from the space header",
   "把易错点和结论收成一页。": "Keeps tricky points and conclusions on one page.",
   "规划": "Plan",
+  "练习": "Practice",
   "学习计划": "Study plan",
   "讲解时自动出现": "Appears during explanations",
   "计划会跟着讲解往下推进。": "The plan advances with the explanation.",
@@ -81,7 +82,7 @@ export const onboardingPhrases: Record<string, string> = {
   "把一件大事拆成几天能做完的小块。":
     "Splits a big task into chunks you can finish in a few days.",
   "随时快问": "Quick ask anytime",
-  "技能与命令": "Skills & commands",
+  "聚焦输入框": "Focus the input",
   "关闭当前浮层": "Close the current overlay",
   "试一试": "Try it",
   "桌面端": "Desktop",
@@ -95,8 +96,6 @@ export const onboardingPhrases: Record<string, string> = {
     "Open a side thread on the right for complex gaps; conclusions return to the main line",
   "薄弱点够了，试试考前一页纸": "Plenty of weak spots — try the pre-exam one-pager",
   "看看你的知识迷雾图": "Check out your knowledge fog map",
-  "输入 / 选技能，比如 /quiz 随堂微测验":
-    "Type / to pick a skill, e.g. /quiz for a quick quiz",
   "Alt+Space 随时快问": "Alt+Space to ask anytime",
   "选中一句话，可以追问、举例或存进笔记":
     "Select a sentence to follow up, get an example, or save it to notes",

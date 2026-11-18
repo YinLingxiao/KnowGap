@@ -222,15 +222,18 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
     } catch { /* 存储不可用时只影响本次 */ }
   }, [user.id]);
 
+  const resetChatMode = chat.setMode;
   const setView = useCallback((next: View) => {
     setViewState(next);
+    // 模式选择只属于对话输入框；离开对话视图后清空，避免带到学习空间输入框
+    if (next.type !== "chat") resetChatMode(null);
     // 打开空间页时切到学习模式，回到对话时切回对话模式；资料/日程是公共入口，保持当前模式
     if (next.type === "subject" || next.type === "spaces") setSidebarMode("learn");
     else if (next.type === "chat") setSidebarMode("chat");
     try {
       localStorage.setItem(viewKey(user.id), JSON.stringify(next));
     } catch { /* per-viewer convenience only */ }
-  }, [setSidebarMode, user.id]);
+  }, [resetChatMode, setSidebarMode, user.id]);
 
   const { openConversation } = chat;
   const openSpace = useCallback((id: string) => {
@@ -745,6 +748,8 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
                     autoFocusKey={chat.activeId}
                     modelKey={chat.modelKeyFor(chat.activeId)}
                     onModelKeyChange={(key) => chat.setConversationModel(chat.activeId, key)}
+                    mode={chat.mode}
+                    onModeChange={chat.setMode}
                   />
                   <p className={styles.disclaimer}>{t("chat.disclaimer")}</p>
             </div>
@@ -806,6 +811,8 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
                 }}
                 autoFocusKey="new"
                 placeholder={contextSubjectName ? t("chat.homePlaceholderInSpace", { name: contextSubjectName }) : t("chat.homePlaceholder")}
+                mode={chat.mode}
+                onModeChange={chat.setMode}
               />
 
               {/* 开始输入后收起下方内容，问候与输入框随之回到视口中央 */}
