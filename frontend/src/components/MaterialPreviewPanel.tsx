@@ -247,7 +247,8 @@ function PdfView({ bytes }: { bytes: ArrayBuffer }) {
  *  这里传的只是脚本文本和文件字节，不是敏感数据，可以接受。 */
 const DOCX_IFRAME_HTML = `<!doctype html>
 <html><head><meta charset="utf-8" /><style>
-  body { margin: 0; padding: 12px; font-family: sans-serif; }
+  /* opaque origin 无法继承父页面 CSS 变量；此固定字体栈需与 --font-read 对应栈人工保持一致。 */
+  body { margin: 0; padding: 12px; font-family: "Source Serif 4 Variable", "Source Serif 4", "Noto Serif SC Variable", "Songti SC", "STSong", Georgia, serif; }
   .docx-wrapper { background: transparent !important; }
 </style></head>
 <body>
