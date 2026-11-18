@@ -1733,17 +1733,21 @@ class ChatStore:
 
     def relevant_memories(
         self, student_id: str, query: str, topic_key: str | None, subject_id: str | None,
+        include_other_spaces: bool = False,
     ) -> list[tuple[LearnerMemory, str]]:
         """Layered recall. Returns (memory, scope) with scope "subject", "global" or "other:<Subject name>".
 
         1. Preferences (general, or this Subject's) always apply.
         2. This Subject's mistakes/mastery, then general ones, by topical match.
-        3. Only when 1-2 found fewer than MIN_LOCAL_HITS topical memories: other Subjects, with a stricter
-           match (a concept tag or a two-character term must hit) and resolved mistakes excluded.
+        3. Only with include_other_spaces=True and when 1-2 found fewer than MIN_LOCAL_HITS topical
+           memories: other Subjects, with a stricter match (a concept tag or a two-character term must
+           hit) and resolved mistakes excluded. Off by default: a general chat never recalls a Subject's
+           memories, and a Subject never sees another Subject's memories.
         """
         wanted = topic_terms(query)
         lowered = normalize(query).lower()
-        names = {subject.id: subject.name for subject in self.subjects(student_id)}
+        names = ({subject.id: subject.name for subject in self.subjects(student_id)}
+                 if include_other_spaces else {})
 
         def score(memory: LearnerMemory) -> tuple[int, bool]:
             overlap = wanted & topic_terms(f"{memory.topic} {memory.summary}")
@@ -1764,11 +1768,12 @@ class ChatStore:
                 # The learner's own Subject wins ties against general memories.
                 local.append((points + (1 if memory.subject_id else 0), memory.updated_at, memory,
                               "subject" if memory.subject_id else "global"))
-            elif not in_scope and memory.subject_id in names and points >= 2 and strong and memory.status != "resolved":
+            elif (include_other_spaces and not in_scope and memory.subject_id in names
+                  and points >= 2 and strong and memory.status != "resolved"):
                 outer.append((points, memory.updated_at, memory, f"other:{names[memory.subject_id]}"))
         local.sort(key=lambda item: (item[0], item[1]), reverse=True)
         chosen = [(memory, scope) for _, _, memory, scope in local[:3]]
-        if len(chosen) < MIN_LOCAL_HITS:
+        if include_other_spaces and len(chosen) < MIN_LOCAL_HITS:
             outer.sort(key=lambda item: (item[0], item[1]), reverse=True)
             chosen += [(memory, scope) for _, _, memory, scope in outer[:2]]
         return preferences[:5] + chosen

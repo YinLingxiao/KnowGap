@@ -11,6 +11,7 @@ from app.chat.prompts import MAIN_ROLE_PROMPT, THREAD_ROLE_PROMPT
 from app.chat.prompts.common import COMMON_CONTEXT_PROMPT, LEARNING_PROMPTS, _LEARNING_CONTEXT
 from app.chat.prompts.main_coordinator import MAIN_PROMPTS
 from app.chat.prompts.thread_worker import THREAD_PROMPTS
+from app.chat.skills import WIDGET_SYSTEM_PROMPT, widget_prompt_for
 from app.services.prompt import PromptError, PromptManager, get_prompt_manager, prompt_text
 from app.services.prompt.manager import APP_ROOT, language_chain
 
@@ -141,7 +142,7 @@ def test_learning_roles_get_the_fields_their_contract_describes():
 
 def test_thread_knows_its_four_sources_and_only_the_thread_is_told_about_web_search():
     search = prompt_text(THREAD_PROMPTS, "search")
-    for name in ("course_sources", "search_good_problems", "web_search", "session_search", "[资料N]", "[网N]"):
+    for name in ("course_sources", "search_good_problems", "web_search", "session_search", "sources[].label", "[网N]"):
         assert name in search, name
     assert "不要用 web_search 找题" in search and "不编造来源" in search
     # the coordinator has no web tools: it hands both kinds of lookup to a thread
@@ -157,3 +158,16 @@ def test_role_prompts_stay_within_their_length_budget():
     # every character here is sent on every turn; raise a limit only on purpose
     assert len(MAIN_ROLE_PROMPT) <= 2870
     assert len(THREAD_ROLE_PROMPT) <= 1200
+
+def test_widget_prompt_for_none_keeps_the_existing_constant():
+    assert widget_prompt_for(None) == WIDGET_SYSTEM_PROMPT
+    assert len(WIDGET_SYSTEM_PROMPT) == 9804
+
+
+def test_widget_prompt_for_practice_keeps_only_the_quiz_spec():
+    prompt = widget_prompt_for("practice")
+    assert "3. 随堂小测" in prompt
+    for marker in ("1. 分步推演", "2. 概念对比", "4. 代码实验台", "5. 缺口卡"):
+        assert marker not in prompt
+    assert "5 种类型" not in prompt
+    assert "本模式只用下面这 1 种类型" in prompt

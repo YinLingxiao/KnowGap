@@ -15,7 +15,7 @@ from app.chat.prompts import (
     THREAD_ROLE_PROMPT,
 )
 from app.chat.schemas import LearnerMemory, Subject
-from app.chat.skills import WIDGET_SYSTEM_PROMPT, recommend_widget, select_skill_prompt
+from app.chat.skills import MODE_PROMPTS, WIDGET_SYSTEM_PROMPT, recommend_widget, select_skill_prompt, widget_prompt_for
 from app.chat.store import quote_in
 from app.chat.attachments import attachment_query, readable_file_markers
 from app.models.schemas import Problem, SourceReference
@@ -226,7 +226,7 @@ def chat_messages(
     compressed_up_to_seq: int = 0,
     learning_plan: dict | None = None, plan_user_events: list[str] | None = None,
     attached_files: list[dict] | None = None, *, system_turn: bool = False,
-    image_question: str | None = None,
+    image_question: str | None = None, mode: str | None = None,
 ) -> list[dict]:
     # Ordered from stable to volatile so provider prefix caches cover the prompt and the whole history;
     # only the trailing turn context (and the new message) is fresh input each turn.
@@ -305,7 +305,7 @@ def chat_messages(
         "learner_memories": [memory_brief(m, scope) for m, scope in memories if m.kind != "preference"],
         "preference_evidence": [memory_brief(m, scope) for m, scope in memories if m.kind == "preference"],
         "active_exercise": problem_brief(exercise) if exercise else None,
-        "course_sources": [s.model_dump(include={"id", "label", "title", "page", "excerpt"}) for s in sources],
+        "course_sources": [s.model_dump(include={"id", "label", "title", "page", "excerpt", "source"}) for s in sources],
     }
     if tutoring:
         turn["prior_knowledge_anchors"] = prior_knowledge_anchors
@@ -338,8 +338,14 @@ def chat_messages(
             turn["recommended_widget"] = "comparison_matrix（对比旧知机制、新知机制与跨领域负迁移易错点）"
     role_prompt = ROLE_PROMPTS.get(role_name, CHAT_ROLE_PROMPT)
     system = f"{role_prompt}\n\n{CONTEXT_PROMPTS.get(role_name, CHAT_PROMPT)}"
+    if mode:
+        if mode not in MODE_PROMPTS:
+            raise ValueError(f"未知模式：{mode}")
+        mode_data = MODE_PROMPTS[mode]
+        system += (f"\n\n【本模式：{mode_data['label']}】\n{mode_data['prompt']}"
+                   f"\n本模式只使用以下卡片：{mode_data['widgets']}；其它类型一律不要输出。")
     if role_name != "main":
-        system += f"\n\n{WIDGET_SYSTEM_PROMPT}"
+        system += f"\n\n{widget_prompt_for(mode)}"
     if snapshot:
         system += f"\n\n{snapshot}"
     # Rows folded into the persisted summary leave the verbatim window; the summary stands in for them.

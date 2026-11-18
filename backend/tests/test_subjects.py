@@ -62,7 +62,7 @@ def test_subject_instructions_reach_the_model(tmp_path):
         }
 
 
-def test_layered_recall_prefers_own_subject_and_looks_outward_only_when_needed(tmp_path):
+def test_layered_recall_prefers_own_subject_and_never_crosses_subjects(tmp_path):
     analyses = [
         observation("misconception", "栈的出入顺序", "认为栈是先进先出", "栈就是先进先出", tags=["栈", "LIFO"]),
         observation("preference", "讲解方式", "希望先看例子再看定义", "我更喜欢先看例子"),
@@ -93,18 +93,21 @@ def test_layered_recall_prefers_own_subject_and_looks_outward_only_when_needed(t
         send(client, new_chat(client, os_["id"]), "讲讲虚拟内存", "req-layer-05")
         assert recalled(model, 4) == [("希望先看例子再看定义", "通用")]
 
-        # Another Subject, nothing local on the topic, but a concept tag hits: look outward and label the source.
+        # Another Subject, nothing local on the topic: even a concept-tag hit must not cross Subjects.
         send(client, new_chat(client, os_["id"]), "函数调用栈在内存里怎么工作", "req-layer-06")
-        assert ("认为栈是先进先出", "其他科目：数据结构") in recalled(model, 5)
+        sixth = recalled(model, 5)
+        assert ("认为栈是先进先出", "其他科目：数据结构") not in sixth
+        assert all(not scope.startswith("其他科目：") for _, scope in sixth)
 
         # A single shared character is not enough to cross Subjects.
         send(client, new_chat(client, ds["id"]), "数组的度量", "req-layer-07")
         assert ("混淆了抢占式与非抢占式调度", "其他科目：操作系统") not in recalled(model, 6)
 
-        # Enough local hits: the outward search does not run even if another Subject matches.
+        # A Subject only sees its own memories plus general ones, never another Subject's.
         send(client, os_chat, "抢占式调度和栈有关系吗", "req-layer-08")
         scopes = [scope for _, scope in recalled(model, 7)]
         assert "本科目" in scopes and len(scopes) <= 4
+        assert all(scope in {"本科目", "通用"} for scope in scopes)
 
 
 def test_memory_scope_can_be_corrected(tmp_path):

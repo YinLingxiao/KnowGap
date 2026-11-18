@@ -56,6 +56,7 @@ IMAGE_FAILED = ("【图片读取失败】学生发了一张图片，但识图没
 logger = logging.getLogger(__name__)
 _PROFILE_LABEL_RE = re.compile(r"^\s*\[(?:Identity|Preference|Context|Activity|Experience)\]\s*")
 ANALYSIS_TIMEOUT = 60
+APPROVAL_TIMEOUT_SECONDS = 600
 # Memory review runs once a conversation goes quiet (or the user moves to another one) with at least
 # REVIEW_MIN_TURNS new turns; a long conversation is also reviewed every REVIEW_MAX_TURNS turns.
 REVIEW_MIN_TURNS = 3
@@ -145,6 +146,7 @@ class Generation:
         # Coordinator wake turns: stay_silent, and whether a learner preempted the turn.
         self.silent = False
         self.preempted = False
+        self.mode: str | None = None
 
 
 class ToolContext:
@@ -333,8 +335,8 @@ class ChatService:
         self.store.merge_meta(generation.assistant_message_id, {"pending_approval": approval})
         generation.queue.put_nowait(("tool_approval", {"id": approval_id, "name": name, "arguments": arguments}))
         try:
-            return bool(await asyncio.wait_for(future, 600))
-        except TimeoutError:
+            return bool(await asyncio.wait_for(future, APPROVAL_TIMEOUT_SECONDS))
+        except asyncio.TimeoutError:
             return False
         finally:
             self.approvals.pop(approval_id, None)
@@ -638,6 +640,7 @@ class ChatService:
         # Called without awaiting in between the caller's is_generating() check, so registration is atomic.
         assistant_id = self.store.start_reply(conversation_id, user_message_id, discard)
         generation = Generation(conversation_id, user_message_id, assistant_id)
+        generation.mode = self.store.message_meta(user_message_id).get("mode")
         generation.queue = self.streams.journal(conversation_id, generation.assistant_message_id)
         if not self.streams.listing(conversation_id)["items"]:
             self.streams.pause(conversation_id, False)
@@ -935,6 +938,7 @@ class ChatService:
                 compressed_up_to_seq=compressed_seq,
                 learning_plan=learning_plan, plan_user_events=plan_user_events,
                 attached_files=attached_files, system_turn=event_turn, image_question=image_question,
+                mode=None if event_turn else generation.mode,
             )
             ctx = ToolContext(
                 workspace_of(self.settings), self.store, student_id, generation.conversation_id,
@@ -1281,6 +1285,12 @@ class ChatService:
 
     async def _review(self, student_id: str, model: ChatModel, turns: list[dict],
                       conversation_id: str, message_id: str | None) -> None:
+        subject = self.store.conversation_subject(conversation_id)
+        if subject is not None:
+            # 学习空间的对话内容不进通用 USER/MEMORY 笔记；学习记忆由 _analyze 的 learner_memories 负责。
+            logger.info("Skipping general memory review: conversation %s belongs to Subject %s",
+                        conversation_id, subject.id)
+            return
         try:
             raw = await self._complete_json(model, review_messages(self.store.agent_notes(student_id), turns),
                                             conversation_id, message_id, "review")

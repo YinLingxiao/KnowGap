@@ -181,6 +181,7 @@ class UpdateConversation(StrictModel):
 class SendMessage(StrictModel):
     content: MessageText
     client_request_id: RequestId
+    mode: Literal["explain", "solve", "practice", "plan", "research", "organize"] | None = None
 
 
 class StartExercise(StrictModel):

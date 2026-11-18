@@ -31,7 +31,7 @@ search:
   heading: |-
     查资料的来源与顺序：
   on_hand: |-
-    - 先用手头的：turn_context.course_sources 里的用户资料（引用处标 [资料N]）和对话里已有的内容，够用就不搜。
+    - 先用手头的：turn_context.course_sources 里的用户资料（引用处原样使用 sources[].label）和对话里已有的内容，够用就不搜。
   problems: |-
     - 要真题、练习题：只用 search_good_problems，按出题技能的流程走；不要用 web_search 找题。
   web: |-
