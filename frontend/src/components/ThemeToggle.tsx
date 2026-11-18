@@ -18,6 +18,13 @@ type DocumentWithVT = Document & {
   startViewTransition?: (callback: () => void) => ViewTransitionLike;
 };
 
+type ThemeAttempt = {
+  token: number;
+  desktop: boolean;
+  domCommitted: boolean;
+  desktopSyncRequested: boolean;
+};
+
 const STORAGE_KEY = "knowgap.theme";
 const CHANGE_EVENT = "knowgap:theme";
 export const THEME_KEY: Record<ThemeChoice, MessageKey> = {
@@ -50,11 +57,11 @@ function syncDesktopTheme(choice: ThemeChoice) {
   }
 }
 
-function commitThemeDom(choice: ThemeChoice) {
+function commitThemeDom(choice: ThemeChoice, syncDesktop = true) {
   const root = document.documentElement;
   if (choice === "system") delete root.dataset.theme;
   else root.dataset.theme = choice;
-  syncDesktopTheme(choice);
+  if (syncDesktop) syncDesktopTheme(choice);
   try {
     if (choice === "system") localStorage.removeItem(STORAGE_KEY);
     else localStorage.setItem(STORAGE_KEY, choice);
@@ -102,24 +109,46 @@ function applyChoice(choice: ThemeChoice, origin?: { x: number; y: number }) {
   const root = document.documentElement;
   // Invalidate both the old snapshot callback and its cleanup on a rapid switch.
   // An earlier transition must never restore an outdated native theme.
-  const token = ++transitionToken;
+  const attempt: ThemeAttempt = {
+    token: ++transitionToken,
+    desktop: Boolean(window.knowgap?.windowChrome),
+    domCommitted: false,
+    desktopSyncRequested: false,
+  };
   activeTransition?.skipTransition();
   clearTransitionState(root);
   window.clearTimeout(switchTimer);
   root.classList.remove("theme-switching");
+
+  const syncDesktopNow = () => {
+    if (attempt.token !== transitionToken || !attempt.desktop || attempt.desktopSyncRequested) return;
+    attempt.desktopSyncRequested = true;
+    syncDesktopTheme(choice);
+  };
+  const commit = (syncDesktop: boolean) => {
+    if (attempt.token !== transitionToken) return;
+    if (!attempt.domCommitted) {
+      attempt.domCommitted = true;
+      if (syncDesktop && attempt.desktop) attempt.desktopSyncRequested = true;
+      commitThemeDom(choice, syncDesktop);
+      return;
+    }
+    if (syncDesktop) syncDesktopNow();
+  };
+  const applyInstant = () => {
+    if (attempt.token !== transitionToken) return;
+    root.classList.add("theme-switching");
+    commit(true);
+    switchTimer = window.setTimeout(() => {
+      if (attempt.token === transitionToken) root.classList.remove("theme-switching");
+    }, 180);
+  };
+
   const wasDark = isEffectiveDark();
   const nextDark = isEffectiveDark(choice);
   const reducedMotion =
     root.dataset.motion === "reduced" || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const doc = document as DocumentWithVT;
-  const desktop = Boolean(window.knowgap?.windowChrome);
-  const applyInstant = () => {
-    root.classList.add("theme-switching");
-    commitThemeDom(choice);
-    switchTimer = window.setTimeout(() => {
-      if (token === transitionToken) root.classList.remove("theme-switching");
-    }, 180);
-  };
 
   // 若视觉明暗未发生变化、或开启了减弱动态效果、或浏览器不支持 View Transitions，直接切换
   if (wasDark === nextDark || reducedMotion || typeof doc.startViewTransition !== "function") {
@@ -152,16 +181,12 @@ function applyChoice(choice: ThemeChoice, origin?: { x: number; y: number }) {
     ? `path(evenodd, "${rectPath} ${holeEnd}")`
     : `circle(${r}px at ${x}px ${y}px)`;
 
-  // Native caption buttons cannot participate in the page's circular mask.
-  // Desktop uses a brief full-surface fade; browsers retain the radial reveal.
-  if (!desktop) root.style.setProperty("--vt-clip-from", clipFrom);
-  root.dataset.vtDir = desktop ? "fade" : isContract ? "contract" : "expand";
+  root.style.setProperty("--vt-clip-from", clipFrom);
+  root.dataset.vtDir = isContract ? "contract" : "expand";
 
   let transition: ViewTransitionLike;
   try {
-    transition = doc.startViewTransition(() => {
-      if (token === transitionToken) commitThemeDom(choice);
-    });
+    transition = doc.startViewTransition(() => commit(false));
     activeTransition = transition;
   } catch {
     clearTransitionState(root);
@@ -169,28 +194,35 @@ function applyChoice(choice: ThemeChoice, origin?: { x: number; y: number }) {
     return;
   }
 
+  const finishImmediately = () => {
+    if (attempt.token !== transitionToken) return;
+    commit(true);
+    transition.skipTransition();
+    clearTransitionState(root);
+  };
+
   transition.ready
     .then(() => {
-      if (token !== transitionToken) return;
+      if (attempt.token !== transitionToken) return;
+      if (isContract) syncDesktopNow();
       activeAnimation = root.animate(
-        desktop ? { opacity: [0, 1] } : { clipPath: [clipFrom, clipTo] },
+        { clipPath: [clipFrom, clipTo] },
         {
-          duration: desktop ? 160 : 400,
+          duration: 400,
           // 扩散用轻快 ease-out；收缩用对称 ease-in-out，避免最后 50px 减速拖尾显得卡顿
-          easing: desktop ? "ease-out" : isContract ? "cubic-bezier(0.4, 0, 0.2, 1)" : "cubic-bezier(0.25, 1, 0.5, 1)",
+          easing: isContract ? "cubic-bezier(0.4, 0, 0.2, 1)" : "cubic-bezier(0.25, 1, 0.5, 1)",
           fill: "both",
           pseudoElement: "::view-transition-new(root)",
         },
       );
     })
-    .catch(() => {
-      if (token === transitionToken) transition.skipTransition();
-    });
+    .catch(finishImmediately);
 
   transition.finished
     .catch(() => {})
     .finally(() => {
-      if (token !== transitionToken) return;
+      if (attempt.token !== transitionToken) return;
+      commit(true);
       clearTransitionState(root);
     });
 }

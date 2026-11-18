@@ -65,24 +65,36 @@ function fixture({ desktop = true, theme = 'light', reduced = false, supported =
   return { apply: module.exports.applyChoice, root, native, transitions, animations, props, classes, timers, stored };
 }
 
-test('desktop theme switching uses a short fade, without a circular mask or delayed native buttons', async () => {
-  for (const [from, to] of [['light', 'dark'], ['dark', 'light']]) {
+test('desktop theme switching uses circular masks and syncs native buttons at the reveal timing', async () => {
+  for (const [from, to, direction] of [['light', 'dark', 'contract'], ['dark', 'light', 'expand']]) {
     const f = fixture({ theme: from });
     f.apply(to, { x: 220, y: 797 });
-    assert.equal(f.root.dataset.vtDir, 'fade');
-    assert.equal(f.props.has('--vt-clip-from'), false);
+    assert.equal(f.root.dataset.vtDir, direction);
+    assert.ok(f.props.has('--vt-clip-from'));
+    assert.deepEqual(f.native, [], 'native buttons wait for the snapshot callback');
     f.transitions[0].commit();
     assert.equal(f.root.dataset.theme, to);
-    assert.deepEqual(f.native, [to], 'native buttons switch with the DOM, not after the animation');
+    assert.deepEqual(f.native, [], 'DOM commit alone does not sync native buttons');
     await flush();
-    assert.deepEqual(f.animations[0].keyframes, { opacity: [0, 1] });
-    assert.equal(f.animations[0].options.duration, 160);
+    assert.ok(f.animations[0].keyframes.clipPath);
+    assert.match(
+      f.animations[0].keyframes.clipPath[0],
+      direction === 'contract' ? /^path\(evenodd,/ : /^circle\(0px/,
+    );
+    assert.equal(f.animations[0].options.duration, 400);
     assert.equal(f.animations[0].options.pseudoElement, '::view-transition-new(root)');
+    assert.deepEqual(
+      f.native,
+      direction === 'contract' ? [to] : [],
+      direction === 'contract'
+        ? 'contract syncs native buttons when the animation starts'
+        : 'expand keeps native buttons unchanged until the reveal finishes',
+    );
     f.transitions[0].finish();
     await flush();
     assert.equal(f.root.dataset.vtDir, undefined);
     assert.equal(f.animations[0].canceled, true);
-    assert.deepEqual(f.native, [to], 'finishing does not send an older theme again');
+    assert.deepEqual(f.native, [to], 'finishing syncs expand once without repeating contract');
   }
 });
 
@@ -114,9 +126,9 @@ test('rapid choices cancel previous snapshots and old completions cannot clear a
   await flush();
   f.transitions[0].finish();
   await flush();
-  assert.equal(f.root.dataset.vtDir, 'fade');
+  assert.equal(f.root.dataset.vtDir, 'expand');
   assert.equal(f.root.dataset.theme, 'light');
-  assert.deepEqual(f.native, ['dark', 'light']);
+  assert.deepEqual(f.native, ['dark'], 'an old completion cannot sync a pending expand');
   f.transitions[1].finish();
   await flush();
   assert.equal(f.root.dataset.vtDir, undefined);
@@ -161,10 +173,54 @@ test('an unavailable pseudo-element animation skips the snapshot instead of leav
   assert.deepEqual(f.native, ['dark']);
 });
 
-test('the desktop fade CSS never inherits the browser circular clipping rule', () => {
+test('the transition CSS removes fade and shares circular clipping for expand and contract', () => {
   const css = fs.readFileSync(path.join(__dirname, '../src/app/globals.css'), 'utf8');
-  assert.match(css, /html\[data-vt-dir="fade"\]::view-transition-new\(root\)\s*\{\s*opacity: 0;/);
+  assert.doesNotMatch(css, /html\[data-vt-dir="fade"\]/);
   const shared = css.match(/html\[data-vt-dir\]::view-transition-new\(root\)\s*\{([^}]+)\}/)[1];
   assert.doesNotMatch(shared, /clip-path|opacity/);
   assert.match(css, /html\[data-vt-dir="expand"\]::view-transition-new\(root\),\s*html\[data-vt-dir="contract"\]::view-transition-new\(root\)\s*\{[^}]*clip-path:/);
+});
+test('the sidebar keeps one theme toggle with account menu and overflow structure intact', () => {
+  const sidebar = fs.readFileSync(path.join(__dirname, '../src/components/chat/ConversationSidebar.tsx'), 'utf8');
+  const sidebarCss = fs.readFileSync(path.join(__dirname, '../src/components/chat/ConversationSidebar.module.css'), 'utf8');
+  const toggleCss = fs.readFileSync(path.join(__dirname, '../src/components/ThemeToggle.module.css'), 'utf8');
+
+  assert.match(sidebar, /import\s*\{\s*ThemeToggle\s*\}\s*from\s*["']\.\.\/ThemeToggle["'];/);
+  assert.equal((sidebar.match(/<ThemeToggle\s*\/>/g) ?? []).length, 1);
+  const avatarIndex = sidebar.indexOf('<AvatarMenu\n');
+  const themeToggleIndex = sidebar.indexOf('<ThemeToggle />');
+  const updateIndex = sidebar.indexOf('<UpdateIndicator ');
+  assert.ok(avatarIndex >= 0, 'AvatarMenu remains in the sidebar footer');
+  assert.ok(themeToggleIndex > avatarIndex, 'ThemeToggle renders after AvatarMenu');
+  assert.ok(updateIndex > themeToggleIndex, 'UpdateIndicator renders after ThemeToggle');
+
+  const avatarMenuStart = sidebar.indexOf('function AvatarMenu(');
+  const avatarMenuEnd = sidebar.indexOf('export function ConversationSidebar(', avatarMenuStart);
+  assert.ok(avatarMenuStart >= 0 && avatarMenuEnd > avatarMenuStart, 'AvatarMenu source can be isolated');
+  const avatarMenu = sidebar.slice(avatarMenuStart, avatarMenuEnd);
+  assert.doesNotMatch(avatarMenu, /\b(?:toggleTheme|themeChoice|systemDark|ThemeIcon|nextTheme|THEME_ICON|THEME_KEY|useThemeChoice)\b|sidebar\.theme/);
+  assert.equal(
+    (avatarMenu.match(/<button\b[^>]*role="menuitem"/g) ?? []).length,
+    3,
+    'AvatarMenu has exactly its own three menuitems, excluding ConversationItem',
+  );
+  for (const label of ['account', 'help', 'settings']) {
+    assert.match(avatarMenu, new RegExp(`t\\("sidebar\\.${label}"\\)`));
+  }
+
+  assert.match(source, /data-theme-toggle-btn="true"/);
+  assert.doesNotMatch(sidebar, /\b(?:toggleTheme|themeChoice|setThemeChoice|nextTheme|effectiveDark|systemDark|useThemeChoice|THEME_ICON|THEME_KEY)\b/);
+
+  const profileTrigger = sidebarCss.match(/\.profileTrigger\s*\{([^}]+)\}/);
+  assert.ok(profileTrigger, 'profileTrigger styles remain present');
+  assert.match(profileTrigger[1], /min-width:\s*0;/);
+  const userName = sidebarCss.match(/\.userName\s*\{([^}]+)\}/);
+  assert.ok(userName, 'userName styles remain present');
+  assert.match(userName[1], /overflow:\s*hidden;/);
+  assert.match(userName[1], /text-overflow:\s*ellipsis;/);
+  assert.match(userName[1], /white-space:\s*nowrap;/);
+  const toggle = toggleCss.match(/\.toggle\s*\{([^}]+)\}/);
+  assert.ok(toggle, 'theme toggle styles remain present');
+  assert.match(toggle[1], /width:\s*28px;/);
+  assert.match(toggle[1], /height:\s*28px;/);
 });

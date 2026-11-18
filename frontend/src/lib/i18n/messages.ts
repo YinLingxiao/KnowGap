@@ -534,7 +534,7 @@ export const zh = {
   "sidebar.search": "搜索",
   "sidebar.account": "账号",
   "sidebar.accountMenuAria": "账号菜单",
-  "sidebar.theme": "主题",
+
   "sidebar.modelAttention": "模型需要设置",
   "sidebar.modeChat": "对话",
   "sidebar.modeLearn": "学习",
@@ -1208,7 +1208,7 @@ export const en: Record<MessageKey, string> = {
   "sidebar.search": "Search",
   "sidebar.account": "Account",
   "sidebar.accountMenuAria": "Account menu",
-  "sidebar.theme": "Theme",
+
   "sidebar.modelAttention": "Model needs setup",
   "sidebar.modeChat": "Chats",
   "sidebar.modeLearn": "Learn",

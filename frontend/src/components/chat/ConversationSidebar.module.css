@@ -399,6 +399,7 @@
   max-width: 68px;
   text-overflow: ellipsis;
   transition: opacity var(--t-hover) var(--ease-out);
+  pointer-events: none;
 }
 
 .more {
@@ -413,6 +414,8 @@
   opacity: 0;
   pointer-events: none;
   transition: opacity var(--t-hover) var(--ease-out), background-color var(--t-hover) var(--ease-out), color var(--t-hover) var(--ease-out);
+  position: relative;
+  z-index: 1;
 }
 
 .item:hover .itemEnd .relativeTime,
@@ -744,7 +747,7 @@
   }
 }
 
-/* 头部与四个入口轻微错峰；减少动效时全局会把时长与延迟压到 0 */
+/* 头部与三个入口轻微错峰；减少动效时全局会把时长与延迟压到 0 */
 .avatarMenu:not(.avatarMenuClosing) > * {
   animation: avatar-item-in var(--duration-fast) var(--ease-out) both;
 }
@@ -759,10 +762,6 @@
 
 .avatarMenu:not(.avatarMenuClosing) > *:nth-child(4) {
   animation-delay: 54ms;
-}
-
-.avatarMenu:not(.avatarMenuClosing) > *:nth-child(5) {
-  animation-delay: 72ms;
 }
 
 @keyframes avatar-item-in {
@@ -800,11 +799,6 @@
   white-space: nowrap;
 }
 
-.menuMeta {
-  flex-shrink: 0;
-  color: var(--text-tertiary);
-  font-size: var(--text-xs);
-}
 
 .menuAlertDot {
   flex-shrink: 0;

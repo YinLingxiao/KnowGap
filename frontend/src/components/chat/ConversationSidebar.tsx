@@ -2,7 +2,7 @@
 
 import {
   useEffect, useLayoutEffect, useMemo, useRef, useState,
-  type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import { BrandMark, BrandWordmark } from "@/components/Brand";
 import { createPortal } from "react-dom";
@@ -16,7 +16,7 @@ import { errorText } from "@/lib/i18n/errors";
 import type { ConversationSummary, Subject } from "@/lib/chat/types";
 import { cx } from "@/lib/cx";
 import type { SettingsTab } from "../settings/SettingsDialog";
-import { THEME_ICON, THEME_KEY, useThemeChoice, type ThemeChoice } from "../ThemeToggle";
+import { ThemeToggle } from "../ThemeToggle";
 import { UpdateIndicator } from "../desktop/UpdateIndicator";
 import styles from "./ConversationSidebar.module.css";
 
@@ -504,10 +504,8 @@ function AvatarMenu({
   onOpenSettings: (tab?: SettingsTab) => void;
 }) {
   const { t } = useI18n();
-  const [themeChoice, setThemeChoice] = useThemeChoice();
   const [open, setOpen] = useState(false);
   const [closing, setClosing] = useState(false);
-  const [systemDark, setSystemDark] = useState(true);
   const [position, setPosition] = useState({ left: 0, top: 0, width: 0 });
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -549,13 +547,6 @@ function AvatarMenu({
     if (closeTimerRef.current !== null) window.clearTimeout(closeTimerRef.current);
   }, []);
 
-  useEffect(() => {
-    const media = window.matchMedia("(prefers-color-scheme: dark)");
-    setSystemDark(media.matches);
-    const onChange = (event: MediaQueryListEvent) => setSystemDark(event.matches);
-    media.addEventListener("change", onChange);
-    return () => media.removeEventListener("change", onChange);
-  }, []);
 
   useLayoutEffect(() => {
     if (!open || !triggerRef.current || !menuRef.current) return;
@@ -614,15 +605,6 @@ function AvatarMenu({
     items[index]?.focus();
   };
 
-  const effectiveDark = themeChoice === "dark" || (themeChoice === "system" && systemDark);
-  const nextTheme: ThemeChoice = effectiveDark ? "light" : "dark";
-  const ThemeIcon = THEME_ICON[themeChoice];
-
-  const toggleTheme = (event: ReactMouseEvent<HTMLButtonElement>) => {
-    const rect = event.currentTarget.getBoundingClientRect();
-    setThemeChoice(nextTheme, { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
-    closeMenu(true);
-  };
 
   const expanded = open && !closing;
 
@@ -690,11 +672,7 @@ function AvatarMenu({
             <span className={styles.menuLabel}>{t("sidebar.settings")}</span>
             {modelIssue && <span className={styles.menuAlertDot} aria-hidden />}
           </button>
-          <button role="menuitem" onClick={toggleTheme}>
-            <ThemeIcon size={13} aria-hidden />
-            <span className={styles.menuLabel}>{t("sidebar.theme")}</span>
-            <span className={styles.menuMeta}>{t(THEME_KEY[themeChoice])}</span>
-          </button>
+
         </div>,
         document.body,
       )}
@@ -956,6 +934,7 @@ export function ConversationSidebar(props: SidebarProps) {
           onOpenHelp={props.onOpenHelp}
           onOpenSettings={props.onOpenSettings}
         />
+        <ThemeToggle />
         <UpdateIndicator onOpenSettings={props.onOpenSettings} />
       </footer>
     </nav>

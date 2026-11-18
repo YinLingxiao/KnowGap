@@ -317,8 +317,8 @@ html.theme-switching *::after {
   transition: none !important;
 }
 
-/* 桌面端使用短淡化，避免页面圆形裁剪与原生窗口按钮分裂；浏览器保留
-   expand / contract 圆形揭幕。旧快照始终铺满，只有新快照参与动画。 */
+/* 桌面端与浏览器均使用 expand / contract 圆形揭幕。
+   旧快照始终铺满，只有新快照参与动画。 */
 html[data-vt-dir],
 html[data-vt-dir] *,
 html[data-vt-dir] *::before,
@@ -346,9 +346,6 @@ html[data-vt-dir="contract"]::view-transition-new(root) {
   clip-path: var(--vt-clip-from);
 }
 
-html[data-vt-dir="fade"]::view-transition-new(root) {
-  opacity: 0;
-}
 
 /* 学习空间支线面板放大 / 退出全屏：面板外框平滑变形，内容新旧快照交叉淡化 */
 ::view-transition-group(space-panel) {
