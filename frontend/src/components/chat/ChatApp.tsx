@@ -565,15 +565,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
             avatarText={user.avatarText}
             mode={sidebarMode}
             onModeChange={setSidebarMode}
-            onOpenThread={(threadId, subjectId) => {
-              // 与日程里的支线入口一致：先把空间面板指向该支线，再进入空间，保持学习模式
-              try {
-                localStorage.setItem(`knowgap.space.panel.v1:${API_BASE_URL}:${subjectId}`,
-                  JSON.stringify({ mode: "thread", id: threadId }));
-              } catch { /* 面板打不开时仍进入空间 */ }
-              openSpace(subjectId);
-              closeOverlays();
-            }}
+
           />
         </div>
       </aside>
