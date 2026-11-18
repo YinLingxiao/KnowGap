@@ -16,6 +16,7 @@ MAX_QUEUED = 10
 # Finished journals kept for readers that reconnect just after the reply ended.
 KEEP_CLOSED = 32
 STOPPED_REQUESTS = 256
+KEEPALIVE_SECONDS = 15
 
 
 def ensure(db):
@@ -67,8 +68,8 @@ class EventJournal:
             if self.closed:
                 return
             try:
-                await asyncio.wait_for(changed.wait(), timeout=15)
-            except TimeoutError:
+                await asyncio.wait_for(changed.wait(), timeout=KEEPALIVE_SECONDS)
+            except asyncio.TimeoutError:
                 yield ": keep-alive\n\n"
 
 

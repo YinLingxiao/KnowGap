@@ -56,6 +56,7 @@ IMAGE_FAILED = ("【图片读取失败】学生发了一张图片，但识图没
 logger = logging.getLogger(__name__)
 _PROFILE_LABEL_RE = re.compile(r"^\s*\[(?:Identity|Preference|Context|Activity|Experience)\]\s*")
 ANALYSIS_TIMEOUT = 60
+APPROVAL_TIMEOUT_SECONDS = 600
 # Memory review runs once a conversation goes quiet (or the user moves to another one) with at least
 # REVIEW_MIN_TURNS new turns; a long conversation is also reviewed every REVIEW_MAX_TURNS turns.
 REVIEW_MIN_TURNS = 3
@@ -334,8 +335,8 @@ class ChatService:
         self.store.merge_meta(generation.assistant_message_id, {"pending_approval": approval})
         generation.queue.put_nowait(("tool_approval", {"id": approval_id, "name": name, "arguments": arguments}))
         try:
-            return bool(await asyncio.wait_for(future, 600))
-        except TimeoutError:
+            return bool(await asyncio.wait_for(future, APPROVAL_TIMEOUT_SECONDS))
+        except asyncio.TimeoutError:
             return False
         finally:
             self.approvals.pop(approval_id, None)
