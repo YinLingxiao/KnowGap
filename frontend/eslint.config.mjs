@@ -12,7 +12,14 @@ const compat = new FlatCompat({
 const eslintConfig = [
   { ignores: [".next/**", "out/**", "node_modules/**", "next-env.d.ts", "public/vendor/**"] },
   ...compat.extends("next/core-web-vitals", "next/typescript"),
-  { files: ["tests/**/*.cjs"], rules: { "@typescript-eslint/no-require-imports": "off" } },
+  {
+    files: ["tests/**/*.cjs"],
+    rules: {
+      "@typescript-eslint/no-require-imports": "off",
+      "@next/next/no-assign-module-variable": "off",
+      "@typescript-eslint/no-this-alias": "off",
+    },
+  },
 ];
 
 export default eslintConfig;

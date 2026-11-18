@@ -42,47 +42,71 @@
   color: var(--text);
 }
 
-.nav {
+/* 顶部：模式切换 + 图标入口 + 可选搜索行 */
+.topArea {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 6px;
+  margin-top: 4px;
 }
 
-.searchRow {
+.segmented {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-hover);
+  box-shadow: inset 0 0 0 1px var(--border-subtle);
+}
+
+.segment {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  height: 26px;
+  border-radius: 4px;
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  transition: background-color var(--t-hover) var(--ease-out), color var(--t-hover) var(--ease-out);
+}
+
+.segment:hover {
+  color: var(--text);
+}
+
+.segmentActive {
+  background: var(--bg-elevated);
+  box-shadow: 0 0 0 1px var(--border-subtle);
+  color: var(--text);
+}
+
+.quickRow {
   display: flex;
   align-items: center;
-  gap: 4px;
-  margin-bottom: 8px;
-  min-width: 0;
+  gap: 2px;
 }
 
-.searchRow .searchField {
-  flex: 1;
-  min-width: 0;
-  width: auto;
-  margin-bottom: 0;
-}
-
-.primaryNav,
-.secondaryNav {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.secondaryNav {
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px solid var(--border);
-}
-
-.primaryNav .navItem {
-  color: var(--text);
-  font-weight: 500;
-}
-
-.secondaryNav .navItem {
+.quickButton {
+  display: inline-grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
   color: var(--text-secondary);
+  transition: background-color var(--t-hover) var(--ease-out), color var(--t-hover) var(--ease-out);
+}
+
+.quickButton:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.quickButtonActive {
+  background: var(--bg-active);
+  color: var(--text);
 }
 
 .sidebar button:focus-visible {
@@ -90,14 +114,12 @@
   outline-offset: 2px;
 }
 
-/* 搜索：未激活时是一个带 ⌘K 角标的按钮，激活后原位变成输入框 */
 .searchField {
   display: flex;
   align-items: center;
   gap: 8px;
   width: 100%;
   height: 32px;
-  margin-bottom: 6px;
   padding: 0 8px;
   border-radius: var(--radius-sm);
   background: var(--bg-hover);
@@ -113,16 +135,6 @@
 
 .searchField > span {
   flex: 1;
-}
-
-.searchField kbd {
-  margin-left: auto;
-  color: var(--text-tertiary);
-}
-
-button.searchField:hover {
-  background: var(--bg-active);
-  color: var(--text-secondary);
 }
 
 .searchFieldActive {
@@ -160,145 +172,73 @@ button.searchField:hover {
   color: var(--text);
 }
 
-.navRow {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.navRow .navItem {
-  flex: 1;
-}
-
-.navItem {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 32px;
-  padding: 0 8px;
-  border-radius: var(--radius-sm);
-  color: var(--text-secondary);
-  font-size: var(--text-sm);
-  text-align: left;
-  transition: background-color var(--t-hover) var(--ease-out), color var(--t-hover) var(--ease-out);
-}
-
-.navItem > svg {
-  flex-shrink: 0;
-  color: var(--text-tertiary);
-  transition: color var(--t-hover) var(--ease-out);
-}
-
-.navItem kbd {
-  margin-left: auto;
-  color: var(--text-tertiary);
-}
-
-.navItem:hover {
-  background: var(--bg-hover);
-  color: var(--text);
-}
-
-.navItem:hover > svg,
-.navActive > svg {
-  color: var(--text);
-}
-
-/* 选中态：底色加深 + 左侧 2px 短指示条 */
-.navActive,
-.navActive:hover,
-.active,
-.active:hover {
-  background: var(--bg-active);
-  color: var(--text);
-}
-
-.navActive {
-  font-weight: 500;
-}
-
-.navActive::before,
-.active::before {
-  content: "";
-  position: absolute;
-  top: 50%;
-  left: 0;
-  width: 2px;
-  height: 14px;
-  border-radius: 0 2px 2px 0;
-  background: var(--accent);
-  transform: translateY(-50%);
-}
-
-.sectionAction {
-  position: absolute;
-  right: 4px;
-  display: none;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 4px;
-  color: var(--text-tertiary);
-}
-
-.navRow:hover .sectionAction,
-.navRow:focus-within .sectionAction {
-  display: inline-grid;
-}
-
-.sectionAction:hover {
-  background: var(--bg-active);
-  color: var(--text);
-}
-
 .scroll {
   flex: 1;
   min-height: 0;
-  margin: 12px -8px 0;
+  margin: 8px -8px 0;
   padding: 0 8px 12px;
   overflow-y: auto;
 }
 
-.group + .group {
-  margin-top: 12px;
+/* 切换模式时列表淡入；时长与曲线沿用全局 token */
+.listFade {
+  animation: sidebar-list-in var(--t-ui) var(--ease-out);
 }
 
-.sectionHead {
-  display: flex;
-  align-items: center;
+@keyframes sidebar-list-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
 }
 
-.sectionToggle {
+.listToolbar {
   display: flex;
+  justify-content: flex-end;
+  height: 24px;
+  margin-bottom: 2px;
+}
+
+.sortButton {
+  display: inline-flex;
   align-items: center;
   gap: 4px;
-  width: 100%;
   height: 24px;
-  padding: 0 8px 0 6px;
-  border-radius: var(--radius-sm);
+  padding: 0 6px;
+  border-radius: 4px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+.sortButton:hover {
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+}
+
+.group {
+  padding-top: 2px;
+}
+
+.group + .group {
+  margin-top: 2px;
+}
+
+/* 组名吸顶：不透明底色盖住滚过的行 */
+.groupHead {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  height: 24px;
+  margin: 0 -8px;
+  padding: 0 8px;
+  background: var(--bg-sidebar);
   color: var(--text-tertiary);
   font-size: 11px;
   font-weight: 500;
   letter-spacing: 0.04em;
-  text-align: left;
-}
-
-.sectionToggle:hover {
-  color: var(--text-secondary);
-}
-
-.sectionLabel {
-  flex: 1;
-}
-
-.chevron {
-  flex-shrink: 0;
-  transition: transform var(--t-ui) var(--ease-out);
-}
-
-.chevronOpen {
-  transform: rotate(90deg);
 }
 
 .list {
@@ -313,6 +253,10 @@ button.searchField:hover {
   display: flex;
   align-items: center;
   border-radius: var(--radius-sm);
+}
+
+.threadItem {
+  margin-left: 14px;
 }
 
 .item:hover,
@@ -507,27 +451,234 @@ button.searchField:hover {
   text-underline-offset: 2px;
 }
 
-.spin {
-  flex-shrink: 0;
+/* 学习模式：空间行 + 可展开的支线 */
+.spaceList {
+  gap: 2px;
+  margin-top: 0;
+}
+
+.spaceItem {
+  position: relative;
+}
+
+.spaceRow {
+  position: relative;
+  display: flex;
+  align-items: center;
+  border-radius: var(--radius-sm);
+}
+
+.spaceRow:hover {
+  background: var(--bg-hover);
+}
+
+.spaceRowActive {
+  background: var(--bg-active);
+}
+
+.spaceRowActive::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 2px;
+  height: 14px;
+  border-radius: 0 2px 2px 0;
+  background: var(--accent);
+  transform: translateY(-50%);
+}
+
+.spaceButton {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  height: 32px;
+  padding: 0 4px 0 8px;
   color: var(--text-secondary);
-  animation: spin 1s linear infinite;
+  font-size: var(--text-sm);
+  text-align: left;
 }
 
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+.spaceRow:hover .spaceButton,
+.spaceRowActive .spaceButton {
+  color: var(--text);
 }
 
-/* 底栏：头像 / 用户名 / 设置 / 主题，统一 28px 点击区、8px 间距 */
+.expandButton {
+  display: inline-grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin-right: 4px;
+  border-radius: 4px;
+  color: var(--text-tertiary);
+  transition: background-color var(--t-hover) var(--ease-out), color var(--t-hover) var(--ease-out);
+}
+
+.expandButton:hover {
+  background: var(--bg-active);
+  color: var(--text);
+}
+
+.expandChevron {
+  transition: transform var(--t-ui) var(--ease-out);
+}
+
+.expandChevronOpen {
+  transform: rotate(90deg);
+}
+
+.threadList {
+  margin-top: 2px;
+}
+
+/* 生成中：小圆点；支线提醒：红色小圆点 */
+.genDot {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.attentionDot {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--red);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--red) 18%, transparent);
+}
+
+/* 全栏唯一主按钮，随模式切换 */
+.actionBar {
+  flex-shrink: 0;
+  padding: 8px 0 2px;
+}
+
+.primaryAction {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  height: 34px;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  transition: filter var(--t-hover) var(--ease-out);
+}
+
+.primaryAction:hover {
+  filter: brightness(1.06);
+}
+
+/* 底栏：整块头像区是菜单触发器，更新提示单独留在右侧 */
 .footer {
   display: flex;
   align-items: center;
   gap: 8px;
   height: 44px;
   margin: 0 -8px;
-  padding: 0 8px 0 12px;
+  padding: 0 8px;
   border-top: 1px solid var(--border-subtle);
+}
+
+.profileTrigger {
+  position: relative;
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  height: 32px;
+  padding: 0 6px 0 4px;
+  border-radius: var(--radius-sm);
+  text-align: left;
+  transition: background-color var(--t-hover) var(--ease-out);
+}
+
+.profileTrigger:hover,
+.profileTriggerOpen {
+  background: var(--bg-active);
+}
+
+.avatarWrap {
+  position: relative;
+  display: inline-grid;
+  flex-shrink: 0;
+  place-items: center;
+}
+
+.profileChevron {
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+  transition: transform var(--t-ui) var(--ease-out);
+}
+
+.profileChevronOpen {
+  transform: rotate(180deg);
+}
+
+/* 与行菜单共用 .menu 浮层外壳，从底部向上弹出 */
+.avatarMenu {
+  min-width: 212px;
+  transform-origin: bottom left;
+  animation: avatar-menu-in var(--duration-fast) var(--ease-out);
+}
+
+@keyframes avatar-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+}
+
+.avatarMenuHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: -4px -4px 4px;
+  padding: 8px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.avatarMenuName {
+  overflow: hidden;
+  flex: 1;
+  min-width: 0;
+  color: var(--text);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.menuLabel {
+  overflow: hidden;
+  flex: 1;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.menuMeta {
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.menuAlertDot {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--orange);
 }
 
 .avatar {
@@ -562,10 +713,11 @@ button.searchField:hover {
 
 .alertDot {
   position: absolute;
-  top: 6px;
-  right: 6px;
-  width: 6px;
-  height: 6px;
+  top: -1px;
+  right: -1px;
+  width: 7px;
+  height: 7px;
+  border: 1.5px solid var(--bg-sidebar);
   border-radius: 50%;
   background: var(--orange);
 }

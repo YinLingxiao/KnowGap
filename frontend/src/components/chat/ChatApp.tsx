@@ -30,7 +30,7 @@ import { SettingsDialog, type SettingsTab } from "../settings/SettingsDialog";
 import { Toaster, useToasts } from "../ui/Toaster";
 import { COMPOSER_ID, Composer } from "./Composer";
 import { OPEN_SETTINGS_EVENT } from "./ModelPicker";
-import { ConversationSidebar } from "./ConversationSidebar";
+import { ConversationSidebar, type SidebarMode } from "./ConversationSidebar";
 import { MemoryDrawer } from "./MemoryDrawer";
 import { MessageList } from "./MessageList";
 import { CreateSpaceDialog } from "./CreateSpaceDialog";
@@ -53,6 +53,19 @@ import styles from "./ChatApp.module.css";
 const NARROW = "(max-width: 860px)";
 function viewKey(userId: string) {
   return `${userId}:knowgap.chat.view.v1:${API_BASE_URL}`;
+}
+
+function sidebarModeKey(userId: string) {
+  return `${userId}:knowgap.sidebar.mode.v1`;
+}
+
+function readSidebarMode(userId: string): SidebarMode | null {
+  try {
+    const saved = localStorage.getItem(sidebarModeKey(userId));
+    return saved === "learn" || saved === "chat" ? saved : null;
+  } catch {
+    return null;
+  }
 }
 
 const STARTERS = [
@@ -124,6 +137,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
     return () => window.removeEventListener(OPEN_SETTINGS_EVENT, onOpen);
   }, [openSettings]);
   const [view, setViewState] = useState<View>({ type: "chat" });
+  const [sidebarMode, setSidebarModeState] = useState<SidebarMode>("chat");
   const [spaceDialog, setSpaceDialog] = useState<null | { editId?: string; select: boolean }>(null);
   const [viewRestored, setViewRestored] = useState(false);
   const [health, setHealth] = useState<HealthState>("checking");
@@ -201,12 +215,22 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
     if (narrow) setSidebarOpen(false);
   }, [narrow]);
 
+  const setSidebarMode = useCallback((next: SidebarMode) => {
+    setSidebarModeState(next);
+    try {
+      localStorage.setItem(sidebarModeKey(user.id), next);
+    } catch { /* 存储不可用时只影响本次 */ }
+  }, [user.id]);
+
   const setView = useCallback((next: View) => {
     setViewState(next);
+    // 打开空间页时切到学习模式，回到对话时切回对话模式；资料/日程是公共入口，保持当前模式
+    if (next.type === "subject" || next.type === "spaces") setSidebarMode("learn");
+    else if (next.type === "chat") setSidebarMode("chat");
     try {
       localStorage.setItem(viewKey(user.id), JSON.stringify(next));
     } catch { /* per-viewer convenience only */ }
-  }, [user.id]);
+  }, [setSidebarMode, user.id]);
 
   const { openConversation } = chat;
   const openSpace = useCallback((id: string) => {
@@ -216,6 +240,8 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
   useEffect(() => {
     const saved = readView(user.id);
     if (saved.type !== "chat") setViewState(saved);
+    const savedMode = readSidebarMode(user.id);
+    setSidebarModeState(savedMode ?? (saved.type === "subject" || saved.type === "spaces" ? "learn" : "chat"));
     setViewRestored(true);
   }, [user.id]);
 
@@ -531,12 +557,23 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
             onRetry={() => void chat.refreshList()}
             onOpenMemory={() => { openMemories(); closeOverlays(); }}
             onOpenMaterials={() => { setView({ type: "materials" }); closeOverlays(); }}
-            onOpenSettings={() => { openSettings(modelConfigured === false ? "models" : "general"); closeOverlays(); }}
+            onOpenSettings={(tab) => { openSettings(tab ?? (modelConfigured === false ? "models" : "general")); closeOverlays(); }}
             onOpenHelp={() => setHelpOpen((open) => !open)}
             helpOpen={helpOpen}
             onCollapse={() => setSidebarOpen(false)}
             displayName={user.displayName}
             avatarText={user.avatarText}
+            mode={sidebarMode}
+            onModeChange={setSidebarMode}
+            onOpenThread={(threadId, subjectId) => {
+              // 与日程里的支线入口一致：先把空间面板指向该支线，再进入空间，保持学习模式
+              try {
+                localStorage.setItem(`knowgap.space.panel.v1:${API_BASE_URL}:${subjectId}`,
+                  JSON.stringify({ mode: "thread", id: threadId }));
+              } catch { /* 面板打不开时仍进入空间 */ }
+              openSpace(subjectId);
+              closeOverlays();
+            }}
           />
         </div>
       </aside>
