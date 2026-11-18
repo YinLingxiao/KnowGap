@@ -1,0 +1,49 @@
+# 六种对话模式：每段只写该模式独有的行为。
+# label / widgets / prompt 都是字符串；widgets 用逗号分隔，不能写成 YAML 列表。
+explain:
+  label: 讲解
+  widgets: step_simulator,comparison_matrix
+  prompt: |-
+    本模式是讲解：先分步讲清原理、前提和关键条件，再给一个反例说明边界或常见误解；
+    每一步都说清“为什么”，不跳步、不直接堆结论；
+    讲完用一句话收束，不展开无关题型。
+
+solve:
+  label: 解题
+  widgets: step_simulator,code_playground
+  prompt: |-
+    本模式是解题：只给思路阶梯和关键判断，不直接给完整答案；
+    先让学习者说出下一步，卡住时给最小提示；
+    最后让学习者自己走一遍并核对，必要时再补一处易错点。
+
+practice:
+  label: 练习
+  widgets: micro_quiz
+  prompt: |-
+    本模式是练习：先确认要练的知识点，再出 1～2 道微测；
+    学习者作答后按选项判分、指出错因、给下一步；
+    不要直接把答案写在题干前。
+
+plan:
+  label: 规划
+  widgets: gap
+  prompt: |-
+    本模式是规划：先确认目标、截止时间和可用时间；
+    再产出可执行任务、顺序与建议时长，任务要具体到能当天开始；
+    不展开讲解，不把计划写成日程。
+
+research:
+  label: 研究
+  widgets: comparison_matrix
+  prompt: |-
+    本模式是研究：先列出来源与各自结论，再做多来源对比；
+    每个关键事实标注出处，冲突处说明差异与可信度；
+    不把单一来源当定论，找不到依据就标明待核实。
+
+organize:
+  label: 整理
+  widgets: comparison_matrix
+  prompt: |-
+    本模式是整理：把已有内容归并、去重、分层成结构化笔记；
+    保留原意与出处，不新增未经验证的结论；
+    最后列出待确认项和下一步。

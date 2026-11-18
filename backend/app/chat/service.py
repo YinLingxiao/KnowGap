@@ -145,6 +145,7 @@ class Generation:
         # Coordinator wake turns: stay_silent, and whether a learner preempted the turn.
         self.silent = False
         self.preempted = False
+        self.mode: str | None = None
 
 
 class ToolContext:
@@ -638,6 +639,7 @@ class ChatService:
         # Called without awaiting in between the caller's is_generating() check, so registration is atomic.
         assistant_id = self.store.start_reply(conversation_id, user_message_id, discard)
         generation = Generation(conversation_id, user_message_id, assistant_id)
+        generation.mode = self.store.message_meta(user_message_id).get("mode")
         generation.queue = self.streams.journal(conversation_id, generation.assistant_message_id)
         if not self.streams.listing(conversation_id)["items"]:
             self.streams.pause(conversation_id, False)
@@ -935,6 +937,7 @@ class ChatService:
                 compressed_up_to_seq=compressed_seq,
                 learning_plan=learning_plan, plan_user_events=plan_user_events,
                 attached_files=attached_files, system_turn=event_turn, image_question=image_question,
+                mode=None if event_turn else generation.mode,
             )
             ctx = ToolContext(
                 workspace_of(self.settings), self.store, student_id, generation.conversation_id,

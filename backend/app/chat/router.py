@@ -279,6 +279,8 @@ def chat_router(store: ChatStore, service: ChatService) -> APIRouter:
             generation = service.begin(current_student(), conversation_id, existing, [row["id"] for row in replies])
         else:
             user_id = store.add_user_message(conversation_id, body.content, body.client_request_id)
+            if body.mode is not None:
+                store.merge_meta(user_id, {"mode": body.mode})
             generation = service.begin(current_student(), conversation_id, user_id, [])
         return stream(service.events(generation))
 

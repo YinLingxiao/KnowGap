@@ -9,9 +9,39 @@ from app.chat.skills.main_skills import MAIN_ROADMAP_SKILL
 from app.chat.skills.file_skills import file_skill_prompt
 from app.chat.skills.thread_skills import THREAD_SKILLS, WIDGET_CAPABILITY, WIDGET_CRAFT_GUIDE, WIDGET_SCHEMA_GUIDE
 from app.chat.skills.visual_guide import VISUAL_CARD_GUIDE
+from app.services.prompt import get_prompt_manager, prompt_text
+
+_MODE_PROMPTS = get_prompt_manager().load_prompts("chat", "modes")
+_WIDGET_PROMPTS = get_prompt_manager().load_prompts("chat", "widgets")
+_CARD_KEYS = ("step_simulator", "comparison_matrix", "micro_quiz", "code_playground", "gap")
 
 # 控件能力声明与两份规范不随轮次变化，放进系统提示：小模型读得到，也能命中前缀缓存。
-WIDGET_SYSTEM_PROMPT = f"{WIDGET_CAPABILITY}\n\n{WIDGET_SCHEMA_GUIDE}\n\n{WIDGET_CRAFT_GUIDE}\n\n{VISUAL_CARD_GUIDE}"
+_WIDGET_SYSTEM_PROMPT = f"{WIDGET_CAPABILITY}\n\n{WIDGET_SCHEMA_GUIDE}\n\n{WIDGET_CRAFT_GUIDE}\n\n{VISUAL_CARD_GUIDE}"
+
+
+def widget_prompt_for(mode: str | None) -> str:
+    """Return the widget guide for a mode; None is the existing full prompt, byte for byte."""
+    if mode is None:
+        return _WIDGET_SYSTEM_PROMPT
+    if mode not in _MODE_PROMPTS:
+        raise ValueError(f"未知模式：{mode}")
+    widgets = [part.strip() for part in prompt_text(_MODE_PROMPTS, mode, "widgets").split(",") if part.strip()]
+    unknown = [part for part in widgets if part not in _CARD_KEYS]
+    if unknown:
+        raise ValueError(f"未知卡片：{','.join(unknown)}")
+    schema = [
+        prompt_text(_WIDGET_PROMPTS, "schema", "heading"),
+        prompt_text(_WIDGET_PROMPTS, "schema", "intro").replace(
+            "支持以下 5 种类型", f"本模式只用下面这 {len(widgets)} 种类型"),
+    ]
+    schema.extend(prompt_text(_WIDGET_PROMPTS, "schema", key) for key in _CARD_KEYS if key in widgets)
+    schema.append(prompt_text(_WIDGET_PROMPTS, "schema", "constraints"))
+    schema_text = "\n".join(schema)
+    return f"{WIDGET_CAPABILITY}\n\n{schema_text}\n\n{WIDGET_CRAFT_GUIDE}\n\n{VISUAL_CARD_GUIDE}"
+
+
+WIDGET_SYSTEM_PROMPT = widget_prompt_for(None)
+MODE_PROMPTS = _MODE_PROMPTS
 
 _FEYNMAN_RE = re.compile(r"费曼|我来讲|听我讲|挑刺|考官")
 _PRACTICE_RE = re.compile(r"练习|做题|考我|出.*题|测验|刷题|来看看我的解答|对不对|练手|好题|真题|母题")
@@ -132,6 +162,7 @@ def select_skill_prompt(
 
 __all__ = [
     "MAIN_ROADMAP_SKILL",
+    "MODE_PROMPTS",
     "ONBOARDING_TITLE",
     "THREAD_SKILLS",
     "WIDGET_RETRY_NOTICE",
@@ -140,4 +171,5 @@ __all__ = [
     "recommend_widget",
     "refuses_widget",
     "select_skill_prompt",
+    "widget_prompt_for",
 ]
