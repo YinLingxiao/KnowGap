@@ -1281,6 +1281,12 @@ class ChatService:
 
     async def _review(self, student_id: str, model: ChatModel, turns: list[dict],
                       conversation_id: str, message_id: str | None) -> None:
+        subject = self.store.conversation_subject(conversation_id)
+        if subject is not None:
+            # 学习空间的对话内容不进通用 USER/MEMORY 笔记；学习记忆由 _analyze 的 learner_memories 负责。
+            logger.info("Skipping general memory review: conversation %s belongs to Subject %s",
+                        conversation_id, subject.id)
+            return
         try:
             raw = await self._complete_json(model, review_messages(self.store.agent_notes(student_id), turns),
                                             conversation_id, message_id, "review")
