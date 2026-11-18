@@ -43,6 +43,7 @@ class SourceReference(BaseModel):
     document_id: str
     title: str
     label: str
+    source: Literal["space", "general"] | None = None
     page: int | None = None
     start_line: int | None = None
     end_line: int | None = None

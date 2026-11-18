@@ -344,11 +344,17 @@ class MaterialStore:
         return True
 
     def search_scoped(self, student_id: str, query: str, limit: int, subject_id: str | None) -> list[SourceReference]:
-        """A Subject's own knowledge first, then unassigned materials; other Subjects' files are never mixed in."""
-        found = self.search(student_id, query, limit, scope=subject_id) if subject_id else []
-        if len(found) < limit:
-            found += self.search(student_id, query, limit - len(found), scope=None)
-        return [source.model_copy(update={'label': f'资料{index}'}) for index, source in enumerate(found, 1)]
+        """A Subject's own knowledge first, then unassigned materials; other Subjects' files are never mixed in.
+
+        Only Subject conversations get two numbered segments (空间资料N / 通用资料N). Free chats keep the
+        neutral 资料N labels so attachments and the materials API do not change shape.
+        """
+        if subject_id is None:
+            return self.search(student_id, query, limit, scope=None)
+        space = self.search(student_id, query, limit, scope=subject_id)
+        general = self.search(student_id, query, limit - len(space), scope=None) if len(space) < limit else []
+        return ([source.model_copy(update={'label': f'空间资料{index}'}) for index, source in enumerate(space, 1)]
+                + [source.model_copy(update={'label': f'通用资料{index}'}) for index, source in enumerate(general, 1)])
 
     def search(self, student_id: str, query: str, limit: int = 5, scope: str | None | bool = True,
                document_ids: list[str] | None = None) -> list[SourceReference]:
@@ -362,7 +368,7 @@ class MaterialStore:
         with self.store.connection() as db:
             document_filter = (' AND d.id IN (' + ','.join('?' for _ in document_ids) + ')') if document_ids else ''
             rows = db.execute('''
-                SELECT c.*, d.title FROM course_index i
+                SELECT c.*, d.title, d.subject_id AS document_subject_id FROM course_index i
                 JOIN course_chunks c ON c.id = i.chunk_id
                 JOIN course_materials d ON d.id = c.document_id
                 WHERE course_index MATCH ? AND d.student_id = ?
@@ -371,6 +377,8 @@ class MaterialStore:
                 (match, student_id, int(scope is True), None if scope is True else scope,
                  None if scope is True else scope, *(document_ids or []), limit)).fetchall()
             return [SourceReference(id=row['id'], document_id=row['document_id'], title=row['title'],
-                                    label=f'资料{index}', page=row['page'], start_line=row['start_line'],
+                                    label=f'资料{index}',
+                                    source='space' if row['document_subject_id'] else 'general',
+                                    page=row['page'], start_line=row['start_line'],
                                     end_line=row['end_line'], excerpt=row['content'])
                     for index, row in enumerate(rows, 1)]

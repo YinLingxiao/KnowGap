@@ -141,7 +141,7 @@ def test_learning_roles_get_the_fields_their_contract_describes():
 
 def test_thread_knows_its_four_sources_and_only_the_thread_is_told_about_web_search():
     search = prompt_text(THREAD_PROMPTS, "search")
-    for name in ("course_sources", "search_good_problems", "web_search", "session_search", "[资料N]", "[网N]"):
+    for name in ("course_sources", "search_good_problems", "web_search", "session_search", "sources[].label", "[网N]"):
         assert name in search, name
     assert "不要用 web_search 找题" in search and "不编造来源" in search
     # the coordinator has no web tools: it hands both kinds of lookup to a thread

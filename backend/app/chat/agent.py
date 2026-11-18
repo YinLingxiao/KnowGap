@@ -305,7 +305,7 @@ def chat_messages(
         "learner_memories": [memory_brief(m, scope) for m, scope in memories if m.kind != "preference"],
         "preference_evidence": [memory_brief(m, scope) for m, scope in memories if m.kind == "preference"],
         "active_exercise": problem_brief(exercise) if exercise else None,
-        "course_sources": [s.model_dump(include={"id", "label", "title", "page", "excerpt"}) for s in sources],
+        "course_sources": [s.model_dump(include={"id", "label", "title", "page", "excerpt", "source"}) for s in sources],
     }
     if tutoring:
         turn["prior_knowledge_anchors"] = prior_knowledge_anchors
