@@ -209,6 +209,7 @@ DEFINITIONS = [
     problem_search.DEFINITION,
     problem_drill_skill.VERIFY_DEFINITION,
     web_search.DEFINITION,
+    problem_search.WEB_FETCH_DEFINITION,
 ]
 
 NEEDS_APPROVAL = {"write", "edit", "bash"}
@@ -375,6 +376,8 @@ async def run(name: str, arguments: dict, ctx) -> str:
                 arguments.get("old_text"),
                 approve=bool(getattr(ctx, "approve_memory", False)),
             )
+        elif name == problem_search.WEB_FETCH_TOOL_NAME:
+            return await problem_search.run_web_fetch(arguments)
         elif name == problem_search.TOOL_NAME:
             # 两个工具内部兜住所有异常、自己控制输出长度，永远返回 JSON 文本
             text = await problem_search.run(arguments, ctx)

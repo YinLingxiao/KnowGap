@@ -41,6 +41,7 @@ from app.chat.quizzes import guard_gaps, seal_quizzes
 from app.chat.skills import WIDGET_RETRY_NOTICE, refuses_widget
 from app.chat.skills.problem_drill_skill import DRILL_TOOLS, SEARCH_TOOL, drill_plan, guard_reply, wants_problems
 from app.agent_tools.web_search import TOOL_NAME as WEB_SEARCH_TOOL
+from app.agent_tools.problem_search import WEB_FETCH_TOOL_NAME
 from app.chat.coordination import cancel_deliveries, dispatch, next_delivery
 from app.memory.store import new_id
 from app.services.materials import MaterialStore
@@ -990,7 +991,7 @@ class ChatService:
             if role["role"] == "chat":
                 # 普通对话是通用助手：不带真题检索和改编题核对（后者依赖检索结果）；练习参考只在用户自己开始练习时提供（见上）
                 # 联网搜索也只给支线：普通对话不带
-                definitions = [tool for tool in definitions if tool["function"]["name"] not in DRILL_TOOLS | {WEB_SEARCH_TOOL}]
+                definitions = [tool for tool in definitions if tool["function"]["name"] not in DRILL_TOOLS | {WEB_SEARCH_TOOL, WEB_FETCH_TOOL_NAME}]
             state = generation.checkpoint or {
                 "version": 1, "role": role["role"], "phase": "model", "rounds": 0, "messages": messages,
                 "parts": parts, "tool_log": tool_log, "tool_messages": tool_messages,
