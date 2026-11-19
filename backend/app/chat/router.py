@@ -523,6 +523,12 @@ def chat_router(store: ChatStore, service: ChatService) -> APIRouter:
         except ValueError as exc:
             raise HTTPException(422, str(exc)) from None
 
+    @router.delete("/agent-memory/{note_id}", status_code=204)
+    def delete_agent_memory(note_id: str):
+        if not store.revoke_agent_memory(current_student(), note_id):
+            raise HTTPException(404, "记忆条目不存在")
+        return Response(status_code=204)
+
     @router.get("/agent-memory/pending")
     def pending_memory():
         return store.pending_notes(current_student())

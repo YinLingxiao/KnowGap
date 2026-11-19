@@ -2,6 +2,7 @@
 
 import re
 import sqlite3
+from typing import Literal, TypedDict
 from uuid import uuid4
 
 SEP = "\n§\n"
@@ -9,6 +10,12 @@ LIMITS = {"user": 1375, "memory": 2200}
 INJECTION = re.compile(r"忽略以上|ignore previous|ignore all|system prompt|你现在是|<\s*/?\s*system", re.I)
 SECRET = re.compile(r"sk-[A-Za-z0-9]|Bearer\s+\S|api[_-]?key\s*[:=]", re.I)
 LONG_TOKEN = re.compile(r"[A-Za-z0-9+/]{40,}={0,2}")
+
+
+class MemoryWriteItem(TypedDict):
+    id: str
+    layer: Literal["USER", "MEMORY"]
+    content: str
 
 
 def ensure(db: sqlite3.Connection) -> None:
@@ -48,6 +55,17 @@ def ensure(db: sqlite3.Connection) -> None:
                 REFERENCES conversations(id) ON DELETE CASCADE,
             turns_since_note INTEGER NOT NULL DEFAULT 0,
             PRIMARY KEY (student_id, conversation_id)
+        )
+    """)
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS memory_write_log (
+            id TEXT PRIMARY KEY,
+            student_id TEXT NOT NULL,
+            layer TEXT NOT NULL CHECK(layer IN ('user', 'memory')),
+            content TEXT NOT NULL,
+            conversation_id TEXT,
+            message_id TEXT,
+            created_at TEXT NOT NULL
         )
     """)
 
@@ -115,7 +133,20 @@ def _queue(db: sqlite3.Connection, student_id: str, action: str, target: str, co
     return "已提交待确认。"
 
 
-def apply(db: sqlite3.Connection, student_id: str, action: str, target: str, content, old_text, timestamp: str, approve: bool = False) -> str:
+def apply(
+    db: sqlite3.Connection,
+    student_id: str,
+    action: str,
+    target: str,
+    content,
+    old_text,
+    timestamp: str,
+    approve: bool = False,
+    *,
+    conversation_id: str | None = None,
+    message_id: str | None = None,
+    events: list[MemoryWriteItem] | None = None,
+) -> str:
     if target not in LIMITS:
         return "target 只能是 user 或 memory。"
     if action not in {"add", "patch", "remove"}:
@@ -157,8 +188,48 @@ def apply(db: sqlite3.Connection, student_id: str, action: str, target: str, con
     if approve:
         return _queue(db, student_id, action, target, queued[0], queued[1], timestamp)
     _store(db, student_id, target, updated, timestamp)
+    if action in {"add", "patch"}:
+        note_id = f"note-{uuid4().hex}"
+        db.execute(
+            "INSERT INTO memory_write_log "
+            "(id,student_id,layer,content,conversation_id,message_id,created_at) VALUES (?,?,?,?,?,?,?)",
+            (note_id, student_id, target, piece, conversation_id, message_id, timestamp),
+        )
+        if events is not None:
+            events.append({
+                "id": note_id,
+                "layer": "USER" if target == "user" else "MEMORY",
+                "content": piece,
+            })
     label = "用户" if target == "user" else "笔记"
     return f"已更新{label}（{len(updated)}/{limit} 字）。写入在下一轮对话里生效。"
+
+
+def revoke_applied_note(db: sqlite3.Connection, student_id: str, note_id: str, timestamp: str) -> bool:
+    row = db.execute(
+        "SELECT layer, content FROM memory_write_log WHERE id=? AND student_id=?",
+        (note_id, student_id),
+    ).fetchone()
+    if row is None:
+        return False
+    target = row["layer"]
+    note = db.execute(
+        "SELECT content FROM agent_memory WHERE student_id=? AND target=?",
+        (student_id, target),
+    ).fetchone()
+    raw = note["content"] if note is not None else ""
+    entries = raw.split(SEP) if raw else []
+    try:
+        index = entries.index(row["content"])
+    except ValueError:
+        return False
+    del entries[index]
+    _store(db, student_id, target, join_entries(entries), timestamp)
+    db.execute(
+        "DELETE FROM memory_write_log WHERE id=? AND student_id=?",
+        (note_id, student_id),
+    )
+    return True
 
 
 def pending(db: sqlite3.Connection, student_id: str) -> list[dict]:

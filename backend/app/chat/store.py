@@ -18,9 +18,11 @@ from app.chat.schemas import (
     MemoryEvidence, SystemEvent, ToolCallRecord, PreferencePrompt,
     MessageAnchor, SpaceProgress, Subject, ThreadSummary,
 )
-from app.memory.curated import LIMITS, apply as apply_note, bump_turns, decide, pending
+from app.memory.curated import LIMITS, MemoryWriteItem, apply as apply_note, bump_turns, decide, pending
 from app.memory.curated import ensure as ensure_notes
-from app.memory.curated import ensure_fts, read_all, search as search_notes, snapshot_text, write as write_note
+from app.memory.curated import (
+    ensure_fts, read_all, revoke_applied_note, search as search_notes, snapshot_text, write as write_note,
+)
 from app.memory.store import Store, ensure_column, new_id, now
 from app.models.schemas import Problem, SourceReference
 from app.services.materials import terms
@@ -1488,9 +1490,31 @@ class ChatStore:
             write_note(db, student_id, target, content, now())
             return self._notes_view(read_all(db, student_id))
 
-    def apply_agent_memory(self, student_id: str, action: str, target: str, content, old_text, approve: bool = False) -> str:
+    def apply_agent_memory(
+        self,
+        student_id: str,
+        action: str,
+        target: str,
+        content,
+        old_text,
+        approve: bool = False,
+        *,
+        conversation_id: str | None = None,
+        message_id: str | None = None,
+        events: list[MemoryWriteItem] | None = None,
+    ) -> str:
         with self.connection() as db:
-            return apply_note(db, student_id, action, target, content, old_text, now(), approve)
+            db.execute("BEGIN IMMEDIATE")
+            timestamp = now()
+            return apply_note(
+                db, student_id, action, target, content, old_text, timestamp, approve,
+                conversation_id=conversation_id, message_id=message_id, events=events,
+            )
+
+    def revoke_agent_memory(self, student_id: str, note_id: str) -> bool:
+        with self.connection() as db:
+            db.execute("BEGIN IMMEDIATE")
+            return revoke_applied_note(db, student_id, note_id, now())
 
     def pending_notes(self, student_id: str) -> list[dict]:
         with self.connection() as db:
