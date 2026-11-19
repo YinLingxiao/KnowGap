@@ -24,9 +24,9 @@ MODES = ("explain", "solve", "practice", "plan", "research", "organize")
 ROWS = [{"role": "user", "content": "你好", "kind": "text", "status": "complete", "meta_json": "{}"}]
 
 MODE_NONE_BASELINE = {
-    "main": (7110, "e0b97772ac1a2afd"),
-    "thread": (15272, "f8ae51348f3b0833"),
-    "chat": (13503, "064d84cb1205c92f"),
+    "main": (7324, "2bb58ef860c78b06"),
+    "thread": (15486, "7b6f2dad1aa17251"),
+    "chat": (13717, "e14844c96789b363"),
 }
 
 

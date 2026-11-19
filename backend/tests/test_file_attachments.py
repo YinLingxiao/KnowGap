@@ -285,6 +285,8 @@ def test_marker_context_first_excerpt_then_outline_and_scoped_retrieval(tmp_path
         send(client, cid, '再说说 FCFS', 'file-round-03')
         assert 'attached_files' not in learning_context(model.calls[2])
         assert 'unrelated.md' in {s['title'] for s in learning_context(model.calls[2])['course_sources']}
+        # 资料库命中的片段也带 document_id，模型能用 read_document 按页读原文，而不是只凭目录页作答
+        assert all(s.get('document_id') for s in learning_context(model.calls[2])['course_sources'])
         for call in [*model.calls, *model.analysis_calls]:
             assert '[[file:' not in json.dumps(call, ensure_ascii=False)
         # Original wire message remains untouched for the frontend's file card rendering.
