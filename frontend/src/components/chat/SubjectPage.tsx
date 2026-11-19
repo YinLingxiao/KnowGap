@@ -5,7 +5,7 @@ import { flushSync } from "react-dom";
 import {
   Brain, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Download, GraduationCap, History, Library as LibraryIcon, Link2, ListTodo,
   LoaderCircle, Maximize2, MessagesSquare, Mic, Minimize2, MoreHorizontal,
-  PanelLeftOpen, Plus, RotateCcw, Settings, SlidersHorizontal, Target, Waypoints, X, Zap,
+  PanelLeftOpen, Plus, RotateCcw, Settings, SlidersHorizontal, Sparkles, Target, Waypoints, X, Zap,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { ChatController } from "@/hooks/useChat";
@@ -24,6 +24,7 @@ import type { Problem } from "@/lib/types";
 import { Button } from "../ui/Button";
 import { CHEATSHEET_OPENED_EVENT, GUIDES_RESET_EVENT, OPEN_SPACE_PANEL_EVENT, coachSeenKey } from "../onboarding/coach";
 import { CheatSheet } from "./CheatSheet";
+import { LearningPlanPanel } from "./LearningPlanPanel";
 import { ConceptGraph, type AttackTarget } from "./ConceptGraph";
 import { SpaceTasks } from "../agenda/SpaceTasks";
 import { Composer } from "./Composer";
@@ -40,6 +41,7 @@ type Panel =
   | { mode: "pages" }
   | { mode: "graph" }
   | { mode: "tasks" }
+  | { mode: "learning-plan" }
   | { mode: "thread"; id: string }
   | { mode: "info"; section: "about" | "files" | "memory" };
 
@@ -84,6 +86,7 @@ function readPanel(subjectId: string): Panel {
     if (parsed.mode === "pages") return { mode: "pages" };
     if (parsed.mode === "graph") return { mode: "graph" };
     if (parsed.mode === "tasks") return { mode: "tasks" };
+    if (parsed.mode === "learning-plan") return { mode: "learning-plan" };
     if (parsed.mode === "thread" && "id" in parsed && typeof parsed.id === "string") return { mode: "thread", id: parsed.id };
     if (parsed.mode === "info" && "section" in parsed && (parsed.section === "about" || parsed.section === "files" || parsed.section === "memory")) {
       return { mode: "info", section: parsed.section };
@@ -470,6 +473,8 @@ export function SubjectPage({
       open: () => setPanel({ mode: "graph" }), coachmark: weakReady && fogReady ? "fog" : undefined },
     { key: "tasks", icon: ListTodo, label: t("space.tab.tasks"), title: t("space.tab.tasksTitle"), active: panel.mode === "tasks",
       open: () => setPanel({ mode: "tasks" }) },
+    { key: "learning-plan", icon: Sparkles, label: t("space.tab.plan"), title: t("space.tab.planTitle"),
+      active: panel.mode === "learning-plan", open: () => setPanel({ mode: "learning-plan" }) },
     { key: "memory", icon: Brain, label: t("space.tab.memory"), title: t("space.tab.memoryTitle", { count: spaceMemories.length }),
       active: panel.mode === "info" && panel.section === "memory", open: () => setPanel({ mode: "info", section: "memory" }) },
     { key: "about", icon: SlidersHorizontal, label: t("space.tab.overview"), title: t("space.tab.overviewTitle"),
@@ -882,6 +887,9 @@ export function SubjectPage({
               subjects={chat.subjects.map((item) => ({ id: item.id, name: item.name, color: item.color }))}
               onOpenThread={openThread}
             />
+          )}
+          {panel.mode === "learning-plan" && (
+            <LearningPlanPanel subjectId={subject.id} deadline={subject.deadline ?? null} />
           )}
           {panel.mode === "graph" && (
             <ConceptGraph

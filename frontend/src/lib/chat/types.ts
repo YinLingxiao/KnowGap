@@ -88,6 +88,13 @@ export interface MemoryChange {
   memory: LearnerMemory;
 }
 
+/** 通用用户记忆（USER / MEMORY）的一次写入；只用于「已写入用户记忆」提示 */
+export interface MemoryWriteItem {
+  id: string;
+  layer: "USER" | "MEMORY";
+  content: string;
+}
+
 export interface TokenUsage {
   requests: number;
   reportedRequests: number;
@@ -122,6 +129,8 @@ export interface ChatMessage {
   problemId: string | null;
   attempt: ExerciseAttempt | null;
   memoryChanges: MemoryChange[];
+  /** 该条回复触发的通用记忆写入；历史消息可能没有此字段 */
+  memoryWrites?: MemoryWriteItem[];
   usedMemoryIds: string[];
   suggestedProblemId: string | null;
   sources: SourceReference[];
@@ -244,6 +253,7 @@ export type StreamEvent =
   | { type: "cancelled"; message: ChatMessage | null }
   | { type: "error"; detail: string; statusCode: number; message: ChatMessage | null }
   | { type: "analysis"; userMessage: ChatMessage | null; assistantMessage: ChatMessage | null; skipped: boolean }
+  | { type: "memory_write"; items: MemoryWriteItem[] }
   | { type: "tool_start"; id: string; name: string; arguments: string }
   | { type: "tool_end"; id: string; name: string; ok: boolean; output: string }
   | { type: "tool_approval"; id: string; name: string; arguments: string }

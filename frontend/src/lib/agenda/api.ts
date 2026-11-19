@@ -39,7 +39,7 @@ export function mapTask(data: Wire): AgendaTask {
     reminderMinutes: typeof data.reminder_minutes === "number" ? data.reminder_minutes : null,
     status: data.status === "done" || data.status === "cancelled" ? data.status : "open",
     completedAt: str(data.completed_at),
-    source: data.source === "ai_breakdown" ? data.source : "manual",
+    source: data.source === "ai_breakdown" || data.source === "learning_agent" ? data.source : "manual",
     memoryId: str(data.memory_id),
     sortOrder: typeof data.sort_order === "number" ? data.sort_order : 0,
     createdAt: String(data.created_at ?? ""),

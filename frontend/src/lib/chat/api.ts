@@ -6,8 +6,8 @@ import type { Problem } from "@/lib/types";
 import { mapPlan, mapPlanChanges } from "./plan";
 import type { ChatMode } from "./modes";
 import type {
-  ChatMessage, Conversation, ConversationSummary, GeneratedFile, LearnerMemory, LearnerMemoryStatus, MemoryChange, SpaceInput,
-  QuizAttemptResult, StreamEvent, Subject, TokenUsage, SpaceUsage,
+  ChatMessage, Conversation, ConversationSummary, GeneratedFile, LearnerMemory, LearnerMemoryStatus, MemoryChange,
+  MemoryWriteItem, SpaceInput, QuizAttemptResult, StreamEvent, Subject, TokenUsage, SpaceUsage,
 } from "./types";
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- wire payloads are mapped field by field below */
@@ -42,6 +42,16 @@ function mapMemoryChanges(raw: Wire): MemoryChange[] {
   return (raw ?? []).map((change: Wire): MemoryChange => ({ action: change.action, memory: mapMemory(change.memory) }));
 }
 
+/** 记忆写入事件只在后端上线 B5 后出现；缺字段、坏条目一律跳过，不影响消息渲染 */
+export function mapMemoryWrites(raw: Wire): MemoryWriteItem[] {
+  return (Array.isArray(raw) ? raw : []).filter((item: Wire) => item && typeof item.id === "string" && item.id)
+    .map((item: Wire): MemoryWriteItem => ({
+      id: String(item.id),
+      layer: item.layer === "MEMORY" ? "MEMORY" : "USER",
+      content: String(item.content ?? ""),
+    }));
+}
+
 function mapMessage(data: Wire): ChatMessage {
   return {
     id: data.id, conversationId: data.conversation_id, seq: data.seq, role: data.role, kind: data.kind,
@@ -52,6 +62,7 @@ function mapMessage(data: Wire): ChatMessage {
       issue: data.attempt.issue ?? null, evidence: data.attempt.evidence,
     } : null,
     memoryChanges: mapMemoryChanges(data.memory_changes),
+    memoryWrites: Array.isArray(data.memory_writes) ? mapMemoryWrites(data.memory_writes) : undefined,
     usedMemoryIds: data.used_memory_ids ?? [],
     suggestedProblemId: data.suggested_problem_id ?? null,
     sources: (data.sources ?? []).map((source: WireSource) => mapSource(source)),
@@ -169,6 +180,8 @@ function mapEvent(type: string, data: Wire): StreamEvent | null {
     case "analysis":
       return { type, userMessage: maybe(data.user_message, mapMessage),
         assistantMessage: maybe(data.assistant_message, mapMessage), skipped: Boolean(data.skipped) };
+    case "memory_write":
+      return { type: "memory_write", items: mapMemoryWrites(data.items) };
     case "tool_start":
       return { type: "tool_start", id: String(data.id), name: String(data.name ?? ""), arguments: String(data.arguments ?? "") };
     case "tool_approval":
@@ -343,6 +356,10 @@ export const chatApi = {
       method: "PUT", body: JSON.stringify({ target, content }),
     });
     return { user: data.user ?? "", memory: data.memory ?? "", limits: { user: data.limits?.user ?? 1375, memory: data.limits?.memory ?? 2200 } };
+  },
+  /** 撤销单条通用记忆；后端上线 B5 前会返回 404 */
+  async deleteAgentMemory(noteId: string): Promise<void> {
+    await request<void>(root, `/api/agent-memory/${encodeURIComponent(noteId)}`, { method: "DELETE" });
   },
   async pendingNotes(): Promise<Array<{ id: string; action: string; target: string; content: string; oldText: string }>> {
     const data = await request<Wire[]>(root, "/api/agent-memory/pending", { cache: "no-store" });

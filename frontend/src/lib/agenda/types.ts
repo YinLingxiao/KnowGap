@@ -2,7 +2,7 @@
 
 export type TaskPriority = 1 | 2 | 3 | 4;
 export type TaskStatus = "open" | "done" | "cancelled";
-export type TaskSource = "manual" | "ai_breakdown";
+export type TaskSource = "manual" | "ai_breakdown" | "learning_agent";
 
 export interface AgendaTask {
   id: string;

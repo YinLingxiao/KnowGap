@@ -11,7 +11,8 @@ import { toApiError } from "@/lib/api/errors";
 import { chatApi } from "@/lib/chat/api";
 import { parseFileMarkers } from "@/lib/chat/attachments";
 import { createMaterialClient } from "@/lib/api/material-client";
-import type { ChatMessage, ExecutionStatus, LearnerMemory } from "@/lib/chat/types";
+import type { ChatMessage, ExecutionStatus, LearnerMemory, MemoryWriteItem } from "@/lib/chat/types";
+import { clearMemoryWrites, readMemoryWrites, rememberRevokedMemoryWrite, storeMemoryWrites, withoutRevokedMemoryWrites } from "@/lib/chat/memoryWrites";
 import { isHiddenSystemMessage } from "@/lib/chat/wakeEvents";
 import { cx } from "@/lib/cx";
 import { useI18n } from "@/components/LanguageProvider";
@@ -61,6 +62,90 @@ const TOOL_LABELS: Record<string, string> = {
 function onlyInferredChanges(changes: ChatMessage["memoryChanges"]): boolean {
   return changes.length > 0 && changes.every((change) =>
     change.memory.evidence.length > 0 && change.memory.evidence.every((item) => item.source === "inferred"));
+}
+
+/** 回复下方的通用记忆写入提示；事件只在后端上线 B5 后出现，缺字段或历史消息不显示 */
+function MemoryWriteNote({ conversationId, messageId, items }: {
+  conversationId: string;
+  messageId: string;
+  items?: MemoryWriteItem[];
+}) {
+  const { t } = useI18n();
+  const [writes, setWrites] = useState<MemoryWriteItem[]>(items ?? []);
+  const [open, setOpen] = useState(false);
+  const [working, setWorking] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (items?.length) {
+      const visible = withoutRevokedMemoryWrites(conversationId, messageId, items);
+      setWrites(visible);
+      storeMemoryWrites(conversationId, messageId, visible);
+      return;
+    }
+    const cached = withoutRevokedMemoryWrites(conversationId, messageId, readMemoryWrites(conversationId, messageId));
+    if (cached.length) setWrites(cached);
+  }, [conversationId, items, messageId]);
+
+  if (!writes.length) return null;
+
+  const revoke = async (noteId: string) => {
+    if (working) return;
+    setWorking(noteId);
+    setNotice(null);
+    try {
+      await chatApi.deleteAgentMemory(noteId);
+      rememberRevokedMemoryWrite(conversationId, messageId, noteId);
+      const next = writes.filter((item) => item.id !== noteId);
+      setWrites(next);
+      if (next.length) storeMemoryWrites(conversationId, messageId, next);
+      else clearMemoryWrites(conversationId, messageId);
+      setNotice(t("messages.memoryWriteRevoked"));
+      if (!next.length) setOpen(false);
+    } catch (error) {
+      setNotice(t("messages.memoryWriteRevokeFailed", { detail: toApiError(error).message }));
+    } finally {
+      setWorking(null);
+    }
+  };
+
+  return (
+    <div className={styles.memoryWrite}>
+      <button
+        type="button"
+        className={cx(styles.note, styles.memoryWriteToggle)}
+        aria-expanded={open}
+        aria-label={t("messages.memoryWriteAria")}
+        title={t("messages.memoryWriteAria")}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <Brain size={12} aria-hidden />
+        {t("messages.memoryWritten")}
+        {open ? <ChevronUp size={11} aria-hidden /> : <ChevronDown size={11} aria-hidden />}
+      </button>
+      {open && (
+        <ul className={styles.memoryWriteList}>
+          {writes.map((item) => (
+            <li key={item.id} className={styles.memoryWriteItem}>
+              <span className={styles.memoryWriteLayer}>
+                {t(item.layer === "USER" ? "messages.memoryWriteUser" : "messages.memoryWriteMemory")}
+              </span>
+              <span className={styles.memoryWriteText}>{item.content}</span>
+              <button
+                type="button"
+                className={styles.memoryWriteRevoke}
+                disabled={working !== null}
+                onClick={() => void revoke(item.id)}
+              >
+                {working === item.id ? t("messages.memoryWriteRevoking") : t("messages.memoryWriteRevoke")}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {notice && <p className={styles.memoryWriteNotice} role="status">{notice}</p>}
+    </div>
+  );
 }
 
 /** 超过该字符数或行数的消息可折叠 */
@@ -740,12 +825,24 @@ export function MessageList({
                     {message.sources.map((source) => (
                       <li key={source.id} title={source.excerpt}>
                         <FileText size={12} aria-hidden />
-                        {tx(source.label)} · {source.title}
+                        {tx(source.label)}
+                        {source.source && (
+                          <span className={styles.sourceTag}>
+                            {t(source.source === "space" ? "sources.space" : "sources.general")}
+                          </span>
+                        )}
+                        · {source.title}
                         {source.page ? t("messages.sourcePage", { page: source.page }) : ""}
                       </li>
                     ))}
                   </ul>
                 )}
+
+                <MemoryWriteNote
+                  conversationId={message.conversationId}
+                  messageId={message.id}
+                  items={message.memoryWrites}
+                />
 
                 {!streaming && (
                   <div className={cx(styles.assistantMeta, styles.metaBar)}>

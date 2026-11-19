@@ -133,3 +133,22 @@ test('stop and revise starts immediately even before React has rendered the stop
     await Promise.all([first, revision]);
   } finally { h.close(); }
 });
+
+test('memory_write attaches to the active reply and survives a done snapshot without the field', async () => {
+  const h = controllerHarness();
+  try {
+    const sent = h.render().sendTo('c1', '记住我的偏好');
+    const request = h.requests[0];
+    start(request, 'reply-1');
+    request.onEvent({ type: 'memory_write', items: [{ id: 'note_1', layer: 'USER', content: '偏好先看例题' }] });
+    assert.deepEqual(h.render().messagesFor('c1').messages[0].memoryWrites, [
+      { id: 'note_1', layer: 'USER', content: '偏好先看例题' },
+    ]);
+    request.onEvent({ type: 'done', message: { id: 'reply-1', seq: 2, role: 'assistant', status: 'complete', content: '记住了' } });
+    assert.deepEqual(h.render().messagesFor('c1').messages[0].memoryWrites, [
+      { id: 'note_1', layer: 'USER', content: '偏好先看例题' },
+    ]);
+    request.resolve('ended');
+    await sent;
+  } finally { h.close(); }
+});

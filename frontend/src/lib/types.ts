@@ -34,5 +34,7 @@ export interface CourseMaterial {
 
 export interface SourceReference {
   id: string; documentId: string; title: string; label: string;
+  /** 学习空间对话区分空间资料/通用资料；旧消息可能没有该字段 */
+  source?: "space" | "general" | null;
   page?: number | null; startLine?: number | null; endLine?: number | null; excerpt: string;
 }
