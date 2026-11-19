@@ -951,6 +951,7 @@ class ChatService:
             ctx.user_message_id = generation.user_message_id
             ctx.plan_version = plans.read(generation.conversation_id, student_id)["version"]
             ctx.on_plan = lambda plan: queue.put_nowait(("plan", plan))
+            ctx.on_memory_write = lambda items: queue.put_nowait(("memory_write", {"items": items}))
             # search_good_problems 用当前对话的模型抽题、用讲义库做本地检索
             ctx.model = model
             ctx.library = self.library
@@ -1381,7 +1382,7 @@ class ChatService:
         self.store.merge_meta(user_id, {"analyzed": True, "attempt": result["attempt"], "memory_changes": changes})
         user_turns = sum(1 for row in history if row["role"] == "user" and not is_system_event_row(row))
         prompt = self._record_profile(
-            student_id, result.get("profile_ops") or [], generation.assistant_message_id,
+            student_id, result.get("profile_ops") or [], generation.assistant_message_id, generation=generation,
         ) if user_turns <= 3 else None
         from app.chat.next_actions import choose
         actions = choose(
@@ -1456,12 +1457,13 @@ class ChatService:
             counts[row["topic"]] = counts.get(row["topic"], 0) + row["n"]
         return any(counts.get(topic, 0) >= 2 for topic in topics)
 
-    def _record_profile(self, student_id: str, ops: list[dict], message_id: str) -> dict | None:
+    def _record_profile(self, student_id: str, ops: list[dict], message_id: str, *, generation=None) -> dict | None:
         if not ops:
             return None
         existing = [" ".join(_PROFILE_LABEL_RE.sub("", entry).split()) for entry in
                     re.split(r"\s*§\s*", self.store.agent_notes(student_id).get("user", "")) if entry.strip()]
         approve = self._agent_flag("memory_write_approval")
+        events = []
         prompt = None
         for op in ops:
             content = " ".join(op["content"].split())
@@ -1472,8 +1474,14 @@ class ChatService:
                 if prompt is None:
                     prompt = self.store.queue_preference(student_id, message_id, content, existing)
                 continue
-            self.store.apply_agent_memory(student_id, "add", "user", f"[{op['layer']}] {content}", None, approve)
+            self.store.apply_agent_memory(
+                student_id, "add", "user", f"[{op['layer']}] {content}", None, approve,
+                conversation_id=generation.conversation_id if generation is not None else None,
+                message_id=message_id, events=events,
+            )
             existing.append(content)
+        if events and generation is not None:
+            generation.queue.put_nowait(("memory_write", {"items": events}))
         return prompt
 
     def _compress_later(self, student_id: str, conversation_id: str, model: ChatModel) -> None:

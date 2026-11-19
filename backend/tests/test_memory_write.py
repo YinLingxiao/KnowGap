@@ -224,3 +224,41 @@ def test_delete_fabricated_and_other_students_ids_are_the_same_404(tmp_path):
         assert client.delete(f"/api/agent-memory/{note_id}").status_code == 204
         assert store.agent_notes(STUDENT)["user"] == ""
         assert write_logs(store) == []
+
+def test_profile_record_queues_memory_write_for_direct_user_notes(tmp_path):
+    store = make_store(tmp_path)
+    conversation = store.create_conversation(STUDENT, title=None, problem=None, client_request_id="conv-b5-profile")
+    journal = EventJournal(conversation, "run-b5-profile")
+    generation = SimpleNamespace(queue=journal, conversation_id=conversation)
+    service = ChatService(store, lambda: FakeChat(["好。"]))
+    ops = [
+        {"layer": "Context", "content": "下周三考数据结构"},
+        {"layer": "Preference", "content": "先举例再讲定义"},
+    ]
+    service._record_profile(STUDENT, ops, "msg-profile", generation=generation)
+    asyncio.run(service.close())
+
+    writes = [json.loads(data) for kind, data in journal.events if kind == "memory_write"]
+    assert len(writes) == 1
+    items = writes[0]["items"]
+    assert [item["layer"] for item in items] == ["USER"]  # 偏好走确认弹窗，不直接写入。
+    assert "下周三考数据结构" in items[0]["content"]
+    logs = write_logs(store)
+    assert [(log["id"], log["conversation_id"], log["message_id"]) for log in logs] == [
+        (items[0]["id"], conversation, "msg-profile"),
+    ]
+
+
+def test_memory_tool_reports_written_items_through_context(tmp_path):
+    from app.agent_tools import run as run_tool
+
+    store = make_store(tmp_path)
+    seen = []
+    ctx = SimpleNamespace(
+        store=store, student_id=STUDENT, conversation_id="conv-tool", assistant_message_id="msg-tool",
+        approve_memory=False, on_memory_write=seen.append,
+    )
+    asyncio.run(run_tool("memory", {"action": "add", "target": "memory", "content": "实验报告周五交"}, ctx))
+    assert len(seen) == 1 and seen[0][0]["content"] == "实验报告周五交" and seen[0][0]["layer"] == "MEMORY"
+    asyncio.run(run_tool("memory", {"action": "remove", "target": "memory", "old_text": "实验报告周五交"}, ctx))
+    assert len(seen) == 1  # 删除不推送写入事件。

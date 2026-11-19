@@ -368,6 +368,7 @@ async def run(name: str, arguments: dict, ctx) -> str:
         elif name == "bash":
             text = await bash_tool.run(ctx.workspace, arguments)
         elif name == "memory":
+            events = []
             text = ctx.store.apply_agent_memory(
                 ctx.student_id,
                 str(arguments.get("action") or ""),
@@ -375,7 +376,12 @@ async def run(name: str, arguments: dict, ctx) -> str:
                 arguments.get("content"),
                 arguments.get("old_text"),
                 approve=bool(getattr(ctx, "approve_memory", False)),
+                conversation_id=getattr(ctx, "conversation_id", None),
+                message_id=getattr(ctx, "assistant_message_id", None),
+                events=events,
             )
+            if events and getattr(ctx, "on_memory_write", None):
+                ctx.on_memory_write(events)
         elif name == problem_search.WEB_FETCH_TOOL_NAME:
             return await problem_search.run_web_fetch(arguments)
         elif name == problem_search.TOOL_NAME:
