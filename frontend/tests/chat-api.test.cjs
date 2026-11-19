@@ -207,3 +207,58 @@ test('skip is separate from completion and confirmation failures propagate', asy
   };
   await chatApi.skipOnboarding();
 });
+
+test('memory_write events keep valid entries and persist by reply when the history has them', async () => {
+  const previousWindow = global.window;
+  global.window = { setTimeout, clearTimeout };
+  const body = [
+    'event: memory_write',
+    'data: {"items":[{"id":"note_1","layer":"USER","content":"偏好先看例题"},{"id":"","layer":"MEMORY","content":"坏条目"}]}',
+    '',
+    'event: done',
+    'data: {"message":{"id":"m1","conversation_id":"c1","seq":2,"role":"assistant","kind":"text","status":"complete","content":"好","memory_writes":[{"id":"note_1","layer":"USER","content":"偏好先看例题"}]}}',
+    '',
+    '',
+  ].join('\n');
+  global.fetch = async () => new Response(new TextEncoder().encode(body), {
+    status: 200, headers: { 'Content-Type': 'text/event-stream' },
+  });
+  try {
+    const events = [];
+    await chatApi.sendMessage('c1', '问题', 'req-memory-1', (event) => events.push(event), new AbortController().signal);
+    assert.deepEqual(events.find((event) => event.type === 'memory_write'), {
+      type: 'memory_write', items: [{ id: 'note_1', layer: 'USER', content: '偏好先看例题' }],
+    });
+    assert.deepEqual(events.find((event) => event.type === 'done').message.memoryWrites, [
+      { id: 'note_1', layer: 'USER', content: '偏好先看例题' },
+    ]);
+  } finally {
+    global.window = previousWindow;
+  }
+
+  global.fetch = async () => json({ id: 'c2', messages: [{ id: 'm2', role: 'assistant', content: '旧回复', status: 'complete' }] });
+  const old = await chatApi.getConversation('c2');
+  assert.equal(old.messages[0].memoryWrites, undefined);
+
+  global.fetch = async (url, options) => {
+    assert.ok(url.endsWith('/api/agent-memory/note%2F1'));
+    assert.equal(options.method, 'DELETE');
+    return new Response(null, { status: 204 });
+  };
+  assert.equal(await chatApi.deleteAgentMemory('note/1'), undefined);
+});
+
+test('source references keep space/general and tolerate old messages', async () => {
+  global.fetch = async () => json({ id: 'c1', subject_id: 's1', messages: [{
+    id: 'a1', conversation_id: 'c1', seq: 2, role: 'assistant', kind: 'text', status: 'complete', content: '回答',
+    sources: [
+      { id: 'ch1', document_id: 'd1', title: '空间文档', label: '空间资料1', source: 'space', page: 2, excerpt: 'e1' },
+      { id: 'ch2', document_id: 'd2', title: '通用文档', label: '通用资料1', source: 'general', page: null, excerpt: 'e2' },
+      { id: 'ch3', document_id: 'd3', title: '旧文档', label: '资料1', page: null, excerpt: 'e3' },
+      { id: 'ch4', document_id: 'd4', title: '未知来源', label: '资料2', source: 'other', page: null, excerpt: 'e4' },
+    ],
+  }] });
+  const sources = (await chatApi.getConversation('c1')).messages[0].sources;
+  assert.deepEqual(sources.map((source) => source.source), ['space', 'general', null, null]);
+  assert.equal(sources[0].label, '空间资料1');
+});

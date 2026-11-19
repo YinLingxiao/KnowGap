@@ -63,7 +63,10 @@ function upsert(messages: ChatMessage[], message: ChatMessage | null): ChatMessa
   const index = messages.findIndex((item) => item.id === message.id);
   if (index >= 0) {
     const next = messages.slice();
-    next[index] = message;
+    // done / analysis 的完整快照不一定带 memory_writes；不要把流式期间收到的写入提示冲掉。
+    next[index] = message.memoryWrites === undefined && messages[index].memoryWrites
+      ? { ...message, memoryWrites: messages[index].memoryWrites }
+      : message;
     return next;
   }
   return [...messages, message].sort((a, b) => a.seq - b.seq);
@@ -450,6 +453,15 @@ export function useChat(notify: Notify, userId: string) {
           patchMessages(id, (messages) => upsert(upsert(messages, event.userMessage), event.assistantMessage));
           void loadMemories();
           void refreshList();
+          break;
+        case "memory_write":
+          if (!assistantId || !event.items.length) break;
+          patchMessages(id, (messages) => messages.map((message) => {
+            if (message.id !== assistantId) return message;
+            const current = message.memoryWrites ?? [];
+            const incoming = event.items.filter((item) => !current.some((existing) => existing.id === item.id));
+            return incoming.length ? { ...message, memoryWrites: [...current, ...incoming] } : message;
+          }));
           break;
         case "tool_approval":
           patchMessages(id, (messages) => messages.map((m) => (m.id === assistantId ? { ...m, pendingApproval: event } : m)));

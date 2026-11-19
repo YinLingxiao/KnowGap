@@ -5,10 +5,12 @@ import type { SourceReference } from "../types";
 
 export interface WireSource {
   id: string; document_id: string; title: string; label: string;
+  source?: "space" | "general" | null;
   page: number | null; start_line: number | null; end_line: number | null; excerpt: string;
 }
 export function mapSource(source: WireSource): SourceReference {
   return { id: source.id, documentId: source.document_id, title: source.title, label: source.label,
+    source: source.source === "space" || source.source === "general" ? source.source : null,
     page: source.page, startLine: source.start_line, endLine: source.end_line, excerpt: source.excerpt };
 }
 
