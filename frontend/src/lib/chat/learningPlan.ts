@@ -177,7 +177,11 @@ function mapConfirm(raw: Wire): LearningPlanConfirmResult {
         durationMinutes: num(item.duration_minutes),
       }];
     }),
-    skipped: (Array.isArray(raw?.skipped) ? raw.skipped : []).filter((id: unknown): id is string => typeof id === "string"),
+    // 后端返回 {draft_task_id, code, message}；兼容纯字符串
+    skipped: (Array.isArray(raw?.skipped) ? raw.skipped : []).flatMap((item: Wire): string[] => {
+      const id = typeof item === "string" ? item : item?.draft_task_id;
+      return typeof id === "string" && id ? [id] : [];
+    }),
   };
 }
 

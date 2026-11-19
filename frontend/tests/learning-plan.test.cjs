@@ -82,7 +82,7 @@ test('confirmation sends only selected task ids and maps created/skipped tasks',
     assert.deepEqual(JSON.parse(options.body), { task_ids: ['d1'] });
     return json({
       created: [{ id: 'task_5b', title: '栈练习', source: 'learning_agent', duration_minutes: 30 }],
-      skipped: ['d2'],
+      skipped: [{ draft_task_id: 'd2', code: 'already_confirmed', message: '该任务已经写入日程' }],
     });
   };
   const result = await learningPlanApi.confirm('plan/1', ['d1']);

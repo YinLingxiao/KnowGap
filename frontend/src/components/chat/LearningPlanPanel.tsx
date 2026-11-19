@@ -87,6 +87,12 @@ function AgentCard({ agent }: { agent: PlanAgent }) {
   );
 }
 
+/** 后端依据格式为「memory_id=<id>；具体依据」，界面只显示具体依据 */
+function evidenceText(evidence?: string): string | undefined {
+  const text = evidence?.replace(/^\s*memory_id=[^；;：:\s]*[；;：:\s]*/, "").trim();
+  return text || undefined;
+}
+
 function TaskRow({ task, checked, confirmed, onToggle }: {
   task: PlanTaskDraft;
   checked: boolean;
@@ -101,7 +107,7 @@ function TaskRow({ task, checked, confirmed, onToggle }: {
         <strong className={styles.taskTitle}>{task.title}</strong>
         <span className={styles.taskMeta}>
           <span>
-            {t("learningPlan.evidence", { evidence: task.evidence ?? task.memoryId ?? t("learningPlan.noEvidence") })}
+            {t("learningPlan.evidence", { evidence: evidenceText(task.evidence) ?? t("learningPlan.noEvidence") })}
           </span>
           <span>
             {t("learningPlan.suggestedTime", {
@@ -149,7 +155,7 @@ export function LearningPlanPanel({ subjectId, deadline }: { subjectId: string; 
       setError(t("learningPlan.deadlineRequired"));
       return;
     }
-    if (!Number.isInteger(budget) || budget < 5 || budget > 720) {
+    if (!Number.isInteger(budget) || budget < 5 || budget > 120) {
       setError(t("learningPlan.budgetInvalid"));
       return;
     }
@@ -217,7 +223,7 @@ export function LearningPlanPanel({ subjectId, deadline }: { subjectId: string; 
         <label className={styles.field}>
           <span>{t("learningPlan.budget")}</span>
           <input
-            type="number" min={5} max={720} step={5} value={budget}
+            type="number" min={5} max={120} step={5} value={budget}
             disabled={stage === "generating"}
             onChange={(event) => setBudget(Number(event.target.value))}
           />
