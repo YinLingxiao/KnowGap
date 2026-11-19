@@ -41,6 +41,7 @@ from app.chat.quizzes import guard_gaps, seal_quizzes
 from app.chat.skills import WIDGET_RETRY_NOTICE, refuses_widget
 from app.chat.skills.problem_drill_skill import DRILL_TOOLS, SEARCH_TOOL, drill_plan, guard_reply, wants_problems
 from app.agent_tools.web_search import TOOL_NAME as WEB_SEARCH_TOOL
+from app.agent_tools.problem_search import WEB_FETCH_TOOL_NAME
 from app.chat.coordination import cancel_deliveries, dispatch, next_delivery
 from app.memory.store import new_id
 from app.services.materials import MaterialStore
@@ -876,6 +877,7 @@ class ChatService:
         role_name: str | None = None
         event_turn = False
         finished = False
+        online_review = None
         try:
             # 必须在 try 内、打开模型之前确定：模型不可用或读历史失败时，finally 也要能回滚唤醒回合
             event_turn = is_system_event(self.store.message_meta(generation.user_message_id))
@@ -990,7 +992,7 @@ class ChatService:
             if role["role"] == "chat":
                 # 普通对话是通用助手：不带真题检索和改编题核对（后者依赖检索结果）；练习参考只在用户自己开始练习时提供（见上）
                 # 联网搜索也只给支线：普通对话不带
-                definitions = [tool for tool in definitions if tool["function"]["name"] not in DRILL_TOOLS | {WEB_SEARCH_TOOL}]
+                definitions = [tool for tool in definitions if tool["function"]["name"] not in DRILL_TOOLS | {WEB_SEARCH_TOOL, WEB_FETCH_TOOL_NAME}]
             state = generation.checkpoint or {
                 "version": 1, "role": role["role"], "phase": "model", "rounds": 0, "messages": messages,
                 "parts": parts, "tool_log": tool_log, "tool_messages": tool_messages,
@@ -1164,7 +1166,9 @@ class ChatService:
                     if owner == student_id and root != family:
                         self._start_review(student_id, other)
                 if count >= REVIEW_MAX_TURNS:
-                    self._start_review(student_id, generation.conversation_id, model)
+                    online_review = self._start_review(
+                        student_id, generation.conversation_id, model, generation=generation,
+                    )
                 elif count >= REVIEW_MIN_TURNS:
                     self._schedule_review(student_id, generation.conversation_id, family, REVIEW_IDLE_SECONDS)
             await asyncio.sleep(0)
@@ -1229,6 +1233,10 @@ class ChatService:
                     self._schedule_wake(student_id, generation.conversation_id)
                 except Exception:
                     logger.exception("Could not schedule the coordinator wake")
+            if online_review is not None:
+                review_outcome = await asyncio.gather(online_review, return_exceptions=True)
+                if isinstance(review_outcome[0], Exception):
+                    logger.error("Background memory review failed during stream finalization: %s", review_outcome[0])
             queue.put_nowait(None)
             if not finished:
                 self.streams.pause(generation.conversation_id)
@@ -1255,7 +1263,7 @@ class ChatService:
             return
         self._start_review(student_id, conversation_id)
 
-    def _start_review(self, student_id: str, conversation_id: str, model=None) -> None:
+    def _start_review(self, student_id: str, conversation_id: str, model=None, *, generation=None):
         """Review the turns counted since this conversation's last review, then reset its counter."""
         pending = self.review_handles.pop(conversation_id, None)
         if pending is not None:
@@ -1279,12 +1287,15 @@ class ChatService:
         except Exception:
             logger.exception("Could not start the memory review")
             return
-        task = asyncio.create_task(self._review(student_id, reviewer, turns, conversation_id, message_id))
+        task = asyncio.create_task(self._review(
+            student_id, reviewer, turns, conversation_id, message_id, generation=generation,
+        ))
         self.reviews.add(task)
         task.add_done_callback(self.reviews.discard)
+        return task
 
     async def _review(self, student_id: str, model: ChatModel, turns: list[dict],
-                      conversation_id: str, message_id: str | None) -> None:
+                      conversation_id: str, message_id: str | None, *, generation=None) -> None:
         subject = self.store.conversation_subject(conversation_id)
         if subject is not None:
             # 学习空间的对话内容不进通用 USER/MEMORY 笔记；学习记忆由 _analyze 的 learner_memories 负责。
@@ -1299,13 +1310,17 @@ class ChatService:
             return
         ops = raw.get("ops") if isinstance(raw, dict) else None
         approve = self._agent_flag("memory_write_approval")
+        events = []
         for op in ops if isinstance(ops, list) else []:
             if not isinstance(op, dict):
                 continue
             self.store.apply_agent_memory(
                 student_id, str(op.get("action") or ""), str(op.get("target") or ""),
                 op.get("content"), op.get("old_text"), approve,
+                conversation_id=conversation_id, message_id=message_id, events=events,
             )
+        if events and generation is not None:
+            generation.queue.put_nowait(("memory_write", {"items": events}))
 
     async def _analyze(
         self, student_id, generation, history, user_text, reply, memories, exercise, model, subject_id=None,

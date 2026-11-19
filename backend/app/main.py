@@ -31,6 +31,7 @@ from app.chat.subjects import subject_router
 from app.chat.service import ChatService
 from app.chat.store import ChatStore
 from app.agenda.router import agenda_router
+from app.learning.router import learning_router
 from app.code_sandbox.router import sandbox_router
 from app.demo.router import demo_router
 from app.vision.router import vision_router
@@ -112,6 +113,7 @@ def create_app(settings: Settings | None = None, chat_model: ChatModel | None = 
     from app.chat.plan_router import plan_router; app.include_router(plan_router(chat_store))
     from app.chat.quizzes import quiz_router; app.include_router(quiz_router(chat_store))
     app.include_router(agenda_router(chat_store, chat))
+    app.include_router(learning_router(chat_store, chat))
     app.include_router(subject_router(chat_store, chat_service))
     app.include_router(auth_router(auth_store, chat_store, settings))
     app.include_router(sandbox_router(allowed_origins=settings.cors_origins))
