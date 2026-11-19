@@ -7,6 +7,7 @@ const net = require("net");
 const path = require("path");
 const { windowChromeOptions, applyWindowTheme } = require("./window-chrome");
 const { createStartup } = require("./startup");
+const { attachZoom } = require("./zoom");
 const { createUpdater, UPDATE_DEFAULTS, normalizeUpdateSettings, validateUpdatePatch } = require("./updater");
 
 // 页面 origin 随端口变化，换端口会丢掉 localStorage（登录、演示模式、草稿等），所以优先复用固定端口
@@ -570,6 +571,7 @@ function createMainWindow() {
       backgroundThrottling: false,
     },
   });
+  attachZoom(mainWindow.webContents);
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     openInDefaultBrowser(url);
     return { action: "deny" };

@@ -29,6 +29,7 @@
       "updater.js",
       "window-chrome.js",
       "startup.js",
+      "zoom.js",
       "startup.html",
       "icon.ico",
       "icon.png"
