@@ -1236,6 +1236,8 @@ class ChatService:
                     logger.exception("Could not schedule the coordinator wake")
             if online_review is not None:
                 review_outcome = await asyncio.gather(online_review, return_exceptions=True)
+                # 已在这里等完；不等下一轮事件循环的 done 回调，避免 reviews 里残留已完成的任务
+                self.reviews.discard(online_review)
                 if isinstance(review_outcome[0], Exception):
                     logger.error("Background memory review failed during stream finalization: %s", review_outcome[0])
             queue.put_nowait(None)
