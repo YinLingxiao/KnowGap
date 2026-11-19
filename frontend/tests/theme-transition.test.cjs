@@ -187,7 +187,8 @@ test('the sidebar keeps one theme toggle with account menu and overflow structur
 
   assert.match(sidebar, /import\s*\{\s*ThemeToggle\s*\}\s*from\s*["']\.\.\/ThemeToggle["'];/);
   assert.equal((sidebar.match(/<ThemeToggle\s*\/>/g) ?? []).length, 1);
-  const avatarIndex = sidebar.indexOf('<AvatarMenu\n');
+  // Windows checkouts use CRLF, so match any whitespace after the tag name.
+  const avatarIndex = sidebar.search(/<AvatarMenu\s/);
   const themeToggleIndex = sidebar.indexOf('<ThemeToggle />');
   const updateIndex = sidebar.indexOf('<UpdateIndicator ');
   assert.ok(avatarIndex >= 0, 'AvatarMenu remains in the sidebar footer');
