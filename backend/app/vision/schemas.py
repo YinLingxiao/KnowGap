@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, SecretStr, StringConstraints,
 
 BboxFormat = Literal["xyxy_1000", "yxyx_1000", "xyxy_pixel", "xyxy_unit"]
 # How the vision model writes boxes. Everything is normalized to [ymin, xmin, ymax, xmax] on 0-1000.
-#   xyxy_1000  [x1, y1, x2, y2] on 0-1000        (Qwen VL family; verified for qwen3.5-plus in eval/vision)
+#   xyxy_1000  [x1, y1, x2, y2] on 0-1000        (Qwen VL family; verified for qwen3.5-plus)
 #   yxyx_1000  [ymin, xmin, ymax, xmax] on 0-1000 (Gemini box_2d)
 #   xyxy_pixel [x1, y1, x2, y2] in pixels          (Qwen2.5-VL)
 #   xyxy_unit  [x1, y1, x2, y2] on 0-1
