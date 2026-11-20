@@ -2,20 +2,25 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   min-width: 0;
-  padding: 2px 14px 6px;
+  margin-top: 8px;
 }
 
 .heroBar {
-  padding: 4px 16px 8px;
+  gap: 12px;
+  margin-top: 14px;
 }
 
 .chip {
+  display: inline-flex;
   flex-shrink: 0;
-  min-height: 24px;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
   padding: 0 10px;
-  border: 1px solid var(--border);
+  border: 1px solid transparent;
   border-radius: 999px;
   background: transparent;
   color: var(--text-secondary);
@@ -29,10 +34,27 @@
     color var(--t-hover) var(--ease-out);
 }
 
+.heroChip {
+  min-height: 30px;
+  padding: 0 11px;
+  font-size: var(--text-sm);
+}
+
+.icon {
+  flex-shrink: 0;
+  width: 15px;
+  height: 15px;
+  opacity: 0.82;
+}
+
 .chip:hover:not(:disabled) {
-  border-color: var(--border-strong);
   background: var(--bg-hover);
   color: var(--text);
+}
+
+.chip:hover:not(:disabled) .icon,
+.chipOn .icon {
+  opacity: 1;
 }
 
 .chip:focus-visible {

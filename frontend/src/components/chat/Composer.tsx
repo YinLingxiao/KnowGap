@@ -1165,8 +1165,6 @@ export function Composer({
           </div>
         </div>
 
-        {onModeChange && <ModePicker value={mode} onChange={onModeChange} hero={hero} disabled={locked} />}
-
         <div className={styles.toolbar}>
           <div className={styles.leftTools}>
             <div className={styles.menuAnchor} ref={menuRef}>
@@ -1561,6 +1559,7 @@ export function Composer({
           </div>
         </div>
       </div>
+      {onModeChange && <ModePicker value={mode} onChange={onModeChange} hero={hero} disabled={locked} />}
     </div>
   );
 }
