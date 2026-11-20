@@ -20,7 +20,7 @@ from tests.test_chat import FakeChat
 
 
 STUDENT = "demo-student-001"
-MODES = ("explain", "solve", "practice", "plan", "research", "organize")
+MODES = ("explain", "solve", "practice", "plan", "research", "organize", "review")
 ROWS = [{"role": "user", "content": "你好", "kind": "text", "status": "complete", "meta_json": "{}"}]
 
 MODE_NONE_BASELINE = {
@@ -85,9 +85,22 @@ def test_recommended_widget_respects_mode_allowlist():
 
 
 def test_organize_mode_with_blank_file_turn_goes_straight_to_notes():
-    skill = select_skill_prompt("chat", "", attached_files=[{"id": "f1", "name": "notes.pdf"}], mode="organize")
-    assert "file_to_notes" in skill
-    assert "再问用户想怎么处理" not in skill
+    for mode in ("organize", "review"):
+        skill = select_skill_prompt("chat", "", attached_files=[{"id": "f1", "name": "notes.pdf"}], mode=mode)
+        assert "file_to_notes" in skill
+        assert "再问用户想怎么处理" not in skill
+
+
+def test_review_schema_keeps_contrasts_quiz_and_gap_only():
+    system = system_for("chat", "review")
+    schema = schema_section(system)
+
+    for marker in ("2. 概念对比", "3. 随堂小测", "5. 缺口卡"):
+        assert marker in schema
+    for marker in ("1. 分步推演", "4. 代码实验台"):
+        assert marker not in schema
+    assert "本模式只用下面这 3 种类型" in schema
+    assert "【沙箱可视化卡规范（" not in system
 
 
 def test_research_mode_enables_web_search_in_chat(tmp_path):

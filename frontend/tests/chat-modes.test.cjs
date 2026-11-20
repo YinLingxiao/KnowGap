@@ -14,12 +14,12 @@ fs.writeFileSync(output, ts.transpileModule(fs.readFileSync(source, 'utf8'), {
 }).outputText);
 const { CHAT_MODE_OPTIONS } = require(output);
 
-test('the six labels map to the six backend mode values in order', () => {
+test('the seven labels map to the seven backend mode values in order', () => {
   assert.deepEqual(CHAT_MODE_OPTIONS.map((option) => option.id), [
-    'explain', 'solve', 'practice', 'plan', 'research', 'organize',
+    'explain', 'solve', 'practice', 'plan', 'research', 'organize', 'review',
   ]);
   assert.deepEqual(CHAT_MODE_OPTIONS.map((option) => option.labelKey), [
     'chat.mode.explain', 'chat.mode.solve', 'chat.mode.practice',
-    'chat.mode.plan', 'chat.mode.research', 'chat.mode.organize',
+    'chat.mode.plan', 'chat.mode.research', 'chat.mode.organize', 'chat.mode.review',
   ]);
 });
