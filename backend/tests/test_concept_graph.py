@@ -10,7 +10,6 @@ from app.chat import concept_graph as concept_graph_module
 from app.main import create_app
 from app.memory.store import now
 from tests.test_acceptance_support import isolated_settings
-from tests.test_auth_and_isolation import auth_headers
 from tests.test_chat import FakeChat
 from tests.test_subject_insights import seeded
 
@@ -136,16 +135,11 @@ def test_concept_graph_missing_and_cross_student_are_404(tmp_path):
     model = FakeChat(analyses=[{"concepts": [{"name": "不该生成", "summary": "隔离", "related_ids": []}]}])
     with TestClient(create_app(isolated_settings(tmp_path), chat_model=model)) as client:
         assert client.post("/api/subjects/subj-missing/concept-graph", json={}).status_code == 404
-        tokens = []
-        for email in ("alice@school.edu", "bob@school.edu"):
-            code = client.post("/api/auth/send-code", json={"email": email, "purpose": "register"}).json()["demo_code"]
-            tokens.append(client.post("/api/auth/register", json={
-                "email": email, "password": "password123", "code": code, "display_name": email[:3],
-            }).json()["token"])
-        alice, bob = (auth_headers(token) for token in tokens)
-        space = client.post("/api/subjects", headers=alice, json={"name": "Alice 的空间"}).json()
-        assert client.post(f"/api/subjects/{space['id']}/concept-graph", headers=bob, json={}).status_code == 404
+        store = client.app.state.chat_service.store
+        foreign = store.create_subject("other-student", "他人的空间", "", "")
+        space = client.post("/api/subjects", json={"name": "我的空间"}).json()
+        assert client.post(f"/api/subjects/{foreign.id}/concept-graph", json={}).status_code == 404
         assert model.analysis_calls == []
-        own = client.post(f"/api/subjects/{space['id']}/concept-graph", headers=alice, json={})
+        own = client.post(f"/api/subjects/{space['id']}/concept-graph", json={})
         assert own.status_code == 200, own.text
         assert own.json()["nodes"][0]["name"] == "不该生成"

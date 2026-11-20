@@ -37,7 +37,7 @@ from app.chat.checkpoints import MAX_TOOL_ROUNDS, resume_state
 from app.chat.usage import normalize_usage
 from app.chat.streaming import StreamStore
 from app.chat.schemas import DispatchThread, ProposeThreads, ReportProgress
-from app.chat.quizzes import guard_gaps, seal_quizzes
+from app.chat.quizzes import QuizStore, guard_gaps, seal_quizzes
 from app.chat.skills import WIDGET_RETRY_NOTICE, mode_widgets, refuses_widget
 from app.chat.skills.problem_drill_skill import DRILL_TOOLS, SEARCH_TOOL, drill_plan, guard_reply, wants_problems
 from app.agent_tools.web_search import TOOL_NAME as WEB_SEARCH_TOOL
@@ -934,6 +934,16 @@ class ChatService:
             learning_plan, plan_user_events = (
                 plans.context(generation.conversation_id, student_id, consume=not event_turn)
                 if not generation.checkpoint else (None, []))
+            quiz_attempts = (
+                QuizStore(self.store).attempt_context(
+                    generation.conversation_id, student_id,
+                    message_ids={row["id"] for row in history if row["role"] == "assistant"},
+                )
+                if not event_turn and not generation.checkpoint else []
+            )
+            onboarding_interview = (
+                False if event_turn else self.store.is_active_onboarding_conversation(student_id, generation.conversation_id)
+            )
             messages = chat_messages(
                 history, memories, exercise, sources, subject, role, snapshot, thinking_depth, conv_title,
                 custom_skills=custom_skills, compressed_summary=compressed_summary,
@@ -941,10 +951,12 @@ class ChatService:
                 learning_plan=learning_plan, plan_user_events=plan_user_events,
                 attached_files=attached_files, system_turn=event_turn, image_question=image_question,
                 mode=None if event_turn else generation.mode,
+                quiz_attempts=quiz_attempts,
+                onboarding_interview=onboarding_interview,
             )
             ctx = ToolContext(
                 workspace_of(self.settings), self.store, student_id, generation.conversation_id,
-                self._agent_flag("memory_write_approval"),
+                self._agent_flag("memory_write_approval") and not onboarding_interview,
             )
             ctx.exercise = exercise
             ctx.assistant_message_id = assistant_id
@@ -1141,6 +1153,11 @@ class ChatService:
                 "tool_calls": tool_log, "tool_messages": tool_messages, **_reasoning_meta(thoughts),
                 "last_checkpoint": {"version": 1, "phase": "done"},
             })
+            if onboarding_interview and not event_turn:
+                wrote_memory = any(item["name"] == "memory" and item["ok"] for item in tool_log)
+                learner_turns = sum(1 for row in history if row["role"] == "user" and not is_system_event_row(row))
+                if wrote_memory or learner_turns >= 2:
+                    self.store.mark_onboarding(student_id, "completed")
             if event_turn:
                 # 沉默（或没有可见副作用）的唤醒回合不留任何消息；汇报保持「已投递」
                 try:
@@ -1188,7 +1205,7 @@ class ChatService:
                 else:
                     await self._analyze(student_id, generation, history, user_text, text, memories, exercise,
                                         self._background_model(model),
-                                        subject_id, plan_at_start)
+                                        subject_id, plan_at_start, quiz_attempts=quiz_attempts)
             except Exception:
                 # The reply is already complete and stored; note-taking problems must not mark it failed.
                 logger.exception("Learning analysis failed")
@@ -1333,7 +1350,7 @@ class ChatService:
 
     async def _analyze(
         self, student_id, generation, history, user_text, reply, memories, exercise, model, subject_id=None,
-        plan_at_start=None,
+        plan_at_start=None, *, quiz_attempts: list[dict] | None = None,
     ) -> None:
         user_id = generation.user_message_id
         if self.store.message_meta(user_id).get("analyzed"):
@@ -1352,7 +1369,7 @@ class ChatService:
         try:
             raw = await asyncio.wait_for(
                 self._complete_json(model, analysis_messages(learner_rows(history), user_text, reply, memories, given, exercise, is_thread,
-                                    learning_plan),
+                                    learning_plan, quiz_attempts=quiz_attempts),
                                     generation.conversation_id, generation.assistant_message_id, "analysis"),
                 ANALYSIS_TIMEOUT,
             )

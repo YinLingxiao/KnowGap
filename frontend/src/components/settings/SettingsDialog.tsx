@@ -2,13 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
-  Brain, Cpu, FolderOpen, Gauge, Monitor, Moon, Plus, Search, Settings, Sliders, Sparkles, Sun, Trash2, Upload, User, X,
+  Brain, Camera, Cpu, FolderOpen, Gauge, MessageSquarePlus, Monitor, Moon, Plus, Search, Settings, Sliders, Sparkles, Sun, Trash2, Upload, User, X,
 } from "lucide-react";
 import { chatApi } from "@/lib/chat/api";
 import { useI18n } from "@/components/LanguageProvider";
 import type { Language, MessageKey } from "@/lib/i18n";
 import type { LearnerMemory, TokenUsage } from "@/lib/chat/types";
-import { updatePassword, type AuthUser } from "@/lib/api/auth";
+import type { AuthUser } from "@/lib/api/auth";
 import type { HealthState } from "@/lib/types";
 import {
   applyAppearance, readAppearance, writeAppearance,
@@ -163,12 +163,15 @@ interface SettingsDialogProps {
   onClose: () => void;
   user?: AuthUser;
   initialTab?: SettingsTab;
-  onLogout?: () => void;
   onRename?: (name: string) => Promise<void>;
+  onUploadAvatar?: (file: File) => Promise<void>;
+  onRemoveAvatar?: () => Promise<void>;
+  onRestartOnboarding?: () => Promise<void>;
 }
 
 export function SettingsDialog({
-  source, health, studentId, modelSignal, modelError = "", onCheckHealth, onConfigChange, onClose, user, initialTab = "general", onLogout, onRename,
+  source, health, studentId, modelSignal, modelError = "", onCheckHealth, onConfigChange, onClose, user,
+  initialTab = "general", onRename, onUploadAvatar, onRemoveAvatar, onRestartOnboarding,
 }: SettingsDialogProps) {
   const ref = useRef<HTMLDialogElement>(null);
   const [tab, setTab] = useState<Tab>(initialTab);
@@ -253,10 +256,11 @@ export function SettingsDialog({
                 {tab === "account" && (
                   <AccountPane
                     user={user}
-                    studentId={studentId}
-                    onLogout={onLogout}
                     onRename={onRename}
+                    onUploadAvatar={onUploadAvatar}
+                    onRemoveAvatar={onRemoveAvatar}
                     onOpenPreferences={() => setTab("preferences")}
+                    onRestartOnboarding={onRestartOnboarding}
                     onClose={onClose}
                   />
                 )}
@@ -267,7 +271,6 @@ export function SettingsDialog({
                 {tab === "models" && (
                   <section>
                     <h2 className={styles.sectionTitle}>{tx("模型接入与服务模型分工")}</h2>
-                    <EffortRow />
                     <ModelAccessCard
                       plain
                       source={source}
@@ -276,8 +279,9 @@ export function SettingsDialog({
                       setupError={modelError}
                       onCheckHealth={onCheckHealth}
                       onConfigChange={onConfigChange}
+                      extraRows={<EffortRow />}
                     />
-                    <div style={{ marginTop: 18 }}>
+                    <div style={{ marginTop: 14 }}>
                       <ServiceModelsSection />
                     </div>
                     <SearchKeyCard />
@@ -522,23 +526,33 @@ function PreferencesPane() {
 }
 
 function AccountPane({
-  user, studentId, onLogout, onRename, onOpenPreferences, onClose,
+  user, onRename, onUploadAvatar, onRemoveAvatar, onOpenPreferences, onRestartOnboarding, onClose,
 }: {
   user?: AuthUser;
-  studentId: string;
-  onLogout?: () => void;
   onRename?: (name: string) => Promise<void>;
+  onUploadAvatar?: (file: File) => Promise<void>;
+  onRemoveAvatar?: () => Promise<void>;
   onOpenPreferences?: () => void;
+  onRestartOnboarding?: () => Promise<void>;
   onClose: () => void;
 }) {
   const { tx } = useI18n();
-  const [name, setName] = useState(user?.displayName || "演示学习者");
-  const [curPw, setCurPw] = useState("");
-  const [newPw, setNewPw] = useState("");
+  const [name, setName] = useState(user?.displayName || "学习者");
   const [domains, setDomains] = useState<string[]>([]);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
-  const providerLabel = user?.provider === "email" ? tx("邮箱账号") : tx("本机演示身份");
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const [avatarFailed, setAvatarFailed] = useState(false);
+  const [restarting, setRestarting] = useState(false);
+  const fileRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    setName(user?.displayName || "学习者");
+  }, [user?.displayName]);
+
+  useEffect(() => {
+    setAvatarFailed(false);
+  }, [user?.avatarUrl]);
 
   useEffect(() => {
     void chatApi
@@ -570,43 +584,121 @@ function AccountPane({
     }
   };
 
+  const handleAvatarFile = async (file: File | undefined) => {
+    if (!file || !onUploadAvatar) return;
+    if (file.size > 2 * 1024 * 1024) {
+      setNote(tx("头像图片不能超过 2 MB。"));
+      return;
+    }
+    setAvatarBusy(true);
+    setNote("");
+    try {
+      await onUploadAvatar(file);
+      setNote(tx("头像已更新"));
+    } catch (error: unknown) {
+      setNote(error instanceof Error ? error.message : tx("头像上传失败"));
+    } finally {
+      setAvatarBusy(false);
+    }
+  };
+
+  const showPhoto = Boolean(user?.avatarUrl && !avatarFailed);
+
   return (
     <section>
-      <h2 className={styles.sectionTitle}>{tx("个人资料与账户")}</h2>
+      <h2 className={styles.sectionTitle}>{tx("个人资料")}</h2>
       <div className={styles.groupCard}>
-        <div className={styles.groupCardHead}>{tx("账户信息")}</div>
+        <div className={styles.groupCardHead}>{tx("本机学习档案")}</div>
         <div className={styles.groupCardBody}>
           <div className={styles.accountHead}>
-            <span className={styles.accountAvatar}>{user?.avatarText || name.slice(0, 1) || tx("学")}</span>
-            <div>
+            <button
+              type="button"
+              className={styles.avatarButton}
+              disabled={avatarBusy || !onUploadAvatar}
+              onClick={() => fileRef.current?.click()}
+              title={tx("上传或更换头像")}
+              aria-label={tx("上传或更换头像")}
+            >
+              <span className={cx(styles.accountAvatar, showPhoto && styles.accountAvatarPhoto)}>
+                {showPhoto ? (
+                  /* eslint-disable-next-line @next/next/no-img-element -- local backend avatar URL */
+                  <img src={user?.avatarUrl} alt="" onError={() => setAvatarFailed(true)} />
+                ) : (
+                  user?.avatarText || name.slice(0, 1) || tx("学")
+                )}
+              </span>
+              <span className={styles.avatarOverlay} aria-hidden>
+                <Camera size={14} />
+              </span>
+            </button>
+            <input
+              ref={fileRef}
+              type="file"
+              hidden
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              aria-label={tx("选择头像图片")}
+              onChange={(event) => {
+                const picked = event.target.files?.[0];
+                event.target.value = "";
+                void handleAvatarFile(picked);
+              }}
+            />
+            <div className={styles.accountIdentity}>
               <p className={styles.settingRowTitle}>{user?.displayName || name}</p>
-              <p className={styles.settingRowDesc}>{user?.username || studentId} · {providerLabel}</p>
+              <p className={styles.settingRowDesc}>{tx("本机学习档案 · 称呼与偏好自动同步至长期记忆")}</p>
+              <div className={styles.avatarActions}>
+                <button
+                  type="button"
+                  className={styles.rowBtn}
+                  disabled={avatarBusy || !onUploadAvatar}
+                  onClick={() => fileRef.current?.click()}
+                >
+                  {avatarBusy ? tx("上传中…") : showPhoto ? tx("更换头像") : tx("上传头像")}
+                </button>
+                {showPhoto && onRemoveAvatar && (
+                  <button
+                    type="button"
+                    className={styles.rowBtn}
+                    disabled={avatarBusy}
+                    onClick={() => {
+                      setAvatarBusy(true);
+                      setNote("");
+                      void onRemoveAvatar()
+                        .then(() => setNote(tx("已恢复文字头像")))
+                        .catch((error: unknown) => setNote(error instanceof Error ? error.message : tx("移除失败")))
+                        .finally(() => setAvatarBusy(false));
+                    }}
+                  >
+                    {tx("移除头像")}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
-          <SettingRow title={tx("显示昵称")} desc={tx("用于侧栏底部头像与首页问候语。")}>
+          <SettingRow title={tx("称呼")} desc={tx("AI 会按这个称呼和你交流，并自动同步到 USER 记忆。")}>
             <form
               className={styles.nameForm}
               onSubmit={(event) => {
                 event.preventDefault();
                 if (!onRename) return;
                 setBusy(true);
+                setNote("");
                 void onRename(name)
-                  .then(() => setNote(tx("昵称已保存")))
+                  .then(() => setNote(tx("称呼已保存并同步至记忆")))
                   .catch((error: unknown) => {
                     setNote(error instanceof Error ? error.message : tx("保存失败"));
                   })
                   .finally(() => setBusy(false));
               }}
             >
-              <input value={name} maxLength={30} onChange={(event) => setName(event.target.value)} aria-label={tx("昵称")} />
+              <input value={name} maxLength={30} onChange={(event) => setName(event.target.value)} aria-label={tx("称呼")} />
               <button className={styles.rowBtn} type="submit" disabled={busy || !name.trim()}>
                 {tx("保存")}
               </button>
             </form>
           </SettingRow>
 
-          {/* 参照 LobeHub 图 4「兴趣/常学领域」多选胶囊墙 */}
           <div className={styles.domainRow}>
             <div className={styles.settingRowInfo}>
               <p className={styles.settingRowTitle}>{tx("常学与关注领域")}</p>
@@ -630,65 +722,31 @@ function AccountPane({
             </div>
           </div>
 
-          {user?.provider === "email" && (
-            <SettingRow title={tx("修改密码")} desc={tx("输入当前密码与新密码（至少 6 位）。")}>
-              <form
-                className={styles.nameForm}
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  if (!curPw || newPw.length < 6 || busy) return;
-                  setBusy(true);
-                  void updatePassword(curPw, newPw)
-                    .then(() => {
-                      setCurPw("");
-                      setNewPw("");
-                      setNote(tx("密码已更新"));
-                    })
-                    .catch((error: unknown) => {
-                      setNote(error instanceof Error ? error.message : tx("密码修改失败"));
-                    })
-                    .finally(() => setBusy(false));
-                }}
-              >
-                <input
-                  type="password"
-                  value={curPw}
-                  placeholder={tx("当前密码")}
-                  aria-label={tx("当前密码")}
-                  onChange={(event) => setCurPw(event.target.value)}
-                />
-                <input
-                  type="password"
-                  value={newPw}
-                  placeholder={tx("新密码（6位+）")}
-                  aria-label={tx("新密码")}
-                  onChange={(event) => setNewPw(event.target.value)}
-                />
-                <button className={styles.rowBtn} type="submit" disabled={busy || !curPw || newPw.length < 6}>
-                  {tx("更新密码")}
-                </button>
-              </form>
-            </SettingRow>
-          )}
-
-          <SettingRow title={tx("学习偏好")} desc={tx("可选。写下背景和讲法，之后的讲解会按这个来。")}>
+          <SettingRow title={tx("学习偏好")} desc={tx("直接编辑背景、讲法与互动节奏，之后的讲解会按此调整。")}>
             <button className={styles.rowBtn} type="button" onClick={() => onOpenPreferences?.()}>
               {tx("去填写")}
             </button>
           </SettingRow>
 
-          <SettingRow title={tx("退出登录")} desc={tx("清除本机登录会话并返回认证界面。")}>
-            <button
-              className={cx(styles.rowBtn, styles.textBtnDanger)}
-              type="button"
-              onClick={() => {
-                onClose();
-                void onLogout?.();
-              }}
-            >
-              {tx("退出当前账号")}
-            </button>
-          </SettingRow>
+          {onRestartOnboarding && (
+            <SettingRow title={tx("初识引导对话")} desc={tx("重新和 AI 聊一轮近况、在学内容与偏好，刷新长期记忆。")}>
+              <button
+                className={styles.rowBtn}
+                type="button"
+                disabled={restarting}
+                onClick={() => {
+                  setRestarting(true);
+                  void onRestartOnboarding()
+                    .then(() => onClose())
+                    .catch((error: unknown) => setNote(error instanceof Error ? error.message : tx("未能启动初识对话")))
+                    .finally(() => setRestarting(false));
+                }}
+              >
+                <MessageSquarePlus size={13} aria-hidden />
+                <span>{restarting ? tx("正在开启…") : tx("重新进行初识对话")}</span>
+              </button>
+            </SettingRow>
+          )}
         </div>
       </div>
       {note && <p className={styles.emptyLine}>{note}</p>}

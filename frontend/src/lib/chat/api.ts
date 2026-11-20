@@ -422,6 +422,16 @@ export const chatApi = {
   async ackOnboarding(): Promise<void> {
     await request(root, "/api/onboarding/ack", { method: "POST" });
   },
+  async startOnboarding(restart = false): Promise<{ conversationId: string; status: string }> {
+    const data = await request<Wire>(root, "/api/onboarding/start", {
+      method: "POST",
+      body: JSON.stringify({ restart }),
+    });
+    return {
+      conversationId: data.conversation_id,
+      status: data.onboarding?.status ?? "in_progress",
+    };
+  },
   async welcome(text: string): Promise<{ subjectId: string; conversationId: string; name: string; goal: string; opener: string }> {
     const data = await request<Wire>(root, "/api/onboarding/welcome", { method: "POST", body: JSON.stringify({ text }) });
     return {
@@ -660,12 +670,6 @@ async function readStream(
   }
   if (!response.ok || !response.body) {
     signal.removeEventListener("abort", abort);
-    if (response.status === 401) {
-      try {
-        localStorage.removeItem("knowgap.auth.token.v1");
-        window.dispatchEvent(new Event("knowgap:auth-expired"));
-      } catch { /* ignore */ }
-    }
     let detail = `请求失败（HTTP ${response.status}）`;
     try {
       const data = await response.json();

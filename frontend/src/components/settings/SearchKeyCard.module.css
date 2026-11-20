@@ -3,23 +3,25 @@
   gap: 12px;
   min-width: 0;
   max-width: 100%;
-  margin-top: 18px;
-  padding-top: 18px;
-  border-top: 1px solid var(--border-subtle);
+  margin-top: 14px;
+  padding: 14px 16px 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
   color: var(--text);
 }
 
 .head h3 {
   margin: 0;
   color: var(--text);
-  font-size: var(--text-lg);
-  font-weight: 650;
+  font-size: var(--text-sm);
+  font-weight: 600;
 }
 
 .head p {
   max-width: 640px;
   margin: 3px 0 0;
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
   font-size: var(--text-xs);
   line-height: var(--leading-ui);
 }
@@ -31,7 +33,7 @@
   align-items: center;
   gap: 6px;
   color: var(--text-secondary);
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
 }
 
 .status strong {

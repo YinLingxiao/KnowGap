@@ -24,8 +24,8 @@ from app.services.materials import MaterialStore
 from app.api.materials import material_router
 from app.auth.deps import current_student, reset_student, set_student
 from app.services.file_store import FileStore
-from app.auth.router import auth_router
-from app.auth.store import AuthStore
+from app.profile.router import profile_router
+from app.profile.store import ProfileStore
 from app.chat.router import chat_router
 from app.chat.subjects import subject_router
 from app.chat.service import ChatService
@@ -67,15 +67,15 @@ def create_app(settings: Settings | None = None, chat_model: ChatModel | None = 
         model_library=model_library, chatgpt_auth=chatgpt_auth,
     )
     chat_service.files = file_store
-    auth_store = AuthStore(store)
+    profile_store = ProfileStore(store)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         store.initialize()
-        auth_store.ensure()
         library.initialize()
         file_store.initialize()
         chat_store.initialize()
+        profile_store.ensure()
         await run_in_threadpool(shared_ssl_context)
         chat_service.recover()
         try:
@@ -89,7 +89,7 @@ def create_app(settings: Settings | None = None, chat_model: ChatModel | None = 
     app.state.tutor = model
     app.state.materials = library
     app.state.chat_service = chat_service
-    app.state.auth = auth_store
+    app.state.profile = profile_store
     vision_store = VisionStore.for_app(settings)
     service_models = ServiceModels(ai_settings, library=ai_settings.library)
     app.state.vision_store = vision_store
@@ -107,7 +107,7 @@ def create_app(settings: Settings | None = None, chat_model: ChatModel | None = 
         return await add_picture_text(kind, data, reading, service_models)
     library.slide_ocr = read_slide_pictures
     app.include_router(material_router(library, lambda subject_id: chat_store.subject(subject_id, current_student()) is not None))
-    app.include_router(chat_router(chat_store, chat_service))
+    app.include_router(chat_router(chat_store, chat_service, get_display_name=lambda: profile_store.get()["display_name"]))
     from app.chat.attachments import attachment_router; app.include_router(attachment_router(chat_store, library))
     from app.chat.files_router import files_router; app.include_router(files_router(file_store))
     from app.chat.plan_router import plan_router; app.include_router(plan_router(chat_store))
@@ -115,18 +115,14 @@ def create_app(settings: Settings | None = None, chat_model: ChatModel | None = 
     app.include_router(agenda_router(chat_store, chat))
     app.include_router(learning_router(chat_store, chat))
     app.include_router(subject_router(chat_store, chat_service))
-    app.include_router(auth_router(auth_store, chat_store, settings))
+    app.include_router(profile_router(profile_store, chat_store))
     app.include_router(sandbox_router(allowed_origins=settings.cors_origins))
     app.include_router(vision_router(vision_store, service_models, cors_origins=settings.cors_origins))
     app.include_router(demo_router(chat_store))
 
     @app.middleware("http")
     async def bind_student(request: Request, call_next):
-        try:
-            student_id = auth_store.student_from_request(request)
-        except HTTPException as exc:
-            return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
-        token = set_student(student_id)
+        token = set_student(profile_store.student_id())
         try:
             return await call_next(request)
         finally:

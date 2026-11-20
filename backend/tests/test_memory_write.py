@@ -168,15 +168,6 @@ def app_store(settings):
     return store
 
 
-def register_bob(client):
-    code = client.post("/api/auth/send-code", json={"email": "bob@school.edu", "purpose": "register"}).json()["demo_code"]
-    data = client.post(
-        "/api/auth/register",
-        json={"email": "bob@school.edu", "password": "password123", "code": code, "display_name": "Bob"},
-    ).json()
-    return {"Authorization": f"Bearer {data['token']}"}
-
-
 def test_delete_revokes_exact_entry_and_log_then_repeat_is_404(tmp_path):
     settings = isolated_settings(tmp_path)
     with TestClient(create_app(settings, chat_model=FakeChat())) as client:
@@ -213,17 +204,17 @@ def test_delete_fabricated_and_other_students_ids_are_the_same_404(tmp_path):
         assert missing.status_code == 404
         assert missing.json() == {"detail": "记忆条目不存在"}
 
-        headers = register_bob(client)
-        other = client.delete(f"/api/agent-memory/{note_id}", headers=headers)
+        other_events: list[MemoryWriteItem] = []
+        store.apply_agent_memory("other-student", "add", "user", "只属于他人", None, events=other_events)
+        other = client.delete(f"/api/agent-memory/{other_events[0]['id']}")
         assert other.status_code == 404
         assert other.json() == missing.json()
 
         # 越权与编造均未产生副作用；本人仍可正常撤销。
+        assert store.agent_notes("other-student")["user"] == "只属于他人"
         assert store.agent_notes(STUDENT) == before_notes
-        assert [log["id"] for log in write_logs(store)] == [note_id]
         assert client.delete(f"/api/agent-memory/{note_id}").status_code == 204
         assert store.agent_notes(STUDENT)["user"] == ""
-        assert write_logs(store) == []
 
 def test_profile_record_queues_memory_write_for_direct_user_notes(tmp_path):
     store = make_store(tmp_path)

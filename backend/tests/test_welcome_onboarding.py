@@ -75,3 +75,49 @@ def test_demo_seed_api_only_touches_the_current_student(tmp_path):
         names = [item["name"] for item in client.get("/api/subjects").json()]
         assert "数据结构（演示）" not in names and "电路原理（演示）" not in names
         assert store.subject(other.id, "other-student").name == "别人的课"
+
+
+def test_onboarding_start_creates_greeting_mounts_skill_and_completes_on_memory_write(tmp_path):
+    from app.chat.agent import learning_context
+    from app.chat.skills import ONBOARDING_INTERVIEW_SKILL
+    from tests.test_chat import send
+
+    class MemoryWritingChat(FakeChat):
+        async def stream(self, messages, tools=None):
+            self.calls.append(messages)
+            if len(self.calls) == 1:
+                yield ("tool_calls", [{
+                    "id": "call-mem-1",
+                    "name": "memory",
+                    "arguments": '{"action":"add","target":"user","content":"[Preference] 讲解偏好：先看直观例子再看定义"}',
+                }])
+                return
+            yield ("text", "记下啦，以后先从直观例子讲起！")
+            yield ("finish", "stop")
+
+    model = MemoryWritingChat()
+    with TestClient(create_app(isolated_settings(tmp_path), chat_model=model)) as client:
+        client.patch("/api/profile", json={"display_name": "小林"})
+        # 即使开启了记忆审批，首次引导对话也应免审直接落盘
+        client.put("/api/agent/settings", json={"memory_write_approval": True})
+        started = client.post("/api/onboarding/start", json={}).json()
+        cid = started["conversation_id"]
+        assert started["onboarding"]["status"] == "in_progress"
+        # 重复调用不新建多余对话
+        assert client.post("/api/onboarding/start", json={}).json()["conversation_id"] == cid
+
+        conv = client.get(f"/api/conversations/{cid}").json()
+        assert len(conv["messages"]) == 1 and conv["messages"][0]["role"] == "assistant"
+        assert "你好，小林！" in conv["messages"][0]["content"]
+
+        send(client, cid, "我最近在学计算机组成原理，喜欢先看例子再看定义", "req-onb-1")
+        ctx = learning_context(model.calls[0])
+        assert ctx["active_skill"] == ONBOARDING_INTERVIEW_SKILL
+        assert ctx["recommended_widget"] is None
+        assert "先看直观例子再看定义" in client.get("/api/agent-memory").json()["user"]
+        assert client.get("/api/onboarding").json()["status"] == "completed"
+
+        # restart=True 允许从设置页重新开启初识对话
+        restarted = client.post("/api/onboarding/start", json={"restart": True}).json()
+        assert restarted["conversation_id"] != cid
+        assert restarted["onboarding"]["status"] == "in_progress"

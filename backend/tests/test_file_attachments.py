@@ -223,27 +223,23 @@ def test_both_upload_routes_accept_new_formats(tmp_path, name, factory, kind, la
         assert len(client.get('/api/materials', params={'unassigned': True}).json()) == 2
 
 
-def register(client, email):
-    code = client.post('/api/auth/send-code', json={'email': email, 'purpose': 'register'}).json()['demo_code']
-    user = client.post('/api/auth/register', json={'email': email, 'password': 'password123', 'code': code}).json()
-    return {'Authorization': f"Bearer {user['token']}"}
-
-
 def test_attachment_upload_owner_and_space_scope(tmp_path):
     with TestClient(create_app(isolated_settings(tmp_path))) as client:
-        alice = register(client, 'alice@school.edu')
-        bob = register(client, 'bob@school.edu')
-        subject = client.post('/api/subjects', headers=alice, json={'name': '操作系统'}).json()
+        store = client.app.state.chat_service.store
+        foreign = store.create_subject('other-student', '别人的课', '', '')
+        assert client.post(
+            f'/api/conversations/{foreign.main_conversation_id}/attachments',
+            files={'file': ('x.txt', b'secret')},
+        ).status_code == 404
+        subject = client.post('/api/subjects', json={'name': '操作系统'}).json()
         cid = subject['main_conversation_id']
         url = f'/api/conversations/{cid}/attachments'
-        assert client.post(url, headers=bob, files={'file': ('x.txt', b'secret')}).status_code == 404
-        assert client.post('/api/conversations/missing/attachments', headers=alice,
+        assert client.post('/api/conversations/missing/attachments',
                            files={'file': ('x.txt', b'abc')}).status_code == 404
-        response = client.post(url, headers=alice, files={'file': ('x.docx', word_bytes())})
+        response = client.post(url, files={'file': ('x.docx', word_bytes())})
         assert response.status_code == 201, response.text
         assert response.json()['subject_id'] == subject['id']
-        assert client.get('/api/materials', headers=bob).json() == []
-        files = client.get('/api/materials', headers=alice, params={'subject_id': subject['id']}).json()
+        files = client.get('/api/materials', params={'subject_id': subject['id']}).json()
         assert [f['id'] for f in files] == [response.json()['id']]
 
 

@@ -110,6 +110,12 @@ def seal_quizzes(text: str, message_id: str, conversation_id: str, store) -> str
     return "".join(pieces)
 
 
+def _option_label(options: list, index: int) -> str:
+    letter = chr(65 + index) if 0 <= index < 26 else str(index + 1)
+    text = str(options[index]).strip() if 0 <= index < len(options) else ""
+    return f"{letter}. {text}" if text else letter
+
+
 def _result(quiz: sqlite3.Row, attempt: sqlite3.Row, repeated: bool = False,
             memory_changes: list | None = None, plan_step: dict | None = None) -> dict:
     result = {
@@ -195,6 +201,41 @@ class QuizStore:
             ).fetchall()
             return {row["quiz_id"]: _result(row, {"id": row["attempt_id"], "option_index": row["option_index"],
                                                     "correct": row["correct"]}) for row in rows}
+
+    def attempt_context(
+        self, conversation_id: str, student_id: str, message_ids: set[str] | None = None, limit: int = 8,
+    ) -> list[dict]:
+        with self.store.connection() as db:
+            rows = db.execute(
+                "SELECT q.quiz_id, q.message_id, q.question, q.options_json, q.answer_index, q.explanation, "
+                "a.option_index, a.correct "
+                "FROM quiz_attempts a "
+                "JOIN quiz_items q ON q.quiz_id = a.quiz_id "
+                "JOIN conversations c ON c.id = q.conversation_id "
+                "WHERE a.conversation_id = ? AND c.student_id = ? AND q.superseded = 0 "
+                "ORDER BY a.created_at DESC, a.rowid DESC",
+                (conversation_id, student_id),
+            ).fetchall()
+        picked = []
+        for row in rows:
+            if message_ids is not None and row["message_id"] not in message_ids:
+                continue
+            options = json.loads(row["options_json"])
+            item = {
+                "quiz_id": row["quiz_id"],
+                "question": str(row["question"])[:200],
+                "chosen_option": _option_label(options, row["option_index"]),
+                "correct_option": _option_label(options, row["answer_index"]),
+                "correct": bool(row["correct"]),
+            }
+            explanation = str(row["explanation"] or "").strip()
+            if explanation:
+                item["explanation"] = explanation[:300]
+            picked.append(item)
+            if len(picked) >= limit:
+                break
+        picked.reverse()
+        return picked
 
 
 class AttemptBody(StrictModel):

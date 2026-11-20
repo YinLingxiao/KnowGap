@@ -36,14 +36,6 @@ function kindOf(status: number): ApiErrorKind {
   return "server";
 }
 
-function noteUnauthorized(status: number) {
-  if (status !== 401) return;
-  try {
-    localStorage.removeItem("knowgap.auth.token.v1");
-    window.dispatchEvent(new Event("knowgap:auth-expired"));
-  } catch { /* private mode */ }
-}
-
 function parseIssues(raw: unknown): VisionIssue[] {
   if (!Array.isArray(raw)) return [];
   return raw.flatMap((item: Wire) => (item && typeof item.message === "string"
@@ -72,7 +64,6 @@ async function postJson(path: string, payload: unknown, timeoutMs = 30_000): Pro
   }
   const body: Wire = await response.json().catch(() => null);
   if (!response.ok) {
-    noteUnauthorized(response.status);
     const detail = body?.detail;
     const message = typeof detail === "string" ? detail
       : typeof detail?.message === "string" ? detail.message : `请求失败（HTTP ${response.status}）`;
@@ -267,7 +258,6 @@ export function loadImageUrl(imageId: string): Promise<string> {
   const pending = fetch(`${API_BASE_URL}/api/vision/images/${encodeURIComponent(imageId)}`, { headers: authHeader() })
     .then(async (response) => {
       if (!response.ok) {
-        noteUnauthorized(response.status);
         throw new ApiError(kindOf(response.status), "图片无法加载", response.status);
       }
       return URL.createObjectURL(await response.blob());

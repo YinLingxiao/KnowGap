@@ -2,22 +2,143 @@
   display: grid;
   min-height: 100%;
   place-items: center;
-  padding: 32px 20px;
+  padding: 28px 20px;
+  overflow-y: auto;
   background: var(--bg);
 }
 
-.card {
+.shell {
   display: flex;
   flex-direction: column;
-  width: min(440px, 100%);
-  gap: 12px;
+  width: min(460px, 100%);
+  gap: 20px;
+  padding: 24px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-card);
+  transition: width 220ms var(--ease-out);
+  animation: shell-in 240ms var(--ease-out);
 }
 
+.shellWide {
+  width: min(680px, 100%);
+}
+
+@keyframes shell-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.topBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.steps {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stepItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  transition: color 180ms var(--ease-out);
+}
+
+.stepActive {
+  color: var(--text);
+}
+
+.stepDone {
+  color: var(--text-secondary);
+}
+
+.stepNum {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  transition:
+    background-color 180ms var(--ease-out),
+    border-color 180ms var(--ease-out),
+    color 180ms var(--ease-out);
+}
+
+.stepActive .stepNum {
+  border-color: var(--accent-solid);
+  background: var(--accent-solid);
+  color: var(--on-accent);
+}
+
+.stepDone .stepNum {
+  border-color: color-mix(in srgb, var(--green) 40%, var(--border));
+  background: color-mix(in srgb, var(--green) 14%, transparent);
+  color: var(--green);
+}
+
+.stepLine {
+  width: 20px;
+  height: 1px;
+  background: var(--border-strong);
+}
+
+.pane {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  animation: pane-enter 220ms var(--ease-out);
+}
+
+@keyframes pane-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.heading {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.heading h1,
 .card h1 {
-  margin: 4px 0 0;
+  margin: 0;
   color: var(--text);
   font-family: var(--font-display);
-  font-size: var(--text-2xl);
+  font-size: var(--text-xl);
   font-weight: 600;
   letter-spacing: 0;
 }
@@ -25,99 +146,177 @@
 .lead {
   margin: 0;
   color: var(--text-secondary);
-  font-size: var(--text-md);
+  font-size: var(--text-sm);
+  line-height: var(--leading-ui);
+}
+
+/* Step 1：头像 + 称呼 */
+.profileRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
+.avatarPick {
+  position: relative;
+  flex-shrink: 0;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: transparent;
+  overflow: hidden;
+  transition: border-color 120ms var(--ease-out);
+}
+
+.avatarPick:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.avatarPick:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.avatarCircle {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.avatarPhoto {
+  background: var(--bg-subtle);
+}
+
+.avatarPhoto img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.avatarMask {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgb(0 0 0 / 48%);
+  color: #fff;
+  opacity: 0;
+  transition: opacity 140ms var(--ease-out);
+}
+
+.avatarPick:hover:not(:disabled) .avatarMask,
+.avatarPick:focus-visible .avatarMask {
+  opacity: 1;
+}
+
+.profileInputs {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fieldLabel {
+  color: var(--text);
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+.fieldLabel small {
+  color: var(--text-tertiary);
+  font-weight: 400;
 }
 
 .input {
   width: 100%;
-  height: 40px;
-  margin-top: 8px;
-  padding: 0 12px;
-  border: 1px solid var(--border);
+  height: 36px;
+  padding: 0 11px;
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius);
   background: var(--bg-elevated);
   color: var(--text);
-  font-size: var(--text-md);
-}
-
-.input:focus-visible {
-  outline: var(--focus-ring);
-  border-color: var(--accent);
-}
-
-.attach,
-.file {
-  display: inline-flex;
-  align-items: center;
-  align-self: flex-start;
-  gap: 6px;
-  max-width: 100%;
-  min-height: 28px;
-  color: var(--text-secondary);
   font-size: var(--text-sm);
+  transition: border-color 120ms var(--ease-out), box-shadow 120ms var(--ease-out);
 }
 
-.attach {
-  padding: 4px 0;
-  border: 0;
-  background: transparent;
+.input:focus {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
-.attach:hover:not(:disabled) {
-  color: var(--text);
-}
-
-.attach:disabled {
-  opacity: 0.55;
-}
-
-.file {
-  padding: 4px 4px 4px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg-subtle);
-  color: var(--text);
-}
-
-.fileName {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.file button {
-  display: grid;
-  flex-shrink: 0;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  border-radius: var(--radius-sm);
-  color: var(--text-tertiary);
-}
-
-.file button:hover:not(:disabled) {
-  background: var(--bg-hover);
-  color: var(--text);
-}
-
-.examples {
+.avatarMeta {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.textLink {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color 120ms var(--ease-out);
+}
+
+.textLink:hover:not(:disabled) {
+  color: var(--text);
+}
+
+/* Step 2：模型接入区 */
+.modelStage {
+  max-height: min(440px, 54dvh);
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.stepActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.rightActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
 }
 
-.examples button,
-.links button {
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--bg-subtle);
+.backBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: var(--radius);
   color: var(--text-secondary);
   font-size: var(--text-sm);
-  padding: 6px 10px;
+  transition: background-color 120ms var(--ease-out), color 120ms var(--ease-out);
 }
 
-.examples button:hover:not(:disabled),
-.links button:hover:not(:disabled) {
+.backBtn:hover:not(:disabled) {
   background: var(--bg-hover);
   color: var(--text);
 }
@@ -128,44 +327,83 @@
   justify-content: center;
   gap: 6px;
   height: 36px;
-  margin-top: 4px;
+  padding: 0 16px;
   border: 0;
   border-radius: var(--radius);
   background: var(--accent-solid);
   color: var(--on-accent);
   font-size: var(--text-sm);
   font-weight: 600;
+  transition: background-color 120ms var(--ease-out), transform 120ms var(--ease-out), opacity 120ms var(--ease-out);
 }
 
 .primary:hover:not(:disabled) {
   background: var(--accent-solid-hover);
 }
 
+.primary:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
 .primary:disabled,
-.examples button:disabled,
-.links button:disabled {
-  opacity: 0.55;
+.secondary:disabled,
+.links button:disabled,
+.backBtn:disabled {
+  opacity: 0.5;
+}
+
+.secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text);
+  font-size: var(--text-sm);
+  transition: background-color 120ms var(--ease-out);
+}
+
+.secondary:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.links button {
+  padding: 5px 11px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  transition: background-color 120ms var(--ease-out), color 120ms var(--ease-out), border-color 120ms var(--ease-out);
+}
+
+.links button:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  width: min(400px, 100%);
+  gap: 12px;
 }
 
 .error {
   margin: 0;
   color: var(--red);
   font-size: var(--text-sm);
-}
-
-.links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.logout {
-  align-self: flex-start;
-  padding: 6px 0;
-  border: 0;
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: var(--text-xs);
 }
 
 /* 模型没接好时的引导卡片：出现在对话里原本显示发送失败的位置 */
@@ -181,6 +419,7 @@
   box-shadow: var(--shadow-card);
   color: var(--text);
   text-align: left;
+  animation: pane-enter 220ms var(--ease-out);
 }
 
 .guideHead {
@@ -237,34 +476,56 @@
   margin-top: 2px;
 }
 
-.guideActions .primary {
-  margin-top: 0;
-  padding: 0 14px;
-}
-
-.secondary {
-  height: 36px;
-  padding: 0 14px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius);
-  background: transparent;
-  color: var(--text);
-  font-size: var(--text-sm);
-}
-
-.secondary:hover {
-  background: var(--bg-hover);
-}
-
 .guide button:focus-visible,
+.shell button:focus-visible,
 .card button:focus-visible {
   outline: var(--focus-ring);
-  outline-offset: 3px;
+  outline-offset: 2px;
+}
+
+@media (max-width: 560px) {
+  .shell {
+    padding: 18px 16px;
+  }
+
+  .profileRow {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+
+  .profileInputs {
+    width: 100%;
+    text-align: left;
+  }
+
+  .stepActions {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+
+  .rightActions {
+    justify-content: flex-end;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .shell,
+  .pane,
+  .guide {
+    animation: none;
+    transition: none;
+  }
+
+  .stepItem,
+  .stepNum,
+  .avatarPick,
+  .avatarMask,
+  .input,
+  .textLink,
+  .backBtn,
   .primary,
-  .examples button,
+  .secondary,
   .links button {
     transition: none;
   }

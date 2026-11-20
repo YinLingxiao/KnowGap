@@ -5,9 +5,7 @@ import { ArrowUp, CornerDownLeft, ExternalLink, Loader2, Plus, X } from "lucide-
 import { useAuth } from "@/components/auth/useAuth";
 import { Markdown } from "@/components/chat/Markdown";
 import { useI18n } from "@/components/LanguageProvider";
-import { MODE_KEY } from "@/lib/api/auth";
 import { ApiError } from "@/lib/api/errors";
-import { AUTH_TOKEN_KEY } from "@/lib/api/http-client";
 import { chatApi } from "@/lib/chat/api";
 import type { Subject } from "@/lib/chat/types";
 import { API_BASE_URL } from "@/lib/config";
@@ -95,29 +93,20 @@ export function QuickAsk() {
     };
   }, []);
 
-  // 浮窗可能早于主窗口登录就已加载：登录状态在别处变化后重新加载，拿到最新身份
-  useEffect(() => {
-    const onStorage = (event: StorageEvent) => {
-      if (event.key === AUTH_TOKEN_KEY || event.key === MODE_KEY) window.location.reload();
-    };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, []);
-
   // 每次呼出时聚焦输入框，并刷新空间列表（主窗口里可能刚新建了空间）
   useEffect(() => {
     inputRef.current?.focus();
     if (!desktop) return;
     return desktop.onShown(() => {
-      if (auth.status === "anonymous") {
-        window.location.reload();
+      if (auth.status === "error") {
+        void auth.retry();
         return;
       }
       inputRef.current?.focus();
       inputRef.current?.select();
       if (user) loadSubjects();
     });
-  }, [desktop, user, auth.status, loadSubjects]);
+  }, [desktop, user, auth, loadSubjects]);
 
   // 面板高度变化时让桌面壳跟着调整窗口高度（外加阴影留白）
   useEffect(() => {
@@ -236,10 +225,13 @@ export function QuickAsk() {
     <main className={styles.stage} onKeyDown={onKeyDown}>
       <div ref={panelRef} className={styles.panel} role="dialog" aria-label={tx("快问")}>
         {auth.status === "loading" ? (
-          <p className={styles.notice}>{tx("正在确认登录状态…")}</p>
+          <p className={styles.notice}>{tx("正在连接后端服务…")}</p>
         ) : !user ? (
           <div className={styles.notice}>
-            <span>{auth.error || tx("请先在主窗口登录，或使用本机演示身份进入。")}</span>
+            <span>{auth.error || tx("无法连接后端服务，请确认后端已启动。")}</span>
+            <button type="button" className={styles.ghost} onClick={() => void auth.retry()}>
+              {tx("重试")}
+            </button>
             <button type="button" className={styles.ghost} onClick={openInMain}>
               <ExternalLink size={14} aria-hidden /> {tx("打开主窗口")}
             </button>

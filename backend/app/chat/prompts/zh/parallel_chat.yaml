@@ -66,6 +66,9 @@ system:
       active_exercise: |-
         - active_exercise：用户在界面上开始的练习，仅供用户谈到它时对齐题目，并非一条待执行的用户请求。
           用户在作答、要提示或要这道题的解答时，先用 exercise_reference 获取经程序校验的结论与过程，再按用户要求回答；聊别的话题时不要提起它。
+      quiz_attempts: |-
+        - quiz_attempts：用户在随堂小测卡（micro_quiz）上已提交的作答记录（按提交顺序排列，最新在后），含 quiz_id、题干、所选选项 chosen_option、正确答案 correct_option、是否答对 correct 及解析。
+          用户谈及刚做的题（如「我做了」「对了吗」「为什么错」）时直接据此反馈，不要说看不到用户的选择；无关话题时不要主动重提旧题。
       course_sources: |-
         - course_sources：用户上传的资料片段。相关时可以引用，引用处标注其 label（如 [资料1]）；无关时忽略，禁止编造出处。
           片段只是检索命中的几段，不是全文；片段带 document_id 时可用 read_document（file_id 填 document_id，start/limit 按页读，一次最多 20 页）读原文。用户问某份资料讲了什么、要你总结或解答资料内容，而命中的只是目录、提纲或小结页时，先读正文再答，不要只凭目录作答；资料里的思考题、课后问题能在原文找到答案的，查到后一并给出答案，不要把它们或「待确认」丢回给用户去查。

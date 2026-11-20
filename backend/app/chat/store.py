@@ -1594,6 +1594,55 @@ class ChatStore:
                 )
             return state(db, student_id)
 
+    def start_onboarding_conversation(
+        self, student_id: str, greeting: str, *, restart: bool = False,
+    ) -> dict:
+        from app.chat.onboarding import state as read_state
+        from app.chat.skills.chat_skills import ONBOARDING_TITLE
+        timestamp = now()
+        with self.connection() as db:
+            db.execute("BEGIN IMMEDIATE")
+            current = read_state(db, student_id)
+            existing_id = current.get("conversation_id")
+            if not restart and current.get("status") == "in_progress" and existing_id:
+                exists = db.execute(
+                    "SELECT id FROM conversations WHERE id = ? AND student_id = ?",
+                    (existing_id, student_id),
+                ).fetchone()
+                if exists:
+                    return {"conversation_id": existing_id, "onboarding": current}
+            conversation_id = new_id("conv")
+            db.execute(
+                "INSERT INTO conversations(id, student_id, title, title_source, client_request_id, subject_id, "
+                "created_at, updated_at) VALUES (?, ?, ?, 'user', NULL, NULL, ?, ?)",
+                (conversation_id, student_id, ONBOARDING_TITLE, timestamp, timestamp),
+            )
+            self._insert(
+                db, conversation_id, role="assistant", kind="text", content=greeting,
+                status="complete", meta={"onboarding_greeting": True},
+            )
+            db.execute(
+                """INSERT INTO onboarding_sessions(student_id, conversation_id, status, turns, version)
+                   VALUES (?, ?, 'in_progress', 0, 1)
+                   ON CONFLICT(student_id) DO UPDATE SET
+                       conversation_id = excluded.conversation_id,
+                       status = 'in_progress',
+                       turns = 0,
+                       version = onboarding_sessions.version + 1""",
+                (student_id, conversation_id),
+            )
+            updated = read_state(db, student_id)
+            updated["has_user_profile"] = bool(read_all(db, student_id)["user"].strip())
+            return {"conversation_id": conversation_id, "onboarding": updated}
+
+    def is_active_onboarding_conversation(self, student_id: str, conversation_id: str) -> bool:
+        with self.connection() as db:
+            row = db.execute(
+                "SELECT status, conversation_id FROM onboarding_sessions WHERE student_id = ?",
+                (student_id,),
+            ).fetchone()
+            return bool(row and row["status"] == "in_progress" and row["conversation_id"] == conversation_id)
+
     def learning_checklist(self, student_id: str) -> dict:
         """上手清单只认学生自己做过的事：导入的演示数据不算，在演示空间里真实发生的对话照常算。"""
         demo = f"{REQUEST_PREFIX}%"

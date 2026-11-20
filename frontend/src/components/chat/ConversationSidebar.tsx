@@ -63,6 +63,7 @@ interface SidebarProps {
   onCollapse: () => void;
   displayName?: string;
   avatarText?: string;
+  avatarUrl?: string;
   /** 当前侧栏模式；缺省按对话模式渲染 */
   mode?: SidebarMode;
   onModeChange?: (mode: SidebarMode) => void;
@@ -494,10 +495,11 @@ function SortMenu({ sort, onSelect }: {
 }
 
 function AvatarMenu({
-  displayName, avatarText, modelIssue, helpOpen, onOpenHelp, onOpenSettings,
+  displayName, avatarText, avatarUrl, modelIssue, helpOpen, onOpenHelp, onOpenSettings,
 }: {
   displayName?: string;
   avatarText?: string;
+  avatarUrl?: string;
   modelIssue: boolean;
   helpOpen: boolean;
   onOpenHelp: () => void;
@@ -608,6 +610,18 @@ function AvatarMenu({
 
   const expanded = open && !closing;
 
+  const [avatarFailed, setAvatarFailed] = useState(false);
+  useEffect(() => { setAvatarFailed(false); }, [avatarUrl]);
+  const showImage = Boolean(avatarUrl && !avatarFailed);
+  const avatarNode = showImage ? (
+    <span className={cx(styles.avatar, styles.avatarPhoto)} aria-hidden>
+      {/* eslint-disable-next-line @next/next/no-img-element -- local backend avatar URL */}
+      <img src={avatarUrl} alt="" onError={() => setAvatarFailed(true)} />
+    </span>
+  ) : (
+    <span className={styles.avatar} aria-hidden>{avatarText || t("app.avatar")}</span>
+  );
+
   return (
     <>
       <button
@@ -625,7 +639,7 @@ function AvatarMenu({
         title={t("sidebar.accountMenuAria")}
       >
         <span className={styles.avatarWrap}>
-          <span className={styles.avatar} aria-hidden>{avatarText || t("app.avatar")}</span>
+          {avatarNode}
           {modelIssue && <span className={styles.alertDot} aria-hidden />}
         </span>
         <span className={styles.userName}>
@@ -649,7 +663,7 @@ function AvatarMenu({
           }}
         >
           <div className={styles.avatarMenuHead} role="presentation">
-            <span className={styles.avatar} aria-hidden>{avatarText || t("app.avatar")}</span>
+            {avatarNode}
             <span className={styles.avatarMenuName}>
               {displayName || t("app.demoLearner")}
               <small className={styles.userPlan}> · {t("app.localVersion")}</small>
@@ -929,6 +943,7 @@ export function ConversationSidebar(props: SidebarProps) {
         <AvatarMenu
           displayName={props.displayName}
           avatarText={props.avatarText}
+          avatarUrl={props.avatarUrl}
           modelIssue={props.modelIssue}
           helpOpen={props.helpOpen}
           onOpenHelp={props.onOpenHelp}

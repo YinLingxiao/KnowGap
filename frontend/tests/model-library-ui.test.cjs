@@ -58,7 +58,7 @@ test('model library settings keep secrets out of the page and expose the library
   assert.match(page, /synthetic-library-key/);
   assert.doesNotMatch(page, /sk-[A-Za-z0-9]{20,}/);
   const css = read('components/settings/ModelLibrary.module.css');
-  assert.match(css, /minmax\(min\(100%, 168px\), 1fr\)/);
+  assert.match(css, /minmax\(min\(100%, 240px\), 1fr\)/);
   assert.match(css, /@media \(max-width: 640px\)/);
   assert.match(read('components/settings/ServiceModelsSection.module.css'), /@media \(max-width: 640px\)/);
 });

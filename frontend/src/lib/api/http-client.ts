@@ -30,7 +30,6 @@ export async function request<T = unknown>(
       signal: controller.signal,
     });
     if (!response.ok) {
-      noteUnauthorized(response.status);
       const detail = await readDetail(response);
       throw new ApiError(statusToKind(response.status), detail ?? `请求失败（HTTP ${response.status}）`, response.status);
     }
@@ -60,23 +59,8 @@ async function readDetail(response: Response): Promise<string | null> {
   }
 }
 
-export const AUTH_TOKEN_KEY = "knowgap.auth.token.v1";
-
 export function authHeader(): Record<string, string> {
-  try {
-    const token = globalThis.localStorage?.getItem(AUTH_TOKEN_KEY);
-    return token ? { Authorization: `Bearer ${token}` } : {};
-  } catch {
-    return {};
-  }
-}
-
-function noteUnauthorized(status: number) {
-  if (status !== 401) return;
-  try {
-    localStorage.removeItem(AUTH_TOKEN_KEY);
-    window.dispatchEvent(new Event("knowgap:auth-expired"));
-  } catch { /* tests and private mode */ }
+  return {};
 }
 
 function statusToKind(status: number): ApiErrorKind {

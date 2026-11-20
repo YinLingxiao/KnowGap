@@ -9,7 +9,6 @@ from app.agents.llm import ProviderError
 from app.chat import cheatsheet as cheatsheet_module
 from app.main import create_app
 from tests.test_acceptance_support import isolated_settings
-from tests.test_auth_and_isolation import auth_headers
 from tests.test_chat import FakeChat
 
 SHEET = {
@@ -97,17 +96,12 @@ def test_insights_empty_space_shape_and_404s(tmp_path):
 
 def test_cross_student_insights_and_cheatsheet_are_404(tmp_path):
     with TestClient(create_app(isolated_settings(tmp_path), chat_model=FakeChat(analyses=[SHEET]))) as client:
-        tokens = []
-        for email in ("alice@school.edu", "bob@school.edu"):
-            code = client.post("/api/auth/send-code", json={"email": email, "purpose": "register"}).json()["demo_code"]
-            tokens.append(client.post("/api/auth/register", json={
-                "email": email, "password": "password123", "code": code, "display_name": email[:3],
-            }).json()["token"])
-        alice, bob = (auth_headers(token) for token in tokens)
-        space = client.post("/api/subjects", headers=alice, json={"name": "Alice 的空间"}).json()
-        assert client.get(f"/api/subjects/{space['id']}/insights", headers=alice).status_code == 200
-        assert client.get(f"/api/subjects/{space['id']}/insights", headers=bob).status_code == 404
-        assert client.post(f"/api/subjects/{space['id']}/cheatsheet", headers=bob, json={}).status_code == 404
+        store = client.app.state.chat_service.store
+        foreign = store.create_subject("other-student", "他人的空间", "", "")
+        own = client.post("/api/subjects", json={"name": "我的空间"}).json()
+        assert client.get(f"/api/subjects/{own['id']}/insights").status_code == 200
+        assert client.get(f"/api/subjects/{foreign.id}/insights").status_code == 404
+        assert client.post(f"/api/subjects/{foreign.id}/cheatsheet", json={}).status_code == 404
 
 
 def test_cheatsheet_uses_real_evidence_and_caches(tmp_path):

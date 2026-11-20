@@ -235,6 +235,7 @@ def chat_messages(
     learning_plan: dict | None = None, plan_user_events: list[str] | None = None,
     attached_files: list[dict] | None = None, *, system_turn: bool = False,
     image_question: str | None = None, mode: str | None = None,
+    quiz_attempts: list[dict] | None = None, onboarding_interview: bool = False,
 ) -> list[dict]:
     # Ordered from stable to volatile so provider prefix caches cover the prompt and the whole history;
     # only the trailing turn context (and the new message) is fresh input each turn.
@@ -261,6 +262,7 @@ def chat_messages(
             earlier_user_texts=user_texts[:-1],
             attached_files=attached_files,
             mode=mode,
+            onboarding_interview=onboarding_interview,
         )
         if custom_skills:
             sample_text = f"{role_info.get('delegated_task') or ''} {latest_user}".lower()
@@ -309,7 +311,7 @@ def chat_messages(
         "latest_user_message": latest_user or (user_texts[-1] if image_turn and user_texts else ""),
         "conversation_role": role_info,
         "active_skill": active_skill,
-        "recommended_widget": None if system_turn else recommend_widget(
+        "recommended_widget": None if system_turn or onboarding_interview else recommend_widget(
             role_name, latest_user, role_info.get("delegated_task"), mode=mode),
         "thinking_depth": thinking_depth,
         "teaching_preferences": teaching_preferences,
@@ -331,6 +333,8 @@ def chat_messages(
                 source['unit_label'] = by_id[reference.document_id]['unit_label']
     if plan_user_events:
         turn["plan_user_events"] = plan_user_events
+    if quiz_attempts:
+        turn["quiz_attempts"] = quiz_attempts
     if reported_prior_knowledge:
         turn["reported_prior_knowledge"] = reported_prior_knowledge
     user_turns = sum(row["role"] == "user" and row["status"] != "failed" and bool(row["content"].strip())
@@ -434,6 +438,7 @@ def review_messages(notes: dict, turns: list[dict]) -> list[dict]:
 def analysis_messages(
     history: list[sqlite3.Row], user_text: str, reply: str, memories: list[tuple[LearnerMemory, str]],
     given_ids: list[str], exercise: Problem | None, report_thread: bool = False, learning_plan: dict | None = None,
+    quiz_attempts: list[dict] | None = None,
 ) -> list[dict]:
     recent = [
         {"role": turn["role"], "content": turn["content"][:800]} for turn in dialogue(history)[-7:-1]
@@ -449,6 +454,8 @@ def analysis_messages(
         "memories_given_to_reply": given_ids,
         "available_exercises": [{"id": p.id, "title": p.title} for p in PROBLEMS.values()],
     }
+    if quiz_attempts:
+        payload["quiz_attempts"] = quiz_attempts
     return [
         {"role": "system", "content": ANALYSIS_PROMPT},
         {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},

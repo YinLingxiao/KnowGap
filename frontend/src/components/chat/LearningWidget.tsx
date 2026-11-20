@@ -19,7 +19,7 @@ import { CircuitNetlistWidget } from "./widgets/CircuitNetlistWidget";
 import { GapCard } from "./widgets/GapCard";
 import { ImageAnnotatorWidget } from "./widgets/ImageAnnotatorWidget";
 import { MEMORY_CHANGED_EVENT } from "./widgets/memoryContext";
-import { WIDGET_ASK_EVENT, askInComposer, useWidgetScope } from "./widgets/widgetEvents";
+import { WIDGET_ASK_EVENT, askInComposer, sendNow, useWidgetScope } from "./widgets/widgetEvents";
 import { ProblemSourceBadge, type ProblemSource } from "./widgets/ProblemSourceBadge";
 import { WidgetSkeleton } from "./widgets/WidgetSkeleton";
 
@@ -768,7 +768,7 @@ function MicroQuizWidget({ data }: { data: Record<string, unknown> }) {
               type="button"
               className={styles.askAiBtn}
               onClick={() =>
-                emitWidgetQuestion(
+                sendNow(
                   scope,
                   tx("针对刚才这道题「{question}」，我选了「{option}」，{followUp}", {
                     question,

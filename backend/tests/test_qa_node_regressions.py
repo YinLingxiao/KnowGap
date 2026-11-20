@@ -175,20 +175,6 @@ def test_blacklisted_calls_are_blocked_before_any_approval_card(tmp_path):
     assert preflight_blacklist("bash", '{"command":"echo hello"}') is None
 
 
-# 6. SMTP rejection falls back to an on-screen demo code.
-def test_smtp_failure_falls_back_to_demo_code(tmp_path, monkeypatch):
-    def reject(*args, **kwargs):
-        raise OSError("recipient rejected")
-
-    monkeypatch.setattr("app.auth.router._send_smtp_email", reject)
-    settings = isolated_settings(tmp_path, smtp_host="smtp.test", smtp_user="bot@test.local", smtp_password="pw")
-    with TestClient(create_app(settings, chat_model=FakeChat())) as client:
-        response = client.post("/api/auth/send-code", json={"email": "alice@test.local", "purpose": "register"})
-    assert response.status_code == 200
-    body = response.json()
-    assert body["delivery"] == "demo" and body["demo_code"] and body["expires_in"] == 300
-
-
 # 7. A Feynman self-test keeps its skill on later turns.
 def test_feynman_challenge_sticks_after_the_first_turn():
     feynman = THREAD_SKILLS["feynman_challenge"]

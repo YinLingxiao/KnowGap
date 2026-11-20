@@ -1,6 +1,6 @@
 /* 设置页里的编辑卡片：居中的模态框，内容多时只滚动卡片内部 */
 .dialog {
-  width: min(560px, calc(100vw - 32px));
+  width: min(540px, calc(100vw - 32px));
   margin: auto;
   max-height: min(720px, calc(100dvh - 48px));
   padding: 0;
@@ -12,8 +12,29 @@
   overflow: hidden;
 }
 
+.dialog[open] {
+  animation: dialog-in 210ms var(--ease-out);
+}
+
 .dialog::backdrop {
   background: rgb(0 0 0 / 48%);
+  animation: backdrop-in 180ms var(--ease-out);
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .card {
@@ -28,8 +49,9 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  padding: 16px 18px 12px;
+  padding: 15px 18px 12px;
   border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-subtle);
 }
 
 .head h4 {
@@ -39,7 +61,7 @@
 }
 
 .head p {
-  margin: 4px 0 0;
+  margin: 3px 0 0;
   color: var(--text-tertiary);
   font-size: var(--text-xs);
   line-height: 1.5;
@@ -53,6 +75,7 @@
   height: 28px;
   border-radius: var(--radius-sm);
   color: var(--text-tertiary);
+  transition: background-color 120ms var(--ease-out), color 120ms var(--ease-out);
 }
 
 .close:hover {
@@ -69,8 +92,19 @@
   display: flex;
   min-height: 0;
   flex-direction: column;
-  gap: 12px;
-  padding: 14px 18px 18px;
+  gap: 14px;
+  padding: 16px 18px 18px;
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dialog[open],
+  .dialog::backdrop {
+    animation: none;
+  }
+
+  .close {
+    transition: none;
+  }
 }

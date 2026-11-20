@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useId, useState } from "react";
-import { CircleCheck, Cpu, RefreshCw, TriangleAlert } from "lucide-react";
+import { useCallback, useEffect, useId, useState, type ReactNode } from "react";
+import { CircleCheck, Cpu, Plus, RefreshCw, TriangleAlert } from "lucide-react";
 import { useI18n } from "@/components/LanguageProvider";
 import type { HealthState } from "@/lib/types";
 import type { AIConfigStatus } from "@/lib/api/ai-config";
@@ -36,6 +36,7 @@ interface ModelAccessCardProps {
   setupError?: string;
   plain?: boolean;
   client?: ModelLibraryClient;
+  extraRows?: ReactNode;
 }
 
 function groupCatalog(models: CatalogModel[]) {
@@ -76,7 +77,7 @@ function statusOf(providers: ProviderPublic[], key: string | null): AIConfigStat
 }
 
 export function ModelAccessCard({
-  source, health, signal, onCheckHealth, onConfigChange, plain = false, client, setupError = "",
+  source, health, signal, onCheckHealth, onConfigChange, plain = false, client, setupError = "", extraRows,
 }: ModelAccessCardProps) {
   const { tx } = useI18n();
   const fieldId = useId();
@@ -99,7 +100,6 @@ export function ModelAccessCard({
     ]);
     let nextDefault = loadedDefault;
     let picked = false;
-    // 默认模型为空或已不可用、但有可选模型时，自动选第一个，否则会一直卡在「先连上 AI 模型」
     const firstKey = nextCatalog[0]?.key;
     if (firstKey && !nextCatalog.some((model) => model.key === loadedDefault.key)) {
       nextDefault = await library.setDefaultModel(firstKey);
@@ -131,6 +131,7 @@ export function ModelAccessCard({
   const editing = editor ? providers.find((item) => item.id === editor) ?? null : null;
   const groups = groupCatalog(catalog);
   const defaultMissing = Boolean(defaultKey && !catalog.some((model) => model.key === defaultKey));
+  const enabledProviders = providers.filter((p) => p.enabled).length;
 
   const run = async (action: () => Promise<void>) => {
     setBusy(true);
@@ -151,14 +152,34 @@ export function ModelAccessCard({
     const status = await reload(true);
     window.dispatchEvent(new Event(MODELS_CHANGED_EVENT));
     setNotice(status.configured
-      ? { tone: "ok", text: tx("正在测试连接，通过后会离开此页。") }
+      ? { tone: "ok", text: tx("已保存默认模型，正在验证连接…") }
       : { tone: "error", text: tx("默认模型还不可用。请确认服务商已启用，并且密钥或 ChatGPT 套餐已授权。") });
   });
 
   const envHint = tx("在 {path} 设置 {flag} 并重启前端后，可在这里管理模型库。", { path: "\u0000", flag: "\u0001" });
 
+  const healthBadge = source === "mock" && !client ? (
+    <span className={styles.healthPill}>{tx("模拟数据")}</span>
+  ) : (
+    <div className={styles.healthPill}>
+      <span className={cx(styles.healthDot, styles[`health_${health}`])} aria-hidden />
+      <span>{tx(HEALTH_TEXT[health])}</span>
+      <code className={styles.healthHost}>{hostOf(API_BASE_URL) || API_BASE_URL}</code>
+      <button
+        type="button"
+        className={styles.healthRetry}
+        onClick={onCheckHealth}
+        disabled={health === "checking"}
+        title={tx("检测后端服务")}
+      >
+        <RefreshCw size={12} className={cx(health === "checking" && styles.spin)} aria-hidden />
+        <span>{tx("检测")}</span>
+      </button>
+    </div>
+  );
+
   return (
-    <section className={plain ? settings.embed : cx(settings.card, settings.cardWide)} aria-labelledby={plain ? undefined : `${fieldId}-title`} aria-busy={loading || undefined}>
+    <div className={cx(styles.stack, !plain && styles.standalone)} aria-busy={loading || undefined}>
       {!plain && (
         <header className={settings.cardHead}>
           <span className={settings.cardIcon} aria-hidden><Cpu size={16} /></span>
@@ -169,106 +190,159 @@ export function ModelAccessCard({
         </header>
       )}
 
-      <dl className={settings.statusGrid}>
-        <div className={settings.statusRow}>
-          <dt>{tx("后端服务")}</dt>
-          <dd>
-            {source === "mock" && !client ? <span className={settings.muted}>{tx("未使用")}</span> : (
-              <>
-                <span className={cx(settings.dot, settings[`dot_${health}`])} aria-hidden />
-                {tx(HEALTH_TEXT[health])}
-                <code className={settings.inlineCode}>{hostOf(API_BASE_URL) || API_BASE_URL}</code>
-                <button type="button" className={settings.rowAction} onClick={onCheckHealth} disabled={health === "checking"}>
-                  <RefreshCw size={12} aria-hidden />
-                  {tx("检测")}
-                </button>
-              </>
-            )}
-          </dd>
-        </div>
-      </dl>
-
       {!active ? (
-        <p className={settings.stepNote}>
-          {envHint.split(/(\u0000|\u0001)/).map((part, index) => {
-            if (part === "\u0000") return <code key={index}>frontend/.env.local</code>;
-            if (part === "\u0001") return <code key={index}>NEXT_PUBLIC_DATA_SOURCE=api</code>;
-            return part;
-          })}
-        </p>
+        <section className={styles.sectionCard}>
+          <div className={styles.sectionHead}>
+            <span className={styles.sectionHeadTitle}>{tx("默认对话模型")}</span>
+            {healthBadge}
+          </div>
+          <div className={styles.sectionPad}>
+            <p className={settings.stepNote}>
+              {envHint.split(/(\u0000|\u0001)/).map((part, index) => {
+                if (part === "\u0000") return <code key={index}>frontend/.env.local</code>;
+                if (part === "\u0001") return <code key={index}>NEXT_PUBLIC_DATA_SOURCE=api</code>;
+                return part;
+              })}
+            </p>
+          </div>
+        </section>
       ) : loadError ? (
-        <div className={styles.wrap}>
-          <p className={cx(styles.outcome, styles.bad)} role="alert"><TriangleAlert size={14} aria-hidden />{tx(loadError)}</p>
-          <Button size="sm" icon={<RefreshCw size={13} />} loading={loading} onClick={() => void run(async () => { setLoadError(""); await reload(); })}>{tx("重新读取")}</Button>
-        </div>
-      ) : loading && providers.length === 0 ? (
-        <p className={styles.note}>{tx("正在读取模型库…")}</p>
-      ) : (
-        <div className={styles.wrap}>
-          {providers.length === 0 ? (
-            <div className={styles.empty}>
-              <strong>{tx("添加你的第一个模型")}</strong>
-              <p>{tx("先添加一个服务商，填写一次地址和密钥，再挂上它提供的模型。")}</p>
-              <Button size="sm" variant="primary" onClick={() => setEditor(null)}>{tx("添加你的第一个模型")}</Button>
-            </div>
-          ) : (
-            <>
-              <label className={styles.defaultRow}>
-                <span className={styles.label} id={`${fieldId}-default`}>{tx("默认模型")}</span>
-                <select
-                  className={styles.select}
-                  aria-labelledby={`${fieldId}-default`}
-                  value={defaultKey ?? ""}
-                  disabled={busy || (catalog.length === 0 && !defaultMissing)}
-                  onChange={(event) => {
-                    const key = event.target.value;
-                    if (!key) return;
-                    void run(async () => {
-                      await library.setDefaultModel(key);
-                      await reload(true);
-                      window.dispatchEvent(new Event(MODELS_CHANGED_EVENT));
-                    });
-                  }}
-                >
-                  {!defaultKey && <option value="">{catalog.length === 0 ? tx("还没有启用的模型") : tx("选择默认模型")}</option>}
-                  {catalog.length === 0 && defaultMissing && <option value="">{tx("还没有启用的模型")}</option>}
-                  {defaultMissing && defaultKey && <option value={defaultKey}>{tx("当前默认模型未启用")}</option>}
-                  {groups.map((group) => (
-                    <optgroup key={group.id} label={group.name}>
-                      {group.models.map((model) => <option key={model.key} value={model.key}>{model.name}</option>)}
-                    </optgroup>
-                  ))}
-                </select>
-              </label>
-              <p className={styles.note}>{tx("新对话使用默认模型。选好后点保存并测试，通过才会离开此页。")}</p>
-              <Button size="sm" variant="primary" disabled={busy || catalog.length === 0} onClick={saveAndTest}>
-                {tx("保存并测试")}
+        <section className={styles.sectionCard}>
+          <div className={styles.sectionHead}>
+            <span className={styles.sectionHeadTitle}>{tx("默认对话模型")}</span>
+            {healthBadge}
+          </div>
+          <div className={styles.sectionPad}>
+            <p className={cx(styles.outcome, styles.bad)} role="alert"><TriangleAlert size={14} aria-hidden />{tx(loadError)}</p>
+            <div>
+              <Button size="sm" icon={<RefreshCw size={13} />} loading={loading} onClick={() => void run(async () => { setLoadError(""); await reload(); })}>
+                {tx("重新读取")}
               </Button>
-              <ProviderList
-                providers={providers}
-                busy={busy}
-                onOpen={(id) => setEditor(id)}
-                onAdd={() => setEditor(null)}
-                onToggle={(id, enabled) => void run(async () => {
-                  await library.updateProvider(id, { enabled });
-                  await reload();
-                })}
-              />
-            </>
-          )}
-          {signal.state === "unavailable" && (
-            <p className={cx(styles.outcome, styles.bad)} role="status">
-              <TriangleAlert size={14} aria-hidden />
-              {signal.detail || tx("诊断时后端没有拿到有效的模型结果。")}
-            </p>
-          )}
-          {(notice || setupError) && (
-            <p className={cx(styles.outcome, notice?.tone === "ok" && !setupError ? styles.ok : styles.bad)} role={notice?.tone === "ok" && !setupError ? "status" : "alert"}>
-              {notice?.tone === "ok" && !setupError ? <CircleCheck size={14} aria-hidden /> : <TriangleAlert size={14} aria-hidden />}
-              {notice?.tone === "error" ? notice.text : setupError || notice?.text}
-            </p>
-          )}
-        </div>
+            </div>
+          </div>
+        </section>
+      ) : loading && providers.length === 0 ? (
+        <section className={styles.sectionCard}>
+          <div className={styles.sectionHead}>
+            <span className={styles.sectionHeadTitle}>{tx("默认对话模型")}</span>
+            {healthBadge}
+          </div>
+          <div className={styles.sectionPad}>
+            <p className={styles.note}>{tx("正在读取模型库…")}</p>
+          </div>
+        </section>
+      ) : (
+        <>
+          <section className={styles.sectionCard}>
+            <div className={styles.sectionHead}>
+              <span className={styles.sectionHeadTitle}>{tx("默认对话模型")}</span>
+              {healthBadge}
+            </div>
+            <div className={styles.sectionBody}>
+              <div className={styles.settingLine}>
+                <div className={styles.settingMeta}>
+                  <label className={styles.settingTitle} id={`${fieldId}-default`} htmlFor={`${fieldId}-default-select`}>
+                    {tx("默认模型")}
+                  </label>
+                  <p className={styles.settingDesc}>{tx("新对话及未单独指定的服务默认使用该模型。")}</p>
+                </div>
+                <div className={styles.defaultControls}>
+                  <select
+                    id={`${fieldId}-default-select`}
+                    className={styles.select}
+                    aria-labelledby={`${fieldId}-default`}
+                    value={defaultKey ?? ""}
+                    disabled={busy || (catalog.length === 0 && !defaultMissing)}
+                    onChange={(event) => {
+                      const key = event.target.value;
+                      if (!key) return;
+                      void run(async () => {
+                        await library.setDefaultModel(key);
+                        await reload(true);
+                        window.dispatchEvent(new Event(MODELS_CHANGED_EVENT));
+                      });
+                    }}
+                  >
+                    {!defaultKey && <option value="">{catalog.length === 0 ? tx("还没有启用的模型") : tx("选择默认模型")}</option>}
+                    {catalog.length === 0 && defaultMissing && <option value="">{tx("还没有启用的模型")}</option>}
+                    {defaultMissing && defaultKey && <option value={defaultKey}>{tx("当前默认模型未启用")}</option>}
+                    {groups.map((group) => (
+                      <optgroup key={group.id} label={group.name}>
+                        {group.models.map((model) => <option key={model.key} value={model.key}>{model.name}</option>)}
+                      </optgroup>
+                    ))}
+                  </select>
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    loading={busy}
+                    disabled={busy || catalog.length === 0}
+                    onClick={saveAndTest}
+                  >
+                    {tx("保存并测试")}
+                  </Button>
+                </div>
+              </div>
+              {extraRows}
+              {signal.state === "unavailable" && (
+                <div className={styles.outcomeRow}>
+                  <p className={cx(styles.outcome, styles.bad)} role="status">
+                    <TriangleAlert size={14} aria-hidden />
+                    {signal.detail || tx("诊断时后端没有拿到有效的模型结果。")}
+                  </p>
+                </div>
+              )}
+              {(notice || setupError) && (
+                <div className={styles.outcomeRow}>
+                  <p
+                    className={cx(styles.outcome, notice?.tone === "ok" && !setupError ? styles.ok : styles.bad)}
+                    role={notice?.tone === "ok" && !setupError ? "status" : "alert"}
+                  >
+                    {notice?.tone === "ok" && !setupError ? <CircleCheck size={14} aria-hidden /> : <TriangleAlert size={14} aria-hidden />}
+                    {notice?.tone === "error" ? notice.text : setupError || notice?.text}
+                  </p>
+                </div>
+              )}
+            </div>
+          </section>
+
+          <section className={styles.sectionCard}>
+            <div className={styles.sectionHead}>
+              <div className={styles.sectionHeadGroup}>
+                <span className={styles.sectionHeadTitle}>{tx("模型服务商")}</span>
+                {providers.length > 0 && (
+                  <span className={styles.countBadge}>
+                    {tx("已启用 {enabled}/{total}", { enabled: enabledProviders, total: providers.length })}
+                  </span>
+                )}
+              </div>
+              <Button size="sm" variant="secondary" icon={<Plus size={13} />} disabled={busy} onClick={() => setEditor(null)}>
+                {tx("添加服务商")}
+              </Button>
+            </div>
+            <div className={styles.sectionPad}>
+              {providers.length === 0 ? (
+                <div className={styles.empty}>
+                  <strong>{tx("添加你的第一个模型")}</strong>
+                  <p>{tx("先添加一个服务商，填写一次地址和密钥，再挂上它提供的模型。")}</p>
+                  <Button size="sm" variant="primary" icon={<Plus size={13} />} onClick={() => setEditor(null)}>
+                    {tx("添加你的第一个模型")}
+                  </Button>
+                </div>
+              ) : (
+                <ProviderList
+                  providers={providers}
+                  busy={busy}
+                  onOpen={(id) => setEditor(id)}
+                  onToggle={(id, enabled) => void run(async () => {
+                    await library.updateProvider(id, { enabled });
+                    await reload();
+                  })}
+                />
+              )}
+            </div>
+          </section>
+        </>
       )}
 
       <EditorDialog
@@ -292,6 +366,6 @@ export function ModelAccessCard({
           />
         )}
       </EditorDialog>
-    </section>
+    </div>
   );
 }

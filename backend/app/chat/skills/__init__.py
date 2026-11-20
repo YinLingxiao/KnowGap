@@ -3,7 +3,9 @@
 import re
 
 from app.chat.skills.chat_skills import (
+    ONBOARDING_INTERVIEW_SKILL,
     ONBOARDING_TITLE,
+    onboarding_greeting,
 )
 from app.chat.skills.main_skills import MAIN_ROADMAP_SKILL
 from app.chat.skills.file_skills import file_skill_prompt
@@ -155,12 +157,15 @@ def select_skill_prompt(
     earlier_user_texts: list[str] | None = None,
     attached_files: list[dict] | None = None,
     mode: str | None = None,
+    onboarding_interview: bool = False,
 ) -> str | None:
     """Return the role-appropriate Skill SOP to inject into `turn_context.active_skill`.
 
     Free chats (`chat`) are a general assistant: no keyword-mounted teaching SOP, only the plain
-    attachment rules when files are attached.
+    attachment rules when files are attached (or the first-run onboarding interview when active).
     """
+    if onboarding_interview and role == "chat":
+        return ONBOARDING_INTERVIEW_SKILL
     if attached_files:
         return file_skill_prompt(user_text, plain=role == "chat", mode=mode)
     if role == "chat":
@@ -189,12 +194,14 @@ def select_skill_prompt(
 __all__ = [
     "MAIN_ROADMAP_SKILL",
     "MODE_PROMPTS",
+    "ONBOARDING_INTERVIEW_SKILL",
     "ONBOARDING_TITLE",
     "THREAD_SKILLS",
     "WIDGET_RETRY_NOTICE",
     "WIDGET_SYSTEM_PROMPT",
     "infer_thread_skill",
     "mode_widgets",
+    "onboarding_greeting",
     "recommend_widget",
     "refuses_widget",
     "select_skill_prompt",

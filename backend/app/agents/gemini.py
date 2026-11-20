@@ -93,6 +93,8 @@ def native_payload(messages: list[dict], tools: list[dict] | None = None, *, str
                             "thoughtSignature": "skip_thought_signature_validator"}
                 parts.append(part)
             append("model" if role == "assistant" else "user", parts)
+    if contents and contents[0]["role"] == "model":
+        contents.insert(0, {"role": "user", "parts": [{"text": "（开场）"}]})
     payload = {"contents": contents}
     if system:
         payload["systemInstruction"] = {"parts": system}

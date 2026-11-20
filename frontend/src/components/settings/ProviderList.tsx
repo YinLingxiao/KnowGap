@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { useI18n } from "@/components/LanguageProvider";
 import type { ProviderPublic } from "@/lib/api/model-library";
 import { findProvider } from "@/lib/modelProviders";
@@ -12,10 +12,14 @@ interface ProviderListProps {
   busy: boolean;
   onOpen: (id: string) => void;
   onToggle: (id: string, enabled: boolean) => void;
-  onAdd: () => void;
 }
 
-export function ProviderList({ providers, busy, onOpen, onToggle, onAdd }: ProviderListProps) {
+function providerGlyph(name: string, preset: string): string {
+  const clean = (name || preset || "M").trim();
+  return clean.slice(0, 1).toUpperCase();
+}
+
+export function ProviderList({ providers, busy, onOpen, onToggle }: ProviderListProps) {
   const { tx } = useI18n();
   const ordered = providers
     .map((provider, index) => ({ provider, index }))
@@ -26,6 +30,7 @@ export function ProviderList({ providers, busy, onOpen, onToggle, onAdd }: Provi
     <div className={styles.providerGrid} role="list">
       {ordered.map((provider) => {
         const enabledCount = provider.models.filter((model) => model.enabled).length;
+        const presetLabel = tx(findProvider(provider.preset).name);
         return (
           <div
             key={provider.id}
@@ -43,11 +48,18 @@ export function ProviderList({ providers, busy, onOpen, onToggle, onAdd }: Provi
               })}
               onClick={() => onOpen(provider.id)}
             >
-              <span className={styles.providerName}>{provider.name}</span>
-              <span className={styles.providerMeta}>
-                {tx(findProvider(provider.preset).name)} · {provider.enabled ? `${enabledCount}/${provider.models.length}` : tx("已停用")}
+              <span className={cx(styles.providerBadge, provider.enabled && styles.providerBadgeOn)} aria-hidden>
+                {providerGlyph(provider.name, provider.preset)}
               </span>
+              <span className={styles.providerInfo}>
+                <span className={styles.providerName}>{provider.name}</span>
+                <span className={styles.providerMeta}>
+                  {presetLabel} · {provider.enabled ? `${enabledCount}/${provider.models.length}` : tx("已停用")}
+                </span>
+              </span>
+              <ChevronRight size={14} className={styles.providerChevron} aria-hidden />
             </button>
+            <span className={styles.providerDivider} aria-hidden />
             <label className={styles.switch}>
               <input
                 type="checkbox"
@@ -62,10 +74,6 @@ export function ProviderList({ providers, busy, onOpen, onToggle, onAdd }: Provi
           </div>
         );
       })}
-      <button type="button" className={styles.addCard} disabled={busy} onClick={onAdd}>
-        <Plus size={15} aria-hidden />
-        {tx("添加服务商")}
-      </button>
     </div>
   );
 }

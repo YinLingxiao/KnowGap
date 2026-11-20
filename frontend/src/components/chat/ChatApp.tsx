@@ -20,8 +20,6 @@ import { chatApi } from "@/lib/chat/api";
 import type { SpaceInput } from "@/lib/chat/types";
 import type { AuthUser } from "@/lib/api/auth";
 import { applyAppearance, readAppearance } from "@/lib/appearance";
-import { AuthView } from "../auth/AuthView";
-import authStyles from "../auth/AuthView.module.css";
 import { useAuth } from "../auth/useAuth";
 import { MaterialLibrary } from "../MaterialLibrary";
 import type { ModelSignal } from "../settings/ModelAccessCard";
@@ -110,10 +108,11 @@ function modelSetupIssue(message?: string | null) {
   return Boolean(message && MODEL_SETUP_MARKS.some((mark) => message.includes(mark)));
 }
 
-function AuthenticatedChat({ user, onLogout, onRename }: {
+function AuthenticatedChat({ user, onRename, onUploadAvatar, onRemoveAvatar }: {
   user: AuthUser;
-  onLogout: () => void;
   onRename: (name: string) => Promise<void>;
+  onUploadAvatar: (file: File) => Promise<void>;
+  onRemoveAvatar: () => Promise<void>;
 }) {
   const { lang, t, tx } = useI18n();
   const { toasts, push, dismiss } = useToasts();
@@ -277,27 +276,25 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
     if (opener) await chat.sendTo(conversationId, opener);
   }, [chat, narrow, setView]);
 
-  const answerWelcome = useCallback(async (text: string, file?: File) => {
+  const startOnboardingChat = useCallback(async (restart = false) => {
     if (welcomeBusy) return;
     setWelcomeBusy(true);
     setWelcomeError("");
     try {
-      const result = await chatApi.welcome(text);
-      if (file) {
-        // 先传完再发开场白，第一轮讲解才能检索到；传不上去不拦路
-        try {
-          await createMaterialClient().upload(file, result.subjectId);
-        } catch {
-          push({ tone: "error", title: tx("资料没传上去，进空间后可以再传。") });
-        }
-      }
-      await enterSpace(result.subjectId, result.conversationId, result.opener);
+      const started = await chatApi.startOnboarding(restart);
+      await chat.refreshList();
+      setView({ type: "chat" });
+      setGate("app");
+      if (!narrow) setSidebarOpen(true);
+      await chat.openConversation(started.conversationId);
     } catch (error) {
-      setWelcomeError(error instanceof Error ? error.message : tx("没能建好空间，请重试。"));
+      const message = error instanceof Error ? error.message : tx("没能开启首次对话，请重试。");
+      setWelcomeError(message);
+      if (restart) throw new Error(message);
     } finally {
       setWelcomeBusy(false);
     }
-  }, [enterSpace, push, tx, welcomeBusy]);
+  }, [chat, narrow, setView, tx, welcomeBusy]);
 
   const browseDemo = useCallback(async () => {
     if (welcomeBusy) return;
@@ -566,6 +563,7 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
             onCollapse={() => setSidebarOpen(false)}
             displayName={user.displayName}
             avatarText={user.avatarText}
+            avatarUrl={user.avatarUrl}
             mode={sidebarMode}
             onModeChange={setSidebarMode}
 
@@ -578,13 +576,23 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
           <StartupStatus
             error={welcomeError}
             onRetry={() => { void checkModel(); void checkOnboarding(); }}
-            onLogout={onLogout}
           />
         ) : gate !== "app" ? (
           <Welcome
+            user={user}
+            source={DATA_SOURCE}
+            health={health}
+            modelSignal={modelSignal}
+            modelConfigured={modelConfigured}
+            modelError={modelError}
             busy={welcomeBusy}
             error={welcomeError}
-            onAnswer={(text, file) => void answerWelcome(text, file)}
+            onCheckHealth={() => void checkHealth()}
+            onConfigChange={handleConfigChange}
+            onRename={onRename}
+            onUploadAvatar={onUploadAvatar}
+            onRemoveAvatar={onRemoveAvatar}
+            onStartInterview={() => void startOnboardingChat(false)}
             onDemo={() => void browseDemo()}
             onSkip={() => void skipWelcome()}
           />
@@ -1003,8 +1011,10 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
           modelError={modelError}
           onCheckHealth={() => void checkHealth()}
           onConfigChange={handleConfigChange}
-          onLogout={onLogout}
           onRename={onRename}
+          onUploadAvatar={onUploadAvatar}
+          onRemoveAvatar={onRemoveAvatar}
+          onRestartOnboarding={() => startOnboardingChat(true)}
           onClose={() => setSettingsOpen(false)}
         />
       )}
@@ -1040,21 +1050,18 @@ function AuthenticatedChat({ user, onLogout, onRename }: {
 }
 
 export function ChatApp() {
-  const { t } = useI18n();
   const auth = useAuth();
   if (DATA_SOURCE === "api" && auth.status !== "ready") {
-    if (auth.status === "loading") {
-      return <div className={authStyles.canvas}><p className={authStyles.loading}>{t("chat.loading")}</p></div>;
-    }
-    return (
-      <AuthView
-        error={auth.error}
-        onLogin={auth.login}
-        onRegister={auth.register}
-        onDemo={auth.enterDemo}
-      />
-    );
+    return <StartupStatus error={auth.status === "error" ? auth.error : ""} onRetry={() => void auth.retry()} />;
   }
   if (!auth.user) return null;
-  return <AuthenticatedChat key={auth.user.id} user={auth.user} onLogout={() => void auth.logout()} onRename={auth.rename} />;
+  return (
+    <AuthenticatedChat
+      key={auth.user.id}
+      user={auth.user}
+      onRename={auth.rename}
+      onUploadAvatar={auth.uploadAvatar}
+      onRemoveAvatar={auth.removeAvatar}
+    />
+  );
 }

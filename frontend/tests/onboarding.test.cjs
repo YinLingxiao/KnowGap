@@ -21,6 +21,7 @@ function loadComponent(name) {
     if (id === '@/lib/chat/api') return { chatApi: {} };
     if (id === '@/lib/chat/attachments') return { DOCUMENT_EXTENSIONS: ['.pdf', '.docx'], MAX_UPLOAD_BYTES: 20 * 1024 * 1024 };
     if (id === '@/lib/cx') return { cx: (...values) => values.filter(Boolean).join(' ') };
+    if (id === '../settings/ModelAccessCard') return { ModelAccessCard: () => React.createElement('div', { 'data-mock-model-card': '1' }) };
     if (id === './coach') return {};
     return require(id);
   };
@@ -31,34 +32,51 @@ function loadComponent(name) {
 const { ModelGuide, StartupStatus, Welcome, topicFromFileName } = loadComponent('Welcome');
 const { GettingStarted } = loadComponent('GettingStarted');
 const noop = () => {};
+const asyncNoop = async () => {};
+const sampleUser = { id: 'demo-student-001', displayName: '学习者', avatarText: '学', avatarUrl: '', createdAt: '' };
 
-test('startup shows progress without asking for a model', () => {
-  const html = renderToStaticMarkup(React.createElement(StartupStatus, { error: '', onRetry: noop, onLogout: noop }));
+test('startup shows progress without asking for a model or logout', () => {
+  const html = renderToStaticMarkup(React.createElement(StartupStatus, { error: '', onRetry: noop }));
   assert.match(html, /role="status"/);
   assert.match(html, /正在读取学习进度/);
-  assert.doesNotMatch(html, /<button|模型/);
+  assert.doesNotMatch(html, /<button|模型|退出登录/);
 });
 
-test('startup failure is readable and retryable, not an endless spinner', () => {
+test('startup failure is readable and retryable without logout', () => {
   const html = renderToStaticMarkup(React.createElement(StartupStatus, {
-    error: '无法读取学习进度，请检查后端是否启动，然后重试。', onRetry: noop, onLogout: noop,
+    error: '无法读取学习进度，请检查后端是否启动，然后重试。', onRetry: noop,
   }));
   assert.match(html, /role="alert"/);
   assert.match(html, />重试<\/button>/);
-  assert.match(html, />退出登录<\/button>/);
-  assert.doesNotMatch(html, /正在读取/);
+  assert.doesNotMatch(html, /退出登录|正在读取/);
 });
 
-test('first-time user goes straight to the topic question, with demo, skip and an optional file', () => {
+test('first-time user sees step 1 profile setup with avatar, name, demo and skip', () => {
   const html = renderToStaticMarkup(React.createElement(Welcome, {
-    busy: false, error: '', onAnswer: noop, onDemo: noop, onSkip: noop,
+    user: sampleUser,
+    source: 'api',
+    health: 'online',
+    modelSignal: { state: 'unknown' },
+    modelConfigured: false,
+    busy: false,
+    error: '',
+    onCheckHealth: noop,
+    onConfigChange: noop,
+    onRename: asyncNoop,
+    onUploadAvatar: asyncNoop,
+    onRemoveAvatar: asyncNoop,
+    onStartInterview: noop,
+    onDemo: noop,
+    onSkip: noop,
   }));
-  assert.match(html, /你最近在学什么？/);
+  assert.match(html, /欢迎来到 KnowGap/);
+  assert.match(html, /认识你/);
+  assert.match(html, /接入模型/);
+  assert.match(html, /怎么称呼你/);
+  assert.match(html, /下一步：接入模型/);
   assert.match(html, /先逛逛演示空间/);
-  assert.match(html, /跳过，直接开始/);
-  assert.match(html, /附一份课件或讲义（可选）/);
-  assert.match(html, /type="file"[^>]*accept="\.pdf,\.docx"|accept="\.pdf,\.docx"[^>]*type="file"/);
-  assert.doesNotMatch(html, /连上 AI 模型/);
+  assert.match(html, /跳过，直接进入/);
+  assert.match(html, /type="file"[^>]*accept="image\/png,image\/jpeg,image\/webp,image\/gif"|accept="image\/png,image\/jpeg,image\/webp,image\/gif"[^>]*type="file"/);
 });
 
 test('a file name becomes an editable topic', () => {

@@ -222,17 +222,17 @@ def test_tool_errors_are_reported_to_the_model_not_raised(tmp_path):
 
 
 def test_other_students_cannot_download_files(tmp_path):
-    from tests.test_file_attachments import register
     model = DocumentModel([("create_document", {"kind": "md", "filename": "笔记", "content": "# 私人笔记"})])
     with TestClient(create_app(isolated_settings(tmp_path), chat_model=model)) as client:
-        alice = register(client, "alice@school.edu")
-        bob = register(client, "bob@school.edu")
-        space = client.post("/api/subjects", headers=alice, json={"name": "私人"}).json()
-        response = client.post(f"/api/conversations/{space['main_conversation_id']}/messages", headers=alice,
+        space = client.post("/api/subjects", json={"name": "私人"}).json()
+        response = client.post(f"/api/conversations/{space['main_conversation_id']}/messages",
                                json={"content": "写份笔记", "client_request_id": "doc-private-1"})
         file_id = next(data for name, data in parse(response.text) if name == "file")["id"]
-        assert client.get(f"/api/files/{file_id}/download", headers=alice).status_code == 200
-        assert client.get(f"/api/files/{file_id}/download", headers=bob).status_code == 404
+        assert client.get(f"/api/files/{file_id}/download").status_code == 200
+        foreign = client.app.state.chat_service.files.save_generated(
+            "other-student", None, "别人的.md", "md", b"# secret",
+        )
+        assert client.get(f"/api/files/{foreign['id']}/download").status_code == 404
 
 
 import pytest

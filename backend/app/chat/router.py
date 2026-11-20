@@ -39,6 +39,10 @@ class WelcomeBody(BaseModel):
     text: str = Field(min_length=1, max_length=200)
 
 
+class OnboardingStartBody(BaseModel):
+    restart: bool = False
+
+
 class LearningPreferencesBody(BaseModel):
     background: str = ""
     explanation: str = ""
@@ -73,7 +77,7 @@ class PatchCustomSkillBody(BaseModel):
     content: str | None = None
 
 
-def chat_router(store: ChatStore, service: ChatService) -> APIRouter:
+def chat_router(store: ChatStore, service: ChatService, get_display_name=None) -> APIRouter:
     router = APIRouter(prefix="/api", tags=["自由对话"])
     def require(conversation_id: str) -> Conversation:
         conversation = store.conversation(conversation_id, current_student())
@@ -391,6 +395,15 @@ def chat_router(store: ChatStore, service: ChatService) -> APIRouter:
     @router.post("/onboarding/ack")
     def ack_onboarding():
         return store.mark_onboarding(current_student(), "completed")
+
+    @router.post("/onboarding/start")
+    def start_onboarding(body: OnboardingStartBody | None = None):
+        from app.chat.skills.chat_skills import onboarding_greeting
+        display_name = get_display_name() if callable(get_display_name) else ""
+        restart = bool(body.restart) if body is not None else False
+        return store.start_onboarding_conversation(
+            current_student(), onboarding_greeting(display_name), restart=restart,
+        )
 
     @router.post("/onboarding/welcome")
     async def welcome_onboarding(body: WelcomeBody):
