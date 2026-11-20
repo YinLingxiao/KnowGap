@@ -102,6 +102,14 @@ def read_all(db: sqlite3.Connection, student_id: str) -> dict[str, str]:
     return {"user": found.get("user", ""), "memory": found.get("memory", "")}
 
 
+def read_updated_at(db: sqlite3.Connection, student_id: str) -> dict[str, str | None]:
+    rows = db.execute(
+        "SELECT target, updated_at FROM agent_memory WHERE student_id = ?", (student_id,),
+    ).fetchall()
+    found = {row["target"]: row["updated_at"] for row in rows}
+    return {"user": found.get("user"), "memory": found.get("memory")}
+
+
 def _store(db: sqlite3.Connection, student_id: str, target: str, content: str, timestamp: str) -> None:
     db.execute("""
         INSERT INTO agent_memory(student_id, target, content, updated_at) VALUES (?, ?, ?, ?)

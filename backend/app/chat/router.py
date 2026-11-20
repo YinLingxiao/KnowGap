@@ -58,6 +58,10 @@ class AgentNoteBody(BaseModel):
     content: str = ""
 
 
+class MemoryInstructBody(BaseModel):
+    instruction: str = Field(min_length=1, max_length=500)
+
+
 class PendingDecision(BaseModel):
     allow: bool
 
@@ -535,6 +539,17 @@ def chat_router(store: ChatStore, service: ChatService, get_display_name=None) -
             return store.save_agent_note(current_student(), body.target, body.content)
         except ValueError as exc:
             raise HTTPException(422, str(exc)) from None
+
+    @router.post("/agent-memory/instruct")
+    async def instruct_agent_memory(body: MemoryInstructBody):
+        try:
+            return await service.instruct_memory(current_student(), body.instruction)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from None
+        except ProviderError as exc:
+            raise HTTPException(exc.status_code, exc.detail) from None
+        except TimeoutError:
+            raise HTTPException(504, "记忆更新超时，请稍后重试。") from None
 
     @router.delete("/agent-memory/{note_id}", status_code=204)
     def delete_agent_memory(note_id: str):

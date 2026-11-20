@@ -112,7 +112,23 @@ class ProfileStore:
         self.ensure()
         with self.store.connection() as db:
             row = db.execute("SELECT * FROM local_profile WHERE id = 1").fetchone()
+            # 称呼也可能在记忆里被改（一句话改记忆、初识对话）：以 USER 里的「称呼：」为准同步回档案
+            noted = self._noted_name(db, row["student_id"])
+            if noted and noted != row["display_name"]:
+                db.execute(
+                    "UPDATE local_profile SET display_name = ?, avatar_text = ?, updated_at = ? WHERE id = 1",
+                    (noted, _avatar_text(noted), now()),
+                )
+                row = db.execute("SELECT * FROM local_profile WHERE id = 1").fetchone()
             return self._public(row)
+
+    @staticmethod
+    def _noted_name(db: sqlite3.Connection, student_id: str) -> str:
+        for entry in split_entries(read_all(db, student_id)["user"]):
+            if _NAME_ENTRY_RE.match(entry):
+                name = " ".join(_NAME_ENTRY_RE.sub("", entry, count=1).split()).strip()
+                return name if 0 < len(name) <= 30 else ""
+        return ""
 
     def update_display_name(self, display_name: str, *, sync_user_note: bool = True) -> dict:
         name = " ".join((display_name or "").split()).strip()

@@ -349,15 +349,50 @@ export const chatApi = {
   async deleteMemory(id: string): Promise<void> {
     await request(root, `/api/learner-memories/${encodeURIComponent(id)}`, { method: "DELETE" });
   },
-  async agentNotes(): Promise<{ user: string; memory: string; limits: { user: number; memory: number } }> {
+  async agentNotes(): Promise<{ user: string; memory: string; limits: { user: number; memory: number }; updatedAt: { user: string | null; memory: string | null } }> {
     const data = await request<Wire>(root, "/api/agent-memory", { cache: "no-store" });
-    return { user: data.user ?? "", memory: data.memory ?? "", limits: { user: data.limits?.user ?? 1375, memory: data.limits?.memory ?? 2200 } };
+    return {
+      user: data.user ?? "",
+      memory: data.memory ?? "",
+      limits: { user: data.limits?.user ?? 1375, memory: data.limits?.memory ?? 2200 },
+      updatedAt: { user: data.updated_at?.user ?? null, memory: data.updated_at?.memory ?? null },
+    };
   },
-  async saveAgentNote(target: "user" | "memory", content: string): Promise<{ user: string; memory: string; limits: { user: number; memory: number } }> {
+  async saveAgentNote(target: "user" | "memory", content: string): Promise<{ user: string; memory: string; limits: { user: number; memory: number }; updatedAt: { user: string | null; memory: string | null } }> {
     const data = await request<Wire>(root, "/api/agent-memory", {
       method: "PUT", body: JSON.stringify({ target, content }),
     });
-    return { user: data.user ?? "", memory: data.memory ?? "", limits: { user: data.limits?.user ?? 1375, memory: data.limits?.memory ?? 2200 } };
+    return {
+      user: data.user ?? "",
+      memory: data.memory ?? "",
+      limits: { user: data.limits?.user ?? 1375, memory: data.limits?.memory ?? 2200 },
+      updatedAt: { user: data.updated_at?.user ?? null, memory: data.updated_at?.memory ?? null },
+    };
+  },
+  async instructAgentMemory(instruction: string): Promise<{
+    summary: string;
+    applied: number;
+    changes: Array<{ action: "add" | "patch" | "remove"; target: "user" | "memory"; text: string }>;
+    failed: string[];
+    user: string;
+    memory: string;
+    limits: { user: number; memory: number };
+    updatedAt: { user: string | null; memory: string | null };
+  }> {
+    const data = await request<Wire>(root, "/api/agent-memory/instruct", {
+      method: "POST",
+      body: JSON.stringify({ instruction }),
+    });
+    return {
+      summary: data.summary ?? "",
+      applied: Number(data.applied ?? 0),
+      changes: Array.isArray(data.changes) ? data.changes : [],
+      failed: Array.isArray(data.failed) ? data.failed.map(String) : [],
+      user: data.user ?? "",
+      memory: data.memory ?? "",
+      limits: { user: data.limits?.user ?? 1375, memory: data.limits?.memory ?? 2200 },
+      updatedAt: { user: data.updated_at?.user ?? null, memory: data.updated_at?.memory ?? null },
+    };
   },
   /** 撤销单条通用记忆；后端上线 B5 前会返回 404 */
   async deleteAgentMemory(noteId: string): Promise<void> {
@@ -394,6 +429,13 @@ export const chatApi = {
       }),
     });
     return { workspace: data.workspace ?? "", autoApprove: Boolean(data.auto_approve), memoryWriteApproval: Boolean(data.memory_write_approval) };
+  },
+  /** 只改「写入前确认」，不碰工作区和自动批准 */
+  async saveMemoryApproval(enabled: boolean): Promise<boolean> {
+    const data = await request<Wire>(root, "/api/agent/settings", {
+      method: "PUT", body: JSON.stringify({ memory_write_approval: enabled }),
+    });
+    return Boolean(data.memory_write_approval);
   },
   async saveReasoningEffort(effort: "off" | "low" | "medium" | "high"): Promise<void> {
     await request<Wire>(root, "/api/agent/settings", {

@@ -85,3 +85,14 @@ def test_legacy_registered_user_is_preserved_when_demo_has_no_data(tmp_path):
         assert profile["display_name"] == "老用户"
         convs = client.get("/api/conversations").json()
         assert [c["id"] for c in convs] == [conv_id]
+
+
+def test_name_changed_in_user_memory_flows_back_to_the_profile(tmp_path):
+    with TestClient(create_app(isolated_settings(tmp_path), chat_model=FakeChat())) as client:
+        client.patch("/api/profile", json={"display_name": "小陈"})
+        client.put("/api/agent-memory", json={"target": "user", "content": "[Identity] 称呼：阿林\n§\n讲解偏好：先举例"})
+        user = client.get("/api/profile").json()["user"]
+        assert user["display_name"] == "阿林" and user["avatar_text"] == "阿"
+        # 记忆里删掉称呼不会清空档案名
+        client.put("/api/agent-memory", json={"target": "user", "content": "讲解偏好：先举例"})
+        assert client.get("/api/profile").json()["user"]["display_name"] == "阿林"

@@ -21,7 +21,7 @@ from app.chat.schemas import (
 from app.memory.curated import LIMITS, MemoryWriteItem, apply as apply_note, bump_turns, decide, pending
 from app.memory.curated import ensure as ensure_notes
 from app.memory.curated import (
-    ensure_fts, read_all, revoke_applied_note, search as search_notes, snapshot_text, write as write_note,
+    ensure_fts, read_all, read_updated_at, revoke_applied_note, search as search_notes, snapshot_text, write as write_note,
 )
 from app.memory.store import Store, ensure_column, new_id, now
 from app.models.schemas import Problem, SourceReference
@@ -1480,20 +1480,24 @@ class ChatStore:
             ))
         return result
 
-    def _notes_view(self, notes: dict[str, str]) -> dict:
-        return {**notes, "limits": dict(LIMITS)}
+    def _notes_view(self, notes: dict[str, str], updated_at: dict[str, str | None] | None = None) -> dict:
+        view = {**notes, "limits": dict(LIMITS)}
+        if updated_at is not None:
+            view["updated_at"] = updated_at
+        return view
 
     def agent_notes(self, student_id: str) -> dict[str, str]:
         with self.connection() as db:
             return read_all(db, student_id)
 
     def agent_notes_view(self, student_id: str) -> dict:
-        return self._notes_view(self.agent_notes(student_id))
+        with self.connection() as db:
+            return self._notes_view(read_all(db, student_id), read_updated_at(db, student_id))
 
     def save_agent_note(self, student_id: str, target: str, content: str) -> dict:
         with self.connection() as db:
             write_note(db, student_id, target, content, now())
-            return self._notes_view(read_all(db, student_id))
+            return self._notes_view(read_all(db, student_id), read_updated_at(db, student_id))
 
     def apply_agent_memory(
         self,

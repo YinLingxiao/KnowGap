@@ -6,6 +6,7 @@ import {
   DEMO_USER, USER_KEY, type AuthUser,
   deleteAvatar as deleteAvatarRequest, fetchMe, updateDisplayName, uploadAvatar as uploadAvatarRequest,
 } from "@/lib/api/auth";
+import { MEMORY_CHANGED_EVENT } from "@/components/chat/widgets/memoryContext";
 
 function rememberUserId(id: string) {
   try {
@@ -41,6 +42,16 @@ export function useAuth() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // 称呼可能在记忆里被改：记忆变了就静默刷新档案，侧栏名字跟着变
+  useEffect(() => {
+    if (DATA_SOURCE !== "api") return;
+    const refresh = () => {
+      fetchMe().then(setUser).catch(() => { /* 下次打开再取 */ });
+    };
+    window.addEventListener(MEMORY_CHANGED_EVENT, refresh);
+    return () => window.removeEventListener(MEMORY_CHANGED_EVENT, refresh);
+  }, []);
 
   const rename = useCallback(async (name: string) => {
     const trimmed = name.trim();

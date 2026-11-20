@@ -25,8 +25,8 @@ from app.agent_tools.guard import ToolError
 from app.agents.llm import ChatCompletionsChat, ChatModel, ProviderError
 from app.chat.agent import (
     HISTORY_CHARS, HISTORY_MESSAGES, active_exercise, analysis_messages, chat_messages,
-    compress_history_messages, deterministic_compress_fallback, dialogue, resolution_messages,
-    review_messages, validate_analysis, validate_resolution,
+    compress_history_messages, deterministic_compress_fallback, dialogue, instruct_memory_messages,
+    resolution_messages, review_messages, validate_analysis, validate_resolution,
 )
 from app.chat.store import (
     ChatStore, INTERRUPTED, PROPOSAL_TASK_PREFIX, is_system_event, is_system_event_row, learner_rows,
@@ -1574,3 +1574,57 @@ class ChatService:
             conversation_id, None, "resolution",
         )
         return validate_resolution(raw)
+
+    async def instruct_memory(self, student_id: str, instruction: str) -> dict:
+        text = " ".join((instruction or "").split()).strip()
+        if not text or len(text) > 500:
+            raise ValueError("请输入 1 到 500 字的记忆指令。")
+        notes = self.store.agent_notes(student_id)
+        model = self._background_model(None)
+        raw = await asyncio.wait_for(
+            self._complete_json(model, instruct_memory_messages(notes, text), None, None, "memory_instruct"),
+            25,
+        )
+        ops = raw.get("ops") if isinstance(raw, dict) and isinstance(raw.get("ops"), list) else []
+        changes: list[dict] = []
+        failed: list[str] = []
+        for op in ops[:8]:
+            if not isinstance(op, dict):
+                continue
+            action = str(op.get("action") or "").strip()
+            target = str(op.get("target") or "").strip()
+            if action not in {"add", "patch", "remove"} or target not in {"user", "memory"}:
+                failed.append("模型给出了无法执行的操作。")
+                continue
+            outcome = self.store.apply_agent_memory(
+                student_id, action, target, op.get("content"), op.get("old_text"), approve=False,
+            )
+            if outcome.startswith("已更新"):
+                text = op.get("old_text") if action == "remove" else op.get("content")
+                changes.append({"action": action, "target": target, "text": str(text or "")})
+            elif not outcome.startswith("已存在"):
+                failed.append(outcome)
+        applied = len(changes)
+        # 反馈以实际执行结果为准：只有全部成功时才用模型写的那句话
+        raw_summary = raw.get("summary") if isinstance(raw, dict) else None
+        model_summary = " ".join(raw_summary.split())[:180] if isinstance(raw_summary, str) else ""
+        if applied and not failed and model_summary:
+            summary = model_summary
+        else:
+            counts = [
+                f"{label} {n} 条" for label, n in (
+                    ("已添加", sum(c["action"] == "add" for c in changes)),
+                    ("已修改", sum(c["action"] == "patch" for c in changes)),
+                    ("已删除", sum(c["action"] == "remove" for c in changes)),
+                ) if n
+            ]
+            done = "、".join(counts) if counts else "没有改动"
+            summary = f"{done}；有 {len(failed)} 条没改成：{failed[0]}" if failed else (
+                f"{done}。" if counts else (model_summary or "没有找到需要修改的记忆条目。"))
+        return {
+            "summary": summary,
+            "applied": applied,
+            "changes": changes,
+            "failed": failed,
+            **self.store.agent_notes_view(student_id),
+        }
