@@ -76,6 +76,41 @@
 }
 
 /* 长期笔记折叠行：纯表面明度区分 */
+/* 长期笔记只放一行入口，内容在设置 · 记忆里看 */
+.notesLink {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--radius-lg);
+  background: var(--bg-subtle);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--t-hover) var(--ease-out);
+}
+
+.notesLink:hover {
+  background: var(--bg-hover);
+}
+
+.notesLink:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.notesLink .notesCount {
+  margin-left: auto;
+}
+
+.notesChevron {
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+}
+
 .notes {
   padding: 2px 10px;
   border-radius: var(--radius-lg);
@@ -317,6 +352,13 @@
   margin-top: 6px;
   font-size: var(--text-sm);
   line-height: var(--leading-read);
+}
+
+.summaryClamp {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .metaRow {

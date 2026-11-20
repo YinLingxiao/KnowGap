@@ -63,3 +63,11 @@ test('the approval switch saves only its own setting', () => {
   assert.match(pane, /saveMemoryApproval\(/);
   assert.doesNotMatch(pane, /saveAgentSettings\(/, 'saving the full settings could wipe workspace and auto-approve');
 });
+
+test('the chat memory drawer links to settings instead of listing raw notes', () => {
+  const drawer = fs.readFileSync(path.join(__dirname, '../src/components/chat/MemoryDrawer.tsx'), 'utf8');
+  const app = fs.readFileSync(path.join(__dirname, '../src/components/chat/ChatApp.tsx'), 'utf8');
+  assert.doesNotMatch(drawer, /saveAgentNote\(/);
+  assert.doesNotMatch(drawer, /memory\.intro/);
+  assert.match(app, /onOpenNotes=\{\(\) => \{[\s\S]*?openSettings\("memory"\)/);
+});

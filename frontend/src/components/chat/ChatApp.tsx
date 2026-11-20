@@ -947,6 +947,10 @@ function AuthenticatedChat({ user, onRename, onUploadAvatar, onRemoveAvatar }: {
                 setMemoryOpen(false);
                 openSettings("preferences");
               }}
+              onOpenNotes={() => {
+                setMemoryOpen(false);
+                openSettings("memory");
+              }}
               onPractice={() => {
                 setMemoryOpen(false);
                 const space = recentSpaces[0];

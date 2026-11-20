@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, ChevronRight, RefreshCw, Trash2, X } from "lucide-react";
+import { ChevronRight, RefreshCw, Trash2, X } from "lucide-react";
 import { useI18n } from "@/components/LanguageProvider";
 import type { ApiError } from "@/lib/api/errors";
 import { chatApi } from "@/lib/chat/api";
@@ -71,12 +71,16 @@ interface MemoryDrawerProps {
   onOpenConversation: (id: string) => void;
   onStartOnboarding?: () => void;
   onPractice?: () => void;
+  /** 打开设置里的记忆页；长期笔记只在那里展示和删除 */
+  onOpenNotes?: () => void;
 }
 
 export function MemoryItem({
-  memory, subjects, focused = false, conversationTitles, onUpdate, onDelete, onOpenConversation,
+  memory, subjects, focused = false, showKind = true, conversationTitles, onUpdate, onDelete, onOpenConversation,
 }: {
   memory: LearnerMemory;
+  /** 已按类型分组时不再在卡片上重复类型 */
+  showKind?: boolean;
   subjects: Subject[];
   focused?: boolean;
   conversationTitles: Record<string, string>;
@@ -101,10 +105,36 @@ export function MemoryItem({
     ref.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [focused]);
 
+  // 来源、依据数、时间和操作只在展开后出现，平时卡片只有标题、状态和一句概括
+  const meta = (
+    <div className={styles.metaRow}>
+      <div className={styles.meta}>
+        <span className={cx(styles.scope, !memory.subjectId && styles.scopeGeneral)}>{scopeName}</span>
+        {origin && (
+          <span className={cx(styles.origin, origin === "inferred" && styles.originInferred)}>
+            {t(ORIGIN_KEY[origin])}
+          </span>
+        )}
+        <span>{t("memory.evidenceCount", { count: memory.evidence.length })}</span>
+        {memory.userCorrected && <span className={styles.corrected}>{t("memory.corrected")}</span>}
+        <span>{formatRelativeTime(memory.updatedAt, lang)}</span>
+      </div>
+      {mode === "view" && (
+        <div className={styles.actions}>
+          <button onClick={() => { setSummary(memory.summary); setStatus(memory.status); setScope(memory.subjectId ?? ""); setMode("edit"); }}>{t("memory.correct")}</button>
+          <button className={styles.deleteAction} onClick={() => setMode("confirm")}>
+            <Trash2 size={12} aria-hidden />
+            {t("common.delete")}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <article ref={ref} className={cx(styles.item, focused && styles.focused)}>
       <button className={styles.head} onClick={() => setOpen((value) => !value)} aria-expanded={open}>
-        <span className={cx(styles.kind, styles[memory.kind])}>{t(KIND_KEY[memory.kind])}</span>
+        {showKind && <span className={cx(styles.kind, styles[memory.kind])}>{t(KIND_KEY[memory.kind])}</span>}
         <span className={styles.topic}>{memory.topic}</span>
         <span className={styles.status}>{t(STATUS_KEY[memory.status])}</span>
         <ChevronRight size={13} className={cx(styles.chevron, open && styles.chevronOpen)} aria-hidden />
@@ -167,31 +197,10 @@ export function MemoryItem({
           </div>
         </div>
       ) : (
-        <p className={styles.summary}>{memory.summary}</p>
+        <p className={cx(styles.summary, !open && styles.summaryClamp)}>{memory.summary}</p>
       )}
 
-      <div className={styles.metaRow}>
-        <div className={styles.meta}>
-          <span className={cx(styles.scope, !memory.subjectId && styles.scopeGeneral)}>{scopeName}</span>
-          {origin && (
-            <span className={cx(styles.origin, origin === "inferred" && styles.originInferred)}>
-              {t(ORIGIN_KEY[origin])}
-            </span>
-          )}
-          <span>{t("memory.evidenceCount", { count: memory.evidence.length })}</span>
-          {memory.userCorrected && <span className={styles.corrected}>{t("memory.corrected")}</span>}
-          <span>{formatRelativeTime(memory.updatedAt, lang)}</span>
-        </div>
-        {mode === "view" && (
-          <div className={styles.actions}>
-            <button onClick={() => { setSummary(memory.summary); setStatus(memory.status); setScope(memory.subjectId ?? ""); setMode("edit"); }}>{t("memory.correct")}</button>
-            <button className={styles.deleteAction} onClick={() => setMode("confirm")}>
-              <Trash2 size={12} aria-hidden />
-              {t("common.delete")}
-            </button>
-          </div>
-        )}
-      </div>
+      {(open || mode !== "view") && meta}
 
       {open && (
         <ol className={styles.evidence}>
@@ -247,106 +256,25 @@ export function MemoryItem({
   );
 }
 
-function splitEntries(text: string): string[] {
-  return text.split(/\s*§\s*/).map((item) => item.trim()).filter(Boolean);
-}
-
-function AgentNotes() {
+function NotesLink({ onOpen }: { onOpen: () => void }) {
   const { t } = useI18n();
-  const [notes, setNotes] = useState({ user: "", memory: "", limits: { user: 1375, memory: 2200 } });
-  const [pending, setPending] = useState<Array<{ id: string; action: string; target: string; content: string; oldText: string }>>([]);
-  const [note, setNote] = useState("");
-  const [open, setOpen] = useState(false);
+  const [count, setCount] = useState<number | null>(null);
+  const [pending, setPending] = useState(0);
 
-  const load = () => {
+  useEffect(() => {
     void chatApi.agentNotes().then((data) => {
-      setNotes(data);
-      if (data.user.trim() || data.memory.trim()) setOpen(true);
-    }).catch(() => setNote(t("memory.notes.loadFailed")));
-    void chatApi.pendingNotes().then((items) => {
-      setPending(items);
-      if (items.length > 0) setOpen(true);
-    }).catch(() => setPending([]));
-  };
-  useEffect(load, []);
-
-  async function remove(target: "user" | "memory", entry: string) {
-    const next = splitEntries(notes[target]).filter((item) => item !== entry);
-    try {
-      setNotes(await chatApi.saveAgentNote(target, next.join("\n§\n")));
-      setNote(t("memory.notes.removed"));
-    } catch (error) {
-      setNote(error instanceof Error ? error.message : t("toast.deleteFailed"));
-    }
-  }
-
-  async function decide(id: string, allow: boolean) {
-    try {
-      await chatApi.decidePending(id, allow);
-      load();
-    } catch (error) {
-      setNote(error instanceof Error ? error.message : t("toast.approvalFailed"));
-    }
-  }
-
-  const blocks: Array<{ key: "user" | "memory"; label: string }> = [
-    { key: "user", label: t("memory.notes.user") },
-    { key: "memory", label: t("memory.notes.memory") },
-  ];
+      setCount([data.user, data.memory].join("\n§\n").split(/\s*§\s*/).filter((item) => item.trim()).length);
+    }).catch(() => setCount(null));
+    void chatApi.pendingNotes().then((items) => setPending(items.length)).catch(() => setPending(0));
+  }, []);
 
   return (
-    <div className={styles.notes}>
-      <button type="button" className={styles.notesToggle} onClick={() => setOpen((v) => !v)} aria-expanded={open}>
-        <span className={styles.notesLabel}>{t("memory.notes.title")}</span>
-        <span className={styles.notesCount}>
-          {t("memory.notes.summary", { user: notes.user.length, userLimit: notes.limits.user, memory: notes.memory.length, memoryLimit: notes.limits.memory })}
-        </span>
-        {pending.length > 0 && <span className={styles.pendingTag}>{t("memory.notes.pendingCount", { count: pending.length })}</span>}
-        <ChevronDown size={13} className={cx(styles.chevron, open && styles.notesOpen)} aria-hidden />
-      </button>
-
-      {open && (
-        <div className={styles.notesBody}>
-          <p className={styles.notesHint}>{t("memory.notes.intro")}</p>
-          {blocks.map((block) => {
-            const items = splitEntries(notes[block.key]);
-            return (
-              <div key={block.key} className={styles.noteSection}>
-                <div className={styles.noteHead}>
-                  <span>{block.label}</span>
-                  <span>{notes[block.key].length}/{notes.limits[block.key]}</span>
-                </div>
-                {items.length === 0 ? (
-                  <p className={styles.noteEmpty}>{t("memory.notes.noEntries")}</p>
-                ) : (
-                  items.map((entry) => (
-                    <div key={entry} className={styles.entry}>
-                      <span>{entry}</span>
-                      <button type="button" onClick={() => void remove(block.key, entry)}>{t("common.delete")}</button>
-                    </div>
-                  ))
-                )}
-              </div>
-            );
-          })}
-          {pending.length > 0 && (
-            <div className={styles.noteSection}>
-              <div className={styles.noteHead}><span>{t("memory.notes.pending")}</span></div>
-              {pending.map((item) => (
-                <div key={item.id} className={styles.entry}>
-                  <span>{item.target} · {item.action} · {item.content || item.oldText}</span>
-                  <div className={styles.entryBtns}>
-                    <button type="button" onClick={() => void decide(item.id, true)}>{t("memory.notes.approve")}</button>
-                    <button type="button" onClick={() => void decide(item.id, false)}>{t("memory.notes.reject")}</button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-          {note && <p className={styles.notesHint}>{note}</p>}
-        </div>
-      )}
-    </div>
+    <button type="button" className={styles.notesLink} onClick={onOpen}>
+      <span className={styles.notesLabel}>{t("memory.notes.link")}</span>
+      {pending > 0 && <span className={styles.pendingTag}>{t("memory.notes.pendingCount", { count: pending })}</span>}
+      <span className={styles.notesCount}>{count ? t("memory.notes.linkCount", { count }) : t("memory.notes.linkEmpty")}</span>
+      <ChevronRight size={13} className={styles.notesChevron} aria-hidden />
+    </button>
   );
 }
 
@@ -384,10 +312,7 @@ export function MemoryDrawer(props: MemoryDrawerProps) {
           <X size={16} />
         </button>
       </header>
-      <AgentNotes />
-      <p className={styles.intro}>
-        {t("memory.intro")}
-      </p>
+      {props.onOpenNotes && <NotesLink onOpen={props.onOpenNotes} />}
       <div className={styles.filters} role="radiogroup" aria-label={t("memory.filterAria")}>
         {filters.map((item) => (
           <button
@@ -422,6 +347,7 @@ export function MemoryDrawer(props: MemoryDrawerProps) {
                 memory={memory}
                 subjects={props.subjects}
                 focused={focusIds.includes(memory.id)}
+                showKind={false}
                 conversationTitles={props.conversationTitles}
                 onUpdate={props.onUpdate}
                 onDelete={props.onDelete}
