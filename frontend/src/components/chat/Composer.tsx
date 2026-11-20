@@ -1165,8 +1165,6 @@ export function Composer({
           </div>
         </div>
 
-        {onModeChange && <ModePicker value={mode} onChange={onModeChange} hero={hero} disabled={locked} />}
-
         <div className={styles.toolbar}>
           <div className={styles.leftTools}>
             <div className={styles.menuAnchor} ref={menuRef}>
@@ -1419,6 +1417,8 @@ export function Composer({
               />
             </span>
 
+            {!hero && onModeChange && <ModePicker value={mode} onChange={onModeChange} disabled={locked} />}
+
             {/* 状态徽标：只在开启自动批准 / 绑定工作区时出现，点击打开 + 菜单里的对应项 */}
             <div className={styles.menuAnchor} ref={wsRef}>
               {(autoApprove || workspace) && (
@@ -1561,6 +1561,7 @@ export function Composer({
           </div>
         </div>
       </div>
+      {hero && onModeChange && <ModePicker value={mode} onChange={onModeChange} hero disabled={locked} />}
     </div>
   );
 }
