@@ -33,6 +33,7 @@ import { AGENDA_TOOLS, AgendaToolCard } from "./AgendaToolCard";
 import { WEB_SEARCH_TOOL, WebSearchCard, parseWebSearch } from "./WebSearchCard";
 import { hasVisionMarker } from "./widgets/visionData";
 import { MessageNav } from "./MessageNav";
+import { navTurns } from "@/lib/chat/messageNav";
 import { MemoriesByIdContext } from "./widgets/memoryContext";
 import { WidgetScopeContext } from "./widgets/widgetEvents";
 import styles from "./MessageList.module.css";
@@ -184,11 +185,11 @@ function readPins(conversationId: string): string[] {
   }
 }
 
-function pinPreview(text: string): string {
+function pinPreview(text: string, max = 30): string {
   const { files, body } = parseFileMarkers(text);
   text = [files.map((file) => file.name).join("、"), body].filter(Boolean).join(" · ");
   const flat = text.replace(/```[\s\S]*?```/g, " ").replace(/[#>*_`~]/g, "").replace(/\s+/g, " ").trim();
-  return flat.length > 30 ? `${flat.slice(0, 30)}…` : flat || "（无文字内容）";
+  return flat.length > max ? `${flat.slice(0, max)}…` : flat || "（无文字内容）";
 }
 
 interface MessageListProps {
@@ -480,9 +481,11 @@ export function MessageList({
     ? messages.findIndex((m, idx) => idx > messages.indexOf(lastUser) && m.role === "assistant")
     : -1;
   const navEntries = showNav
-    ? messages
-      .filter((message) => message.role === "user" && message.kind !== "exercise" && !isHiddenSystemMessage(message, eventIds))
-      .map((message) => ({ id: message.id, preview: pinPreview(message.content) }))
+    ? navTurns(
+      messages,
+      (message) => message.kind !== "exercise" && !isHiddenSystemMessage(message, eventIds),
+      (message) => pinPreview(message.content, 80),
+    )
     : [];
 
   return (

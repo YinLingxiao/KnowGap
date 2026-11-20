@@ -1,4 +1,4 @@
-/* 提问导航：平时只是一列刻度，悬停或聚焦时同一列向左展开成提问列表（行高不变，鼠标下的项不会跳走） */
+/* 提问导航：平时只是一列刻度；悬停或聚焦某道刻度时，左侧弹出这一问的预览卡 */
 .nav {
   position: absolute;
   top: 50%;
@@ -9,68 +9,37 @@
   transform: translateY(-50%);
 }
 
-.panel {
+.ticks {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  align-items: flex-end;
   margin: 0;
-  padding: 6px;
+  padding: 6px 2px;
   overflow-y: auto;
-  border: 1px solid transparent;
-  border-radius: var(--radius-lg);
   list-style: none;
   scrollbar-width: none;
-  transition:
-    background-color var(--t-hover) var(--ease-out),
-    border-color var(--t-hover) var(--ease-out);
 }
 
-.panel::-webkit-scrollbar {
+.ticks::-webkit-scrollbar {
   display: none;
 }
 
-.nav:hover .panel,
-.nav:focus-within .panel {
-  border-color: var(--border);
-  background: var(--bg-elevated);
-  box-shadow: var(--shadow-popover); /* taste-skill-ignore */
-}
-
-.item {
+.tickButton {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 10px;
-  width: 100%;
-  height: 24px;
-  padding: 0 4px 0 8px;
+  width: 30px;
+  height: 12px;
+  padding: 0 4px;
   border: none;
   border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--text-tertiary);
-  font-size: var(--text-sm);
   cursor: pointer;
 }
 
-.item:hover,
-.item:focus-visible {
-  background: var(--bg-hover);
-  color: var(--text);
-}
-
-.itemText {
-  max-width: 0;
-  overflow: hidden;
-  opacity: 0;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  transition: opacity var(--t-hover) var(--ease-out);
-}
-
-.nav:hover .itemText,
-.nav:focus-within .itemText {
-  max-width: 260px;
-  opacity: 1;
+.tickButton:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 1px;
 }
 
 .tick {
@@ -84,20 +53,104 @@
     background-color var(--t-hover) var(--ease-out);
 }
 
-.itemOn {
-  color: var(--text);
-  font-weight: 500;
+.tickButton:hover .tick,
+.hovered .tick {
+  width: 15px;
+  background: var(--text-secondary);
 }
 
-.itemOn .tick {
-  width: 16px;
+.on .tick {
+  width: 18px;
   background: var(--text);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .panel,
-  .itemText,
-  .tick {
-    transition: none;
+.card {
+  position: absolute;
+  right: calc(100% + 6px);
+  width: 288px;
+  padding: 10px 12px 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-popover); /* taste-skill-ignore */
+  cursor: pointer;
+  transform: translateY(-50%);
+  transition: top 140ms var(--ease-out);
+  animation: nav-card-in 140ms var(--ease-out);
+}
+
+.cardMeta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  line-height: 18px;
+}
+
+.badge {
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-weight: 500;
+}
+
+.question,
+.answer {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  overflow-wrap: anywhere;
+}
+
+.question {
+  -webkit-line-clamp: 2;
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.answer {
+  -webkit-line-clamp: 3;
+  margin-top: 6px;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  line-height: 1.6;
+}
+
+.pending {
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+
+@keyframes nav-card-in {
+  from {
+    opacity: 0;
+    transform: translate(4px, -50%);
   }
+}
+
+@media (max-width: 760px) {
+  .nav {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tick,
+  .card {
+    transition: none;
+    animation: none;
+  }
+}
+
+:global([data-motion="reduced"]) .tick,
+:global([data-motion="reduced"]) .card {
+  transition: none;
+  animation: none;
 }

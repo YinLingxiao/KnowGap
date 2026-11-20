@@ -1,4 +1,8 @@
 export const widgetPhrases: Record<string, string> = {
+  "第 {n} 问：{text}": "Question {n}: {text}",
+  "第 {n} / {total} 问": "Question {n} of {total}",
+  "含小测": "Has quiz",
+  "还没有文字回答": "No text answer yet",
   "文件较大，建议下载后用本地程序查看。": "This file is large. Download it and open it in a local app.",
   "下载中…": "Downloading…",
   "下载查看": "Download to view",
