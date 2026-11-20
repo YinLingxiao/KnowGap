@@ -280,7 +280,7 @@ export function ProviderEditor({ provider, client, onClose, onChange, onCreated,
         <label className={styles.field} htmlFor={`${fieldId}-preset`}>
           <span className={styles.label}>{tx("服务商预设")}</span>
           <select id={`${fieldId}-preset`} className={styles.select} aria-label={tx("服务商预设")} value={draft.preset} disabled={busy} onChange={(event) => applyPreset(event.target.value as ModelProviderId)}>
-            {["deepseek", "qwen", "ark", "moonshot", "zhipu", "openai", "chatgpt", "vertex", "custom"].map((id) => (
+            {["deepseek", "qwen", "ark", "moonshot", "zhipu", "openai", "opencode", "chatgpt", "vertex", "custom"].map((id) => (
               <option key={id} value={id}>{tx(findProvider(id).name)}</option>
             ))}
           </select>

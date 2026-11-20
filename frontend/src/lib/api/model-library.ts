@@ -6,7 +6,7 @@ import { API_BASE_URL } from "../config";
 import { ApiError } from "./errors";
 import { request } from "./http-client";
 
-export type ProviderPreset = "openai" | "deepseek" | "qwen" | "ark" | "moonshot" | "zhipu" | "vertex" | "chatgpt" | "custom";
+export type ProviderPreset = "openai" | "deepseek" | "qwen" | "ark" | "moonshot" | "zhipu" | "opencode" | "vertex" | "chatgpt" | "custom";
 export type AuthMode = "api_key" | "adc" | "chatgpt";
 export type ReasoningLevel = "none" | "low" | "medium" | "high";
 export type ModelLabel = "新" | "Pro";
@@ -138,7 +138,7 @@ export interface ModelLibraryClient {
 export const MODELS_CHANGED_EVENT = "knowgap:models-changed";
 
 const ROOT = "/api/models";
-const PRESETS = new Set<ProviderPreset>(["openai", "deepseek", "qwen", "ark", "moonshot", "zhipu", "vertex", "chatgpt", "custom"]);
+const PRESETS = new Set<ProviderPreset>(["openai", "deepseek", "qwen", "ark", "moonshot", "zhipu", "opencode", "vertex", "chatgpt", "custom"]);
 const AUTH_MODES = new Set<AuthMode>(["api_key", "adc", "chatgpt"]);
 const ROLES: ServiceRole[] = ["logic", "vision", "memory"];
 const FETCH_SAMPLES: Partial<Record<ProviderPreset, readonly string[]>> = {
@@ -147,6 +147,7 @@ const FETCH_SAMPLES: Partial<Record<ProviderPreset, readonly string[]>> = {
   qwen: ["qwen-plus"],
   moonshot: ["moonshot-v1-8k"],
   zhipu: ["glm-4-flash"],
+  opencode: ["kimi-k3", "glm-5.3", "minimax-m3"],
   vertex: ["gemini-4-argon"],
   chatgpt: ["gpt-6.1-sol"],
 };

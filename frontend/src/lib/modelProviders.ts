@@ -3,7 +3,7 @@
  * 通用服务走 OpenAI Chat Completions；Vertex Express 走原生 Gemini 接口。
  */
 
-export type ModelProviderId = "openai" | "deepseek" | "qwen" | "ark" | "moonshot" | "zhipu" | "vertex" | "chatgpt" | "custom";
+export type ModelProviderId = "openai" | "deepseek" | "qwen" | "ark" | "moonshot" | "zhipu" | "opencode" | "vertex" | "chatgpt" | "custom";
 
 export interface ModelProvider {
   id: ModelProviderId;
@@ -24,6 +24,13 @@ export const MODEL_PROVIDERS: ModelProvider[] = [
   { id: "moonshot", name: "Kimi", baseUrl: "https://api.moonshot.cn/v1", modelHint: "moonshot-v1-8k" },
   { id: "zhipu", name: "智谱 GLM", baseUrl: "https://open.bigmodel.cn/api/paas/v4", modelHint: "glm-4-flash" },
   { id: "openai", name: "OpenAI", baseUrl: "https://api.openai.com/v1", modelHint: "gpt-4o-mini" },
+  {
+    id: "opencode", name: "OpenCode Go",
+    baseUrl: "https://opencode.ai/inference/go/openai/v1",
+    modelHint: "kimi-k3",
+    urlHint: "OpenCode Go 套餐的 OpenAI 兼容接口。KnowGap 会自动带上 OpenCode 要求的会话请求头；免费模型只能在 OpenCode 里用。",
+    keyHint: "填写 OpenCode 控制台生成的 API Key（oc_sk_ 开头），不含 Bearer 前缀。",
+  },
   {
     id: "chatgpt", name: "ChatGPT 套餐",
     baseUrl: "https://api.openai.com/v1",

@@ -13,7 +13,7 @@ import httpx
 from fastapi import HTTPException
 from pydantic import SecretStr, ValidationError
 
-from app.agents.llm import ProviderError, is_vertex_native
+from app.agents.llm import OPENCODE_USER_AGENT, ProviderError, is_opencode, is_vertex_native, opencode_session
 from app.config import Settings
 from app.models.model_library_schemas import (
     NO_MODEL_DETAIL, URL_KEY_RESET_DETAIL, SERVICE_ROLES, PROVIDER_ID, AffectedRefs, CatalogModel,
@@ -40,6 +40,7 @@ _PRESET_URLS = {
     "https://api.moonshot.cn/v1": ("moonshot", "Kimi"),
     "https://open.bigmodel.cn/api/paas/v4": ("zhipu", "智谱 GLM"),
     "https://api.openai.com/v1": ("openai", "OpenAI"),
+    "https://opencode.ai/inference/go/openai/v1": ("opencode", "OpenCode Go"),
 }
 _NON_CHAT = re.compile(
     r"(?:embed|tts|whisper|dall-?e|diffusion|(?:^|[-_./])image(?:[-_./]|$)|moderation|realtime|transcri|"
@@ -710,6 +711,9 @@ class ModelLibrary:
         headers = {"Accept": "application/json"}
         if secret:
             headers["Authorization"] = f"Bearer {secret}"
+        if is_opencode(provider.base_url):
+            headers["x-opencode-session"] = opencode_session(None)
+            headers["User-Agent"] = OPENCODE_USER_AGENT
         try:
             with httpx.Client(timeout=FETCH_TIMEOUT, follow_redirects=False) as client:
                 response = client.get(f"{provider.base_url}/models", headers=headers)

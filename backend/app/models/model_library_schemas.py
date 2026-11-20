@@ -13,7 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field, SecretStr, SerializationInfo,
 
 from app.config import Settings
 
-ProviderPreset = Literal["openai", "deepseek", "qwen", "ark", "moonshot", "zhipu", "vertex", "chatgpt", "custom"]
+ProviderPreset = Literal["openai", "deepseek", "qwen", "ark", "moonshot", "zhipu", "opencode", "vertex", "chatgpt", "custom"]
 AuthMode = Literal["api_key", "adc", "chatgpt"]
 ReasoningLevel = Literal["none", "low", "medium", "high"]
 ModelLabel = Literal["新", "Pro"]

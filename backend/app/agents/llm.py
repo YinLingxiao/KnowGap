@@ -1,7 +1,9 @@
 """Replaceable Chat Completions adapter. Never substitutes fabricated results."""
 
+import hashlib
 import json
 import re
+import uuid
 from functools import cache
 from typing import AsyncIterator, Protocol
 from urllib.parse import urlsplit
@@ -114,7 +116,7 @@ class ChatCompletionsTutor:
             async with httpx.AsyncClient(timeout=settings.llm_timeout_seconds, transport=self.transport) as client:
                 response = await client.post(
                     f"{base_url}/chat/completions", json=payload,
-                    headers={"Authorization": f"Bearer {settings.llm_api_key.get_secret_value()}"},
+                    headers=provider_headers(base_url, settings.llm_api_key.get_secret_value(), payload["messages"]),
                 )
         except httpx.TimeoutException:
             raise ProviderError(504, "模型响应超时，请稍后重试；本次作答尚未保存。") from None
@@ -169,6 +171,34 @@ def openai_messages(messages: list[dict]) -> list[dict]:
         {key: value for key, value in call.items() if key != "gemini_part"}
         for call in message["tool_calls"]
     ]) if message.get("tool_calls") else message for message in messages]
+
+
+OPENCODE_USER_AGENT = "KnowGap/1.0"
+
+
+def is_opencode(base_url: str) -> bool:
+    host = (urlsplit((base_url or "").strip()).hostname or "").lower()
+    return host == "opencode.ai" or host.endswith(".opencode.ai")
+
+
+def opencode_session(messages: list[dict] | None) -> str:
+    """同一段对话得到同一个会话 id：取系统提示和第一条用户消息做摘要（OpenCode Go 要求每次请求都带、且保持稳定）。"""
+    if not messages:
+        return f"ses_{uuid.uuid4().hex[:24]}"
+    system = next((m.get("content") for m in messages if m.get("role") == "system"), "")
+    first = next((m.get("content") for m in messages if m.get("role") == "user"), "")
+    seed = json.dumps([system, first], ensure_ascii=False, default=str)
+    return "ses_" + hashlib.sha256(seed.encode("utf-8")).hexdigest()[:24]
+
+
+def provider_headers(base_url: str, api_key: str, messages: list[dict] | None = None, *, stream: bool = False) -> dict[str, str]:
+    headers = {"Authorization": f"Bearer {api_key}"}
+    if stream:
+        headers["Accept"] = "text/event-stream"
+    if is_opencode(base_url):
+        headers["x-opencode-session"] = opencode_session(messages)
+        headers["User-Agent"] = OPENCODE_USER_AGENT
+    return headers
 
 
 def provider_endpoint(settings: Settings) -> tuple[str, str]:
@@ -321,7 +351,7 @@ class ChatCompletionsChat:
             async with httpx.AsyncClient(timeout=timeout, transport=self.transport, verify=shared_ssl_context()) as client:
                 async with client.stream(
                     "POST", f"{base_url}/chat/completions", json=payload,
-                    headers={"Authorization": f"Bearer {api_key}", "Accept": "text/event-stream"},
+                    headers=provider_headers(base_url, api_key, payload["messages"], stream=True),
                 ) as response:
                     error = status_error(response.status_code)
                     if error:
@@ -431,7 +461,7 @@ class ChatCompletionsChat:
                 timeout=settings.llm_timeout_seconds, transport=self.transport, verify=shared_ssl_context(),
             ) as client:
                 response = await client.post(
-                    f"{base_url}/chat/completions", json=payload, headers={"Authorization": f"Bearer {api_key}"},
+                    f"{base_url}/chat/completions", json=payload, headers=provider_headers(base_url, api_key, payload["messages"]),
                 )
         except PROVIDER_FAILURES as exc:
             raise request_error(exc) from None
