@@ -18,6 +18,14 @@ Goal = Annotated[str, StringConstraints(strip_whitespace=True, max_length=400)]
 Level = Literal["beginner", "some", "fluent", "exam"]
 Deadline = Annotated[str, StringConstraints(strip_whitespace=True, pattern=r"^\d{4}-\d{2}-\d{2}$")]
 Color = Annotated[str, StringConstraints(strip_whitespace=True, pattern=r"^#[0-9A-Fa-f]{6}$")]
+DEFAULT_SUBJECT_ICON = "graduation-cap"
+SubjectIcon = Literal[
+    "graduation-cap", "folder", "book-open", "notebook-pen", "code", "terminal", "cpu", "database",
+    "calculator", "sigma", "atom", "flask-conical", "dna", "brain", "globe", "languages",
+    "scale", "landmark", "bar-chart", "palette", "music", "stethoscope", "wrench", "zap",
+    "compass", "target", "rocket", "lightbulb", "puzzle", "briefcase", "heart", "bookmark",
+]
+SUBJECT_ICONS = frozenset(SubjectIcon.__args__)
 ConversationKind = Literal["chat", "main", "thread"]
 ThreadStatus = Literal["open", "resolved"]
 ExecutionStatus = Literal["queued", "working", "waiting", "idle", "failed", "cancelled"]
@@ -38,6 +46,7 @@ class CreateSubject(StrictModel):
     level: Level | None = None
     deadline: Deadline | None = None
     color: Color | None = None
+    icon: SubjectIcon | None = None
 
 
 class UpdateSubject(StrictModel):
@@ -48,6 +57,7 @@ class UpdateSubject(StrictModel):
     level: Level | None = None
     deadline: Deadline | None = None
     color: Color | None = None
+    icon: SubjectIcon | None = None
 
 
 class SpaceProgress(BaseModel):
@@ -68,6 +78,7 @@ class Subject(BaseModel):
     level: Level | None = None
     deadline: str | None = None
     color: str = "#3d6fdb"
+    icon: str = DEFAULT_SUBJECT_ICON
     main_conversation_id: str | None = None
     progress: SpaceProgress = Field(default_factory=SpaceProgress)
     conversation_count: int

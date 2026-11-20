@@ -10,6 +10,7 @@ import type { Subject } from "@/lib/chat/types";
 import { useI18n } from "@/components/LanguageProvider";
 import { localeOf, type MessageKey } from "@/lib/i18n";
 import { cx } from "@/lib/cx";
+import { SpaceIcon } from "./SpaceIcon";
 import styles from "./SpacesPage.module.css";
 
 type SortKey = "studied" | "created" | "name";
@@ -226,7 +227,7 @@ export function SpacesPage(props: SpacesPageProps) {
               >
                 <button className={styles.cardMain} onClick={() => props.onOpen(subject.id)}>
                   <span className={styles.cardIcon} style={{ color: subject.color }} aria-hidden>
-                    <GraduationCap size={17} />
+                    <SpaceIcon name={subject.icon} size={17} />
                   </span>
                   <div className={styles.cardBody}>
                     <div className={styles.nameRow}>

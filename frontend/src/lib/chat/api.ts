@@ -121,6 +121,7 @@ function mapSubject(data: Wire): Subject {
   return {
     id: data.id, name: data.name, description: data.description, instructions: data.instructions,
     goal: data.goal ?? "", level: data.level ?? null, deadline: data.deadline ?? null, color: data.color ?? "#3d6fdb",
+    icon: data.icon ?? "graduation-cap",
     mainConversationId: data.main_conversation_id ?? null,
     progress: {
       toReview: data.progress?.to_review ?? 0, improving: data.progress?.improving ?? 0,
@@ -139,6 +140,7 @@ function spaceBody(input: SpaceInput): Wire {
   if (input.level !== undefined) body.level = input.level;
   if (input.deadline !== undefined) body.deadline = input.deadline;
   if (input.color !== undefined) body.color = input.color;
+  if (input.icon !== undefined) body.icon = input.icon;
   if (input.description !== undefined) body.description = input.description;
   if (input.instructions !== undefined) body.instructions = input.instructions;
   return body;

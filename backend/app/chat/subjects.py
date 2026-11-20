@@ -32,7 +32,7 @@ def subject_router(store: ChatStore, service=None) -> APIRouter:
     def create_subject(body: CreateSubject):
         return store.create_subject(
             current_student(), body.name, body.description, body.instructions,
-            goal=body.goal, level=body.level, deadline=body.deadline, color=body.color,
+            goal=body.goal, level=body.level, deadline=body.deadline, color=body.color, icon=body.icon,
         )
 
     @router.get("/{subject_id}", response_model=Subject)

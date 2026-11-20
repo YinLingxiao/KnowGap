@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { GraduationCap, Plus, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Plus, RotateCcw, Search, X } from "lucide-react";
 import { useI18n } from "@/components/LanguageProvider";
 import { DOCUMENT_EXTENSIONS } from "@/lib/chat/attachments";
 import { SPACE_COLORS, LEVELS } from "@/lib/chat/space";
 import type { Level, SpaceInput, Subject } from "@/lib/chat/types";
+import { cx } from "@/lib/cx";
+import { DEFAULT_SPACE_ICON, SpaceIcon, filterSpaceIcons } from "./SpaceIcon";
 import styles from "./CreateSpaceDialog.module.css";
 
 interface CreateSpaceDialogProps {
@@ -16,28 +18,59 @@ interface CreateSpaceDialogProps {
 }
 
 export function CreateSpaceDialog({ subject, onClose, onCreate, onUpdate }: CreateSpaceDialogProps) {
-  const { t } = useI18n();
+  const { t, tx } = useI18n();
   const editing = Boolean(subject);
   const [name, setName] = useState(subject?.name ?? "");
   const [goal, setGoal] = useState(subject?.goal ?? "");
   const [level, setLevel] = useState<Level | null>(subject?.level ?? null);
   const [deadline, setDeadline] = useState(subject?.deadline ?? "");
   const [color, setColor] = useState(subject?.color || SPACE_COLORS[0]);
-  const [colorOpen, setColorOpen] = useState(false);
+  const [icon, setIcon] = useState(subject?.icon || DEFAULT_SPACE_ICON);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [iconQuery, setIconQuery] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [working, setWorking] = useState(false);
   const [over, setOver] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
+  const pickerRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  const visibleIcons = useMemo(() => filterSpaceIcons(iconQuery), [iconQuery]);
+  const isDefaultAppearance = icon === DEFAULT_SPACE_ICON && color === SPACE_COLORS[0];
 
   useEffect(() => {
     nameRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key !== "Escape") return;
+      if (pickerOpen) {
+        event.stopPropagation();
+        setPickerOpen(false);
+      } else {
+        onClose();
+      }
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, pickerOpen]);
+
+  useEffect(() => {
+    if (!pickerOpen) {
+      setIconQuery("");
+      return;
+    }
+    searchRef.current?.focus();
+    const onDown = (event: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(event.target as Node)) {
+        setPickerOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [pickerOpen]);
 
   const addFiles = (list: FileList | null) => {
     if (!list) return;
@@ -54,6 +87,7 @@ export function CreateSpaceDialog({ subject, onClose, onCreate, onUpdate }: Crea
       level,
       deadline: deadline || null,
       color,
+      icon,
     };
     const ok = editing && subject
       ? await onUpdate(subject.id, input)
@@ -83,32 +117,100 @@ export function CreateSpaceDialog({ subject, onClose, onCreate, onUpdate }: Crea
             {t("createSpace.nameLabel")}
           </label>
           <div className={styles.nameRow}>
-            <div className={styles.colorAnchor}>
+            <div className={styles.colorAnchor} ref={pickerRef}>
               <button
                 type="button"
-                className={styles.iconSwatch}
+                className={cx(styles.iconSwatch, pickerOpen && styles.iconSwatchOpen)}
                 style={{ color }}
-                onClick={() => setColorOpen((v) => !v)}
-                aria-label={t("createSpace.colorAria")}
-                title={t("createSpace.changeColor")}
+                onClick={() => setPickerOpen((v) => !v)}
+                aria-expanded={pickerOpen}
+                aria-haspopup="dialog"
+                aria-label={tx("选择图标和颜色")}
+                title={tx("选择图标和颜色")}
               >
-                <GraduationCap size={15} />
+                <span key={`${icon}-${color}`} className={styles.swatchGlyph}>
+                  <SpaceIcon name={icon} size={15} />
+                </span>
               </button>
-              {colorOpen && (
-                <div className={styles.colorPopover}>
-                  {SPACE_COLORS.map((item) => (
-                    <button
-                      key={item}
-                      type="button"
-                      className={color === item ? styles.dotOn : styles.dot}
-                      style={{ background: item }}
-                      onClick={() => {
-                        setColor(item);
-                        setColorOpen(false);
-                      }}
-                      aria-label={`颜色 ${item}`}
+              {pickerOpen && (
+                <div className={styles.pickerPopover} role="dialog" aria-label={tx("图标与颜色选择器")}>
+                  <div className={styles.pickerSearch}>
+                    <Search size={13} aria-hidden />
+                    <input
+                      ref={searchRef}
+                      type="text"
+                      value={iconQuery}
+                      placeholder={tx("搜索图标…")}
+                      aria-label={tx("搜索图标")}
+                      onChange={(event) => setIconQuery(event.target.value)}
                     />
-                  ))}
+                    {iconQuery && (
+                      <button
+                        type="button"
+                        className={styles.searchClear}
+                        aria-label={tx("清空搜索")}
+                        onClick={() => { setIconQuery(""); searchRef.current?.focus(); }}
+                      >
+                        <X size={12} aria-hidden />
+                      </button>
+                    )}
+                  </div>
+
+                  <div className={styles.colorRow} role="radiogroup" aria-label={t("createSpace.colorAria")}>
+                    {SPACE_COLORS.map((item) => (
+                      <button
+                        key={item}
+                        type="button"
+                        role="radio"
+                        aria-checked={color === item}
+                        className={color === item ? styles.dotOn : styles.dot}
+                        style={{ background: item }}
+                        onClick={() => setColor(item)}
+                        aria-label={`颜色 ${item}`}
+                      />
+                    ))}
+                  </div>
+
+                  {visibleIcons.length === 0 ? (
+                    <p className={styles.pickerEmpty}>{tx("没有匹配的图标")}</p>
+                  ) : (
+                    <div className={styles.iconGrid} role="listbox" aria-label={tx("可选图标")}>
+                      {visibleIcons.map((entry) => {
+                        const active = icon === entry.id;
+                        const IconComp = entry.icon;
+                        return (
+                          <button
+                            key={entry.id}
+                            type="button"
+                            role="option"
+                            aria-selected={active}
+                            className={cx(styles.iconCell, active && styles.iconCellActive)}
+                            style={active ? { color } : undefined}
+                            title={tx(entry.label)}
+                            aria-label={tx(entry.label)}
+                            onClick={() => setIcon(entry.id)}
+                          >
+                            <IconComp size={15} aria-hidden />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  <div className={styles.pickerFoot}>
+                    <button
+                      type="button"
+                      className={styles.resetBtn}
+                      disabled={isDefaultAppearance}
+                      onClick={() => {
+                        setIcon(DEFAULT_SPACE_ICON);
+                        setColor(SPACE_COLORS[0]);
+                      }}
+                    >
+                      <RotateCcw size={12} aria-hidden />
+                      <span>{tx("重置图标与颜色")}</span>
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import {
-  Brain, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Download, GraduationCap, History, Library as LibraryIcon, Link2, ListTodo,
+  Brain, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Download, History, Library as LibraryIcon, Link2, ListTodo,
   LoaderCircle, Maximize2, MessagesSquare, Mic, Minimize2, MoreHorizontal,
   PanelLeftOpen, Plus, RotateCcw, Settings, SlidersHorizontal, Sparkles, Target, Waypoints, X, Zap,
 } from "lucide-react";
@@ -34,6 +34,7 @@ import { Library } from "./Library";
 import { MessageList } from "./MessageList";
 import { UsageStats } from "./UsageStats";
 import { hasThreadsNeedingAttention, mergeNoticeFor } from "@/lib/chat/threadAlerts";
+import { SpaceIcon } from "./SpaceIcon";
 import styles from "./SubjectPage.module.css";
 
 type Panel =
@@ -493,7 +494,7 @@ export function SubjectPage({
             </button>
           )}
           <span className={styles.spaceIcon} style={{ color: subject.color }} aria-hidden>
-            <GraduationCap size={13} />
+            <SpaceIcon name={subject.icon} size={13} />
           </span>
           <div className={styles.heading}>
             <h1>{subject.name}</h1>

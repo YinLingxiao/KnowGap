@@ -47,6 +47,7 @@ export interface Subject {
   level: Level | null;
   deadline: string | null;
   color: string;
+  icon?: string;
   mainConversationId: string | null;
   progress: SpaceProgress;
   conversationCount: number;
@@ -62,6 +63,7 @@ export interface SpaceInput {
   level?: Level | null;
   deadline?: string | null;
   color?: string;
+  icon?: string;
   description?: string;
   instructions?: string;
 }

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, Plus } from "lucide-react";
 import { useI18n } from "@/components/LanguageProvider";
 import type { Subject } from "@/lib/chat/types";
+import { SpaceIcon } from "./SpaceIcon";
 import styles from "./SubjectPicker.module.css";
 
 interface SubjectPickerProps {
@@ -44,7 +45,7 @@ export function SubjectPicker({ subjects, value, onChange, onCreate }: SubjectPi
   return (
     <div className={styles.anchor} ref={ref}>
       <button className={styles.trigger} onClick={() => setOpen((state) => !state)} aria-haspopup="listbox" aria-expanded={open}>
-        {current && <span className={styles.dot} style={{ background: current.color }} />}
+        {current && <span style={{ color: current.color, display: "inline-flex" }}><SpaceIcon name={current.icon} size={13} /></span>}
         {current ? current.name : t("sidebar.spaces")}
         <ChevronDown size={13} aria-hidden />
       </button>
@@ -63,7 +64,7 @@ export function SubjectPicker({ subjects, value, onChange, onCreate }: SubjectPi
               onClick={() => pick(subject.id)}
             >
               <span className={styles.optionName}>
-                <i style={{ background: subject.color }} />
+                <span style={{ color: subject.color, display: "inline-flex" }}><SpaceIcon name={subject.icon} size={13} /></span>
                 {subject.name}
               </span>
               {value === subject.id && <Check size={14} aria-hidden />}

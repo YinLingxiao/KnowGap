@@ -365,17 +365,13 @@
   white-space: nowrap;
 }
 
-/* 学习空间色彩环：带微光光晕 */
-.spaceRing {
+/* 学习空间自定义彩色图标 */
+.spaceIcon {
+  display: inline-grid;
   flex-shrink: 0;
-  box-sizing: border-box;
-  width: 9px;
-  height: 9px;
-  margin: 0 1px;
-  border: 1.5px solid currentColor;
-  border-radius: 50%;
-  background: color-mix(in srgb, currentColor 24%, transparent);
-  box-shadow: 0 0 8px currentColor;
+  place-items: center;
+  width: 16px;
+  height: 16px;
 }
 
 .itemEnd {

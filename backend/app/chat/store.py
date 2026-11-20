@@ -38,6 +38,7 @@ MIN_LOCAL_HITS = 2
 STOP_CHARS = set("的了是在我你他她它们和与或也都就不没有吗呢吧啊这那个一些什么怎么为如何要会能可以说想看问题对吧嗯哦好请帮")
 INTERRUPTED = "服务重启，生成被中断。可以重新生成这条回复。"
 DEFAULT_COLOR = "#3d6fdb"
+DEFAULT_ICON = "graduation-cap"
 LEVELS = {"beginner", "some", "fluent", "exam"}
 STATUSES = {
     "misconception": {"suspected", "needs_review", "improving", "resolved"},
@@ -205,7 +206,8 @@ class ChatStore:
                     id TEXT PRIMARY KEY, student_id TEXT NOT NULL, name TEXT NOT NULL,
                     description TEXT NOT NULL DEFAULT '', instructions TEXT NOT NULL DEFAULT '',
                     goal TEXT NOT NULL DEFAULT '', level TEXT, deadline TEXT,
-                    color TEXT NOT NULL DEFAULT '#3d6fdb', main_conversation_id TEXT,
+                    color TEXT NOT NULL DEFAULT '#3d6fdb', icon TEXT NOT NULL DEFAULT 'graduation-cap',
+                    main_conversation_id TEXT,
                     created_at TEXT NOT NULL, updated_at TEXT NOT NULL
                 );
                 CREATE TABLE IF NOT EXISTS custom_skills (
@@ -266,6 +268,7 @@ class ChatStore:
             ensure_column(db, "subjects", "level", "TEXT")
             ensure_column(db, "subjects", "deadline", "TEXT")
             ensure_column(db, "subjects", "color", "TEXT NOT NULL DEFAULT '#3d6fdb'")
+            ensure_column(db, "subjects", "icon", "TEXT NOT NULL DEFAULT 'graduation-cap'")
             ensure_column(db, "subjects", "main_conversation_id", "TEXT")
             ensure_column(db, "conversations", "notes_snapshot", "TEXT")
             ensure_column(db, "conversations", "context_summary", "TEXT NOT NULL DEFAULT ''")
@@ -666,6 +669,7 @@ class ChatStore:
             id=row["id"], name=row["name"], description=row["description"], instructions=row["instructions"],
             goal=row["goal"] or "", level=row["level"] if row["level"] in LEVELS else None,
             deadline=row["deadline"], color=row["color"] or DEFAULT_COLOR,
+            icon=row["icon"] or DEFAULT_ICON,
             main_conversation_id=row["main_conversation_id"],
             progress=SpaceProgress(
                 to_review=memory["to_review"] or 0, improving=memory["improving"] or 0,
@@ -690,6 +694,7 @@ class ChatStore:
     def create_subject(
         self, student_id: str, name: str, description: str, instructions: str, *,
         goal: str = "", level: str | None = None, deadline: str | None = None, color: str | None = None,
+        icon: str | None = None,
     ) -> Subject:
         timestamp = now()
         subject_id = new_id("subj")
@@ -697,10 +702,10 @@ class ChatStore:
         with self.connection() as db:
             db.execute("BEGIN IMMEDIATE")
             db.execute(
-                "INSERT INTO subjects(id, student_id, name, description, instructions, goal, level, deadline, color, "
-                "main_conversation_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO subjects(id, student_id, name, description, instructions, goal, level, deadline, color, icon, "
+                "main_conversation_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (subject_id, student_id, name, description, instructions, goal, level, deadline,
-                 color or DEFAULT_COLOR, main_id, timestamp, timestamp),
+                 color or DEFAULT_COLOR, icon or DEFAULT_ICON, main_id, timestamp, timestamp),
             )
             db.execute(
                 "INSERT INTO conversations(id, student_id, title, title_source, subject_id, kind, created_at, updated_at) "
@@ -714,8 +719,8 @@ class ChatStore:
             current = self._subject(db, subject_id, student_id)
             if current is None:
                 return None
-            for field in ("name", "description", "instructions", "goal", "level", "deadline", "color"):
-                if field in changes:
+            for field in ("name", "description", "instructions", "goal", "level", "deadline", "color", "icon"):
+                if field in changes and (field != "icon" or changes[field] is not None):
                     db.execute(f"UPDATE subjects SET {field} = ? WHERE id = ?", (changes[field], subject_id))
             if "name" in changes and changes["name"] and current.main_conversation_id:
                 db.execute(

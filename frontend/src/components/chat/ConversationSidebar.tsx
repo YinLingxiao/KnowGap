@@ -18,6 +18,7 @@ import { cx } from "@/lib/cx";
 import type { SettingsTab } from "../settings/SettingsDialog";
 import { ThemeToggle } from "../ThemeToggle";
 import { UpdateIndicator } from "../desktop/UpdateIndicator";
+import { SpaceIcon } from "./SpaceIcon";
 import styles from "./ConversationSidebar.module.css";
 
 export type SidebarMode = "chat" | "learn";
@@ -359,7 +360,9 @@ function SpaceListItem({ subject, active, attention, relativeTime, onOpen }: {
         aria-current={active ? "page" : undefined}
         title={subject.name}
       >
-        <span className={styles.spaceRing} style={{ color: subject.color }} aria-hidden />
+        <span className={styles.spaceIcon} style={{ color: subject.color }} aria-hidden>
+          <SpaceIcon name={subject.icon} size={14} />
+        </span>
         <span className={styles.itemTitle}>{subject.name}</span>
         <span className={styles.spaceMeta}>
           {attention && <span className={styles.attentionDot} role="img" aria-label={t("sidebar.threadAttention")} />}
