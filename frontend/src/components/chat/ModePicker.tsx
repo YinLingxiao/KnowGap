@@ -1,7 +1,7 @@
 "use client";
 
-import type { ReactNode } from "react";
-import { FolderOpen, Lightbulb, ListTodo } from "lucide-react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { Check, ChevronDown, FolderOpen, Lightbulb, ListTodo, X } from "lucide-react";
 import { useI18n } from "@/components/LanguageProvider";
 import { CHAT_MODE_OPTIONS, type ChatMode } from "@/lib/chat/modes";
 import { cx } from "@/lib/cx";
@@ -12,6 +12,16 @@ interface ModePickerProps {
   onChange: (mode: ChatMode | null) => void;
   hero?: boolean;
   disabled?: boolean;
+}
+
+function ModeTriggerIcon() {
+  return (
+    <svg className={styles.icon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M12 4.5l3.5 6h-7l3.5-6z" />
+      <rect x="4.5" y="13.5" width="5.5" height="5.5" rx="1.2" />
+      <circle cx="16.75" cy="16.25" r="2.75" />
+    </svg>
+  );
 }
 
 function SolveIcon() {
@@ -58,26 +68,139 @@ const MODE_ICONS: Record<ChatMode, ReactNode> = {
 };
 
 export function ModePicker({ value, onChange, hero = false, disabled = false }: ModePickerProps) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
+  const [open, setOpen] = useState(false);
+  const anchorRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (disabled) setOpen(false);
+  }, [disabled]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (!anchorRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  if (hero) {
+    return (
+      <div className={cx(styles.bar, styles.heroBar)} role="group" aria-label={t("chat.mode.label")}>
+        {CHAT_MODE_OPTIONS.map((option, index) => {
+          const selected = value === option.id;
+          return (
+            <button
+              key={option.id}
+              type="button"
+              className={cx(styles.chip, styles.heroChip, selected && styles.chipOn)}
+              style={{ "--item-index": index } as CSSProperties}
+              aria-pressed={selected}
+              disabled={disabled}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => onChange(selected ? null : option.id)}
+            >
+              <span key={selected ? "on" : "off"} className={cx(styles.iconWrap, selected && styles.iconWrapOn)}>
+                {MODE_ICONS[option.id]}
+              </span>
+              <span>{t(option.labelKey)}</span>
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
+
+  const activeOption = value ? CHAT_MODE_OPTIONS.find((option) => option.id === value) ?? null : null;
+  const shortLabel = lang === "en" ? "Mode" : "模式";
+  const clearLabel = lang === "en" ? "Clear mode" : "取消模式";
+
   return (
-    <div className={cx(styles.bar, hero && styles.heroBar)} role="group" aria-label={t("chat.mode.label")}>
-      {CHAT_MODE_OPTIONS.map((option) => {
-        const selected = value === option.id;
-        return (
+    <div className={styles.anchor} ref={anchorRef}>
+      {activeOption ? (
+        <span key={activeOption.id} className={cx(styles.activePill, open && styles.activePillOpen)}>
           <button
-            key={option.id}
             type="button"
-            className={cx(styles.chip, hero && styles.heroChip, selected && styles.chipOn)}
-            aria-pressed={selected}
+            className={styles.activeMain}
+            aria-expanded={open}
+            aria-haspopup="menu"
+            aria-label={t("chat.mode.label")}
             disabled={disabled}
             onMouseDown={(event) => event.preventDefault()}
-            onClick={() => onChange(selected ? null : option.id)}
+            onClick={() => setOpen((prev) => !prev)}
           >
-            {MODE_ICONS[option.id]}
-            <span>{t(option.labelKey)}</span>
+            {MODE_ICONS[activeOption.id]}
+            <span>{t(activeOption.labelKey)}</span>
+            <ChevronDown size={12} className={cx(styles.chevron, open && styles.chevronOpen)} aria-hidden />
           </button>
-        );
-      })}
+          <button
+            type="button"
+            className={styles.clearBtn}
+            aria-label={clearLabel}
+            title={clearLabel}
+            disabled={disabled}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => {
+              setOpen(false);
+              onChange(null);
+            }}
+          >
+            <X size={12} aria-hidden />
+          </button>
+        </span>
+      ) : (
+        <button
+          type="button"
+          className={styles.trigger}
+          aria-expanded={open}
+          aria-haspopup="menu"
+          aria-label={t("chat.mode.label")}
+          disabled={disabled}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => setOpen((prev) => !prev)}
+        >
+          <ModeTriggerIcon />
+          <span>{shortLabel}</span>
+          <ChevronDown size={12} className={cx(styles.chevron, open && styles.chevronOpen)} aria-hidden />
+        </button>
+      )}
+
+      {open && !disabled && (
+        <div className={styles.menu} role="menu" aria-label={t("chat.mode.label")}>
+          {CHAT_MODE_OPTIONS.map((option, index) => {
+            const selected = value === option.id;
+            return (
+              <button
+                key={option.id}
+                type="button"
+                role="menuitemradio"
+                aria-checked={selected}
+                className={cx(styles.menuItem, selected && styles.menuItemOn)}
+                style={{ "--item-index": index } as CSSProperties}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => {
+                  onChange(selected ? null : option.id);
+                  setOpen(false);
+                }}
+              >
+                <span className={styles.menuItemLeft}>
+                  {MODE_ICONS[option.id]}
+                  <span>{t(option.labelKey)}</span>
+                </span>
+                {selected && <Check size={13} className={styles.menuCheck} aria-hidden />}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
