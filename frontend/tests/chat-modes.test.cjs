@@ -23,3 +23,12 @@ test('the six labels map to the six backend mode values in order', () => {
     'chat.mode.plan', 'chat.mode.research', 'chat.mode.organize',
   ]);
 });
+test('the mode picker takes every visible label from the i18n messages', () => {
+  const picker = fs.readFileSync(path.join(__dirname, '../src/components/chat/ModePicker.tsx'), 'utf8');
+  const messages = fs.readFileSync(path.join(__dirname, '../src/lib/i18n/messages.ts'), 'utf8');
+  assert.doesNotMatch(picker, /[一-鿿]/, 'no hard-coded Chinese text in the picker');
+  for (const key of ['chat.mode.short', 'chat.mode.clear']) {
+    assert.match(picker, new RegExp(`t\\("${key.replace(/\./g, '\\.')}"\\)`));
+    assert.equal(messages.split(`"${key}":`).length - 1, 2, `${key} exists in zh and en`);
+  }
+});

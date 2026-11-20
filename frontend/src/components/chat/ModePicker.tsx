@@ -68,7 +68,7 @@ const MODE_ICONS: Record<ChatMode, ReactNode> = {
 };
 
 export function ModePicker({ value, onChange, hero = false, disabled = false }: ModePickerProps) {
-  const { t, lang } = useI18n();
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const anchorRef = useRef<HTMLDivElement>(null);
 
@@ -120,8 +120,8 @@ export function ModePicker({ value, onChange, hero = false, disabled = false }: 
   }
 
   const activeOption = value ? CHAT_MODE_OPTIONS.find((option) => option.id === value) ?? null : null;
-  const shortLabel = lang === "en" ? "Mode" : "模式";
-  const clearLabel = lang === "en" ? "Clear mode" : "取消模式";
+  const shortLabel = t("chat.mode.short");
+  const clearLabel = t("chat.mode.clear");
 
   return (
     <div className={styles.anchor} ref={anchorRef}>
