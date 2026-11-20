@@ -719,7 +719,6 @@ export function ConversationSidebar(props: SidebarProps) {
   const chatItems = useMemo(
     () => conversations
       .filter((item) => (item.kind ?? "chat") === "chat" && !item.subjectId)
-      .filter((item) => item.title !== "初识引导 · 定制你的学习画像")
       .filter((item) => !keyword || item.title.toLowerCase().includes(keyword))
       .slice()
       .sort((a, b) => compareDatesDesc(chatSortTime(a, sort), chatSortTime(b, sort))),

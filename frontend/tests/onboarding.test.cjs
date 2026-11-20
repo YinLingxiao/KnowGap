@@ -113,3 +113,8 @@ test('checklist has five tasks with space creation first and existing space chec
   assert.equal((existing.match(/disabled/g) || []).length, 1);
   assert.match(existing, /lucide-check/);
 });
+
+test('the onboarding chat stays in the sidebar so the learner can return to it', () => {
+  const sidebar = fs.readFileSync(path.join(__dirname, '../src/components/chat/ConversationSidebar.tsx'), 'utf8');
+  assert.doesNotMatch(sidebar, /初识引导/, 'the sidebar must not hide the onboarding chat by title');
+});
