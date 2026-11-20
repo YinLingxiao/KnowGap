@@ -62,7 +62,7 @@ test('custom feed is a secure directory URL, never credentials or an arbitrary f
 test('production guards, 20 second delay, 4 hour interval, fixed GitHub source and security policy', async () => {
   const { updater, engine, timers, calls } = fixture();
   assert.equal(timers.get('delay').ms, 20000);
-  assert.equal(timers.get('interval').ms, 4 * 60 * 60 * 1000);
+  assert.equal(timers.get('interval').ms, 60 * 60 * 1000);
   assert.equal(engine.autoInstallOnAppQuit, false);
   assert.equal(engine.autoDownload, false);
   assert.equal(engine.allowPrerelease, false);
@@ -307,4 +307,21 @@ test('disabling and re-enabling scheduled checks leaves manual checks usable and
   assert.equal(timers.size, 0);
   engine.emit('update-downloaded', info);
   assert.equal(await updater.install(), true);
+});
+
+test('the update button installs without the confirm dialog; settings still confirm', async () => {
+  const quick = fixture();
+  quick.engine.emit('update-downloaded', info);
+  assert.equal(await quick.handlers.get(CHANNELS.install)({ trusted: true }, { quick: true }), true);
+  assert.ok(!quick.calls.includes('confirm'));
+  assert.deepEqual(quick.calls.at(-1), ['install', true, true]);
+
+  const fromSettings = fixture();
+  fromSettings.engine.emit('update-downloaded', info);
+  assert.equal(await fromSettings.handlers.get(CHANNELS.install)({ trusted: true }), true);
+  assert.equal(fromSettings.calls[0], 'confirm');
+
+  for (const arg of [{ quick: 'yes' }, { quick: true, path: 'x' }, [], null]) {
+    assert.throws(() => quick.handlers.get(CHANNELS.install)({ trusted: true }, arg));
+  }
 });

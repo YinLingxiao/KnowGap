@@ -107,7 +107,7 @@ export function UpdateRows() {
       </p>
       {settings && (<>
         {([
-          ["autoCheckUpdates", "自动检查更新", "启动约 20 秒后检查，之后每 4 小时检查一次。关闭后仍可手动检查。"],
+          ["autoCheckUpdates", "自动检查更新", "启动约 20 秒后检查，之后每小时检查一次。关闭后仍可手动检查。"],
           ["autoDownloadUpdates", "自动下载", "发现新版本后后台下载；关闭后需点击「下载更新」。"],
           ["autoInstallOnQuit", "退出时自动安装已下载的更新", "默认关闭。关闭窗口到托盘不算退出；开启后，仅在真正退出应用时安装。"],
         ] as const).map(([key, title, desc]) => (

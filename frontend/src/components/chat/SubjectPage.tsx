@@ -35,6 +35,7 @@ import { MessageList } from "./MessageList";
 import { UsageStats } from "./UsageStats";
 import { hasThreadsNeedingAttention, mergeNoticeFor } from "@/lib/chat/threadAlerts";
 import { SpaceIcon } from "./SpaceIcon";
+import { UpdateIndicator } from "../desktop/UpdateIndicator";
 import styles from "./SubjectPage.module.css";
 
 type Panel =
@@ -493,6 +494,7 @@ export function SubjectPage({
               <PanelLeftOpen size={16} />
             </button>
           )}
+          {!sidebarOpen && <UpdateIndicator busy={Object.values(chat.streams).some((handle) => handle.phase !== "analyzing")} />}
           <span className={styles.spaceIcon} style={{ color: subject.color }} aria-hidden>
             <SpaceIcon name={subject.icon} size={13} />
           </span>

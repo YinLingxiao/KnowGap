@@ -30,6 +30,7 @@ import { COMPOSER_ID, Composer } from "./Composer";
 import { OPEN_SETTINGS_EVENT } from "./ModelPicker";
 import { ConversationSidebar, type SidebarMode } from "./ConversationSidebar";
 import { MemoryDrawer } from "./MemoryDrawer";
+import { UpdateIndicator } from "../desktop/UpdateIndicator";
 import { MessageList } from "./MessageList";
 import { CreateSpaceDialog } from "./CreateSpaceDialog";
 import { CoachmarkHost } from "../onboarding/Coachmark";
@@ -667,6 +668,7 @@ function AuthenticatedChat({ user, onRename, onUploadAvatar, onRemoveAvatar }: {
                     <PanelLeftOpen size={16} />
                   </button>
                 )}
+                {!sidebarOpen && <UpdateIndicator busy={generatingIds.length > 0} />}
                 <h1 className={styles.title}>
                   {contextSubjectId && contextSubjectName && (
                     <>
@@ -770,6 +772,7 @@ function AuthenticatedChat({ user, onRename, onUploadAvatar, onRemoveAvatar }: {
               </button>
             )}
             <div className={styles.homeTopRight}>
+              {!sidebarOpen && <UpdateIndicator busy={generatingIds.length > 0} />}
               <button
                 type="button"
                 className={cx(styles.iconButton, memoryOpen && styles.iconButtonOn)}

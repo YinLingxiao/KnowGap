@@ -5,6 +5,8 @@ const UPDATE_DEFAULTS = Object.freeze({
   autoInstallOnQuit: false,
   updateUrl: "",
 });
+// 像 ChatGPT 桌面端一样勤快：每小时查一次，下载好后由主界面的「更新」按钮安装
+const CHECK_INTERVAL_MS = 60 * 60 * 1000;
 const GITHUB = Object.freeze({ provider: "github", owner: "YinLingxiao", repo: "KnowGap" });
 const CHANNELS = Object.freeze({ state: "updater:state", get: "updater:get-state", check: "updater:check", install: "updater:install" });
 const URL_ERROR = "更新地址必须是 HTTPS 目录地址（本机测试仅允许 http://127.0.0.1），不能含用户名、密码、查询参数或片段。";
@@ -191,6 +193,16 @@ function createUpdater({ app, ipcMain, getWindows, isTrustedSender, getSettings,
     }
   }
 
+  // 渲染进程只能传 { quick }：主界面的更新按钮直接安装，设置页仍先确认
+  function installRequest(options) {
+    if (options === undefined) return install();
+    if (!options || typeof options !== "object" || Array.isArray(options) ||
+        Object.keys(options).some((key) => key !== "quick") || typeof options.quick !== "boolean") {
+      throw new Error("安装参数无效。");
+    }
+    return install({ confirm: !options.quick });
+  }
+
   function configure() {
     if (!engine) return;
     // Do not use electron-updater's automatic quit hook: it can race backend teardown.
@@ -200,7 +212,7 @@ function createUpdater({ app, ipcMain, getWindows, isTrustedSender, getSettings,
     initialTimer = intervalTimer = null;
     if (settings().autoCheckUpdates) {
       initialTimer = timers.setTimeout(() => { void check({}, false); }, 20000);
-      intervalTimer = timers.setInterval(() => { void check({}, false); }, 4 * 60 * 60 * 1000);
+      intervalTimer = timers.setInterval(() => { void check({}, false); }, CHECK_INTERVAL_MS);
       initialTimer?.unref?.();
       intervalTimer?.unref?.();
     }
@@ -228,10 +240,10 @@ function createUpdater({ app, ipcMain, getWindows, isTrustedSender, getSettings,
     return true;
   }
 
-  for (const [channel, handler] of [[CHANNELS.get, getState], [CHANNELS.check, check], [CHANNELS.install, () => install()]]) {
+  for (const [channel, handler] of [[CHANNELS.get, getState], [CHANNELS.check, check], [CHANNELS.install, installRequest]]) {
     ipcMain.handle(channel, (event, ...args) => {
       if (!isTrustedSender(event)) throw new Error("不允许此页面操作软件更新。");
-      if ((channel !== CHANNELS.check && args.length) || args.length > 1) throw new Error("更新参数无效。");
+      if ((channel === CHANNELS.get && args.length) || args.length > 1) throw new Error("更新参数无效。");
       return handler(...args);
     });
   }
@@ -245,4 +257,4 @@ function createUpdater({ app, ipcMain, getWindows, isTrustedSender, getSettings,
     } };
 }
 
-module.exports = { createUpdater, UPDATE_DEFAULTS, CHANNELS, normalizeUpdateSettings, validateUpdateUrl, validateUpdatePatch, releaseText };
+module.exports = { createUpdater, UPDATE_DEFAULTS, CHANNELS, CHECK_INTERVAL_MS, normalizeUpdateSettings, validateUpdateUrl, validateUpdatePatch, releaseText };

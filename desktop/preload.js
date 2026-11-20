@@ -23,7 +23,8 @@ const TRAY_COMMANDS = new Set(["open-agenda", "quick-ask"]);
 const updater = {
   getState: () => ipcRenderer.invoke("updater:get-state"),
   check: (options) => ipcRenderer.invoke("updater:check", options),
-  install: () => ipcRenderer.invoke("updater:install"),
+  // 只转发固定的 { quick: true }，页面传的其它任何东西都不带进主进程
+  install: (options) => (options?.quick === true ? ipcRenderer.invoke("updater:install", { quick: true }) : ipcRenderer.invoke("updater:install")),
   onState: (listener) => {
     if (typeof listener !== "function") throw new TypeError("更新监听器必须是函数");
     const handler = (_event, state) => listener(state);

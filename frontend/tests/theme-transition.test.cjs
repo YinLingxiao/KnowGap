@@ -190,10 +190,9 @@ test('the sidebar keeps one theme toggle with account menu and overflow structur
   // Windows checkouts use CRLF, so match any whitespace after the tag name.
   const avatarIndex = sidebar.search(/<AvatarMenu\s/);
   const themeToggleIndex = sidebar.indexOf('<ThemeToggle />');
-  const updateIndex = sidebar.indexOf('<UpdateIndicator ');
   assert.ok(avatarIndex >= 0, 'AvatarMenu remains in the sidebar footer');
   assert.ok(themeToggleIndex > avatarIndex, 'ThemeToggle renders after AvatarMenu');
-  assert.ok(updateIndex > themeToggleIndex, 'UpdateIndicator renders after ThemeToggle');
+  assert.ok(sidebar.indexOf('<UpdateIndicator ') < avatarIndex, 'the update button lives in the header, not the footer');
 
   const avatarMenuStart = sidebar.indexOf('function AvatarMenu(');
   const avatarMenuEnd = sidebar.indexOf('export function ConversationSidebar(', avatarMenuStart);

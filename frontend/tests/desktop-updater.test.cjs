@@ -103,13 +103,13 @@ test('download progress exposes percent, speed, bytes and a labeled native progr
   assert.match(renderRows({ ...baseState, status: 'available', version: '0.5.7' }), /下载更新/);
 });
 
-test('sidebar downloaded indicator is quiet, keyboard-accessible and opens the existing settings', () => {
+test('the downloaded update shows a keyboard-accessible button that installs directly', () => {
   const source = read('src/components/desktop/UpdateIndicator.tsx');
   assert.match(source, /state\.status !== "downloaded"\) return null/);
-  assert.match(source, /<button[^>]*onClick=\{onOpenSettings\}[^>]*aria-label=\{label\} title=\{label\}/);
-  assert.doesNotMatch(source, /Notification|alert\(|showModal|animate/);
-  assert.match(read('src/components/chat/ConversationSidebar.tsx'), /<UpdateIndicator onOpenSettings=\{props.onOpenSettings\} \/>/);
-  assert.match(read('src/components/settings/UpdateRows.module.css'), /:focus-visible/);
+  assert.match(source, /aria-label=\{label\}\s+title=\{label\}/);
+  assert.doesNotMatch(source, /Notification|alert\(|showModal/);
+  assert.match(read('src/components/chat/ConversationSidebar.tsx'), /<UpdateIndicator busy=\{generatingIds\.length > 0\} \/>/);
+  assert.match(read('src/components/desktop/UpdateIndicator.module.css'), /:focus-visible/);
   assert.match(read('src/lib/desktop-updater.ts'), /alive = false; unsubscribe\(\)/);
 });
 

@@ -30,6 +30,7 @@
       "window-chrome.js",
       "startup.js",
       "zoom.js",
+      "dataReset.js",
       "startup.html",
       "icon.ico",
       "icon.png"

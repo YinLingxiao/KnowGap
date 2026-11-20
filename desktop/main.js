@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, Notification, Tray, dialog, globalShortcut, ipcMain, nativeImage, nativeTheme, screen, shell } = require("electron");
+const { app, BrowserWindow, Menu, Notification, Tray, dialog, globalShortcut, ipcMain, nativeImage, nativeTheme, session, screen, shell } = require("electron");
 const { createHash } = require("crypto");
 const { spawn } = require("child_process");
 const http = require("http");
@@ -8,6 +8,7 @@ const path = require("path");
 const { windowChromeOptions, applyWindowTheme } = require("./window-chrome");
 const { createStartup } = require("./startup");
 const { attachZoom } = require("./zoom");
+const { resetLegacyData } = require("./dataReset");
 const { createUpdater, UPDATE_DEFAULTS, normalizeUpdateSettings, validateUpdatePatch } = require("./updater");
 
 // 页面 origin 随端口变化，换端口会丢掉 localStorage（登录、演示模式、草稿等），所以优先复用固定端口
@@ -669,7 +670,9 @@ if (!app.requestSingleInstanceLock()) {
     }
     showMain();
   });
-  app.whenReady().then(() => {
+  app.whenReady().then(async () => {
+    // 1.0.0 正式版：先清空旧版本数据（只做一次），再读设置、启动后端
+    await resetLegacyData({ dir: app.getPath("userData"), fs, dialog, session: session.defaultSession });
     loadSettings();
     applyLoginItem();
     createTray();

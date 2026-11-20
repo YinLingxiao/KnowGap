@@ -27,7 +27,7 @@ interface DesktopUpdateApi {
   updater: {
     getState: () => Promise<UpdateState>;
     check: (options?: { download?: boolean }) => Promise<UpdateState>;
-    install: () => Promise<boolean>;
+    install: (options?: { quick: boolean }) => Promise<boolean>;
     onState: (listener: (state: UpdateState) => void) => () => void;
   };
 }
