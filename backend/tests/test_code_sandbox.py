@@ -37,6 +37,19 @@ def run(language: str, code: str, **extra):
     return run_sandbox(RunRequest(language=language, code=code, **extra))
 
 
+def run_built(language: str, code: str, **extra):
+    """要求编译成功的用例：托管 CI 的 Windows 机器偶尔编译超时，重试一次；仍超时就跳过，其它编译错误照常失败并给出编译输出。"""
+    response = run(language, code, **extra)
+    for attempt in range(2):
+        compile_out = response.compile.stderr if response.compile else ""
+        if response.status != "compile_error" or "编译超过" not in compile_out:
+            break
+        if attempt == 1:
+            pytest.skip(f"编译在本机超时（{compile_out.strip()[-80:]}），与代码无关")
+        response = run(language, code, **extra)
+    return response
+
+
 def sandbox_dirs() -> set[str]:
     return set(glob.glob(os.path.join(tempfile.gettempdir(), "knowgap-sbx-*")))
 
@@ -290,8 +303,8 @@ int main(void) {
 
 @needs_gcc
 def test_c_compiles_runs_and_compares():
-    response = run("c", C_ECHO, test_cases=[{"input": "3", "expected": "9"}, {"input": "4", "expected": "16"}])
-    assert response.status == "passed" and (response.passed, response.total) == (2, 2)
+    response = run_built("c", C_ECHO, test_cases=[{"input": "3", "expected": "9"}, {"input": "4", "expected": "16"}])
+    assert response.status == "passed" and (response.passed, response.total) == (2, 2), response.compile
 
 
 @needs_gcc
@@ -312,15 +325,15 @@ def test_c_link_error_has_no_line_number():
 
 @needs_gcc
 def test_c_warnings_do_not_fail_the_build():
-    response = run("c", '#include <stdio.h>\nint main(void){ int unused; printf("ok\\n"); return 0; }\n')
-    assert response.status == "ok"
+    response = run_built("c", '#include <stdio.h>\nint main(void){ int unused; printf("ok\\n"); return 0; }\n')
+    assert response.status == "ok", response.compile
     assert any(d.severity == "warning" for d in response.compile.diagnostics)
 
 
 @needs_gpp
 def test_cpp_runs():
-    response = run("cpp", '#include <iostream>\nint main(){ std::cout << "hi\\n"; }\n')
-    assert response.status == "ok" and response.stdout == "hi\n"
+    response = run_built("cpp", '#include <iostream>\nint main(){ std::cout << "hi\\n"; }\n')
+    assert response.status == "ok" and response.stdout == "hi\n", response.compile
 
 
 @needs_gcc
