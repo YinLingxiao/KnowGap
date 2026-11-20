@@ -38,7 +38,7 @@ from app.chat.usage import normalize_usage
 from app.chat.streaming import StreamStore
 from app.chat.schemas import DispatchThread, ProposeThreads, ReportProgress
 from app.chat.quizzes import guard_gaps, seal_quizzes
-from app.chat.skills import WIDGET_RETRY_NOTICE, refuses_widget
+from app.chat.skills import WIDGET_RETRY_NOTICE, mode_widgets, refuses_widget
 from app.chat.skills.problem_drill_skill import DRILL_TOOLS, SEARCH_TOOL, drill_plan, guard_reply, wants_problems
 from app.agent_tools.web_search import TOOL_NAME as WEB_SEARCH_TOOL
 from app.agent_tools.problem_search import WEB_FETCH_TOOL_NAME
@@ -991,9 +991,10 @@ class ChatService:
                 # 读写文件与终端命令属于开发者模式：没有绑定工作区时不提供给模型
                 definitions = [tool for tool in definitions if tool["function"]["name"] not in {"read", "write", "edit", "bash"}]
             if role["role"] == "chat":
-                # 普通对话是通用助手：不带真题检索和改编题核对（后者依赖检索结果）；练习参考只在用户自己开始练习时提供（见上）
-                # 联网搜索也只给支线：普通对话不带
-                definitions = [tool for tool in definitions if tool["function"]["name"] not in DRILL_TOOLS | {WEB_SEARCH_TOOL, WEB_FETCH_TOOL_NAME}]
+                blocked = set(DRILL_TOOLS)
+                if generation.mode != "research":
+                    blocked |= {WEB_SEARCH_TOOL, WEB_FETCH_TOOL_NAME}
+                definitions = [tool for tool in definitions if tool["function"]["name"] not in blocked]
             state = generation.checkpoint or {
                 "version": 1, "role": role["role"], "phase": "model", "rounds": 0, "messages": messages,
                 "parts": parts, "tool_log": tool_log, "tool_messages": tool_messages,
@@ -1091,7 +1092,12 @@ class ChatService:
             else:
                 raise ProviderError(502, "工具调用已达到本轮上限，请缩小任务范围后重试。")
             last_reply = "".join(round_text)
-            if role["role"] != "main" and not event_turn and refuses_widget(last_reply, user_text):
+            allow_widget_retry = (
+                role["role"] != "main"
+                and not event_turn
+                and (generation.mode is None or bool(mode_widgets(generation.mode)))
+            )
+            if allow_widget_retry and refuses_widget(last_reply, user_text):
                 # 小模型偶尔仍说「嵌不了」或把整页 HTML 丢给用户：只重试一次，不流式输出，
                 # 替换后的正文由 done 事件覆盖已显示的原文，历史里也不留下错误示范。
                 retry = [*flatten_tool_history(messages), {"role": "assistant", "content": last_reply},

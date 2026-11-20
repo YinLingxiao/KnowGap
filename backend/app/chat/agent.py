@@ -8,6 +8,7 @@ from datetime import date
 
 from app.chat.prompts import (
     CHAT_PROMPT,
+    CHAT_ROLE_BARE_PROMPT,
     CHAT_ROLE_PROMPT,
     CONTEXT_PROMPTS,
     MAIN_ROLE_PROMPT,
@@ -15,7 +16,14 @@ from app.chat.prompts import (
     THREAD_ROLE_PROMPT,
 )
 from app.chat.schemas import LearnerMemory, Subject
-from app.chat.skills import MODE_PROMPTS, WIDGET_SYSTEM_PROMPT, recommend_widget, select_skill_prompt, widget_prompt_for
+from app.chat.skills import (
+    MODE_PROMPTS,
+    WIDGET_SYSTEM_PROMPT,
+    mode_widgets,
+    recommend_widget,
+    select_skill_prompt,
+    widget_prompt_for,
+)
 from app.chat.store import quote_in
 from app.chat.attachments import attachment_query, readable_file_markers
 from app.models.schemas import Problem, SourceReference
@@ -230,6 +238,8 @@ def chat_messages(
 ) -> list[dict]:
     # Ordered from stable to volatile so provider prefix caches cover the prompt and the whole history;
     # only the trailing turn context (and the new message) is fresh input each turn.
+    if mode is not None and mode not in MODE_PROMPTS:
+        raise ValueError(f"未知模式：{mode}")
     role_info = conversation_role or {"role": "chat"}
     role_name = role_info.get("role", "chat")
     user_texts = [readable_file_markers(row["content"]) for row in history if row["role"] == "user"]
@@ -250,6 +260,7 @@ def chat_messages(
             conversation_title,
             earlier_user_texts=user_texts[:-1],
             attached_files=attached_files,
+            mode=mode,
         )
         if custom_skills:
             sample_text = f"{role_info.get('delegated_task') or ''} {latest_user}".lower()
@@ -299,7 +310,7 @@ def chat_messages(
         "conversation_role": role_info,
         "active_skill": active_skill,
         "recommended_widget": None if system_turn else recommend_widget(
-            role_name, latest_user, role_info.get("delegated_task")),
+            role_name, latest_user, role_info.get("delegated_task"), mode=mode),
         "thinking_depth": thinking_depth,
         "teaching_preferences": teaching_preferences,
         "learner_memories": [memory_brief(m, scope) for m, scope in memories if m.kind != "preference"],
@@ -335,17 +346,23 @@ def chat_messages(
             TRANSFER_LEARNING_HINT if prior_knowledge_anchors or reported_prior_knowledge else PREREQUISITE_PROBE_HINT
         )
         if (prior_knowledge_anchors or reported_prior_knowledge) and role_name != "main":
-            turn["recommended_widget"] = "comparison_matrix（对比旧知机制、新知机制与跨领域负迁移易错点）"
-    role_prompt = ROLE_PROMPTS.get(role_name, CHAT_ROLE_PROMPT)
+            if mode is None or "comparison_matrix" in mode_widgets(mode):
+                turn["recommended_widget"] = "comparison_matrix（对比旧知机制、新知机制与跨领域负迁移易错点）"
+    role_prompt = CHAT_ROLE_BARE_PROMPT if role_name == "chat" and mode else ROLE_PROMPTS.get(role_name, CHAT_ROLE_PROMPT)
     system = f"{role_prompt}\n\n{CONTEXT_PROMPTS.get(role_name, CHAT_PROMPT)}"
     if mode:
-        if mode not in MODE_PROMPTS:
-            raise ValueError(f"未知模式：{mode}")
         mode_data = MODE_PROMPTS[mode]
-        system += (f"\n\n【本模式：{mode_data['label']}】\n{mode_data['prompt']}"
-                   f"\n本模式只使用以下卡片：{mode_data['widgets']}；其它类型一律不要输出。")
+        allowed_widgets = mode_widgets(mode)
+        card_rule = (
+            f"本模式只使用以下卡片：{mode_data['widgets']}；其它类型一律不要输出。"
+            if allowed_widgets else
+            "本模式不使用交互卡片，直接用文字或计划工具回复。"
+        )
+        system += f"\n\n【本模式：{mode_data['label']}】\n{mode_data['prompt']}\n{card_rule}"
     if role_name != "main":
-        system += f"\n\n{widget_prompt_for(mode)}"
+        widget_guide = widget_prompt_for(mode)
+        if widget_guide:
+            system += f"\n\n{widget_guide}"
     if snapshot:
         system += f"\n\n{snapshot}"
     # Rows folded into the persisted summary leave the verbatim window; the summary stands in for them.

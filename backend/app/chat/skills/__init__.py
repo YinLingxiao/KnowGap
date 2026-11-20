@@ -14,30 +14,53 @@ from app.services.prompt import get_prompt_manager, prompt_text
 _MODE_PROMPTS = get_prompt_manager().load_prompts("chat", "modes")
 _WIDGET_PROMPTS = get_prompt_manager().load_prompts("chat", "widgets")
 _CARD_KEYS = ("step_simulator", "comparison_matrix", "micro_quiz", "code_playground", "gap")
+_VISUAL_KEY = "knowgap-visual"
+_ALLOWED_MODE_WIDGETS = frozenset(_CARD_KEYS) | {_VISUAL_KEY}
 
-# 控件能力声明与两份规范不随轮次变化，放进系统提示：小模型读得到，也能命中前缀缓存。
 _WIDGET_SYSTEM_PROMPT = f"{WIDGET_CAPABILITY}\n\n{WIDGET_SCHEMA_GUIDE}\n\n{WIDGET_CRAFT_GUIDE}\n\n{VISUAL_CARD_GUIDE}"
+_CARD_ONLY_CAPABILITY = "\n".join([
+    prompt_text(_WIDGET_PROMPTS, "capability", "heading"),
+    "你的回复由 KnowGap 前端渲染，在聊天正文里写 ```knowgap-widget（JSON 微件）代码块，就会直接变成可点击、可操作的卡片。",
+    prompt_text(_WIDGET_PROMPTS, "capability", "never_refuse"),
+    prompt_text(_WIDGET_PROMPTS, "capability", "recommended"),
+    prompt_text(_WIDGET_PROMPTS, "capability", "when_not"),
+])
+
+
+def mode_widgets(mode: str) -> list[str]:
+    if mode not in _MODE_PROMPTS:
+        raise ValueError(f"未知模式：{mode}")
+    raw = [part.strip() for part in prompt_text(_MODE_PROMPTS, mode, "widgets").split(",") if part.strip()]
+    widgets = [part for part in raw if part.lower() != "none"]
+    unknown = [part for part in widgets if part not in _ALLOWED_MODE_WIDGETS]
+    if unknown:
+        raise ValueError(f"未知卡片：{','.join(unknown)}")
+    return widgets
 
 
 def widget_prompt_for(mode: str | None) -> str:
     """Return the widget guide for a mode; None is the existing full prompt, byte for byte."""
     if mode is None:
         return _WIDGET_SYSTEM_PROMPT
-    if mode not in _MODE_PROMPTS:
-        raise ValueError(f"未知模式：{mode}")
-    widgets = [part.strip() for part in prompt_text(_MODE_PROMPTS, mode, "widgets").split(",") if part.strip()]
-    unknown = [part for part in widgets if part not in _CARD_KEYS]
-    if unknown:
-        raise ValueError(f"未知卡片：{','.join(unknown)}")
-    schema = [
-        prompt_text(_WIDGET_PROMPTS, "schema", "heading"),
-        prompt_text(_WIDGET_PROMPTS, "schema", "intro").replace(
-            "支持以下 5 种类型", f"本模式只用下面这 {len(widgets)} 种类型"),
-    ]
-    schema.extend(prompt_text(_WIDGET_PROMPTS, "schema", key) for key in _CARD_KEYS if key in widgets)
-    schema.append(prompt_text(_WIDGET_PROMPTS, "schema", "constraints"))
-    schema_text = "\n".join(schema)
-    return f"{WIDGET_CAPABILITY}\n\n{schema_text}\n\n{WIDGET_CRAFT_GUIDE}\n\n{VISUAL_CARD_GUIDE}"
+    widgets = mode_widgets(mode)
+    if not widgets:
+        return ""
+    cards = [key for key in _CARD_KEYS if key in widgets]
+    allow_visual = _VISUAL_KEY in widgets
+    parts = [WIDGET_CAPABILITY if allow_visual else _CARD_ONLY_CAPABILITY]
+    if cards:
+        schema = [
+            prompt_text(_WIDGET_PROMPTS, "schema", "heading"),
+            prompt_text(_WIDGET_PROMPTS, "schema", "intro").replace(
+                "支持以下 5 种类型", f"本模式只用下面这 {len(cards)} 种类型"),
+        ]
+        schema.extend(prompt_text(_WIDGET_PROMPTS, "schema", key) for key in cards)
+        schema.append(prompt_text(_WIDGET_PROMPTS, "schema", "constraints"))
+        parts.append("\n".join(schema))
+    parts.append(WIDGET_CRAFT_GUIDE)
+    if allow_visual:
+        parts.append(VISUAL_CARD_GUIDE)
+    return "\n\n".join(parts)
 
 
 WIDGET_SYSTEM_PROMPT = widget_prompt_for(None)
@@ -75,26 +98,28 @@ WIDGET_RETRY_NOTICE = (
 
 
 def recommend_widget(
-    role: str, user_text: str, delegated_task: str | None = None,
+    role: str, user_text: str, delegated_task: str | None = None, mode: str | None = None,
 ) -> str | None:
     """Return a proactive widget recommendation for `turn_context.recommended_widget`."""
     if role == "main":
         return None
+    allowed = set(mode_widgets(mode)) if mode is not None else None
+    if allowed is not None and not allowed:
+        return None
     sample = f"{delegated_task or ''} {user_text or ''}".strip()
     if not sample or len(sample) < 4:
         return None
-    if _CODE_RE.search(sample):
-        return "code_playground（必须在回复中嵌入 ```knowgap-widget 的 code_playground 代码实验台）"
-    if _VISUAL_INTENT_RE.search(sample):
-        return _VISUAL_RECOMMENDATION
-    if _PRACTICE_RE.search(sample):
-        return "micro_quiz（必须在回复中嵌入 ```knowgap-widget 的 micro_quiz 随堂微测卡）"
-    if _COMPARE_RE.search(sample):
-        return "comparison_matrix（必须在回复中嵌入 ```knowgap-widget 交互对比卡）"
-    if _VISUAL_TOPIC_RE.search(sample):
-        return _VISUAL_RECOMMENDATION
-    if _EXPLAIN_RE.search(sample) or role == "thread":
-        return "step_simulator（必须在回复中嵌入 ```knowgap-widget 单步推演器展示核心过程）"
+    candidates = (
+        ("code_playground", _CODE_RE.search(sample), "code_playground（必须在回复中嵌入 ```knowgap-widget 的 code_playground 代码实验台）"),
+        (_VISUAL_KEY, _VISUAL_INTENT_RE.search(sample), _VISUAL_RECOMMENDATION),
+        ("micro_quiz", _PRACTICE_RE.search(sample), "micro_quiz（必须在回复中嵌入 ```knowgap-widget 的 micro_quiz 随堂微测卡）"),
+        ("comparison_matrix", _COMPARE_RE.search(sample), "comparison_matrix（必须在回复中嵌入 ```knowgap-widget 交互对比卡）"),
+        (_VISUAL_KEY, _VISUAL_TOPIC_RE.search(sample), _VISUAL_RECOMMENDATION),
+        ("step_simulator", _EXPLAIN_RE.search(sample) or role == "thread", "step_simulator（必须在回复中嵌入 ```knowgap-widget 单步推演器展示核心过程）"),
+    )
+    for key, matched, text in candidates:
+        if matched and (allowed is None or key in allowed):
+            return text
     return None
 
 
@@ -129,6 +154,7 @@ def select_skill_prompt(
     conversation_title: str = "",
     earlier_user_texts: list[str] | None = None,
     attached_files: list[dict] | None = None,
+    mode: str | None = None,
 ) -> str | None:
     """Return the role-appropriate Skill SOP to inject into `turn_context.active_skill`.
 
@@ -136,7 +162,7 @@ def select_skill_prompt(
     attachment rules when files are attached.
     """
     if attached_files:
-        return file_skill_prompt(user_text, plain=role == "chat")
+        return file_skill_prompt(user_text, plain=role == "chat", mode=mode)
     if role == "chat":
         return None
     # A Feynman self-test spans several turns: once the title or an earlier user turn started it,
@@ -168,6 +194,7 @@ __all__ = [
     "WIDGET_RETRY_NOTICE",
     "WIDGET_SYSTEM_PROMPT",
     "infer_thread_skill",
+    "mode_widgets",
     "recommend_widget",
     "refuses_widget",
     "select_skill_prompt",

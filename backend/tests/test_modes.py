@@ -7,9 +7,9 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
-from app.chat.agent import chat_messages
+from app.chat.agent import chat_messages, learning_context
 from app.chat.service import ChatService
-from app.chat.skills import WIDGET_SYSTEM_PROMPT
+from app.chat.skills import WIDGET_SYSTEM_PROMPT, mode_widgets, recommend_widget, select_skill_prompt
 from app.chat.store import ChatStore
 from app.main import create_app
 from app.memory.store import Store
@@ -50,7 +50,13 @@ def test_mode_injects_label_prompt_and_hard_card_limit(mode):
 
     assert data["label"] in system
     assert prompt_text(modes_yaml(), mode, "prompt") in system
-    assert f"本模式只使用以下卡片：{data['widgets']}；其它类型一律不要输出。" in system
+    assert "回答原则：" not in system
+    if mode_widgets(mode):
+        assert f"本模式只使用以下卡片：{data['widgets']}；其它类型一律不要输出。" in system
+    else:
+        assert "本模式不使用交互卡片" in system
+        assert "【内联可交互学习微件规范（" not in system
+    assert ("【沙箱可视化卡规范（" in system) == (mode in {"explain", "solve"})
 
 
 def test_practice_schema_keeps_only_micro_quiz():
@@ -62,6 +68,53 @@ def test_practice_schema_keeps_only_micro_quiz():
         assert marker not in schema
     assert "本模式只用下面这 1 种类型" in schema
     assert "5 种类型" not in schema
+    assert "【沙箱可视化卡规范（" not in system
+
+
+def test_recommended_widget_respects_mode_allowlist():
+    assert recommend_widget("chat", "练习一下栈和队列的区别", mode="practice").startswith("micro_quiz")
+    assert recommend_widget("chat", "栈和队列的区别是什么", mode="practice") is None
+    assert recommend_widget("chat", "给我制定一下这周复习算法和链表的计划", mode="plan") is None
+    assert recommend_widget("chat", "调研一下 React 和 Vue 的区别", mode="research").startswith("comparison_matrix")
+    assert recommend_widget("chat", "画个二叉树遍历动画", mode="research") is None
+    ctx = learning_context(chat_messages(
+        [{"role": "user", "content": "栈和队列有什么区别", "kind": "text", "status": "complete", "meta_json": "{}"}],
+        [], None, [], conversation_role={"role": "chat"}, mode="plan",
+    ))
+    assert ctx["recommended_widget"] is None
+
+
+def test_organize_mode_with_blank_file_turn_goes_straight_to_notes():
+    skill = select_skill_prompt("chat", "", attached_files=[{"id": "f1", "name": "notes.pdf"}], mode="organize")
+    assert "file_to_notes" in skill
+    assert "再问用户想怎么处理" not in skill
+
+
+def test_research_mode_enables_web_search_in_chat(tmp_path):
+    class Capture(FakeChat):
+        async def stream(self, messages, tools=None):
+            self.calls.append((messages, {tool["function"]["name"] for tool in (tools or [])}))
+            yield "text", "好。"
+            yield "finish", "stop"
+
+    model = Capture()
+    with TestClient(create_app(isolated_settings(tmp_path), chat_model=model)) as client:
+        cid = client.post("/api/conversations", json={}).json()["id"]
+        r1 = client.post(
+            f"/api/conversations/{cid}/messages",
+            json={"content": "查一下 HTTP/3 的差异", "client_request_id": "req-res-1", "mode": "research"},
+        )
+        assert r1.status_code == 200
+        r2 = client.post(
+            f"/api/conversations/{cid}/messages",
+            json={"content": "讲一下快速排序", "client_request_id": "req-exp-1", "mode": "explain"},
+        )
+        assert r2.status_code == 200
+
+    _, research_tools = model.calls[0]
+    _, explain_tools = model.calls[1]
+    assert {"web_search", "web_fetch"} <= research_tools
+    assert not ({"web_search", "web_fetch"} & explain_tools)
 
 
 @pytest.mark.parametrize("role, length, digest", [

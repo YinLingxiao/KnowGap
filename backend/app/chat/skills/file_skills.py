@@ -118,8 +118,10 @@ _TEACHING_LINES = (
 )
 
 
-def file_skill_prompt(user_text: str, plain: bool = False) -> str:
+def file_skill_prompt(user_text: str, plain: bool = False, mode: str | None = None) -> str:
     key = file_skill_name(user_text)
+    if key is None and mode == "organize":
+        key = "file_to_notes"
     if not plain:
         return (FILE_SKILLS[key] if key else FILE_FALLBACK) + FILE_GROUNDING
     text = (FILE_SKILLS[key] if key in PLAIN_FILE_SKILLS else PLAIN_FILE_FALLBACK) + FILE_GROUNDING

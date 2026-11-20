@@ -10,6 +10,10 @@ from app.services.prompt import get_prompt_manager, prompt_text
 CHAT_PROMPTS = get_prompt_manager().load_prompts("chat", "parallel_chat")
 
 CHAT_ROLE_PROMPT = prompt_text(CHAT_PROMPTS, "role")
+CHAT_ROLE_BARE_PROMPT = "\n".join([
+    prompt_text(CHAT_PROMPTS, "role", "identity"),
+    prompt_text(CHAT_PROMPTS, "role", "closing"),
+])
 
 # Identity first, the per-turn context contract and tool rules last; blank lines set off the format rules.
 CHAT_CONTEXT_PROMPT = "\n".join([
