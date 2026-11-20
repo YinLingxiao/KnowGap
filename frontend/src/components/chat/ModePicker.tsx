@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { Check, ChevronDown, FolderOpen, Lightbulb, ListTodo, X } from "lucide-react";
+import { Check, ChevronDown, FolderOpen, GraduationCap, Lightbulb, ListTodo, X } from "lucide-react";
 import { useI18n } from "@/components/LanguageProvider";
 import { CHAT_MODE_OPTIONS, type ChatMode } from "@/lib/chat/modes";
 import { cx } from "@/lib/cx";
@@ -65,6 +65,7 @@ const MODE_ICONS: Record<ChatMode, ReactNode> = {
   plan: <PlanIcon />,
   research: <ResearchIcon />,
   organize: <FolderOpen size={15} strokeWidth={1.75} className={styles.icon} aria-hidden />,
+  review: <GraduationCap size={15} strokeWidth={1.75} className={styles.icon} aria-hidden />,
 };
 
 export function ModePicker({ value, onChange, hero = false, disabled = false }: ModePickerProps) {

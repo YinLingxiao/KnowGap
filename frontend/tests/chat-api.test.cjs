@@ -188,7 +188,7 @@ test('mode is optional and only sent when the composer has a selection', async (
     });
   };
   try {
-    const modes = ['explain', 'solve', 'practice', 'plan', 'research', 'organize'];
+    const modes = ['explain', 'solve', 'practice', 'plan', 'research', 'organize', 'review'];
     for (const mode of modes) {
       await chatApi.sendMessage('c1', '问题', `req-${mode}`, () => {}, new AbortController().signal, mode);
     }

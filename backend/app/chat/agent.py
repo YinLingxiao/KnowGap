@@ -340,7 +340,8 @@ def chat_messages(
     )
     # Prior-knowledge probing is for starting a topic, not for solving one given problem.
     concrete_problem = image_turn or exercise is not None
-    if (tutoring and not system_turn and 1 <= user_turns <= 2 and not concrete_problem
+    # 复习备考跳过零基础铺垫：不在开头摸底前置知识
+    if (tutoring and not system_turn and 1 <= user_turns <= 2 and not concrete_problem and mode != "review"
             and (learning_topic or reported_prior_knowledge)):
         turn["transfer_learning_hint"] = (
             TRANSFER_LEARNING_HINT if prior_knowledge_anchors or reported_prior_knowledge else PREREQUISITE_PROBE_HINT

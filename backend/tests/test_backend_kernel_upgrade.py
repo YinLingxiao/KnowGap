@@ -251,3 +251,12 @@ def test_five_layer_review_keeps_existing_white_box_storage_contract():
     for skill in ("deep_explain", "socratic_practice", "study_note_builder"):
         assert "prior_knowledge_anchors" in THREAD_SKILLS[skill]
         assert "跨领域负迁移易错点" in THREAD_SKILLS[skill]
+
+
+def test_review_mode_skips_the_prerequisite_probe():
+    # 复习备考跳过零基础铺垫，开头不摸底前置知识
+    rows = history("我想学习 Python")
+    probed = learning_context(chat_messages(rows, [], None, [], conversation_role={"role": "thread"}))
+    reviewed = learning_context(chat_messages(rows, [], None, [], conversation_role={"role": "thread"}, mode="review"))
+    assert "transfer_learning_hint" in probed
+    assert "transfer_learning_hint" not in reviewed
