@@ -347,7 +347,7 @@ def search(db: sqlite3.Connection, student_id: str, query: str, limit: int, excl
     exclude = exclude_conversation_id or ""
     try:
         rows = db.execute("""
-            SELECT m.content AS content, m.role AS role, m.created_at AS created_at, c.title AS title
+            SELECT m.content AS content, m.role AS role, m.created_at AS created_at, c.title AS title, c.id AS conversation_id
             FROM message_fts
             JOIN conversation_messages m ON m.id = message_fts.message_id
             JOIN conversations c ON c.id = m.conversation_id
@@ -365,7 +365,8 @@ def search(db: sqlite3.Connection, student_id: str, query: str, limit: int, excl
         body = (row["content"] or "").strip().replace("\n", " ")
         if len(body) > 600:
             body = body[:600] + "…"
-        lines.append(f"- [{(row['created_at'] or '')[:10]}] {row['title']} / {row['role']}: {body}")
+        lines.append(f"- [{(row['created_at'] or '')[:10]}] {row['title']}（conversation_id: {row['conversation_id']}）"
+                     f" / {row['role']}: {body}")
     return "\n".join(lines)
 
 

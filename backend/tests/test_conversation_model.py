@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 from pydantic import SecretStr
 
 from app.agents.llm import ChatCompletionsChat
+from app.chat.agent import learning_context
 from app.chat.service import Generation
 from app.main import create_app
 from app.models.model_library_schemas import ModelEntry, ModelTags, Provider, ServiceModelSelection, make_model_key
@@ -94,7 +95,10 @@ def test_two_conversations_keep_their_own_models_and_record_usage(tmp_path):
         assert "只有甲" in json.dumps(chats[0][1], ensure_ascii=False)
         assert "只有乙" not in json.dumps(chats[0][1], ensure_ascii=False)
         assert "只有乙" in json.dumps(chats[1][1], ensure_ascii=False)
-        assert "只有甲" not in json.dumps(chats[1][1], ensure_ascii=False)
+        # 乙的对话里只会在 recent_conversations 里看到甲的标题，甲的消息本身不会混进来
+        second_transcript = [m for m in chats[1][1] if not (m["role"] == "system" and learning_context([m]))]
+        assert "只有甲" not in json.dumps(second_transcript, ensure_ascii=False)
+        assert [item["conversation_id"] for item in learning_context(chats[1][1])["recent_conversations"]] == [first["id"]]
         assert all(model == MEMORY for kind, model, _ in sink if kind == "json")
         with client.app.state.chat_service.store.connection() as db:
             rows = db.execute(

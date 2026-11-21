@@ -236,6 +236,7 @@ def chat_messages(
     attached_files: list[dict] | None = None, *, system_turn: bool = False,
     image_question: str | None = None, mode: str | None = None,
     quiz_attempts: list[dict] | None = None, onboarding_interview: bool = False,
+    recent_conversations: list[dict] | None = None,
 ) -> list[dict]:
     # Ordered from stable to volatile so provider prefix caches cover the prompt and the whole history;
     # only the trailing turn context (and the new message) is fresh input each turn.
@@ -335,6 +336,8 @@ def chat_messages(
         turn["plan_user_events"] = plan_user_events
     if quiz_attempts:
         turn["quiz_attempts"] = quiz_attempts
+    if recent_conversations and not system_turn:
+        turn["recent_conversations"] = recent_conversations
     if reported_prior_knowledge:
         turn["reported_prior_knowledge"] = reported_prior_knowledge
     user_turns = sum(row["role"] == "user" and row["status"] != "failed" and bool(row["content"].strip())

@@ -24,6 +24,7 @@ from app.memory.curated import (
     ensure_fts, read_all, read_updated_at, revoke_applied_note, search as search_notes, snapshot_text, write as write_note,
 )
 from app.memory.store import Store, ensure_column, new_id, now
+from app.chat import history as conversation_history
 from app.models.schemas import Problem, SourceReference
 from app.services.materials import terms
 from app.services.problems import PROBLEMS
@@ -1739,6 +1740,16 @@ class ChatStore:
     def search_messages(self, student_id: str, query: str, limit: int = 5, exclude_conversation_id: str | None = None) -> str:
         with self.connection() as db:
             return search_notes(db, student_id, query, limit, exclude_conversation_id)
+
+    def recent_conversations(self, student_id: str, exclude_conversation_id: str | None = None,
+                             limit: int = conversation_history.TURN_LIMIT, *, detail: bool = False) -> list[dict]:
+        """用户最近的其他对话（不含支线），按最后一条消息时间倒序。"""
+        with self.connection() as db:
+            return conversation_history.recent(db, student_id, exclude_conversation_id, limit, detail=detail)
+
+    def read_conversation(self, student_id: str, conversation_id: str) -> str:
+        with self.connection() as db:
+            return conversation_history.open_text(db, student_id, conversation_id)
 
     # ------------------------------------------------------------------ custom skills
 

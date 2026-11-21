@@ -946,6 +946,10 @@ class ChatService:
             onboarding_interview = (
                 False if event_turn else self.store.is_active_onboarding_conversation(student_id, generation.conversation_id)
             )
+            # 普通对话和主线每轮带上最近的其他对话（标题和时间），「上个对话」这类说法才有据可查
+            recent_conversations = [] if event_turn or onboarding_interview or role["role"] == "thread" else (
+                self.store.recent_conversations(student_id, generation.conversation_id)
+            )
             messages = chat_messages(
                 history, memories, exercise, sources, subject, role, snapshot, thinking_depth, conv_title,
                 custom_skills=custom_skills, compressed_summary=compressed_summary,
@@ -955,6 +959,7 @@ class ChatService:
                 mode=None if event_turn else generation.mode,
                 quiz_attempts=quiz_attempts,
                 onboarding_interview=onboarding_interview,
+                recent_conversations=recent_conversations,
             )
             ctx = ToolContext(
                 workspace_of(self.settings), self.store, student_id, generation.conversation_id,

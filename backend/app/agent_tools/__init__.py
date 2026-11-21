@@ -9,6 +9,7 @@ from app.agent_tools import bash as bash_tool
 from app.agent_tools import documents as document_tools
 from app.agent_tools import files
 from app.agent_tools import material_search
+from app.chat import history as conversation_history
 from app.agent_tools import problem_search
 from app.agent_tools import web_search
 from app.agent_tools.guard import (
@@ -196,14 +197,20 @@ DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "session_search",
-            "description": "搜索这个用户所有对话的原文，包括当前对话较早的消息。返回原文，不经过摘要。笔记里放每次都要知道的，这里查以前聊过什么。",
+            "description": (
+                "查用户以前的对话，三种用法：① query 和 conversation_id 都不传：列出最近的对话（标题、时间、首问、最后的回答），"
+                "用户说「上个对话」「之前聊的」「几小时前那段」时先用它；② 传 conversation_id：打开那段对话读原文；"
+                "③ 传 query：按关键词搜所有对话的原文（包括当前对话较早的消息）。"
+                "笔记里放每次都要知道的，这里查以前聊过什么。"
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "query": {"type": "string"},
-                    "limit": {"type": "integer", "description": "条数，默认 5，最大 8"},
+                    "query": {"type": "string", "description": "关键词；不传则列出最近的对话"},
+                    "conversation_id": {"type": "string", "description": "要打开的对话 id（来自最近对话列表或搜索结果）"},
+                    "limit": {"type": "integer", "description": "条数，默认 5；关键词搜索最多 8，最近对话最多 10"},
                 },
-                "required": ["query"],
+                "required": [],
             },
         },
     },
@@ -401,9 +408,16 @@ async def run(name: str, arguments: dict, ctx) -> str:
             text = await asyncio.to_thread(agenda_tools.run, name, arguments, ctx)
         elif name == "session_search":
             limit = arguments.get("limit", 5)
-            text = ctx.store.search_messages(
-                ctx.student_id, str(arguments.get("query") or ""), limit if isinstance(limit, int) else 5,
-            )
+            limit = limit if isinstance(limit, int) and not isinstance(limit, bool) and limit > 0 else 5
+            conversation_id = str(arguments.get("conversation_id") or "").strip()
+            query = str(arguments.get("query") or "").strip()
+            if conversation_id:
+                text = ctx.store.read_conversation(ctx.student_id, conversation_id)
+            elif query:
+                text = ctx.store.search_messages(ctx.student_id, query, limit)
+            else:
+                text = conversation_history.recent_text(ctx.store.recent_conversations(
+                    ctx.student_id, getattr(ctx, "conversation_id", None), limit, detail=True))
         else:
             text = f"未知工具：{name}"
     except json.JSONDecodeError:
