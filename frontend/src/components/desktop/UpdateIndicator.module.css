@@ -21,6 +21,13 @@
     transform var(--t-press) var(--ease-out);
 }
 
+/* 侧栏顶部：只留图标的圆形按钮，给品牌字标让出位置 */
+.compact {
+  justify-content: center;
+  width: 26px;
+  padding: 0;
+}
+
 .pill:hover:not(:disabled) {
   filter: brightness(1.08);
 }
