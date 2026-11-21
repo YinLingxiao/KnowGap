@@ -180,9 +180,10 @@ def clean_errors(items, extraction: Extraction) -> list[dict]:
 
 async def judge_with_logic(
     extraction: Extraction, question: str, settings: Settings, transport: httpx.AsyncBaseTransport | None = None,
+    chatgpt_auth=None,
 ) -> tuple[list[dict], str]:
     try:
-        raw, _usage = await ChatCompletionsChat(settings, transport=transport).complete_json_with_usage(
+        raw, _usage = await ChatCompletionsChat(settings, transport=transport, chatgpt_auth=chatgpt_auth).complete_json_with_usage(
             judge_messages(extraction, question))
     except ProviderError as exc:
         raise ProviderError(exc.status_code, f"主力逻辑模型：{exc.detail}", usage=exc.usage) from None
@@ -275,7 +276,8 @@ async def analyze_image_for_relay(
         if not extraction.regions:
             raise AnalysisError("图片里没有识别到可以定位的文字或步骤，请换一张更清晰、拍正的照片。")
         if relay:
-            errors, summary = await judge_with_logic(extraction, request.prompt, logic_settings, logic_transport)
+            errors, summary = await judge_with_logic(extraction, request.prompt, logic_settings, logic_transport,
+                                                     chatgpt_auth=getattr(settings.ai, "chatgpt", None))
             judged_by = "logic"
         else:
             errors, summary = clean_errors(extraction.errors, extraction), extraction.summary

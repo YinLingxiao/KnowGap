@@ -10,7 +10,10 @@ import re
 
 import httpx
 
-from app.agents.llm import PROVIDER_FAILURES, ProviderError, is_vertex_native, request_error, shared_ssl_context, status_error
+from app.agents.llm import (
+    ChatCompletionsChat, PROVIDER_FAILURES, ProviderError, is_vertex_native, provider_headers, request_error,
+    shared_ssl_context, status_error,
+)
 from app.services.office_readers import Reading
 
 MAX_OCR_PAGES = 12
@@ -67,6 +70,14 @@ async def _ocr_page(png: bytes, config, transport: httpx.AsyncBaseTransport | No
     url = "data:image/png;base64," + base64.b64encode(png).decode("ascii")
     if is_vertex_native(config.base_url):
         return await _ocr_page_native(url, config, transport, prompt)
+    if config.auth_mode == "chatgpt":
+        # ChatGPT 套餐走 Responses 接口，和对话同一个通道
+        messages = [{"role": "user", "content": [
+            {"type": "image_url", "image_url": {"url": url}},
+            {"type": "text", "text": prompt},
+        ]}]
+        chat = ChatCompletionsChat(config.llm_settings(), transport, chatgpt_auth=config.chatgpt)
+        return _clean("".join([value async for kind, value in chat.stream(messages) if kind == "text"]))
     payload = {
         "model": config.model, "temperature": 0,
         "messages": [{"role": "user", "content": [
@@ -79,7 +90,8 @@ async def _ocr_page(png: bytes, config, transport: httpx.AsyncBaseTransport | No
     try:
         async with httpx.AsyncClient(timeout=config.timeout_seconds, transport=transport, verify=shared_ssl_context()) as client:
             response = await client.post(f"{config.base_url}/chat/completions", json=payload,
-                                         headers={"Authorization": f"Bearer {config.api_key.get_secret_value()}"})
+                                         headers=provider_headers(config.base_url, config.api_key.get_secret_value(),
+                                                                  payload["messages"]))
     except PROVIDER_FAILURES as exc:
         raise request_error(exc) from None
     error = status_error(response.status_code)

@@ -9,7 +9,7 @@ the public view only reports whether a key is configured.
 import json
 import time
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 from urllib.parse import urlsplit
 
 from fastapi import HTTPException
@@ -30,7 +30,7 @@ INVALID = "服务模型配置无效：请检查 API 地址、模型名称和 API
 class VisionConfig(BaseModel):
     """Resolved settings for one vision-model call."""
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     base_url: str = ""
     model: str = ""
@@ -44,12 +44,14 @@ class VisionConfig(BaseModel):
     # The VLM only transcribes and boxes. Qwen's thinking doubled latency and timed out in testing.
     disable_thinking: bool = True
     source: str = "none"  # service_models | env | logic | none
+    # ChatGPT 套餐的登录状态（app.services.chatgpt_auth）；只在内存里传递，不序列化、不返回给前端
+    chatgpt: Any = Field(default=None, exclude=True, repr=False)
 
     @property
     def configured(self) -> bool:
-        # Vision extraction still uses a model endpoint with its own API key/ADC; ChatGPT OAuth is chat-only for now.
         if self.auth_mode == "chatgpt":
-            return False
+            # 套餐走 Responses 接口，凭的是登录状态而不是 API Key
+            return bool(self.model and self.chatgpt is not None and self.chatgpt.status().get("connected"))
         return self.llm_settings().llm_configured
 
     def llm_settings(self) -> Settings:
@@ -231,6 +233,13 @@ class ServiceModels:
         return base.model_copy(update={"llm_model": logic.model}), "service_models"
 
     def vision_config(self, cfg: ServiceModelsConfig | None = None) -> VisionConfig:
+        config = self._vision_config(cfg)
+        if config.auth_mode == "chatgpt":
+            # 识图也能用 ChatGPT 套餐：把登录状态带给识图调用
+            return config.model_copy(update={"chatgpt": getattr(self.ai, "chatgpt", None)})
+        return config
+
+    def _vision_config(self, cfg: ServiceModelsConfig | None = None) -> VisionConfig:
         cfg = cfg or self.config()
         vision = cfg.vision_model
         picked = self._library_settings("vision")

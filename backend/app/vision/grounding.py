@@ -12,7 +12,10 @@ import re
 import httpx
 from pydantic import BaseModel, Field
 
-from app.agents.llm import ChatCompletionsChat, PROVIDER_FAILURES, ProviderError, is_vertex_native, request_error, shared_ssl_context, status_error
+from app.agents.llm import (
+    ChatCompletionsChat, PROVIDER_FAILURES, ProviderError, is_vertex_native, provider_headers, request_error,
+    shared_ssl_context, status_error,
+)
 from app.vision.settings import VisionConfig
 
 KINDS = ("handwritten", "circuit", "problem", "other")
@@ -260,9 +263,12 @@ async def extract(
             ]},
         ],
     }
-    if is_vertex_native(config.base_url):
+    if is_vertex_native(config.base_url) or config.auth_mode == "chatgpt":
+        # Vertex 原生接口和 ChatGPT 套餐都没有 /chat/completions，走和对话相同的通道（都支持图片）
         try:
-            result = await ChatCompletionsChat(config.llm_settings(), transport).complete_json(payload["messages"])
+            result = await ChatCompletionsChat(
+                config.llm_settings(), transport, chatgpt_auth=config.chatgpt,
+            ).complete_json(payload["messages"])
             return parse_extraction(json.dumps(result, ensure_ascii=False), config.bbox_format, width, height)
         except ProviderError as exc:
             raise _vision_error(exc) from None
@@ -274,7 +280,7 @@ async def extract(
                                      verify=shared_ssl_context()) as client:
             response = await client.post(
                 f"{config.base_url}/chat/completions", json=payload,
-                headers={"Authorization": f"Bearer {config.api_key.get_secret_value()}"},
+                headers=provider_headers(config.base_url, config.api_key.get_secret_value(), payload["messages"]),
             )
     except PROVIDER_FAILURES as exc:
         raise _vision_error(request_error(exc)) from None
