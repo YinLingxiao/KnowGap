@@ -6,6 +6,25 @@
   line-height: var(--leading-read);
   overflow-wrap: anywhere;
   text-wrap: pretty;
+  text-spacing-trim: trim-all;
+  text-autospace: normal;
+}
+
+.markdown .codeBlock,
+.markdown .codeBlock *,
+.markdown .pre,
+.markdown .pre *,
+.markdown code,
+.markdown kbd,
+.markdown samp,
+.markdown input,
+.markdown textarea,
+.markdown select,
+.markdown [contenteditable="true"],
+.markdown :global(.katex),
+.markdown :global(.katex) * {
+  text-spacing-trim: space-all;
+  text-autospace: no-autospace;
 }
 
 .markdown ::selection {

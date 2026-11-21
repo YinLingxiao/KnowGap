@@ -40,19 +40,13 @@
 }
 
 .spin {
-  animation: update-spin 900ms linear infinite;
+  animation: global(kg-spin) 900ms linear infinite;
 }
 
 @keyframes update-pill-in {
   from {
     opacity: 0;
     transform: scale(0.92);
-  }
-}
-
-@keyframes update-spin {
-  to {
-    transform: rotate(360deg);
   }
 }
 

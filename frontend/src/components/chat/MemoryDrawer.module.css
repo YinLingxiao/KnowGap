@@ -66,13 +66,7 @@
 }
 
 .spinning {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+  animation: global(kg-spin) 1s linear infinite;
 }
 
 /* 长期笔记折叠行：纯表面明度区分 */

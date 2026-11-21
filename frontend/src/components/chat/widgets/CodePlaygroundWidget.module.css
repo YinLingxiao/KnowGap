@@ -144,13 +144,7 @@ button.controlBtn {
 }
 
 .spin {
-  animation: spin 900ms linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+  animation: global(kg-spin) 900ms linear infinite;
 }
 
 .askedNote {

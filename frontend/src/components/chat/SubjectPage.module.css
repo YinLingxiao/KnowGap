@@ -243,13 +243,7 @@
 }
 
 .spin {
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+  animation: global(kg-spin) 0.8s linear infinite;
 }
 
 .mergeNotice {
@@ -604,13 +598,7 @@
 
 /* 刚被选中的标签文字淡入，不是突然冒出来 */
 .panelTabActive .tabLabel {
-  animation: tab-label-in var(--t-enter) var(--ease) backwards;
-}
-
-@keyframes tab-label-in {
-  from {
-    opacity: 0;
-  }
+  animation: global(kg-fade-in) var(--t-enter) var(--ease) backwards;
 }
 
 /* 切换视图：新内容从下方轻轻浮上来。内容是挂载时才播放，面板里的刷新不会重复触发 */

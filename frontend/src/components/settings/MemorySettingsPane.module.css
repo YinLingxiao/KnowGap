@@ -409,19 +409,13 @@
 }
 
 .spin {
-  animation: memory-spin 900ms linear infinite;
+  animation: global(kg-spin) 900ms linear infinite;
 }
 
 @keyframes memory-in {
   from {
     opacity: 0;
     transform: translateY(3px);
-  }
-}
-
-@keyframes memory-spin {
-  to {
-    transform: rotate(360deg);
   }
 }
 

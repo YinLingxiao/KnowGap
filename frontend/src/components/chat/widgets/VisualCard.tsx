@@ -9,7 +9,11 @@ import { askInComposer, useWidgetScope } from "./widgetEvents";
 import styles from "./VisualCard.module.css";
 
 function pushTheme(frame: HTMLIFrameElement | null) {
-  frame?.contentWindow?.postMessage({ type: VISUAL_MSG.theme, vars: readThemeVars() }, "*");
+  frame?.contentWindow?.postMessage({
+    type: VISUAL_MSG.theme,
+    vars: readThemeVars(),
+    motionReduced: document.documentElement.dataset.motion === "reduced",
+  }, "*");
 }
 
 /** ```knowgap-visual``` 的 HTML 放进 sandbox iframe。流式未写完只出骨架，不挂 iframe。 */
@@ -26,7 +30,11 @@ export function VisualCard({ rawCode }: { rawCode: string }) {
   const [mounted, setMounted] = useState(false);
   const body = useMemo(() => extractVisualBody(rawCode), [rawCode]);
   // 只在原文变化时重建文档；之后的主题变化走 postMessage。
-  const srcdoc = useMemo(() => (mounted ? buildVisualSrcdoc(rawCode, readThemeVars()) : ""), [rawCode, mounted]);
+  const srcdoc = useMemo(() => (mounted ? buildVisualSrcdoc(
+    rawCode,
+    readThemeVars(),
+    document.documentElement.dataset.motion === "reduced",
+  ) : ""), [rawCode, mounted]);
 
   useEffect(() => setMounted(true), []);
 
@@ -58,7 +66,10 @@ export function VisualCard({ rawCode }: { rawCode: string }) {
 
   useEffect(() => {
     const observer = new MutationObserver(() => pushTheme(iframeRef.current));
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class", "data-theme"] });
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class", "data-theme", "data-text-size", "data-read-font", "data-motion"],
+    });
     return () => observer.disconnect();
   }, []);
 

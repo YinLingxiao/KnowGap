@@ -151,11 +151,7 @@
 }
 
 .spin {
-  animation: spin 0.9s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
+  animation: global(kg-spin) 0.9s linear infinite;
 }
 
 /* 默认模型行：左侧标题说明，右侧选择器 + 紧凑按钮 */

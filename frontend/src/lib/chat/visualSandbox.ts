@@ -27,7 +27,9 @@ export const THEME_VARS: readonly string[] = [
   "--ink-solid",
   "--on-ink",
   "--font-sans",
+  "--font-read",
   "--font-mono",
+  "--text-read",
   "--radius",
   "--radius-lg",
 ];
@@ -42,13 +44,13 @@ const CSP_META =
  * 这些规则排在模型内容之前，模型自己的 <style> 仍然可以覆盖。
  */
 const KIT_RULES = [
-  "h3,.kg-title{margin:0;color:var(--text);font:600 16px/1.35 var(--font-sans)}",
-  ".kg-sub{margin:2px 0 0;color:var(--text-secondary);font-size:13px}",
+  "h3,.kg-title{margin:0;color:var(--text);font:600 1.066667rem/1.35 var(--font-sans)}",
+  ".kg-sub{margin:2px 0 0;color:var(--text-secondary);font-size:0.866667rem}",
   "p{margin:8px 0}",
-  "label{color:var(--text-secondary);font-size:13px}",
-  "code,kbd{font-family:var(--font-mono);font-size:12.5px}",
+  "label{color:var(--text-secondary);font-size:0.866667rem}",
+  "code,kbd{font-family:var(--font-mono);font-size:0.833333rem}",
   // 控件
-  "button,.kg-btn{appearance:none;display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:30px;margin:0;padding:0 12px;border:1px solid var(--border-strong);border-radius:999px;background:var(--bg-elevated);color:var(--text);font:500 13px var(--font-sans);cursor:pointer;transition:background-color .16s ease,border-color .16s ease,color .16s ease,transform .1s ease}",
+  "button,.kg-btn{appearance:none;display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:30px;margin:0;padding:0 12px;border:1px solid var(--border-strong);border-radius:999px;background:var(--bg-elevated);color:var(--text);font:500 0.866667rem var(--font-sans);cursor:pointer;transition:background-color .16s ease,border-color .16s ease,color .16s ease,transform .1s ease}",
   "button:hover:not(:disabled){background:var(--bg-subtle)}",
   "button:active:not(:disabled){transform:scale(.97)}",
   "button:disabled{opacity:.45;cursor:not-allowed}",
@@ -56,7 +58,7 @@ const KIT_RULES = [
   "button.is-active,.kg-btn.is-active{border-color:var(--accent);background:var(--accent-soft);color:var(--accent-text)}",
   "button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}",
   "input[type=range]{width:100%;height:20px;margin:0;background:transparent;accent-color:var(--accent)}",
-  "input[type=number],input[type=text],select{height:30px;padding:0 10px;border:1px solid var(--border-strong);border-radius:var(--radius);background:var(--bg-elevated);color:var(--text);font:400 13px var(--font-sans)}",
+  "input[type=number],input[type=text],select{height:30px;padding:0 10px;border:1px solid var(--border-strong);border-radius:var(--radius);background:var(--bg-elevated);color:var(--text);font:400 0.866667rem var(--font-sans)}",
   // 版式
   ".kg-stack{display:flex;flex-direction:column;gap:12px}",
   ".kg-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px}",
@@ -66,28 +68,28 @@ const KIT_RULES = [
   ".kg-field{display:flex;flex-direction:column;gap:4px}",
   ".kg-field>label{display:flex;justify-content:space-between;gap:8px}",
   ".kg-field output,.kg-field label b{color:var(--text);font-weight:600;font-variant-numeric:tabular-nums}",
-  ".kg-caption{margin:0;color:var(--text-secondary);font-size:12.5px;line-height:1.6}",
+  ".kg-caption{margin:0;color:var(--text-secondary);font-size:0.833333rem;line-height:1.6}",
   // 数据
-  ".kg-chip{display:inline-flex;align-items:center;gap:5px;padding:1px 9px;border:1px solid var(--border);border-radius:999px;background:var(--bg-subtle);color:var(--text-secondary);font-size:12px;font-weight:500}",
+  ".kg-chip{display:inline-flex;align-items:center;gap:5px;padding:1px 9px;border:1px solid var(--border);border-radius:999px;background:var(--bg-subtle);color:var(--text-secondary);font-size:0.8rem;font-weight:500}",
   ".kg-chip.is-accent{border-color:transparent;background:var(--accent-soft);color:var(--accent-text)}",
   ".kg-chip.is-green{border-color:transparent;background:var(--green-soft);color:var(--green)}",
   ".kg-chip.is-orange{border-color:transparent;background:var(--orange-soft);color:var(--orange)}",
   ".kg-stat{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg-elevated)}",
-  ".kg-stat>span{color:var(--text-tertiary);font-size:12px}",
-  ".kg-stat>b{color:var(--text);font:600 20px/1.2 var(--font-sans);font-variant-numeric:tabular-nums}",
-  ".kg-legend{display:flex;flex-wrap:wrap;gap:6px 14px;color:var(--text-secondary);font-size:12px}",
+  ".kg-stat>span{color:var(--text-tertiary);font-size:0.8rem}",
+  ".kg-stat>b{color:var(--text);font:600 1.333333rem/1.2 var(--font-sans);font-variant-numeric:tabular-nums}",
+  ".kg-legend{display:flex;flex-wrap:wrap;gap:6px 14px;color:var(--text-secondary);font-size:0.8rem}",
   ".kg-dot{display:inline-block;width:8px;height:8px;margin-right:6px;border-radius:50%;background:var(--accent)}",
   ".kg-bar{display:flex;width:100%;height:12px;overflow:hidden;border-radius:999px;background:var(--bg-subtle)}",
   ".kg-bar>*{flex:none;height:100%;background:var(--accent);transition:width .25s ease}",
   ".kg-dot.is-green,.kg-bar>.is-green{background:var(--green)}",
   ".kg-dot.is-orange,.kg-bar>.is-orange{background:var(--orange)}",
   ".kg-dot.is-muted,.kg-bar>.is-muted{background:var(--border-strong)}",
-  ".kg-callout{padding:9px 12px;border-radius:var(--radius);background:var(--accent-soft);color:var(--text);font-size:13px}",
+  ".kg-callout{padding:9px 12px;border-radius:var(--radius);background:var(--accent-soft);color:var(--text);font-size:0.866667rem}",
   ".kg-callout.is-warn{background:var(--orange-soft)}",
   ".kg-callout.is-ok{background:var(--green-soft)}",
-  ".kg-table{width:100%;border-collapse:collapse;font-size:13px}",
+  ".kg-table{width:100%;border-collapse:collapse;font-size:0.866667rem}",
   ".kg-table th,.kg-table td{padding:7px 10px;border-bottom:1px solid var(--border);text-align:left}",
-  ".kg-table th{color:var(--text-secondary);font-size:12px;font-weight:500}",
+  ".kg-table th{color:var(--text-secondary);font-size:0.8rem;font-weight:500}",
   // SVG：节点、连线、标注；状态用 is-* 切换，颜色有过渡，逐个点亮时不会生硬地跳
   ".kg-node{fill:var(--bg-elevated);stroke:var(--border-strong);stroke-width:1.5;transition:fill .25s ease,stroke .25s ease}",
   ".kg-node.is-active{fill:var(--accent-soft);stroke:var(--accent)}",
@@ -95,7 +97,7 @@ const KIT_RULES = [
   ".kg-node.is-warn{fill:var(--orange-soft);stroke:var(--orange)}",
   ".kg-edge{fill:none;stroke:var(--border-strong);stroke-width:1.5;transition:stroke .25s ease}",
   ".kg-edge.is-active{stroke:var(--accent);stroke-width:2}",
-  ".kg-label{fill:var(--text);font:500 12px var(--font-sans);text-anchor:middle;dominant-baseline:central}",
+  ".kg-label{fill:var(--text);font:500 0.8rem var(--font-sans);text-anchor:middle;dominant-baseline:central}",
   ".kg-label.is-muted{fill:var(--text-tertiary)}",
   ".kg-label.is-accent{fill:var(--accent)}",
   ".kg-label.is-start{text-anchor:start}",
@@ -108,23 +110,23 @@ const KIT_RULES = [
   ".kg-event::after{content:'';position:absolute;left:4px;top:19px;bottom:-3px;width:2px;background:var(--border-strong)}",
   ".kg-event:last-child::after{display:none}",
   ".kg-event>b{display:block;color:var(--text);font-weight:600}",
-  ".kg-event>span,.kg-event>p{display:block;margin:0;color:var(--text-secondary);font-size:13px}",
+  ".kg-event>span,.kg-event>p{display:block;margin:0;color:var(--text-secondary);font-size:0.866667rem}",
   ".kg-event.is-active::before{background:var(--accent)}",
   ".kg-event.is-done::before{background:var(--green)}",
   ".kg-event.is-warn::before{background:var(--orange)}",
   // 流程：方框横排可换行，相邻两个之间自动画箭头；换行后的行首箭头落在容器外，被 overflow 裁掉
   ".kg-flow{display:flex;flex-wrap:wrap;gap:10px 28px;overflow:hidden}",
-  ".kg-box{position:relative;display:flex;flex-direction:column;justify-content:center;min-width:72px;padding:8px 12px;border:1px solid var(--border-strong);border-radius:var(--radius);background:var(--bg-elevated);color:var(--text);font-size:13px;font-weight:500;text-align:center;transition:background-color .25s ease,border-color .25s ease}",
-  ".kg-box small{display:block;color:var(--text-secondary);font-size:12px;font-weight:400}",
+  ".kg-box{position:relative;display:flex;flex-direction:column;justify-content:center;min-width:72px;padding:8px 12px;border:1px solid var(--border-strong);border-radius:var(--radius);background:var(--bg-elevated);color:var(--text);font-size:0.866667rem;font-weight:500;text-align:center;transition:background-color .25s ease,border-color .25s ease}",
+  ".kg-box small{display:block;color:var(--text-secondary);font-size:0.8rem;font-weight:400}",
   ".kg-flow>.kg-box+.kg-box::before{content:'';position:absolute;top:50%;left:-25px;width:21px;height:2px;margin-top:-1px;background:var(--text-tertiary)}",
   ".kg-flow>.kg-box+.kg-box::after{content:'';position:absolute;top:50%;left:-12px;width:7px;height:7px;margin-top:-3.5px;box-sizing:border-box;border:solid var(--text-tertiary);border-width:2px 2px 0 0;transform:rotate(45deg)}",
   // 数组格：等宽的一排，等宽字体；data-i 显示在格子下方（有它才留出位置），空格是虚线框
   // 占满整行再居中：放在 kg-stage 这类收缩容器里时，不占满的话格子会被压成一条细缝
   ".kg-cells{display:flex;justify-content:center;gap:4px;width:100%}",
-  ".kg-cell{position:relative;display:flex;flex:0 1 56px;align-items:center;justify-content:center;min-width:28px;min-height:40px;padding:0 2px;border:1px solid var(--border-strong);border-radius:var(--radius);background:var(--bg-elevated);color:var(--text);font:500 14px var(--font-mono);transition:background-color .25s ease,border-color .25s ease}",
+  ".kg-cell{position:relative;display:flex;flex:0 1 56px;align-items:center;justify-content:center;min-width:28px;min-height:40px;padding:0 2px;border:1px solid var(--border-strong);border-radius:var(--radius);background:var(--bg-elevated);color:var(--text);font:500 0.933333rem var(--font-mono);transition:background-color .25s ease,border-color .25s ease}",
   ".kg-cell:empty{border-style:dashed;background:transparent}",
   ".kg-cell[data-i]{margin-bottom:20px}",
-  ".kg-cell[data-i]::after{content:attr(data-i);position:absolute;top:100%;left:0;right:0;margin-top:4px;color:var(--text-tertiary);font:400 12px var(--font-mono);text-align:center}",
+  ".kg-cell[data-i]::after{content:attr(data-i);position:absolute;top:100%;left:0;right:0;margin-top:4px;color:var(--text-tertiary);font:400 0.8rem var(--font-mono);text-align:center}",
   ".kg-cell.is-active[data-i]::after{color:var(--accent-text)}",
   // 方框和数组格共用三种状态
   ".kg-box.is-active,.kg-cell.is-active{border-color:var(--accent);background:var(--accent-soft)}",
@@ -139,6 +141,7 @@ const KIT_RULES = [
   ".kg-plot.is-muted,.kg-point.is-muted{--c:var(--text-tertiary)}",
   ".kg-plot{fill:none;stroke:var(--c);stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transition:stroke .25s ease}",
   ".kg-point{fill:var(--c);transition:fill .25s ease}",
+  ":root[data-motion=reduced] *,:root[data-motion=reduced] *::before,:root[data-motion=reduced] *::after{transition:none!important;animation:none!important}",
   "@media (prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important}}",
 ];
 
@@ -147,12 +150,19 @@ export const KIT_CLASSES: readonly string[] = [...new Set(KIT_RULES.join("").mat
 
 const BASE_STYLE =
   // html 不出滚动条：滚动条会改宽度，和高度自适应互相触发
-  "<style>html,body{margin:0;background:transparent;color:var(--text);font:14px/1.6 var(--font-sans)}html{overflow:hidden}*{box-sizing:border-box}"
+  "<style>html,body{margin:0;background:transparent;color:var(--text);font-family:var(--font-sans);line-height:1.6}html{overflow:hidden;font-size:var(--text-read,15px);--font-sans:system-ui,sans-serif;--font-mono:monospace;--font-read:var(--font-sans)}body{font-size:0.933333rem}*{box-sizing:border-box}"
   + KIT_RULES.join("") + "</style>";
 
 function hostRoot(): HTMLElement | undefined {
   if (typeof document === "undefined") return undefined;
   return document.documentElement;
+}
+
+function validBaseFontSize(value: string): boolean {
+  const normalized = value.trim();
+  if (!/^(?:\d+(?:\.\d+)?|\.\d+)px$/.test(normalized)) return false;
+  const size = Number.parseFloat(normalized);
+  return Number.isFinite(size) && size > 0;
 }
 
 /** 从宿主 <html> 读取 THEME_VARS 的当前值 */
@@ -163,7 +173,7 @@ export function readThemeVars(root?: HTMLElement): Record<string, string> {
   const vars: Record<string, string> = {};
   for (const name of THEME_VARS) {
     const value = style.getPropertyValue(name).trim();
-    if (value) vars[name] = value;
+    if (value && (name !== "--text-read" || validBaseFontSize(value))) vars[name] = value;
   }
   // 和宿主 color-scheme 不一致时 Chrome 会给 iframe 垫白底
   const scheme = style.colorScheme?.trim();
@@ -202,6 +212,7 @@ function themeStyle(theme: Record<string, string>): string {
   const decls: string[] = [];
   for (const [key, value] of Object.entries(theme)) {
     if (blockedThemeToken(key) || blockedThemeToken(value)) continue;
+    if (key === "--text-read" && !validBaseFontSize(value)) continue;
     decls.push(`${key}:${value}`);
   }
   return `<style>:root{${decls.join(";")}}</style>`;
@@ -262,12 +273,14 @@ function bridgeScript(): string {
       var key = keys[i];
       if (key.indexOf("--") === 0 || key === "color-scheme") document.documentElement.style.setProperty(key, String(vars[key]));
     }
+    document.documentElement.dataset.motion = e.data.motionReduced === true ? "reduced" : "normal";
   });
 })();</script>`;
 }
 
 /** 组装 iframe srcdoc：doctype + charset + viewport + CSP meta + :root 主题变量 + 基础样式 + 通信脚本 + 模型内容 */
-export function buildVisualSrcdoc(raw: string, theme: Record<string, string>): string {
+export function buildVisualSrcdoc(raw: string, theme: Record<string, string>, motionReduced = false): string {
   // 模型 HTML 原样拼进 body，转义交给 React 的 srcDoc
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">${CSP_META}${themeStyle(theme)}${BASE_STYLE}${bridgeScript()}</head><body>${extractVisualBody(raw)}</body></html>`;
+  const motion = motionReduced ? ' data-motion="reduced"' : "";
+  return `<!doctype html><html${motion}><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">${CSP_META}${themeStyle(theme)}${BASE_STYLE}${bridgeScript()}</head><body>${extractVisualBody(raw)}</body></html>`;
 }

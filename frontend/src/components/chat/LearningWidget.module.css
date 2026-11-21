@@ -306,14 +306,8 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  animation: stage-in 220ms var(--ease-out);
-}
-
-@keyframes stage-in {
-  from {
-    opacity: 0;
-    transform: translateX(8px);
-  }
+  --motion-slide-distance: 8px;
+  animation: global(kg-slide-in-right) var(--t-ui) var(--ease-out);
 }
 
 .liveWrap .stepStage {
@@ -973,13 +967,7 @@
 }
 
 .spin {
-  animation: quiz-spin 0.9s linear infinite;
-}
-
-@keyframes quiz-spin {
-  to {
-    transform: rotate(360deg);
-  }
+  animation: global(kg-spin) 0.9s linear infinite;
 }
 
 .quizSubmit:disabled {

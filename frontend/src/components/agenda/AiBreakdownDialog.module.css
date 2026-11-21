@@ -32,7 +32,6 @@
 .dialog .primary:hover { background: var(--accent-solid-hover); }
 .error { background: var(--red-soft); color: var(--red); border: 1px solid var(--red); border-radius: var(--radius-sm); padding: 10px 12px; font-size: var(--text-xs); margin-bottom: 16px; overflow-wrap: anywhere; }
 .loading { display: flex; align-items: center; gap: 8px; font-size: var(--text-xs); margin-top: 20px; color: var(--accent-text); }
-.loading span { width: 12px; height: 12px; border: 2px solid var(--accent-soft-strong); border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
+.loading span { width: 12px; height: 12px; border: 2px solid var(--accent-soft-strong); border-top-color: var(--accent); border-radius: 50%; animation: global(kg-spin) 1s linear infinite; }
 @media (max-width: 600px) { .fields { grid-template-columns: 1fr 1fr; } .inputOptions { grid-template-columns: 1fr; } .header, .body { padding: 16px; } }
 @media (prefers-reduced-motion: reduce) { .loading span { animation: none; } }

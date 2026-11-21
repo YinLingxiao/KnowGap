@@ -7,7 +7,7 @@
   place-items: center;
   padding: 24px;
   background: rgb(0 0 0 / 52%);
-  animation: backdrop-fade 220ms var(--ease-out);
+  animation: global(kg-fade-in) var(--t-ui) var(--ease-out);
 }
 
 .dialog {
@@ -27,11 +27,6 @@
   animation: modal-spring 280ms var(--ease-spring);
 }
 
-@keyframes backdrop-fade {
-  from {
-    opacity: 0;
-  }
-}
 
 @keyframes modal-spring {
   from {

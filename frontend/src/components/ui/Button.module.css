@@ -81,13 +81,7 @@
 }
 
 .spin {
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+  animation: global(kg-spin) 0.8s linear infinite;
 }
 
 /* 只在主指针是触屏时加大点击区；带触屏的笔记本（主指针为鼠标）不应把按钮撑到 40px */

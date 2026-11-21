@@ -1041,14 +1041,8 @@
   border-left: 1px solid var(--border);
   background: var(--bg-sidebar);
   box-shadow: var(--shadow-popover);
-  animation: drawer-in var(--t-sidebar) var(--ease-out);
-}
-
-@keyframes drawer-in {
-  from {
-    opacity: 0;
-    transform: translateX(16px);
-  }
+  --motion-slide-distance: 16px;
+  animation: global(kg-slide-in-right) var(--t-ui) var(--ease-out);
 }
 
 .mockNotice {

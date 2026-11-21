@@ -87,11 +87,5 @@
 }
 
 .spin {
-  animation: generated-spin 900ms linear infinite;
-}
-
-@keyframes generated-spin {
-  to {
-    transform: rotate(360deg);
-  }
+  animation: global(kg-spin) 900ms linear infinite;
 }

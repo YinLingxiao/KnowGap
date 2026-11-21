@@ -299,13 +299,7 @@ button.textBtn:disabled {
 }
 
 .spin {
-  animation: vision-spin 0.9s linear infinite;
-}
-
-@keyframes vision-spin {
-  to {
-    transform: rotate(360deg);
-  }
+  animation: global(kg-spin) 0.9s linear infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {

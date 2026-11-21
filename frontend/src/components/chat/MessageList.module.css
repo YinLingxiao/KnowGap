@@ -699,13 +699,7 @@
 .toolIconSpin {
   flex-shrink: 0;
   color: var(--text-tertiary);
-  animation: spin 2s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+  animation: global(kg-spin) 2s linear infinite;
 }
 
 .toolName {

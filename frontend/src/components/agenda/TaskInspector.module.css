@@ -6,14 +6,8 @@
   height: 100%;
   border-left: 1px solid var(--border);
   background: var(--bg-panel);
-  animation: slide-in 220ms var(--ease-spring);
-}
-
-@keyframes slide-in {
-  from {
-    opacity: 0;
-    transform: translateX(12px);
-  }
+  --motion-slide-distance: 12px;
+  animation: global(kg-slide-in-right) var(--t-ui) var(--ease);
 }
 
 .head {

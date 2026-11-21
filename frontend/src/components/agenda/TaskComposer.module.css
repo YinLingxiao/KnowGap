@@ -108,8 +108,7 @@
 .toast span { min-width: 0; overflow-wrap: anywhere; }
 .toast button { flex-shrink: 0; color: var(--accent-text); }
 .toast button:focus-visible { outline: var(--focus-ring); outline-offset: 3px; }
-.spin { animation: spin 1s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
+.spin { animation: global(kg-spin) 1s linear infinite; }
 @media (max-width: 480px) {
   .dialog { inset-block-start: 5dvh; max-height: 90dvh; }
   .header { padding-inline: 14px; }

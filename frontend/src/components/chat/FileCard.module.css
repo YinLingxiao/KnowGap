@@ -137,13 +137,7 @@
 }
 
 .spin {
-  animation: file-spin 900ms linear infinite;
-}
-
-@keyframes file-spin {
-  to {
-    transform: rotate(360deg);
-  }
+  animation: global(kg-spin) 900ms linear infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {

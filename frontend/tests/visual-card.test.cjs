@@ -4,15 +4,25 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const Module = require('node:module');
 const ts = require('typescript');
 
-const source = fs.readFileSync(path.join(__dirname, '../src/lib/chat/visualSandbox.ts'), 'utf8');
+const sourcePath = path.join(__dirname, '../src/lib/chat/visualSandbox.ts');
+const source = fs.readFileSync(sourcePath, 'utf8');
 const js = ts.transpileModule(source, {
-  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+  fileName: sourcePath,
+  compilerOptions: {
+    module: ts.ModuleKind.CommonJS,
+    target: ts.ScriptTarget.ES2020,
+    inlineSourceMap: true,
+    inlineSources: true,
+  },
 }).outputText;
-const mod = { exports: {} };
-new Function('module', 'exports', 'require', js)(mod, mod.exports, require);
-const { VISUAL_MSG, THEME_VARS, KIT_CLASSES, readThemeVars, extractVisualBody, buildVisualSrcdoc } = mod.exports;
+const visualModule = new Module(sourcePath, module);
+visualModule.filename = sourcePath;
+visualModule.paths = Module._nodeModulePaths(path.dirname(sourcePath));
+visualModule._compile(js, sourcePath);
+const { VISUAL_MSG, THEME_VARS, KIT_CLASSES, readThemeVars, extractVisualBody, buildVisualSrcdoc } = visualModule.exports;
 
 const CSP = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; font-src data:">`;
 
@@ -72,8 +82,8 @@ test('THEME_VARS includes the host tokens', () => {
   for (const name of [
     '--bg', '--bg-elevated', '--bg-subtle', '--text', '--text-secondary', '--text-tertiary',
     '--border', '--border-strong', '--accent', '--accent-soft', '--accent-text',
-    '--green', '--green-soft', '--orange', '--orange-soft', '--font-sans', '--font-mono',
-    '--radius', '--radius-lg',
+    '--green', '--green-soft', '--orange', '--orange-soft', '--font-sans', '--font-read', '--font-mono',
+    '--text-read', '--radius', '--radius-lg',
   ]) {
     assert.ok(THEME_VARS.includes(name), name);
   }
@@ -91,6 +101,7 @@ function bridgeContext(hasObserver) {
   const listeners = {};
   let onResize = null;
   const element = {
+    dataset: {},
     getBoundingClientRect: () => ({ height: 89.4 }),
     style: { setProperty: (key, value) => { props[key] = value; } },
   };
@@ -219,15 +230,95 @@ test('the kit ships timeline, flow, array-cell and chart components', () => {
   assert.ok(html.includes('*::before,*::after{transition:none!important'));
 });
 
-test('kit stylesheet stays flat and uses host colours, readable sizes and the three type weights', () => {
+test('kit stylesheet stays flat and uses host colours, scalable sizes and the three type weights', () => {
   const html = buildVisualSrcdoc('', {});
   const css = (html.match(/<style>(html,body[\s\S]*?)<\/style>/) || [])[1] || '';
   assert.ok(css.includes('.kg-timeline'));
   assert.equal(/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(|gradient\(|shadow|blur\(/i.test(css), false);
-  const sizes = [...css.matchAll(/font(?:-size)?:[^;}]*?(\d+(?:\.\d+)?)px/g)].map((match) => Number(match[1]));
-  assert.ok(sizes.length > 20);
-  assert.deepEqual(sizes.filter((size) => size < 12), []);
+  const kitCss = css.slice(css.indexOf('h3,.kg-title'));
+  const sizes = [...kitCss.matchAll(/font(?:-size)?:[^;}]*?(\d+(?:\.\d+)?)rem/g)].map((match) => Number(match[1]));
+  assert.ok(sizes.length >= 20);
+  assert.deepEqual(sizes.filter((size) => size < 0.8), []);
+  assert.deepEqual([...kitCss.matchAll(/font(?:-size)?:[^;}]*?\d+(?:\.\d+)?px/g)].map((match) => match[0]), []);
   const weights = [...css.matchAll(/font-weight:(\d+)|font:(\d{3}) /g)].map((match) => Number(match[1] || match[2]));
   assert.ok(weights.length > 10);
   assert.deepEqual(weights.filter((weight) => ![400, 500, 600].includes(weight)), []);
+});
+test('srcdoc carries the host font stacks and base font size', () => {
+  const theme = {
+    '--font-sans': '"Geist Variable", "PingFang SC", sans-serif',
+    '--font-read': '"Source Serif 4 Variable", "Songti SC", serif',
+    '--font-mono': '"JetBrains Mono", Consolas, monospace',
+    '--text-read': '16.5px',
+  };
+  const html = buildVisualSrcdoc('<p>中英 typography</p>', theme);
+  for (const [name, value] of Object.entries(theme)) {
+    assert.ok(html.includes(`${name}:${value}`), `${name} should be copied into srcdoc`);
+  }
+  assert.ok(html.includes('font-family:var(--font-sans)'));
+  assert.ok(html.includes('font-size:var(--text-read,15px)'));
+  assert.ok(html.includes('body{font-size:0.933333rem}'));
+  assert.ok(html.includes("font-src data:"));
+  assert.doesNotMatch(html, /@font-face|https?:\/\/[^'"\s]*\.(?:woff2?|ttf|otf)/i);
+});
+
+test('readThemeVars reads the host root and rejects invalid base sizes', () => {
+  const root = {};
+  const values = {
+    '--font-sans': '"Geist Variable", sans-serif',
+    '--font-read': '"Source Serif 4 Variable", serif',
+    '--text-read': '16.5px',
+  };
+  const documentDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'document');
+  const styleDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'getComputedStyle');
+  const restore = (name, descriptor) => {
+    if (descriptor) Object.defineProperty(globalThis, name, descriptor);
+    else delete globalThis[name];
+  };
+  try {
+    globalThis.document = { documentElement: root };
+    delete globalThis.getComputedStyle;
+    assert.deepEqual(readThemeVars(root), {});
+
+    let baseSize = values['--text-read'];
+    globalThis.getComputedStyle = (element) => {
+      assert.equal(element, root);
+      return {
+        colorScheme: 'dark',
+        getPropertyValue: (name) => name === '--text-read' ? baseSize : (values[name] || ''),
+      };
+    };
+    const vars = readThemeVars();
+    assert.equal(vars['--font-sans'], values['--font-sans']);
+    assert.equal(vars['--font-read'], values['--font-read']);
+    assert.equal(vars['--text-read'], '16.5px');
+    assert.equal(vars['color-scheme'], 'dark');
+
+    for (const invalid of ['1rem', '0px', '-1px', 'NaNpx', '16px</style>']) {
+      baseSize = invalid;
+      assert.equal(readThemeVars(root)['--text-read'], undefined, invalid);
+      const html = buildVisualSrcdoc('', { '--text-read': invalid });
+      assert.equal(html.includes(`--text-read:${invalid}`), false, invalid);
+    }
+  } finally {
+    restore('document', documentDescriptor);
+    restore('getComputedStyle', styleDescriptor);
+  }
+});
+
+test('reduced motion is applied initially and kept in sync through the bridge', () => {
+  const html = buildVisualSrcdoc('', {}, true);
+  assert.ok(html.startsWith('<!doctype html><html data-motion="reduced">'));
+  assert.ok(html.includes(':root[data-motion=reduced] *'));
+  assert.ok(html.includes('@media (prefers-reduced-motion:reduce)'));
+
+  const ctx = runBridge(true);
+  const message = (motionReduced) => ctx.listeners['win:message']({
+    source: ctx.sandbox.parent,
+    data: { type: VISUAL_MSG.theme, vars: {}, motionReduced },
+  });
+  message(true);
+  assert.equal(ctx.sandbox.document.documentElement.dataset.motion, 'reduced');
+  message(false);
+  assert.equal(ctx.sandbox.document.documentElement.dataset.motion, 'normal');
 });

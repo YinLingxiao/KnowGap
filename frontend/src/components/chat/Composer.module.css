@@ -238,13 +238,7 @@
   word-break: break-word;
   pointer-events: none;
   user-select: none;
-  animation: ghost-fade 160ms var(--ease-out);
-}
-
-@keyframes ghost-fade {
-  from {
-    opacity: 0;
-  }
+  animation: global(kg-fade-in) var(--t-hover) var(--ease-out);
 }
 
 .ghostText {
