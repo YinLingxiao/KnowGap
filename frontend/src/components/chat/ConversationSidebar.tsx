@@ -778,7 +778,7 @@ export function ConversationSidebar(props: SidebarProps) {
       <header className={styles.brand}>
         <BrandMark size={24} />
         <span className={styles.brandName}><BrandWordmark width={112} /></span>
-        <UpdateIndicator compact busy={generatingIds.length > 0} />
+        <UpdateIndicator busy={generatingIds.length > 0} />
         <button className={styles.iconButton} onClick={props.onCollapse} aria-label={t("sidebar.collapse")} title={t("sidebar.collapse")}>
           <PanelLeftClose size={16} />
         </button>

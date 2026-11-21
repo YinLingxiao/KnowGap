@@ -34,7 +34,6 @@ export const settingsPhrases: Record<string, string> = {
   "自动检查更新": "Check for updates automatically",
   "启动约 20 秒后检查，之后每小时检查一次。关闭后仍可手动检查。": "Checks about 20 seconds after launch, then every hour. You can still check manually when this is off.",
   "KnowGap {version} 已下载，点击重启并安装": "KnowGap {version} is ready. Click to restart and install.",
-  "更新": "Update",
   "自动下载": "Download automatically",
   "发现新版本后后台下载；关闭后需点击「下载更新」。": "Downloads in the background when a new version appears; when off, click “Download update”.",
   "退出时自动安装已下载的更新": "Install downloaded updates on quit",
