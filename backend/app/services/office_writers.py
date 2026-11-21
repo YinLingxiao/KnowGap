@@ -482,7 +482,11 @@ def _pdf_font() -> tuple[str, str]:
     from reportlab.pdfbase.ttfonts import TTFont
 
     for name, path, index in _PDF_FONTS:
-        if Path(path).is_file():
+        try:
+            present = Path(path).is_file()
+        except OSError:  # 别的系统上的路径（如 Linux 上的 C:\\Windows）可能连查看都不允许
+            present = False
+        if present:
             try:
                 if name not in pdfmetrics.getRegisteredFontNames():
                     pdfmetrics.registerFont(TTFont(name, path, subfontIndex=index or 0))
