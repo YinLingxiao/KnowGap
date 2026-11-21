@@ -63,6 +63,17 @@ export function scaleOf(attachment: Pick<FileAttachment, "units" | "unitLabel">)
   return attachment.units > 0 ? `${attachment.units} ${attachment.unitLabel}` : "";
 }
 
+// 读取说明分三类：只有图片没读（正文都读了）、有页/表/对象没读、只是提醒（如识图转写可能有错字）
+const UNREAD_NOTE = /没有读取|没有识别|识别失败|只读取了|只识别了/;
+const IMAGE_NOTE = /图片里的文字|图片没有读取|张没有读取|矢量图|图片没有识别|图片识别失败/;
+
+/** 卡片上的读取说明标记：说清楚是图片没读、部分没读，还是只是提醒，免得误以为整份没读到 */
+export function noteLabel(notes: readonly string[]): string {
+  const unread = notes.filter((note) => UNREAD_NOTE.test(note));
+  if (unread.length === 0) return "读取说明";
+  return unread.every((note) => IMAGE_NOTE.test(note)) ? "图片未读" : "部分未读";
+}
+
 interface FileCardProps {
   name: string;
   kind?: AttachmentKind;
@@ -71,7 +82,7 @@ interface FileCardProps {
   scale?: string;
   /** 失败原因（后端返回的中文说明） */
   error?: string;
-  /** 读取说明：没读到的内容，鼠标停在规模信息上时显示，并以标记点提示 */
+  /** 读取说明（图片未读、部分页没读、识图转写提醒等），鼠标停在规模信息上时显示，并以标记提示 */
   notes?: string[];
   /** 给出时显示 × 移除按钮（输入框里的待发送附件） */
   onRemove?: () => void;
@@ -96,7 +107,9 @@ export function FileCard({ name, kind, state = "ready", scale, error, notes, onR
           <span className={styles.meta} title={notes?.length ? notes.join("\n") : undefined}>
             {meta}
             {state === "ready" && notes && notes.length > 0 && (
-              <span className={styles.noteDot} aria-label={`读取说明：${notes.join(" ")}`} role="note">没读到的内容</span>
+              <span className={styles.noteDot} aria-label={`读取说明：${notes.join(" ")}`} title={notes.join("\n")} role="note">
+                {noteLabel(notes)}
+              </span>
             )}
             {state === "ready" && scale && <span className={styles.kind}>{KIND_LABEL[resolved]}</span>}
           </span>

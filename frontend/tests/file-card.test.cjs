@@ -77,3 +77,19 @@ test('metadata is viewer-scoped and navigation reuses saved app view and space p
     }
   }
 });
+
+test('the reading-note badge says what was skipped instead of "nothing was read"', () => {
+  assert.equal(card.noteLabel(['文中含 12 张图片，图片里的文字没有读取。']), '图片未读');
+  assert.equal(card.noteLabel(['第 3、4 页的图片由识图模型识别，可能有错字、漏字，示意图和公式请对照原件。',
+    '课件图片很多，只识别了前 40 张，其余 8 张没有读取。']), '图片未读');
+  assert.equal(card.noteLabel(['第 2 页没有可读的文字（可能是扫描图片或纯图片页），这些页的内容没有读取。']), '部分未读');
+  assert.equal(card.noteLabel(['2 个隐藏的工作表没有读取：成绩、备份。', '文中含 3 张图片，图片里的文字没有读取。']), '部分未读');
+  assert.equal(card.noteLabel(['这份 PDF 是扫描图片，文字由识图模型识别，可能有错字、漏字，公式和表格尤其要核对原件。']), '读取说明');
+  const html = renderToStaticMarkup(React.createElement(card.FileCard, {
+    name: 'KnowGap-架构导读.docx', scale: '16 节', notes: ['文中含 12 张图片，图片里的文字没有读取。'],
+  }));
+  assert.ok(html.includes('图片未读'));
+  assert.ok(!html.includes('没读到的内容'));
+  assert.ok(html.includes('title="文中含 12 张图片，图片里的文字没有读取。"'));
+});
+
