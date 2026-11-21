@@ -93,7 +93,7 @@ test('upload uses conversation-scoped multipart endpoint and maps parsing scale'
 });
 
 test('415 / 413 / 422 retain exact backend Chinese explanations', async () => {
-  for (const [status, detail] of [[415, '请另存为 .docx/.pptx/.xlsx'], [413, '单文件不能超过 20 MB'],
+  for (const [status, detail] of [[415, '请另存为 .docx/.pptx/.xlsx'], [413, '单文件不能超过 100 MB'],
     [422, '这份 PDF 是扫描图片，暂不支持识别文字']]) {
     global.fetch = async () => new Response(JSON.stringify({ detail }), { status });
     await assert.rejects(contract.attachmentApi.upload('chat-one', new File(['data'], '文件.pdf')),

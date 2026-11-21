@@ -447,7 +447,7 @@ const basePhrases: Record<string, string> = {
   "选中我回复里的一句话，再追问": "Select a sentence in my reply and ask a follow-up",
   "先列一个学习计划，再讲第一个概念": "Make a study plan, then explain the first concept",
   "按 Alt+Space 随时快问": "Press Alt+Space to ask quickly",
-  "单份资料不能超过 20 MB。": "Each file must be 20 MB or smaller.",
+  "单份资料不能超过 100 MB。": "Each file must be 100 MB or smaller.",
   "请上传 PDF、Word（.docx / .doc）、PowerPoint（.pptx / .ppt）、Excel（.xlsx / .xls）、TXT、Markdown 或 CSV 文件。": "Upload a PDF, Word (.docx / .doc), PowerPoint (.pptx / .ppt), Excel (.xlsx / .xls), TXT, Markdown or CSV file.",
   "通用资料库": "General library",
   "已添加 {name} 至{scope}。": "Added {name} to {scope}.",

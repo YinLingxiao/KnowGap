@@ -19,7 +19,7 @@ function loadComponent(name) {
     if (id === 'next/image') return { __esModule: true, default: (props) => React.createElement('img', props) };
     if (id === '@/components/Brand') return { BrandMark: () => React.createElement('svg', { 'aria-hidden': true }), BrandWordmark: () => React.createElement('span', { role: 'img', 'aria-label': 'KnowGap' }), BrandLockup: () => React.createElement('span', { role: 'img', 'aria-label': 'KnowGap' }) };
     if (id === '@/lib/chat/api') return { chatApi: {} };
-    if (id === '@/lib/chat/attachments') return { DOCUMENT_EXTENSIONS: ['.pdf', '.docx'], MAX_UPLOAD_BYTES: 20 * 1024 * 1024 };
+    if (id === '@/lib/chat/attachments') return { DOCUMENT_EXTENSIONS: ['.pdf', '.docx'], MAX_UPLOAD_BYTES: 100 * 1024 * 1024 };
     if (id === '@/lib/cx') return { cx: (...values) => values.filter(Boolean).join(' ') };
     if (id === '../settings/ModelAccessCard') return { ModelAccessCard: () => React.createElement('div', { 'data-mock-model-card': '1' }) };
     if (id === './coach') return {};

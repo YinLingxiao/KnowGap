@@ -8,7 +8,7 @@ from pathlib import Path
 
 from app.memory.store import Store, new_id, now
 
-MAX_FILE_BYTES = 20 * 1024 * 1024
+MAX_FILE_BYTES = 100 * 1024 * 1024
 MAX_GENERATED_PER_STUDENT = 300
 _ILLEGAL = re.compile(r'[\\/:*?"<>|\x00-\x1f]')
 
@@ -47,7 +47,7 @@ class FileStore:
     def _insert(self, file_id: str, student_id: str, conversation_id: str | None, name: str, kind: str,
                 data: bytes, origin: str, source_id: str | None) -> dict:
         if len(data) > MAX_FILE_BYTES:
-            raise ValueError("文件超过 20 MB。")
+            raise ValueError("文件超过 100 MB。")
         self.directory.mkdir(parents=True, exist_ok=True)
         self._path(file_id).write_bytes(data)
         record = {"id": file_id, "name": name, "kind": kind, "size": len(data), "origin": origin,

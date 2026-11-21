@@ -25,7 +25,7 @@ import { Markdown, type CitationPreviewTarget } from "./chat/Markdown";
 import { useI18n } from "@/components/LanguageProvider";
 import styles from "./MaterialPreviewPanel.module.css";
 
-// 和后端 MAX_UPLOAD_BYTES（20MB）同一量级，但更保守：docx-preview / pdf.js 在大文件、
+// 比后端 MAX_UPLOAD_BYTES（100 MB）保守得多：docx-preview / pdf.js 在大文件、
 // 多图片文档上会在主线程产生明显卡顿，这个阈值不是精确基准测试得出的，只是经验性的安全余量，
 // 如果实测发现偏大偏小可以调整。
 const DEGRADE_BYTES = { pdf: 12 * 1024 * 1024, office: 8 * 1024 * 1024 } as const;

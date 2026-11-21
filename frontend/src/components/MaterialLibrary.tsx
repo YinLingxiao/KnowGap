@@ -201,7 +201,7 @@ export function MaterialLibrary({
     setError(null);
     setNotice(null);
     if (file.size > MAX_UPLOAD_BYTES) {
-      setError(tx("单份资料不能超过 20 MB。"));
+      setError(tx("单份资料不能超过 100 MB。"));
       return;
     }
     if (!UPLOAD_EXTENSION_RE.test(file.name)) {

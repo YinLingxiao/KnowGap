@@ -30,7 +30,7 @@ def attachment_router(store: ChatStore, library: MaterialStore) -> APIRouter:
             subject = await run_in_threadpool(store.conversation_subject, conversation_id)
             data = await file.read(MAX_UPLOAD_BYTES + 1)
             if len(data) > MAX_UPLOAD_BYTES:
-                raise HTTPException(413, '单份资料不能超过 20 MB。')
+                raise HTTPException(413, '单份资料不能超过 100 MB。')
             material = await library.add_with_ocr(student_id, file.filename or '', data, subject.id if subject else None)
             return await run_in_threadpool(library.attachment, material.id, student_id)
         finally:

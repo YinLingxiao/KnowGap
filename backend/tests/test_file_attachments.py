@@ -146,7 +146,7 @@ def test_corrupt_legacy_binary_formats_have_actionable_422(name):
 
 @pytest.mark.parametrize('name,data,code,detail', [
     ('scan.pdf', blank_pdf(), 422, '这份 PDF 是扫描图片，暂不支持识别文字'),
-    ('too-big.txt', b'a' * (MAX_UPLOAD_BYTES + 1), 413, '20 MB'),
+    ('too-big.txt', b'a' * (MAX_UPLOAD_BYTES + 1), 413, '100 MB'),
     ('too-many.pdf', blank_pdf(201), 413, '200'),
     ('broken.docx', b'not a zip', 422, '无法解析'),
     ('broken.pptx', b'not a zip', 422, '无法解析'),

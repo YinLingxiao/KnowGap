@@ -15,7 +15,7 @@ from app.services.office_readers import (
     Reading, read_doc, read_docx, read_ppt, read_pptx, read_xls, read_xlsx,
 )
 
-MAX_UPLOAD_BYTES = 20 * 1024 * 1024
+MAX_UPLOAD_BYTES = 100 * 1024 * 1024
 MAX_TEXT = 200_000
 MAX_DOCUMENTS = 30
 MAX_PAGES = 200
@@ -134,7 +134,7 @@ _LEGACY_HINT = {'doc': 'Word', 'ppt': 'PowerPoint', 'xls': 'Excel'}
 def extract_document(filename: str, data: bytes, *, allow_empty: bool = False) -> tuple[str, Reading]:
     """读取一份资料，返回 (类型, Reading)。旧版 doc / ppt / xls 的类型记作 docx / pptx / xlsx。"""
     if len(data) > MAX_UPLOAD_BYTES:
-        raise HTTPException(413, '单份资料不能超过 20 MB。')
+        raise HTTPException(413, '单份资料不能超过 100 MB。')
     ext = PurePosixPath(filename).suffix.lower().lstrip('.')
     if ext not in SUPPORTED:
         raise HTTPException(415, f'请上传 {SUPPORTED_HINT} 文件。')
@@ -250,7 +250,7 @@ class MaterialStore:
     def add(self, student_id: str, filename: str, data: bytes, subject_id: str | None = None,
             preread: tuple[str, Reading] | None = None) -> Material:
         if len(data) > MAX_UPLOAD_BYTES:
-            raise HTTPException(413, '单份资料不能超过 20 MB。')
+            raise HTTPException(413, '单份资料不能超过 100 MB。')
         title = PurePosixPath(filename.replace('\\', '/')).name
         title = ''.join(c for c in title if ord(c) >= 32 and ord(c) != 127)[:140] or '课程资料'
         kind, reading = preread if preread is not None else extract_document(title, data)
