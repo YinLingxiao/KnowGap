@@ -188,7 +188,7 @@ class MaterialStore:
         self.originals = None
         # async (pdf 字节) -> Reading：扫描版 PDF 转写，由 main.py 挂上；没有时扫描件直接报错
         self.ocr = None
-        # async (kind, 原件字节, Reading) -> Reading：把课件里的图片交给识图模型，文字并回对应幻灯片
+        # async (kind, 原件字节, Reading) -> Reading：把课件 / Word 文档里的图片交给识图模型，文字并回对应的页或节
         self.slide_ocr = None
 
     def initialize(self):
@@ -221,7 +221,8 @@ class MaterialStore:
         from starlette.concurrency import run_in_threadpool
 
         extension = PurePosixPath(filename).suffix.lower()
-        if self.slide_ocr is not None and extension in ('.ppt', '.pptx'):
+        # 课件和 Word 文档里的图片交给识图模型（旧版 .doc 不读图片）
+        if self.slide_ocr is not None and extension in ('.ppt', '.pptx', '.docx'):
             return await self._add_slides(student_id, filename, data, subject_id)
         try:
             return await run_in_threadpool(self.add, student_id, filename, data, subject_id)

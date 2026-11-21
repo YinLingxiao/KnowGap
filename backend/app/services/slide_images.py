@@ -1,4 +1,4 @@
-"""课件里的图片：按幻灯片取出，交给「服务模型分工」里的识图模型转写，文字并回对应的那一页。
+"""课件和 Word 文档里的图片：按幻灯片（Word 按「节」）取出，交给「服务模型分工」里的识图模型转写，文字并回对应的那一页/节。
 
 只读文字的话，截图、位图、流程图里的内容学生以为 AI 看到了，其实没有。这里补上这一步：
 取图 → 去掉装饰图（太小、同一张在很多页重复出现的 logo）→ 缩放 → 识图 → 以「[图片内容]」附在该页文字后面。
@@ -16,7 +16,7 @@ import httpx
 
 from app.agents.llm import ProviderError
 from app.services.office_readers import (
-    Reading, _RT_SLIDE, _ole, _persist_directory, _ppt_slide_containers, _records,
+    Reading, _RT_SLIDE, _ole, _persist_directory, _ppt_slide_containers, _records, docx_pictures,
 )
 from app.services.pdf_ocr import OCR_CONCURRENCY, RENDER_EDGE, _ocr_page
 
@@ -32,6 +32,7 @@ SLIDE_PROMPT = (
     "3. 只是装饰、背景、图标、没有信息量的图，什么都不要输出。\n"
     "看不清的字写「□」，不要猜测、补写或总结。只输出内容，不要加任何说明。"
 )
+DOC_PROMPT = SLIDE_PROMPT.replace("这是课件某一页幻灯片里的一张图片。", "这是一份 Word 文档里的一张插图（截图、架构图、流程图、表格截图等）。")
 
 _RT_PPDRAWING_GROUP, _RT_PPDRAWING = 1035, 1036
 _ESCHER_DGG, _ESCHER_BSTORE, _ESCHER_FBSE = 0xF000, 0xF001, 0xF007
@@ -214,7 +215,11 @@ def _to_png(raw: bytes) -> tuple[bytes, int, int] | None:
 
 
 def collect_pictures(kind: str, data: bytes) -> Collected:
-    raw = _pptx_raw(data) if data.startswith(b'PK') else _ppt_raw(data)
+    if kind == 'docx':
+        # 旧版 .doc 的图片不在这里读；.docx 按「节」标号
+        raw = docx_pictures(data) if data.startswith(b'PK') else []
+    else:
+        raw = _pptx_raw(data) if data.startswith(b'PK') else _ppt_raw(data)
     result = Collected([], total=len(raw))
     slides_of: dict[str, set[int]] = {}
     for number, blob in raw:
@@ -256,15 +261,20 @@ async def add_picture_text(kind: str, data: bytes, reading: Reading, service_mod
                            transport: httpx.AsyncBaseTransport | None = None) -> Reading:
     """返回并入图片文字后的 Reading；没有图片或识图不可用时返回带说明的原内容，不抛错。"""
     found = await asyncio.to_thread(collect_pictures, kind, data)
+    word = kind == 'docx'
+    source, unit, prompt = ('文档', '节', DOC_PROMPT) if word else ('课件', '页', SLIDE_PROMPT)
     if not found.pictures:
         if found.unsupported:
-            notes = _drop_old_notes(reading.notes) + [f'课件里有 {found.unsupported} 张矢量图（EMF/WMF）没有识别，图里的文字没有读取。']
+            notes = _drop_old_notes(reading.notes) + [f'{source}里有 {found.unsupported} 张矢量图（EMF/WMF）没有识别，图里的文字没有读取。']
             return Reading(reading.pages, notes)
+        if word and found.total:
+            # 只有图标、分隔线这类装饰图：说明不再写「图片没有读取」
+            return Reading(reading.pages, _drop_old_notes(reading.notes), extra=reading.extra)
         return reading
     config = service_models.vision_config(service_models.config())
     if not config.configured:
         notes = _drop_old_notes(reading.notes) + [
-            f'课件里有 {len(found.pictures)} 张内容图片，图片里的文字没有读取。'
+            f'{source}里有 {len(found.pictures)} 张内容图片，图片里的文字没有读取。'
             '到「设置 → 模型接入」配置一个多模态识图模型后重新上传，就能识别。']
         return Reading(reading.pages, notes)
 
@@ -276,7 +286,7 @@ async def add_picture_text(kind: str, data: bytes, reading: Reading, service_mod
             if time.monotonic() > deadline:
                 return picture.slide, '', '超时'
             try:
-                return picture.slide, await _ocr_page(picture.data, config, transport, SLIDE_PROMPT), ''
+                return picture.slide, await _ocr_page(picture.data, config, transport, prompt), ''
             except ProviderError as exc:
                 return picture.slide, '', exc.detail
 
@@ -290,7 +300,9 @@ async def add_picture_text(kind: str, data: bytes, reading: Reading, service_mod
         elif text:
             by_slide.setdefault(slide, []).append(text)
     pages, added = [], {}
-    for number, body in reading.pages:
+    existing = {number for number, _ in reading.pages}
+    # 只有图片、没有文字的 Word 文档没有「节」，图片文字自成一节
+    for number, body in reading.pages + [(number, '') for number in sorted(by_slide) if number not in existing]:
         found_texts = by_slide.get(number)
         if found_texts:
             addition = '\n\n'.join(f'[图片内容]\n{text}' for text in found_texts)
@@ -300,13 +312,13 @@ async def add_picture_text(kind: str, data: bytes, reading: Reading, service_mod
 
     notes = _drop_old_notes(reading.notes)
     if by_slide:
-        notes.append(f'第 {_numbers(by_slide)} 页的图片由识图模型识别，可能有错字、漏字，示意图和公式请对照原件。')
+        notes.append(f'第 {_numbers(by_slide)} {unit}的图片由识图模型识别，可能有错字、漏字，示意图和公式请对照原件。')
     if failed:
-        notes.append(f'第 {_numbers(slide for slide, _ in failed)} 页有图片识别失败（{failed[0][1][:60]}），那些图片没有读取。')
+        notes.append(f'第 {_numbers(slide for slide, _ in failed)} {unit}有图片识别失败（{failed[0][1][:60]}），那些图片没有读取。')
     if found.over_limit:
-        notes.append(f'课件图片很多，只识别了前 {MAX_PICTURES} 张，其余 {found.over_limit} 张没有读取。')
+        notes.append(f'{source}图片很多，只识别了前 {MAX_PICTURES} 张，其余 {found.over_limit} 张没有读取。')
     if found.unsupported:
         notes.append(f'有 {found.unsupported} 张矢量图（EMF/WMF）没有识别。')
     if not by_slide and not failed:
-        notes.append('课件里的图片没有识别到文字或有效信息。')
+        notes.append(f'{source}里的图片没有识别到文字或有效信息。')
     return Reading(pages, notes, extra={**reading.extra, **added})

@@ -211,8 +211,9 @@ def _docx_part_text(package, partname: str, tag: str) -> list[str]:
     return []
 
 
-def _split_blocks(blocks: list[str], size: int = DOCX_CHUNK) -> list[tuple[int, str]]:
-    pages, buffer = [], ''
+def _split_blocks_indexed(blocks: list[str], size: int = DOCX_CHUNK) -> tuple[list[tuple[int, str]], list[int]]:
+    """按字数切成若干「节」，同时返回每个块结尾落在第几节（用来把图片文字并回它所在的那一节）。"""
+    pages, buffer, ends = [], '', []
     for block in blocks:
         for start in range(0, len(block), size):
             part = block[start:start + size]
@@ -220,15 +221,44 @@ def _split_blocks(blocks: list[str], size: int = DOCX_CHUNK) -> list[tuple[int, 
                 pages.append((len(pages) + 1, buffer))
                 buffer = ''
             buffer += ('\n' if buffer else '') + part
+        ends.append(len(pages) + 1)
     if buffer:
         pages.append((len(pages) + 1, buffer))
-    return pages
+    return pages, ends
+
+
+def _split_blocks(blocks: list[str], size: int = DOCX_CHUNK) -> list[tuple[int, str]]:
+    return _split_blocks_indexed(blocks, size)[0]
+
+
+_DOCX_BLIPS = './/a:blip[not(ancestor::mc:Fallback)]/@r:embed'
 
 
 def read_docx(data: bytes) -> Reading:
+    return _read_docx(data)[0]
+
+
+def docx_pictures(data: bytes) -> list[tuple[int, bytes]]:
+    """正文里的图片（按出现顺序，含浮动图和表格里的图），每张标上它落在第几节。外链图片没有内容，跳过。"""
+    _reading, placed, document = _read_docx(data)
+    related = document.part.related_parts
+    found = []
+    for page, rid in placed:
+        part = related.get(rid)
+        blob = getattr(part, 'blob', None)
+        if blob:
+            found.append((page, blob))
+    return found
+
+
+def _read_docx(data: bytes):
     document = Document(io.BytesIO(data))
     blocks: list[str] = []
+    # (块序号, 图片关系 id)：图片跟着所在段落；只有图片没有文字的段落，挂到前一个块上
+    pictures: list[tuple[int, str]] = []
     for block in document.iter_inner_content():
+        element = block._p if isinstance(block, Paragraph) else block._tbl if isinstance(block, Table) else None
+        rids = list(dict.fromkeys(_x(element, _DOCX_BLIPS))) if element is not None else []
         if isinstance(block, Paragraph):
             text = block.text.strip()
             # 文本框里的字不在段落正文里
@@ -254,6 +284,9 @@ def read_docx(data: bytes) -> Reading:
             text = '\n'.join(_table_lines(rows))
         else:
             continue
+        if rids:
+            anchor = len(blocks) if text or not blocks else len(blocks) - 1
+            pictures.extend((anchor, rid) for rid in rids)
         if text:
             blocks.append(text)
     notes: list[str] = []
@@ -276,12 +309,13 @@ def read_docx(data: bytes) -> Reading:
         blocks.append('【尾注】\n' + '\n'.join(f'- {line}' for line in endnotes))
     if headers:
         blocks.append('【页眉页脚】' + ' / '.join(headers))
-    images = len(document.inline_shapes)
+    images = max(len(document.inline_shapes), len({rid for _, rid in pictures}))
     if images:
         notes.append(f'文中含 {images} 张图片，图片里的文字没有读取。')
-    pages = _split_blocks(blocks)
+    pages, ends = _split_blocks_indexed(blocks)
     _limit_pages(pages, '节')
-    return Reading(pages, notes)
+    placed = [(ends[min(index, len(ends) - 1)] if ends else 1, rid) for index, rid in pictures]
+    return Reading(pages, notes), placed, document
 
 
 # ------------------------------------------------------------------ xlsx / xls
