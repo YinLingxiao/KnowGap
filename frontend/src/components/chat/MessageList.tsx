@@ -19,8 +19,9 @@ import { useI18n } from "@/components/LanguageProvider";
 import type { MessageKey } from "@/lib/i18n";
 import { useSmoothText } from "@/hooks/useSmoothText";
 import { fastForwardWidgets } from "@/lib/chat/smoothWidgets";
-import type { Problem } from "@/lib/types";
-import { CopyButton, Markdown } from "./Markdown";
+import type { Problem, SourceReference } from "@/lib/types";
+import { CopyButton, Markdown, toCitationOpenRequest, type OpenCitation } from "./Markdown";
+import previewStyles from "../MaterialPreviewPanel.module.css";
 import { FileCard, kindFromName, openFileLibrary, recalledFile, rememberFile, scaleOf } from "./FileCard";
 import { SELECTABLE_ATTR, SelectionToolbar } from "./SelectionToolbar";
 import { GeneratedFiles } from "./GeneratedFiles";
@@ -156,13 +157,19 @@ const PIN_KEY_PREFIX = "knowgap.pins.v1.";
 const SAVE_TO_PAGE_EVENT = "knowgap:save-to-page";
 
 /** 流式回复先过一道平滑显示，再交给 Markdown 渲染 */
-function SmoothMarkdown({ text, live, paused }: { text: string; live: boolean; paused: boolean }) {
+function SmoothMarkdown({ text, live, paused, sources, onOpenCitation }: {
+  text: string;
+  live: boolean;
+  paused: boolean;
+  sources?: readonly SourceReference[];
+  onOpenCitation?: OpenCitation;
+}) {
   const shown = useSmoothText(text, live, paused);
   // 卡片 JSON 逐字增长会反复重排，已经开始的卡片直接显示 full 中的当前内容；
   // 平滑显示已追平时无需再扫描，与 fastForwardWidgets 的早退条件一致
   const display = paused || shown === text ? shown : fastForwardWidgets(shown, text);
   // 选区冻结时保留当前可见内容，解除选区后再显示定稿。
-  return <Markdown text={display} live={live || shown !== text} />;
+  return <Markdown text={display} live={live || shown !== text} sources={sources} onOpenCitation={onOpenCitation} />;
 }
 
 function isLongText(text: string): boolean {
@@ -215,6 +222,7 @@ interface MessageListProps {
   onDecideTool?: (approvalId: string, allow: boolean) => void;
   onSendText?: (text: string) => Promise<boolean> | boolean;
   onOpenWeakPoints?: () => void;
+  onOpenCitation?: OpenCitation;
   /** 外层若提供导航回调可无刷新打开资料；未提供时复用既有视图恢复机制。 */
   onOpenFile?: (documentId: string, subjectId: string | null) => void;
   collapseLong?: boolean;
@@ -318,7 +326,7 @@ function planMarksOf(changes: PlanChange[] | undefined) {
 export function MessageList({
   conversationId, messages, problems, memoriesById, conversationSubjectId, subjectNames, phase, followNonce, topSlot,
   onRegenerate, onStartExercise, onOpenMemories, onOpenSummary, onDecideTool, onConfirmProposal, onResumeCheckpoint,
-  onSendText, onOpenWeakPoints, onOpenFile, collapseLong = true, scrollTarget, threadStates, showNav = false,
+  onSendText, onOpenWeakPoints, onOpenCitation, onOpenFile, collapseLong = true, scrollTarget, threadStates, showNav = false,
 }: MessageListProps) {
   const { t, tx } = useI18n();
   const summaryCard = useSummaryCard();
@@ -730,7 +738,13 @@ export function MessageList({
                       {...{ [SELECTABLE_ATTR]: "" }}
                       {...(finished && message.content.length >= 80 ? { "data-coachmark": "select" } : {})}
                     >
-                      <SmoothMarkdown text={message.content} live={streaming} paused={readingSelection} />
+                      <SmoothMarkdown
+                        text={message.content}
+                        live={streaming}
+                        paused={readingSelection}
+                        sources={message.sources}
+                        onOpenCitation={onOpenCitation}
+                      />
                     </div>
                     {fold.long && (
                       <button
@@ -825,19 +839,35 @@ export function MessageList({
 
                 {message.sources.length > 0 && (
                   <ul className={styles.sources}>
-                    {message.sources.map((source) => (
-                      <li key={source.id} title={source.excerpt}>
-                        <FileText size={12} aria-hidden />
-                        {tx(source.label)}
-                        {source.source && (
-                          <span className={styles.sourceTag}>
-                            {t(source.source === "space" ? "sources.space" : "sources.general")}
-                          </span>
-                        )}
-                        · {source.title}
-                        {source.page ? t("messages.sourcePage", { page: source.page }) : ""}
-                      </li>
-                    ))}
+                    {message.sources.map((source) => {
+                      const content = (
+                        <>
+                          <FileText size={12} aria-hidden />
+                          {tx(source.label)}
+                          {source.source && (
+                            <span className={styles.sourceTag}>
+                              {t(source.source === "space" ? "sources.space" : "sources.general")}
+                            </span>
+                          )}
+                          · {source.title}
+                          {source.page ? t("messages.sourcePage", { page: source.page }) : ""}
+                        </>
+                      );
+                      return (
+                        <li key={source.id} title={source.excerpt}>
+                          {onOpenCitation ? (
+                            <button
+                              type="button"
+                              className={previewStyles.citationEntry}
+                              aria-label={t("sources.open", { title: source.title })}
+                              onClick={() => onOpenCitation(toCitationOpenRequest(source))}
+                            >
+                              {content}
+                            </button>
+                          ) : content}
+                        </li>
+                      );
+                    })}
                   </ul>
                 )}
 

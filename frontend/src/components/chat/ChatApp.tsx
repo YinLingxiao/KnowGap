@@ -22,6 +22,8 @@ import type { AuthUser } from "@/lib/api/auth";
 import { applyAppearance, readAppearance } from "@/lib/appearance";
 import { useAuth } from "../auth/useAuth";
 import { MaterialLibrary } from "../MaterialLibrary";
+import { MaterialPreviewPanel } from "../MaterialPreviewPanel";
+import type { CitationOpenRequest } from "./Markdown";
 import type { ModelSignal } from "../settings/ModelAccessCard";
 import { DesktopBridge } from "../desktop/DesktopBridge";
 import { SettingsDialog, type SettingsTab } from "../settings/SettingsDialog";
@@ -47,6 +49,7 @@ import { SubjectPage } from "./SubjectPage";
 import { SubjectPicker } from "./SubjectPicker";
 import { TodayPanel } from "../home/TodayPanel";
 import todayStyles from "../home/TodayPanel.module.css";
+import previewStyles from "../MaterialPreviewPanel.module.css";
 import styles from "./ChatApp.module.css";
 
 const NARROW = "(max-width: 860px)";
@@ -137,6 +140,7 @@ function AuthenticatedChat({ user, onRename, onUploadAvatar, onRemoveAvatar }: {
     return () => window.removeEventListener(OPEN_SETTINGS_EVENT, onOpen);
   }, [openSettings]);
   const [view, setViewState] = useState<View>({ type: "chat" });
+  const [citationPreview, setCitationPreview] = useState<{ conversationId: string; request: CitationOpenRequest } | null>(null);
   const [sidebarMode, setSidebarModeState] = useState<SidebarMode>("chat");
   const [spaceDialog, setSpaceDialog] = useState<null | { editId?: string; select: boolean }>(null);
   const [viewRestored, setViewRestored] = useState(false);
@@ -224,6 +228,7 @@ function AuthenticatedChat({ user, onRename, onUploadAvatar, onRemoveAvatar }: {
 
   const resetChatMode = chat.setMode;
   const setView = useCallback((next: View) => {
+    setCitationPreview(null);
     setViewState(next);
     // 模式选择只属于对话输入框；离开对话视图后清空，避免带到学习空间输入框
     if (next.type !== "chat") resetChatMode(null);
@@ -339,6 +344,7 @@ function AuthenticatedChat({ user, onRename, onUploadAvatar, onRemoveAvatar }: {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setMemoryOpen(false);
+        setCitationPreview(null);
         if (narrow) setSidebarOpen(false);
         return;
       }
@@ -416,6 +422,10 @@ function AuthenticatedChat({ user, onRename, onUploadAvatar, onRemoveAvatar }: {
     setMemoryOpen(true);
     void chat.loadMemories();
   };
+
+  const openCitationPreview = useCallback((request: CitationOpenRequest) => {
+    if (chat.activeId) setCitationPreview({ conversationId: chat.activeId, request });
+  }, [chat.activeId]);
 
   const showConversation = (id: string) => {
     setView({ type: "chat" });
@@ -661,7 +671,8 @@ function AuthenticatedChat({ user, onRename, onUploadAvatar, onRemoveAvatar }: {
             </div>
           )
         ) : chat.activeId ? (
-          <>
+          <div className={previewStyles.citationLayout}>
+            <div className={previewStyles.conversationColumn}>
               <header className={styles.topbar}>
                 {!sidebarOpen && (
                   <button className={styles.iconButton} onClick={() => setSidebarOpen(true)} aria-label={t("sidebar.expand")} title={t("sidebar.expand")}>
@@ -722,6 +733,7 @@ function AuthenticatedChat({ user, onRename, onUploadAvatar, onRemoveAvatar }: {
                   onOpenMemories={openMemories}
                   onDecideTool={(approvalId, allow) => void chat.decideTool(approvalId, allow)}
                   onSendText={(text) => chat.sendTo(chat.activeId!, text)}
+                  onOpenCitation={openCitationPreview}
                   onOpenWeakPoints={chat.activeConversation?.subjectId ? () => {
                     const subjectId = chat.activeConversation?.subjectId;
                     if (!subjectId) return;
@@ -763,7 +775,16 @@ function AuthenticatedChat({ user, onRename, onUploadAvatar, onRemoveAvatar }: {
                   />
                   <p className={styles.disclaimer}>{t("chat.disclaimer")}</p>
             </div>
-          </>
+            </div>
+            {citationPreview?.conversationId === chat.activeId && (
+              <MaterialPreviewPanel
+                citation={citationPreview.request}
+                initialPage={citationPreview.request.page}
+                quote={citationPreview.request.excerpt}
+                onClose={() => setCitationPreview(null)}
+              />
+            )}
+          </div>
         ) : (
           <div className={cx(styles.home, todayStyles.homeViewport)}>
             {!sidebarOpen && (

@@ -8,14 +8,8 @@
   min-height: 0;
   border-left: 1px solid var(--border-strong);
   background: var(--bg-elevated);
-  animation: slide-in 180ms var(--ease-spring);
-}
-
-@keyframes slide-in {
-  from {
-    opacity: 0;
-    transform: translateX(8px);
-  }
+  --motion-slide-distance: 8px;
+  animation: global(kg-slide-in-right) var(--t-hover) var(--ease);
 }
 
 .head {
@@ -216,4 +210,99 @@
   height: 100%;
   min-height: 420px;
   border: 0;
+}
+.citationLayout {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.conversationColumn {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.citationPanel {
+  width: min(420px, 44%);
+  min-width: 280px;
+}
+
+.citationEntry {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 3px 6px;
+  border-radius: var(--radius);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.citationEntry:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.citationMark {
+  display: inline;
+  margin: 0 1px;
+  padding: 0 3px;
+  border-radius: 4px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.78em;
+  line-height: 1.5;
+  vertical-align: baseline;
+}
+
+.citationMark:hover {
+  background: var(--bg-active);
+  color: var(--text);
+}
+
+.citationEntry:focus:not(:focus-visible),
+.citationMark:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.citationEntry:focus-visible,
+.citationMark:focus-visible,
+.iconBtn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.quote {
+  flex-shrink: 0;
+  max-height: 132px;
+  overflow: auto;
+  margin: 0;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  line-height: var(--leading-read);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+@media (max-width: 860px) {
+  .citationPanel {
+    position: fixed;
+    inset: var(--desktop-titlebar-height, 0px) 0 0;
+    z-index: 60;
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    border-left: 0;
+  }
 }

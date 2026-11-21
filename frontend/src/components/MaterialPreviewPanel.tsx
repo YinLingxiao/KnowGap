@@ -21,7 +21,7 @@ import { createMaterialClient } from "@/lib/api/material-client";
 import { toApiError } from "@/lib/api/errors";
 import { cx } from "@/lib/cx";
 import type { CourseMaterial } from "@/lib/types";
-import { Markdown } from "./chat/Markdown";
+import { Markdown, type CitationPreviewTarget } from "./chat/Markdown";
 import { useI18n } from "@/components/LanguageProvider";
 import styles from "./MaterialPreviewPanel.module.css";
 
@@ -32,6 +32,24 @@ const DEGRADE_BYTES = { pdf: 12 * 1024 * 1024, office: 8 * 1024 * 1024 } as cons
 
 // 预览只逐页铺 canvas，几百页的 PDF 会吃掉大量内存，超出的部分请下载查看。
 const MAX_PDF_PAGES = 100;
+
+export function normalizeInitialPage(page?: number | null): number {
+  return typeof page === "number" && Number.isInteger(page) && page > 0 ? page : 1;
+}
+
+export function pdfPagesToRender(pageCount: number, initialPage?: number): readonly number[] {
+  if (!Number.isInteger(pageCount) || pageCount <= 0) return [];
+  const count = Math.floor(pageCount);
+  const target = Math.min(normalizeInitialPage(initialPage), count);
+  const pages = Array.from({ length: Math.min(count, MAX_PDF_PAGES) }, (_, index) => index + 1);
+  if (!pages.includes(target)) pages.push(target);
+  return pages;
+}
+
+export function worksheetIndex(initialPage: number | undefined, sheetCount: number): number | null {
+  if (!Number.isInteger(sheetCount) || sheetCount <= 0) return null;
+  return Math.min(normalizeInitialPage(initialPage), Math.floor(sheetCount)) - 1;
+}
 
 const TITLE_ICON = { docx: FileType, pptx: Presentation, xlsx: FileSpreadsheet } as const;
 
@@ -96,6 +114,35 @@ function useMaterialBytes(material: CourseMaterial | null): RenderState {
   }, [material, client]);
 
   return result && result.id === material?.id ? result.state : LOADING;
+}
+
+type CitationMaterialState =
+  | { status: "loading"; material: null }
+  | { status: "ready"; material: CourseMaterial }
+  | { status: "missing"; material: null };
+
+function useCitationMaterial(citation?: CitationPreviewTarget): CitationMaterialState {
+  const client = useMemo(() => createMaterialClient(), []);
+  const [result, setResult] = useState<{ id: string; state: CitationMaterialState } | null>(null);
+  useEffect(() => {
+    if (!citation) return;
+    let cancelled = false;
+    const id = citation.documentId;
+    if (!id.trim()) {
+      setResult({ id, state: { status: "missing", material: null } });
+      return () => { cancelled = true; };
+    }
+    client.list().then((materials) => {
+      if (cancelled) return;
+      const material = materials.find((item) => item.id === id);
+      setResult({ id, state: material ? { status: "ready", material } : { status: "missing", material: null } });
+    }).catch(() => {
+      if (!cancelled) setResult({ id, state: { status: "missing", material: null } });
+    });
+    return () => { cancelled = true; };
+  }, [citation, client]);
+  if (!citation) return { status: "loading", material: null };
+  return result?.id === citation.documentId ? result.state : { status: "loading", material: null };
 }
 
 /** UTF-8 优先；不是合法 UTF-8 时按 GB18030 解（Excel 在中文 Windows 上导出的 CSV 默认是 GBK），去掉 BOM。 */
@@ -182,8 +229,8 @@ function DownloadButton({ material }: { material: CourseMaterial }) {
 
 // ------------------------------------------------------------------ PDF
 
-function PdfView({ bytes }: { bytes: ArrayBuffer }) {
-  const { tx } = useI18n();
+function PdfView({ bytes, initialPage }: { bytes: ArrayBuffer; initialPage?: number }) {
+  const { t, tx } = useI18n();
   const hostRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [truncatedAt, setTruncatedAt] = useState<number | null>(null);
@@ -193,6 +240,7 @@ function PdfView({ bytes }: { bytes: ArrayBuffer }) {
     const host = hostRef.current;
     if (!host) return undefined;
     host.replaceChildren();
+    setError(null);
     (async () => {
       try {
         const pdfjs = await import("pdfjs-dist");
@@ -200,13 +248,16 @@ function PdfView({ bytes }: { bytes: ArrayBuffer }) {
         // bytes 可能被 React 严格模式下的重复 effect 或其他读取者转移，复制一份给 pdf.js 专用。
         const doc = await pdfjs.getDocument({ data: bytes.slice(0) }).promise;
         if (cancelled) return;
+        const target = Math.min(normalizeInitialPage(initialPage), doc.numPages);
         if (doc.numPages > MAX_PDF_PAGES) setTruncatedAt(doc.numPages);
-        for (let number = 1; number <= Math.min(doc.numPages, MAX_PDF_PAGES); number += 1) {
+        else setTruncatedAt(null);
+        for (const number of pdfPagesToRender(doc.numPages, target)) {
           const page = await doc.getPage(number);
           if (cancelled) return;
           const viewport = page.getViewport({ scale: 1.3 });
           const canvas = document.createElement("canvas");
           canvas.className = styles.pdfPage;
+          canvas.dataset.pageNumber = String(number);
           canvas.width = viewport.width;
           canvas.height = viewport.height;
           const context = canvas.getContext("2d");
@@ -214,13 +265,14 @@ function PdfView({ bytes }: { bytes: ArrayBuffer }) {
           await page.render({ canvas, canvasContext: context, viewport }).promise;
           if (cancelled) return;
           host.append(canvas);
+          if (number === target) canvas.scrollIntoView({ block: "start" });
         }
       } catch {
         if (!cancelled) setError(tx("PDF 无法渲染，请下载后查看。"));
       }
     })();
     return () => { cancelled = true; };
-  }, [bytes]);
+  }, [bytes, initialPage]);
 
   if (error) return <div className={styles.state}><TriangleAlert size={24} aria-hidden /><p>{error}</p></div>;
   return (
@@ -228,7 +280,9 @@ function PdfView({ bytes }: { bytes: ArrayBuffer }) {
       {truncatedAt && (
         <p className={styles.outlineBanner}>
           <TriangleAlert size={14} aria-hidden />
-           {tx("共 {pages} 页，仅预览前 {max} 页，完整内容请下载查看", { pages: truncatedAt, max: MAX_PDF_PAGES })}
+          {normalizeInitialPage(initialPage) > MAX_PDF_PAGES && normalizeInitialPage(initialPage) <= truncatedAt
+            ? t("sources.pdfTruncatedWithTarget", { pages: truncatedAt, max: MAX_PDF_PAGES, target: normalizeInitialPage(initialPage) })
+            : tx("共 {pages} 页，仅预览前 {max} 页，完整内容请下载查看", { pages: truncatedAt, max: MAX_PDF_PAGES })}
         </p>
       )}
       <div ref={hostRef} className={styles.pdfPages} aria-label={tx("PDF 预览")} />
@@ -255,8 +309,30 @@ const DOCX_IFRAME_HTML = `<!doctype html>
   <div id="styles"></div>
   <div id="container"></div>
   <script>
+    function locateCitation(initialPage, quote) {
+      var container = document.getElementById("container");
+      var sections = Array.from(container.querySelectorAll("section.docx"));
+      if (!sections.length) return;
+      var target = null;
+      if (quote) {
+        var walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+        var textNode;
+        while ((textNode = walker.nextNode())) {
+          if (textNode.nodeValue && textNode.nodeValue.indexOf(quote) !== -1) {
+            target = textNode.parentElement.closest("section.docx") || textNode.parentElement;
+            break;
+          }
+        }
+      }
+      target = target || sections[Math.min(Math.max(initialPage - 1, 0), sections.length - 1)];
+      if (target && target.scrollIntoView) target.scrollIntoView({ block: "start" });
+    }
     window.addEventListener("message", async function (event) {
       if (event.source !== window.parent) return;
+      if (event.data && event.data.docxLocate) {
+        locateCitation(event.data.initialPage, event.data.quote || "");
+        return;
+      }
       try {
         event.data.scripts.forEach(function (code) { (0, eval)(code); });
         await window.docx.renderAsync(
@@ -265,6 +341,7 @@ const DOCX_IFRAME_HTML = `<!doctype html>
           document.getElementById("styles"),
           { inWrapper: true, ignoreWidth: false, className: "docx" },
         );
+        locateCitation(event.data.initialPage, event.data.quote || "");
         window.parent.postMessage({ docxPreview: "ready" }, "*");
       } catch (error) {
         window.parent.postMessage({ docxPreview: "error" }, "*");
@@ -284,7 +361,7 @@ async function loadDocxScripts(): Promise<string[]> {
   }));
 }
 
-function DocxView({ bytes }: { bytes: ArrayBuffer }) {
+function DocxView({ bytes, initialPage = 1, quote = "" }: { bytes: ArrayBuffer; initialPage?: number; quote?: string }) {
   const { tx } = useI18n();
   const frameRef = useRef<HTMLIFrameElement>(null);
   const [error, setError] = useState(false);
@@ -299,7 +376,7 @@ function DocxView({ bytes }: { bytes: ArrayBuffer }) {
     const onLoad = () => {
       loaded = true;
       scripts.then((code) => {
-        if (!cancelled) frame.contentWindow?.postMessage({ scripts: code, bytes }, "*");
+        if (!cancelled) frame.contentWindow?.postMessage({ scripts: code, bytes, initialPage: normalizeInitialPage(initialPage), quote }, "*");
       }).catch(() => undefined);
     };
     const onMessage = (event: MessageEvent) => {
@@ -316,7 +393,7 @@ function DocxView({ bytes }: { bytes: ArrayBuffer }) {
       frame.removeEventListener("load", onLoad);
       window.removeEventListener("message", onMessage);
     };
-  }, [bytes]);
+  }, [bytes, initialPage, quote]);
 
   return (
     <>
@@ -358,11 +435,15 @@ function SheetTable({ rows }: { rows: string[][] }) {
   );
 }
 
-function XlsxView({ bytes }: { bytes: ArrayBuffer }) {
+function XlsxView({ bytes, initialPage }: { bytes: ArrayBuffer; initialPage?: number }) {
   const { tx } = useI18n();
   const [sheets, setSheets] = useState<{ name: string; rows: string[][] }[] | null>(null);
   const [active, setActive] = useState(0);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setActive(worksheetIndex(initialPage, sheets?.length ?? 0) ?? 0);
+  }, [initialPage, sheets]);
 
   useEffect(() => {
     let cancelled = false;
@@ -417,9 +498,15 @@ function CsvView({ bytes }: { bytes: ArrayBuffer }) {
 
 // ------------------------------------------------------------------ 大纲预览（PPT / 旧版 doc·ppt）
 
-function OutlineView({ material }: { material: CourseMaterial }) {
-  const { tx } = useI18n();
+function OutlineView({ material, initialPage, quote, citationMode = false }: {
+  material: CourseMaterial;
+  initialPage?: number;
+  quote?: string;
+  citationMode?: boolean;
+}) {
+  const { t, tx } = useI18n();
   const client = useMemo(() => createMaterialClient(), []);
+  const listRef = useRef<HTMLOListElement>(null);
   const [outline, setOutline] = useState<string[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -431,6 +518,14 @@ function OutlineView({ material }: { material: CourseMaterial }) {
     return () => { cancelled = true; };
   }, [client, material.id]);
 
+  useEffect(() => {
+    if (!outline?.length || !listRef.current) return;
+    const quotedIndex = quote?.trim() ? outline.findIndex((heading) => heading.includes(quote)) : -1;
+    const index = quotedIndex >= 0 ? quotedIndex : Math.min(normalizeInitialPage(initialPage), outline.length) - 1;
+    const target = listRef.current.children[index];
+    if (target instanceof HTMLElement) target.scrollIntoView({ block: "start" });
+  }, [initialPage, outline, quote]);
+
   return (
     <div>
       <p className={styles.outlineBanner}>
@@ -438,13 +533,13 @@ function OutlineView({ material }: { material: CourseMaterial }) {
         {tx("仅显示大纲，完整排版请下载查看")}
       </p>
       {error ? (
-        <p className={styles.plainText}>{error}</p>
+        <p className={styles.plainText}>{citationMode ? t("sources.missing") : error}</p>
       ) : !outline ? (
         <p className={styles.plainText}>{tx("正在加载大纲…")}</p>
       ) : outline.length === 0 ? (
         <p className={styles.plainText}>{tx("没有提取到标题。")}</p>
       ) : (
-        <ol className={styles.outlineList}>
+        <ol ref={listRef} className={styles.outlineList}>
           {outline.map((heading, index) => <li key={index}>{heading}</li>)}
         </ol>
       )}
@@ -454,38 +549,57 @@ function OutlineView({ material }: { material: CourseMaterial }) {
 
 // ------------------------------------------------------------------ 分发与面板外壳
 
-function PreviewBody({ material, state }: { material: CourseMaterial; state: RenderState }) {
-  const { tx } = useI18n();
+function PreviewBody({ material, state, initialPage, quote, citationMode = false }: {
+  material: CourseMaterial;
+  state: RenderState;
+  initialPage?: number;
+  quote?: string;
+  citationMode?: boolean;
+}) {
+  const { t, tx } = useI18n();
   if (state.status === "loading") return <p className={styles.plainText}>{tx("正在加载…")}</p>;
   if (state.status === "degraded" || state.status === "error") {
-    return state.status === "error"
-      ? <div className={styles.state}><TriangleAlert size={24} aria-hidden /><p>{state.message}</p></div>
-      : <DownloadButton material={material} />;
+    if (state.status === "error") {
+      return <div className={styles.state}><TriangleAlert size={24} aria-hidden /><p>{citationMode ? t("sources.missing") : state.message}</p></div>;
+    }
+    return <DownloadButton material={material} />;
   }
 
   const { bytes, legacy } = state;
   switch (previewMode(material.kind, legacy)) {
-    case "pdf": return <PdfView bytes={bytes} />;
+    case "pdf": return <PdfView bytes={bytes} initialPage={initialPage} />;
     case "markdown": return <Markdown text={decodeText(bytes)} />;
     case "text": return <pre className={styles.plainText}>{decodeText(bytes)}</pre>;
     case "csv": return <CsvView bytes={bytes} />;
-    case "xlsx": return <XlsxView bytes={bytes} />;
-    case "outline": return <OutlineView material={material} />;
-    case "docx": return <DocxView bytes={bytes} />;
+    case "xlsx": return <XlsxView bytes={bytes} initialPage={initialPage} />;
+    case "outline": return <OutlineView material={material} initialPage={initialPage} quote={quote} citationMode={citationMode} />;
+    case "docx": return <DocxView bytes={bytes} initialPage={initialPage} quote={quote} />;
   }
 }
 
-export function MaterialPreviewPanel({ material, onClose }: { material: CourseMaterial | null; onClose: () => void }) {
-  const { tx } = useI18n();
-  const state = useMaterialBytes(material);
-  if (!material) return null;
-  const Icon = material.kind in TITLE_ICON ? TITLE_ICON[material.kind as keyof typeof TITLE_ICON] : FileText;
+type MaterialPreviewPanelProps = {
+  initialPage?: number;
+  quote?: string;
+  onClose: () => void;
+} & (
+  | { material: CourseMaterial | null; citation?: never }
+  | { material?: null; citation: CitationPreviewTarget }
+);
+
+export function MaterialPreviewPanel({ material: providedMaterial, citation, initialPage, quote, onClose }: MaterialPreviewPanelProps) {
+  const { t, tx } = useI18n();
+  const citationState = useCitationMaterial(citation);
+  const material = citation ? citationState.material : providedMaterial;
+  const state = useMaterialBytes(material ?? null);
+  if (!citation && !providedMaterial) return null;
+  const Icon = material && material.kind in TITLE_ICON ? TITLE_ICON[material.kind as keyof typeof TITLE_ICON] : FileText;
+  const title = citation?.title ?? material?.title ?? "";
   return (
-    <aside className={styles.panel} aria-label={tx("资料预览")}>
+    <aside className={cx(styles.panel, citation && styles.citationPanel)} aria-label={citation ? t("sources.preview") : tx("资料预览")}>
       <header className={styles.head}>
         <span className={styles.headTitle}>
           <Icon size={15} aria-hidden />
-          {material.title}
+          {title}
         </span>
         <div className={styles.headActions}>
           <button type="button" className={styles.iconBtn} aria-label={tx("关闭预览")} title={tx("关闭预览")} onClick={onClose}>
@@ -493,8 +607,15 @@ export function MaterialPreviewPanel({ material, onClose }: { material: CourseMa
           </button>
         </div>
       </header>
+      {quote?.trim() && <blockquote className={styles.quote} aria-label={t("sources.excerpt")}>{quote}</blockquote>}
       <div className={styles.body}>
-        <PreviewBody material={material} state={state} />
+        {citation && citationState.status === "missing" ? (
+          <div className={styles.state} role="status"><TriangleAlert size={24} aria-hidden /><p>{t("sources.missing")}</p></div>
+        ) : citation && citationState.status === "loading" ? (
+          <p className={styles.plainText}>{tx("正在加载…")}</p>
+        ) : material ? (
+          <PreviewBody material={material} state={state} initialPage={initialPage} quote={quote} citationMode={Boolean(citation)} />
+        ) : null}
       </div>
     </aside>
   );
