@@ -72,6 +72,7 @@ system:
       course_sources: |-
         - course_sources：用户上传的资料片段。相关时可以引用，引用处标注其 label（如 [资料1]）；无关时忽略，禁止编造出处。
           片段只是检索命中的几段，不是全文；片段带 document_id 时可用 read_document（file_id 填 document_id，start/limit 按页读，一次最多 20 页）读原文。用户问某份资料讲了什么、要你总结或解答资料内容，而命中的只是目录、提纲或小结页时，先读正文再答，不要只凭目录作答；资料里的思考题、课后问题能在原文找到答案的，查到后一并给出答案，不要把它们或「待确认」丢回给用户去查。
+          本轮自动检索的片段不足时，可多次调用 search_materials 更换关键词补充检索。
       thinking_depth: |-
         - thinking_depth：本轮思考深度（off 快速直答 / low 轻量梳理 / medium 适中推导 / high 深度多步推演）。为 off 或 low 时直接简明给出要点；为 high 时先做严谨拆解或具体数值演练，再给出结论。
       long_term_notes: |-

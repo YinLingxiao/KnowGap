@@ -151,12 +151,14 @@ class Generation:
 
 
 class ToolContext:
-    def __init__(self, workspace, store: ChatStore, student_id: str, conversation_id: str, approve_memory: bool = False):
+    def __init__(self, workspace, store: ChatStore, student_id: str, conversation_id: str, approve_memory: bool = False,
+                 *, subject_id: str | None = None):
         self.workspace = workspace
         self.store = store
         self.student_id = student_id
         self.conversation_id = conversation_id
         self.approve_memory = approve_memory
+        self.subject_id = subject_id
         self.dispatch_thread = None
         self.propose_threads = None
         self.report_progress = None
@@ -957,6 +959,7 @@ class ChatService:
             ctx = ToolContext(
                 workspace_of(self.settings), self.store, student_id, generation.conversation_id,
                 self._agent_flag("memory_write_approval") and not onboarding_interview,
+                subject_id=subject_id,
             )
             ctx.exercise = exercise
             ctx.assistant_message_id = assistant_id
@@ -967,6 +970,7 @@ class ChatService:
             # search_good_problems 用当前对话的模型抽题、用讲义库做本地检索
             ctx.model = model
             ctx.library = self.library
+            ctx.sources = sources  # search_materials 追加的片段续编号，引用过滤时一并保存
             ctx.files = self.files
             ctx.generated = []
 
@@ -988,7 +992,7 @@ class ChatService:
             else:
                 definitions = [tool for tool in DEFINITIONS if (
                     tool["function"]["name"] in {"dispatch_thread", "propose_threads", "session_search", "memory", "update_plan",
-                                                 "agenda_list", "agenda_add", "agenda_update",
+                                                 "agenda_list", "agenda_add", "agenda_update", "search_materials",
                                                  "create_document", "edit_document", "read_document"}
                     if role["role"] == "main" else tool["function"]["name"] not in {
                         "dispatch_thread", "propose_threads", "stay_silent"}
