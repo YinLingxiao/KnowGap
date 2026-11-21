@@ -7,6 +7,12 @@
 export const settingsPhrases: Record<string, string> = {
   // UpdateRows
   "软件更新": "Software update",
+  "系统技能 · 读写常用文件": "System skills · Working with common files",
+  "内置且始终可用：AI 读、总结、修改或生成这些文件时会自动调用对应的技能。": "Built in and always on: the AI loads the matching skill whenever it reads, summarises, edits or creates such a file.",
+  "读不到系统技能列表": "Could not load the system skills",
+  "读文件": "Reading files",
+  "做文件": "Making files",
+  "查看": "View",
   "当前版本 {version}": "Current version {version}",
   "仅接收正式版本，不降级；下载文件始终校验完整性。": "Stable releases only, no downgrades; downloads are always integrity-checked.",
   "检查中…": "Checking…",

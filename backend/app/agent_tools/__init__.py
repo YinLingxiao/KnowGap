@@ -10,6 +10,7 @@ from app.agent_tools import documents as document_tools
 from app.agent_tools import files
 from app.agent_tools import material_search
 from app.chat import history as conversation_history
+from app.chat.skills import system_skills
 from app.agent_tools import problem_search
 from app.agent_tools import web_search
 from app.agent_tools.guard import (
@@ -216,6 +217,7 @@ DEFINITIONS = [
     },
     problem_search.DEFINITION,
     material_search.DEFINITION,
+    system_skills.definition(),
     problem_drill_skill.VERIFY_DEFINITION,
     web_search.DEFINITION,
     problem_search.WEB_FETCH_DEFINITION,
@@ -396,6 +398,8 @@ async def run(name: str, arguments: dict, ctx) -> str:
         elif name == problem_search.TOOL_NAME:
             # 两个工具内部兜住所有异常、自己控制输出长度，永远返回 JSON 文本
             text = await problem_search.run(arguments, ctx)
+        elif name == system_skills.TOOL_NAME:
+            text = await asyncio.to_thread(system_skills.run, arguments, ctx)
         elif name == material_search.TOOL_NAME:
             return await asyncio.to_thread(material_search.run, arguments, ctx)
         elif name == problem_drill_skill.VERIFY_TOOL:

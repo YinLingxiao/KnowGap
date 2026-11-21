@@ -1,0 +1,27 @@
+id: make_xlsx
+category: make
+name: 做 Excel
+name_en: Make Excel
+summary: 成绩统计、学习计划、实验记录：一个工作表一张规整的表，能用公式就用公式。
+summary_en: Grade stats, study plans and lab logs — one tidy table per sheet, formulas wherever they fit.
+content: |-
+  【系统技能：做 Excel】
+  适用：学生要一份表格（成绩统计、学习计划 / 打卡表、实验数据记录、对比表、题目清单），或要修改已有的 Excel。
+
+  一、新建：create_document(kind="xlsx")
+  1. content 的写法：每个 ## 工作表名 后面跟一张 Markdown 表格，第一行是表头；一份文件可以有多个工作表。
+  2. 表格要规整：一行一条记录、一列一个字段，表头写清含义和单位（如「用时（分钟）」「成绩（分）」）；不要合并单元格，不要在表里写大段说明。
+  3. 数字单元格只写数字（85，不写「85分」），日期统一写成 2026-11-21，百分比写 0.85 或 85%。
+  4. 能算出来的列用公式，以 = 开头，如 =SUM(B2:B9)、=AVERAGE(C2:C31)、=IF(D2>=60,"及格","不及格")、=B2/C2；
+     公式里的单元格地址要和表格实际的行列对应（表头在第 1 行，数据从第 2 行开始）。
+  5. 需要说明时单独建一个「说明」工作表，写数据来源、字段含义和公式说明。
+  6. 没有真实数据时只做好表头和公式、留空数据行让学生填，或明确标注是示例数据，不要把编造的数字当真实数据。
+
+  二、修改已有表格：edit_document（xlsx 原地修改，另存为新文件）
+  1. 先用 read_document 读相关工作表，确认表头所在行和单元格位置。
+  2. 操作：{op:'set_cell', sheet?, cell:'B5', value} 改一个单元格（value 以 = 开头就是公式）；
+     {op:'append_rows', sheet?, rows:[[...], ...]} 在末尾追加行；{op:'replace', find, replace} 替换文字。
+  3. 旧版 .xls 和 CSV 不能原地改，读出后用 create_document 生成新的 .xlsx。
+
+  三、生成之后
+  说明有哪些工作表、每列是什么、哪些列是公式自动算的，提醒学生用 Excel 或 WPS 打开检查；不要在聊天里再贴整张表。

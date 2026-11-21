@@ -217,6 +217,28 @@ export interface QueuedMessage {
 }
 export interface Outbox { paused: boolean; items: QueuedMessage[] }
 
+export interface SystemSkill {
+  id: string;
+  category: "read" | "make";
+  name: string;
+  nameEn: string;
+  summary: string;
+  summaryEn: string;
+  content: string;
+}
+
+function toSystemSkill(item: Wire): SystemSkill {
+  return {
+    id: String(item.id),
+    category: item.category === "make" ? "make" : "read",
+    name: String(item.name ?? ""),
+    nameEn: String(item.name_en ?? item.name ?? ""),
+    summary: String(item.summary ?? ""),
+    summaryEn: String(item.summary_en ?? item.summary ?? ""),
+    content: String(item.content ?? ""),
+  };
+}
+
 export const chatApi = {
   outbox(id: string): Promise<Outbox> {
     return request(root, `${path(id)}/outbox`, { cache: "no-store" });
@@ -560,6 +582,11 @@ export const chatApi = {
   },
   async deleteCustomSkill(id: string): Promise<void> {
     await request(root, `/api/skills/${encodeURIComponent(id)}`, { method: "DELETE" });
+  },
+  /** 系统技能：读、做常用文件的做法，始终可用，AI 用 load_skill 按需加载；这里只供查看 */
+  async listSystemSkills(): Promise<SystemSkill[]> {
+    const data = await request<Wire>(root, "/api/skills", { cache: "no-store" });
+    return (data.system_skills ?? []).map(toSystemSkill);
   },
   async workspaceTree(): Promise<{
     workspace: string;

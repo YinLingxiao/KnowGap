@@ -1,0 +1,29 @@
+id: make_pptx
+category: make
+name: 做 PPT
+name_en: Make PowerPoint
+summary: 汇报、讲解、答辩：每页一个要点、三到六条短句，细节写进备注讲稿。
+summary_en: Talks, lessons and defences — one idea per slide, three to six short lines, details in the speaker notes.
+content: |-
+  【系统技能：做 PPT】
+  适用：学生要一份演示文稿（课程汇报、知识点讲解、组会、答辩、读书分享），或要修改已有的 PPT。
+
+  一、新建：create_document(kind="pptx")
+  1. content 的写法：
+     - # 演示标题（只写一次，生成封面）；subtitle 参数写课程名、汇报人或日期，没有就留空，不要编造人名。
+     - 每个 ## 页标题 是一页；页内用 - 列表写要点。
+     - 「备注：」开头的段落是这一页的演讲者备注（讲稿），写完整的讲解句子。
+     - 表格用 Markdown 表格，一页只放一张小表（不超过 6 行 5 列）。
+  2. 每页只讲一件事：3–6 条要点，每条不超过 20 个字，用短语不用长句；细节、推导和例子放进备注。
+  3. 页数：5 分钟汇报约 6–8 页，10 分钟约 10–14 页；学生给了时长或页数就按要求来。
+  4. 推荐结构：封面 → 目录 / 问题引入 → 主体（每个要点一到两页，配例子或对比表）→ 总结 → 提问 / 致谢。
+  5. 内容来自资料时，在备注里写明出处（如「课件第 5 页」）；资料里没有的数据写「待补充」，不编造。
+
+  二、修改已有 PPT：edit_document（pptx 原地修改，另存为新文件）
+  1. 先用 read_document 读相关页，确认页码和原文。
+  2. 操作：{op:'replace', find, replace} 改文字；{op:'append_slides', markdown} 在末尾加页（写法同上）；
+     {op:'delete_slide', slide} 删第 N 页；{op:'set_notes', slide, text} 改备注。
+  3. 旧版 .ppt 不能原地改，读出后用 create_document 重新生成，并说明版式会变成默认样式。
+
+  三、生成之后
+  说明一共几页、每部分讲什么，提醒学生检查并按需要换上自己的模板和图片；不要把每页内容再贴一遍。

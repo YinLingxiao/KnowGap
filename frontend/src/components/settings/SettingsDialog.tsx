@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Brain, Camera, Cpu, FolderOpen, Gauge, MessageSquarePlus, Monitor, Moon, Plus, Search, Settings, Sliders, Sparkles, Sun, Trash2, Upload, User, X,
 } from "lucide-react";
-import { chatApi } from "@/lib/chat/api";
+import { chatApi, type SystemSkill } from "@/lib/chat/api";
 import { useI18n } from "@/components/LanguageProvider";
 import type { Language, MessageKey } from "@/lib/i18n";
 import type { LearnerMemory, TokenUsage } from "@/lib/chat/types";
@@ -1093,6 +1093,64 @@ function parseUploadedSkillFile(fileName: string, rawText: string): {
   return { name, role, triggerKeywords, content: body || rawText.trim() };
 }
 
+function SystemSkillsSection() {
+  const { lang, tx } = useI18n();
+  const [skills, setSkills] = useState<SystemSkill[] | null>(null);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    void chatApi.listSystemSkills().then(setSkills).catch(() => setError(tx("读不到系统技能列表")));
+  }, [tx]);
+
+  const groups: Array<{ category: SystemSkill["category"]; label: string }> = [
+    { category: "read", label: tx("读文件") },
+    { category: "make", label: tx("做文件") },
+  ];
+  return (
+    <div className={styles.systemSkills}>
+      <p className={styles.sectionLabel}>{tx("系统技能 · 读写常用文件")}</p>
+      <p className={styles.settingRowDesc}>
+        {tx("内置且始终可用：AI 读、总结、修改或生成这些文件时会自动调用对应的技能。")}
+      </p>
+      {error && <p className={styles.skillNotice}>{error}</p>}
+      {skills && groups.map((group) => (
+        <div key={group.category} className={styles.systemSkillGroup}>
+          <p className={styles.systemSkillGroupTitle}>{group.label}</p>
+          {skills.filter((skill) => skill.category === group.category).map((skill) => {
+            const name = lang === "en" ? skill.nameEn : skill.name;
+            const open = openId === skill.id;
+            return (
+              <div key={skill.id} className={styles.systemSkillItem}>
+                <div className={styles.settingRow}>
+                  <div className={styles.settingRowInfo}>
+                    <p className={styles.settingRowTitle}>
+                      {name}
+                      <span className={styles.skillTriggerTag}>{skill.id}</span>
+                    </p>
+                    <p className={styles.settingRowDesc}>{lang === "en" ? skill.summaryEn : skill.summary}</p>
+                  </div>
+                  <div className={styles.skillRowControls}>
+                    <button
+                      type="button"
+                      className={styles.textBtn}
+                      aria-expanded={open}
+                      onClick={() => setOpenId(open ? null : skill.id)}
+                    >
+                      {open ? tx("收起") : tx("查看")}
+                    </button>
+                  </div>
+                </div>
+                {open && <pre className={styles.skillContentFull}>{skill.content}</pre>}
+              </div>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function SkillsPane() {
   const { tx } = useI18n();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -1257,6 +1315,8 @@ function SkillsPane() {
           </div>
         </div>
       )}
+
+      <SystemSkillsSection />
 
       <p className={styles.sectionLabel}>{tx("我上传 / 创建的技能 ({count})", { count: customSkills.length })}</p>
       {customSkills.length === 0 ? (

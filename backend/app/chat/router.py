@@ -14,6 +14,7 @@ from app.chat.schemas import (
 )
 from app.models.model_library_schemas import ConversationModelUpdate
 from app.chat.service import ChatService
+from app.chat.skills import system_skills
 from app.chat.store import UNSET, ChatStore, is_system_event_row
 from app.auth.deps import current_student
 from app.services.problems import PROBLEMS
@@ -452,7 +453,12 @@ def chat_router(store: ChatStore, service: ChatService, get_display_name=None) -
 
     @router.get("/skills")
     def list_skills():
-        return {"custom_skills": store.list_custom_skills(current_student())}
+        student_id = current_student()
+        return {
+            "custom_skills": store.list_custom_skills(student_id),
+            # 系统技能始终可用，只供查看
+            "system_skills": list(system_skills.catalog()),
+        }
 
     @router.post("/skills", status_code=201)
     def create_skill(body: CreateCustomSkillBody):

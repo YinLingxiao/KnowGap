@@ -998,7 +998,7 @@ class ChatService:
                 definitions = [tool for tool in DEFINITIONS if (
                     tool["function"]["name"] in {"dispatch_thread", "propose_threads", "session_search", "memory", "update_plan",
                                                  "agenda_list", "agenda_add", "agenda_update", "search_materials",
-                                                 "create_document", "edit_document", "read_document"}
+                                                 "create_document", "edit_document", "read_document", "load_skill"}
                     if role["role"] == "main" else tool["function"]["name"] not in {
                         "dispatch_thread", "propose_threads", "stay_silent"}
                     and (role["role"] == "thread" or tool["function"]["name"] != "report_progress")

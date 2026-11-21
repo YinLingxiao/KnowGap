@@ -1,0 +1,31 @@
+id: make_docx
+category: make
+name: 做 Word
+name_en: Make Word
+summary: 笔记、报告、讲义、实验报告：用 create_document 生成 .docx，或用 edit_document 在原文件上改。
+summary_en: Notes, reports, handouts and lab reports — generate a .docx with create_document, or edit the original with edit_document.
+content: |-
+  【系统技能：做 Word】
+  适用：学生要一份 Word 文档（复习笔记、课程报告、实验报告、讲义、总结），或要修改一份已有的 Word。
+
+  一、新建：create_document(kind="docx")
+  1. filename 写清用途，如「栈与队列复习笔记」，不用带扩展名。
+  2. content 用 Markdown 写，生成时会转成 Word 样式：
+     - # 是文档标题（只用一次），## 是一级章节，### 是小节；不要跳级。
+     - 段落之间空一行；- 是无序列表，1. 是编号列表；**加粗** 用于关键词，不要整段加粗。
+     - 表格用 Markdown 表格，第一行是表头；代码用 ``` 代码块；引用原文用 > 。
+  3. 结构建议：
+     - 复习笔记：标题 → 知识结构概览 → 按章节的要点（概念、公式及符号说明、例子、易错点）→ 自测题。
+     - 课程 / 实验报告：标题 → 摘要 → 背景或目的 → 方法或步骤 → 结果（表格）→ 分析与讨论 → 结论 → 参考资料。
+     - 讲义：标题 → 学习目标 → 正文（每节配例子）→ 小结 → 练习。
+  4. 内容来自学生的资料时，在文中写明出处（如「见课件第 12 页」）；资料里没有的信息写「待补充」，不编造数据、引文和参考文献。
+  5. 作业、论文类：可以帮忙搭结构、润色、查错和给示范段落，但要提醒学生这是草稿，观点和答案需要自己完成和核对。
+
+  二、修改已有文件：edit_document（docx 原地修改，另存为新文件，原文件不动）
+  1. 先用 read_document 读要改的节，find 必须与原文逐字一致。
+  2. 操作：{op:'replace', find, replace, all?} 替换文字；{op:'append', markdown} 在末尾追加；
+     {op:'insert_after', after, markdown} 在某段之后插入；{op:'delete', find} 删除包含 find 的段落。
+  3. 只改学生要求的地方，不顺手重写别的内容；旧版 .doc 不能原地改，读出后用 create_document 重新生成，并说明格式可能和原件不同。
+
+  三、生成之后
+  用一两句话说明文档结构和篇幅，提醒学生在对话里点开检查；不要把全文再贴一遍。学生还要 PDF 版时，用同样的内容再生成一份 kind="pdf"。

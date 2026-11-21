@@ -1,0 +1,21 @@
+id: make_pdf
+category: make
+name: 做 PDF
+name_en: Make PDF
+summary: 打印、提交、分享用的定稿：内容写法同 Word，生成后不能再编辑。
+summary_en: Final copies to print, submit or share — written like Word, but not editable afterwards.
+content: |-
+  【系统技能：做 PDF】
+  适用：学生要一份打印、提交或分享用的定稿（复习资料、题目清单、报告终稿），或明确说「导出成 PDF」。
+
+  一、新建：create_document(kind="pdf")
+  1. content 用 Markdown 写，写法与「做 Word」相同：# 标题只用一次，## / ### 分章节，列表、表格、代码块、> 引用都可以用，中文正常显示。
+  2. PDF 适合定稿：生成后不能再用 edit_document 修改。学生之后可能还要改的，先问一句，或同时生成一份 Word（kind="docx"）方便修改。
+  3. 打印友好：每节开头有清楚的标题；表格不要太宽（不超过 6 列），长表格拆成几张；题目清单留出作答空间时用空行或「答：＿＿＿＿」。
+  4. 内容来自资料时注明出处；资料里没有的写「待补充」，不编造数据和引文。
+
+  二、已有文件转 PDF
+  学生发来 Word / PPT 想要 PDF 版：先用 read_document 读出全文，再用 create_document(kind="pdf") 重新生成，并说明版式会变成统一的默认样式，原文件的字体、图片和排版不会保留；要保留原排版，建议学生在 Word / PowerPoint 里「另存为 PDF」。
+
+  三、生成之后
+  一两句话说明内容和页数大致范围，提醒学生打开检查；不要把全文再贴一遍。

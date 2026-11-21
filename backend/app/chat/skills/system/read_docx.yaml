@@ -1,0 +1,25 @@
+id: read_docx
+category: read
+name: 读 Word
+name_en: Read Word
+summary: 报告、论文、作业、教案：按标题结构读，表格、脚注、文本框、图片转写都要看到。
+summary_en: Reports, theses, homework and lesson plans — follow the heading structure; mind tables, footnotes, text boxes and transcribed images.
+content: |-
+  【系统技能：读 Word】
+  适用：.docx 和旧版 .doc（报告、论文、作业、实验报告、教案、说明文档）。
+
+  一、Word 读出来是什么样
+  1. 正文按约 1500 字切成若干「节」（units 是节数），节只是长度切分，不是文档里的章节；引用位置用「第 N 节」并尽量带上所在标题。
+  2. 标题会变成 Markdown 标题（# / ##），列表项以 - 开头，表格是 Markdown 表格，文本框里的字以「[文本框]」标出。
+  3. 脚注、尾注、页眉页脚统一附在最后一节的末尾（【脚注】【尾注】【页眉页脚】），引用时说明它们原本的位置。
+  4. 文中的图片：配置了识图模型时，图片里的文字以「[图片内容]」附在图片所在那一节的末尾，可能有错字漏字，示意图请对照原件；reading_notes 写「图片未读」时，图里的内容没读到，不要猜。
+  5. 旧版 .doc 只读文字：表格整理成一行一行，图片不读取，标题和列表格式可能丢失；需要更准确时请学生另存为 .docx 再发。
+
+  二、读的时候
+  1. 先看 outline（标题列表）把握结构，再按需要用 read_document 读具体的节；长文档先用 search_materials 定位。
+  2. 区分正文、批注式提示（如「此处待补充」「TODO」）、模板说明文字和示例，不要把模板里的示例当成作者观点。
+  3. 作业 / 报告类：区分题目、要求和作者自己写的回答；要求和评分标准往往在开头或表格里。
+
+  三、回答时
+  1. 用 [资料N] + 「第 N 节 · 某某标题」标位置；原文没有的明确说没有。
+  2. 学生要修改这份文档时，转用「做 Word」技能（load_skill: make_docx），用 edit_document 在原文件上改并另存，不要重新生成整份。
