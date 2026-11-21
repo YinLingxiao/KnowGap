@@ -31,6 +31,7 @@
       "startup.js",
       "zoom.js",
       "dataReset.js",
+      "dataLocation.js",
       "startup.html",
       "icon.ico",
       "icon.png"

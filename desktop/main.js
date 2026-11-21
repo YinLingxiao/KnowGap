@@ -10,6 +10,10 @@ const { createStartup } = require("./startup");
 const { attachZoom } = require("./zoom");
 const { resetLegacyData } = require("./dataReset");
 const { createUpdater, UPDATE_DEFAULTS, normalizeUpdateSettings, validateUpdatePatch } = require("./updater");
+const { resolveDataDir } = require("./dataLocation");
+
+// 数据放在安装时选的文件夹（默认 D 盘），必须在任何地方读 userData 之前定下来，旧位置的数据会在这里搬过去
+const dataLocation = resolveDataDir({ app, fs, path });
 
 // 页面 origin 随端口变化，换端口会丢掉 localStorage（登录、演示模式、草稿等），所以优先复用固定端口
 const PREFERRED_PORT = 38617;
@@ -671,6 +675,9 @@ if (!app.requestSingleInstanceLock()) {
     showMain();
   });
   app.whenReady().then(async () => {
+    if (dataLocation.warning) {
+      dialog.showMessageBoxSync({ type: "warning", title: "KnowGap", buttons: ["好的"], message: "数据文件夹暂时不可用", detail: dataLocation.warning });
+    }
     // 1.0.0 正式版：先清空旧版本数据（只做一次），再读设置、启动后端
     await resetLegacyData({ dir: app.getPath("userData"), fs, dialog, session: session.defaultSession });
     loadSettings();

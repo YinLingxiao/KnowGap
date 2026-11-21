@@ -14,6 +14,8 @@ const CHROMIUM_ENTRIES = new Set([
   "IndexedDB", "blob_storage", "Service Worker", "Shared Dictionary", "SharedStorage", "WebStorage",
   "Crashpad", "Cookies", "Cookies-journal", "Trust Tokens", "Trust Tokens-journal", "TransportSecurity",
   "Dictionaries", "VideoDecodeStats", "databases", "lockfile", "Partitions",
+  // 安装程序写的数据文件夹指针，不属于学习数据
+  "data-location.txt",
 ]);
 
 const NOTICE = {
