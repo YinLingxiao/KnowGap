@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ArrowUpRight, CalendarClock, CircleAlert, RotateCcw } from "lucide-react";
+import { useI18n } from "@/components/LanguageProvider";
 import { describeError } from "@/lib/api/errors";
 import { agendaApi } from "@/lib/agenda/api";
 import { AGENDA_CHANGED_EVENT, type AgendaTask, type AgendaThread } from "@/lib/agenda/types";
@@ -24,8 +25,7 @@ export interface SpaceSubject {
 
 const NO_SUBJECT_TAGS = new Map<string, SubjectInfo>();
 
-/** 空间进度（已完成 / 全部）：feed 只带今天完成的任务，这里单独拉 status=all；任务变动后重新拉取 */
-function useSpaceProgress(subjectId: string) {
+/** 空间进度（已完成 / 全部）：feed 只带今天完成的任务，这里单独拉 status=all；任务变动后重新拉取 */function useSpaceProgress(subjectId: string) {
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   useEffect(() => {
     let alive = true;
@@ -50,8 +50,6 @@ function useSpaceProgress(subjectId: string) {
   return progress;
 }
 
-const emptyHint = (group: AgendaGroup) => (group.key === "tasks" ? "这个空间还没有待办任务。" : null);
-
 interface SpaceTaskListProps {
   subject: SpaceSubject;
   tasks: AgendaTask[];
@@ -74,14 +72,15 @@ interface SpaceTaskListProps {
 /** 某个学习空间的未完成任务：进行中支线 / 任务（日程页与学习空间页共用） */
 export function SpaceTaskList(props: SpaceTaskListProps) {
   const { subject, tasks, threads, today } = props;
+  const { tx } = useI18n();
   const list = useListState();
   const progress = useSpaceProgress(subject.id);
   const groups = useMemo(() => {
-    const built = buildSpaceGroups(tasks, threads, subject.id, { includeDone: props.viewOptions?.showCompleted });
+    const built = buildSpaceGroups(tasks, threads, subject.id, { includeDone: props.viewOptions?.showCompleted }, tx);
     if (!props.viewOptions) return built;
-    return applyViewOptions(built, props.viewOptions, new Map([[subject.id, subject]]), today);
-  }, [tasks, threads, subject, today, props.viewOptions]);
-  const deadline = deadlineInfo(subject.deadline, today);
+    return applyViewOptions(built, props.viewOptions, new Map([[subject.id, subject]]), today, tx);
+  }, [tasks, threads, subject, today, props.viewOptions, tx]);
+  const deadline = deadlineInfo(subject.deadline, today, tx);
 
   return (
     <div className={styles.view}>
@@ -89,13 +88,13 @@ export function SpaceTaskList(props: SpaceTaskListProps) {
         <span className={styles.dot} style={{ background: subject.color }} aria-hidden />
         <h2 className={styles.name} title={subject.name}>{subject.name}</h2>
         {subject.deadline && (
-          <span className={cx(styles.meta, deadline?.urgent && styles.urgent)} title={`截止日 ${subject.deadline}`}>
+          <span className={cx(styles.meta, deadline?.urgent && styles.urgent)} title={tx("截止日 {date}", { date: subject.deadline })}>
             <CalendarClock size={12} aria-hidden />
-            {monthDay(subject.deadline)}截止
+            {tx("{date}截止", { date: monthDay(subject.deadline, tx) })}
           </span>
         )}
         {progress && progress.total > 0 && (
-          <span className={styles.meta} title={`已完成 ${progress.done} / 全部 ${progress.total}`}>
+          <span className={styles.meta} title={tx("已完成 {done} / 全部 {total}", { done: progress.done, total: progress.total })}>
             <span className={styles.bar} aria-hidden>
               <span style={{ width: `${(progress.done / progress.total) * 100}%` }} />
             </span>
@@ -105,7 +104,7 @@ export function SpaceTaskList(props: SpaceTaskListProps) {
         <span className={styles.spacer} />
         {props.onOpenSpace && (
           <button type="button" className={styles.openBtn} onClick={props.onOpenSpace}>
-            打开学习空间
+            {tx("打开学习空间")}
             <ArrowUpRight size={13} aria-hidden />
           </button>
         )}
@@ -126,13 +125,13 @@ export function SpaceTaskList(props: SpaceTaskListProps) {
           onToggleGroup={list.toggleGroup}
           onToggleParent={list.toggleParent}
           onCompose={props.onCompose ?? ((defaults) => dispatchCompose(defaults))}
-          emptyHint={emptyHint}
+          emptyHint={(group) => (group.key === "tasks" ? tx("这个空间还没有待办任务。") : null)}
           leavingIds={props.leavingIds}
           taskActions={props.taskActions}
           onRescheduleOverdue={props.onRescheduleOverdue}
           composingKey={props.composingKey}
           composer={props.composer}
-          ariaLabel={`「${subject.name}」的任务`}
+          ariaLabel={tx("「{name}」的任务", { name: subject.name })}
         />
       </div>
     </div>
@@ -148,6 +147,7 @@ interface SpaceTasksProps {
 
 /** 独立版：自己拉数据并在原地打开任务详情，挂在学习空间页右侧面板「任务」标签 */
 export function SpaceTasks({ subject, subjects, onOpenThread }: SpaceTasksProps) {
+  const { tx } = useI18n();
   const [notice, setNotice] = useState<string | null>(null);
   const agenda = useAgenda(setNotice);
   const { tasks, threads, today, update, create, remove } = agenda;
@@ -199,15 +199,15 @@ export function SpaceTasks({ subject, subjects, onOpenThread }: SpaceTasksProps)
     <div className={styles.standalone}>
       {notice && <p className={styles.notice} role="alert">{notice}</p>}
       {agenda.status === "loading" ? (
-        <div className={styles.skeleton} role="status" aria-label="正在加载任务">
+        <div className={styles.skeleton} role="status" aria-label={tx("正在加载任务")}>
           {Array.from({ length: 5 }, (_, index) => <span key={index} style={{ width: `${86 - index * 9}%` }} />)}
         </div>
       ) : agenda.status === "error" ? (
         <div className={styles.state} role="alert">
           <CircleAlert size={18} aria-hidden />
-          <p>{failure?.title ?? "任务加载失败"}</p>
+          <p>{failure?.title ?? tx("任务加载失败")}</p>
           <button type="button" className={styles.openBtn} onClick={() => void agenda.reload()}>
-            <RotateCcw size={13} aria-hidden />重新加载
+            <RotateCcw size={13} aria-hidden />{tx("重新加载")}
           </button>
         </div>
       ) : (
