@@ -7,6 +7,7 @@ import {
   Mic, PanelLeftOpen, RotateCcw, X,
 } from "lucide-react";
 import { useChat } from "@/hooks/useChat";
+import { useQuickShortcut } from "@/hooks/useQuickShortcut";
 import { useI18n } from "@/components/LanguageProvider";
 import type { HealthState } from "@/lib/types";
 import { getAIConfig, testAIConfig, type AIConfigStatus } from "@/lib/api/ai-config";
@@ -119,6 +120,7 @@ function AuthenticatedChat({ user, onRename, onUploadAvatar, onRemoveAvatar }: {
   onRemoveAvatar: () => Promise<void>;
 }) {
   const { lang, t, tx } = useI18n();
+  const quickShortcut = useQuickShortcut();
   const { toasts, push, dismiss } = useToasts();
   const chat = useChat(push, user.id);
   const [narrow, setNarrow] = useState(false);
@@ -1022,7 +1024,8 @@ function AuthenticatedChat({ user, onRename, onUploadAvatar, onRemoveAvatar }: {
                 }));
               }, 60);
             } else if (action === "spotlight") {
-              push({ tone: "info", title: tx("按 Alt+Space 随时快问") });
+              push({ tone: "info", title: quickShortcut
+                ? tx("{shortcut} 随时快问", { shortcut: quickShortcut }) : tx("从托盘打开快问") });
             }
           }}
         />

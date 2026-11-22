@@ -1,10 +1,17 @@
 """Free-chat HTTP contract. Independent from the retired problem-bound sessions (only imported into conversations at startup)."""
 
+from datetime import date
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
 from app.models.schemas import Assessment, SourceReference
+
+
+def valid_deadline(value: str) -> str:
+    date.fromisoformat(value)
+    return value
+
 
 MessageText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=12000)]
 Title = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=60)]
@@ -16,7 +23,8 @@ Description = Annotated[str, StringConstraints(strip_whitespace=True, max_length
 Instructions = Annotated[str, StringConstraints(strip_whitespace=True, max_length=4000)]
 Goal = Annotated[str, StringConstraints(strip_whitespace=True, max_length=400)]
 Level = Literal["beginner", "some", "fluent", "exam"]
-Deadline = Annotated[str, StringConstraints(strip_whitespace=True, pattern=r"^\d{4}-\d{2}-\d{2}$")]
+Deadline = Annotated[str, StringConstraints(strip_whitespace=True, pattern=r"^\d{4}-\d{2}-\d{2}$"),
+                     AfterValidator(valid_deadline)]
 Color = Annotated[str, StringConstraints(strip_whitespace=True, pattern=r"^#[0-9A-Fa-f]{6}$")]
 DEFAULT_SUBJECT_ICON = "graduation-cap"
 SubjectIcon = Literal[

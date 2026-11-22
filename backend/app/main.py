@@ -22,6 +22,7 @@ from app.services.chatgpt_auth import ChatGPTAuth
 from app.services.search_settings import SearchSettings
 from app.services.materials import MaterialStore
 from app.api.materials import material_router
+from app.api.validation import validation_detail
 from app.auth.deps import current_student, reset_student, set_student
 from app.services.file_store import FileStore
 from app.profile.router import profile_router
@@ -145,6 +146,10 @@ def create_app(settings: Settings | None = None, chat_model: ChatModel | None = 
             return JSONResponse(status_code=422, content={"detail": "AI 配置请求格式无效，请提交 JSON 对象。"})
         if request.url.path in {"/api/search/config", "/api/search/test"}:
             return JSONResponse(status_code=422, content={"detail": "搜索配置请求格式无效，请提交 JSON 对象。"})
+        if (request.url.path == "/api/materials/search"
+                or request.url.path == "/api/subjects"
+                or request.url.path.startswith(("/api/subjects/", "/api/agenda/"))):
+            return JSONResponse(status_code=422, content={"detail": validation_detail(exc)})
         return await request_validation_exception_handler(request, exc)
 
     @app.exception_handler(StateConflict)
