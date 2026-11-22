@@ -10,16 +10,21 @@
  * - xlsx / csv 不用 SheetJS 的 sheet_to_html（它的输出不转义单元格内容，真实存在过 CVE-2026-44549
  *   这种存储型 XSS），改用 sheet_to_json 拿纯数组数据，自己拼 <table>，交给 React 的文本节点自动转义。
  * - md 复用 chat/Markdown.tsx 的 Markdown 组件，它基于 ReactMarkdown，明确不渲染原始 HTML。
- * - pptx 和旧版 .doc/.ppt 没有成熟的纯 JS 渲染库，统一走「大纲预览」：只展示后端已提取好的纯文字
- *   标题列表，经 React 渲染天然转义，不需要额外隔离，但必须在界面上明确标注，不能让人误以为是
- *   真实排版。
+ * - pptx 用 JSZip 读 OOXML，只渲染每页文字（见 lib/materials/pptx.ts），不执行文档里的任何脚本。
+ * - 旧版 .doc/.ppt 和原件丢失的资料走「文字版」：展示上传时后端已提取的纯文本，界面明确标注。
+ *
+ * 兼容性兜底：PDF 的 pdf.js 渲染失败时切到浏览器自带查看器；docx / pptx 解析失败时切到文字版；
+ * 任何格式都保留下载入口，不让一种渲染器的问题把资料变成白屏。
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Download, FileSpreadsheet, FileText, FileType, Presentation, TriangleAlert, X } from "lucide-react";
-import { createMaterialClient } from "@/lib/api/material-client";
+import {
+  Download, FileSpreadsheet, FileText, FileType, Maximize2, Minimize2, Presentation, TriangleAlert, X,
+} from "lucide-react";
+import { createMaterialClient, type ExtractedText } from "@/lib/api/material-client";
 import { toApiError } from "@/lib/api/errors";
 import { cx } from "@/lib/cx";
+import { clampPptxScale, pptxFrameDocument, renderPptxDocument, type RenderedPptx } from "@/lib/materials/pptx";
 import type { CourseMaterial } from "@/lib/types";
 import { Markdown, type CitationPreviewTarget } from "./chat/Markdown";
 import { useI18n } from "@/components/LanguageProvider";
@@ -64,18 +69,22 @@ export function isLegacyOle(bytes: Uint8Array): boolean {
   return bytes.length >= 4 && bytes[0] === 0xd0 && bytes[1] === 0xcf && bytes[2] === 0x11 && bytes[3] === 0xe0;
 }
 
-/** 预览分发：pdf.js / docx-preview（沙箱 iframe） / SheetJS（安全表格） / 大纲视图（pptx、旧版 doc·ppt）。
+/** 预览分发：pdf.js / docx-preview（沙箱 iframe） / SheetJS（安全表格） / PPTX 文字版 / 提取文字。
  *  导出成纯函数方便单测；真实渲染组件内部也调这个来决定走哪条分支。 */
+export type PreviewMode = "pdf" | "markdown" | "text" | "csv" | "xlsx" | "pptx" | "docx" | "extracted";
+
 export function previewMode(
   kind: CourseMaterial["kind"], legacy: boolean,
-): "pdf" | "markdown" | "text" | "csv" | "xlsx" | "outline" | "docx" {
+): PreviewMode {
   if (kind === "pdf") return "pdf";
   if (kind === "md") return "markdown";
   if (kind === "txt") return "text";
   if (kind === "csv") return "csv";
   if (kind === "xlsx") return "xlsx"; // SheetJS 原生支持旧版 .xls（BIFF8），不需要特殊处理
-  if (kind === "pptx") return "outline"; // 没有成熟的纯 JS pptx 渲染库
-  return legacy ? "outline" : "docx"; // 旧版 .doc 是 OLE 二进制，docx-preview 解析不了
+  // 新版 .pptx 是 ZIP（OOXML），可以读出文字版幻灯片；旧版 .ppt 是 OLE 二进制，只能看提取文字
+  if (kind === "pptx") return legacy ? "extracted" : "pptx";
+  // 新版 .docx 走 docx-preview；旧版 .doc 是 OLE 二进制，docx-preview 解析不了
+  return legacy ? "extracted" : "docx";
 }
 
 type RenderState =
@@ -229,11 +238,17 @@ function DownloadButton({ material }: { material: CourseMaterial }) {
 
 // ------------------------------------------------------------------ PDF
 
-function PdfView({ bytes, initialPage }: { bytes: ArrayBuffer; initialPage?: number }) {
+function PdfView({ bytes, initialPage, fullscreen, material }: {
+  bytes: ArrayBuffer;
+  initialPage?: number;
+  fullscreen?: boolean;
+  material: CourseMaterial;
+}) {
   const { t, tx } = useI18n();
   const hostRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [truncatedAt, setTruncatedAt] = useState<number | null>(null);
+  const [nativeUrl, setNativeUrl] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -254,7 +269,7 @@ function PdfView({ bytes, initialPage }: { bytes: ArrayBuffer; initialPage?: num
         for (const number of pdfPagesToRender(doc.numPages, target)) {
           const page = await doc.getPage(number);
           if (cancelled) return;
-          const viewport = page.getViewport({ scale: 1.3 });
+          const viewport = page.getViewport({ scale: fullscreen ? 1.8 : 1.3 });
           const canvas = document.createElement("canvas");
           canvas.className = styles.pdfPage;
           canvas.dataset.pageNumber = String(number);
@@ -272,9 +287,48 @@ function PdfView({ bytes, initialPage }: { bytes: ArrayBuffer; initialPage?: num
       }
     })();
     return () => { cancelled = true; };
-  }, [bytes, initialPage]);
+  }, [bytes, initialPage, fullscreen, tx]);
 
-  if (error) return <div className={styles.state}><TriangleAlert size={24} aria-hidden /><p>{error}</p></div>;
+  // pdf.js 失败（worker 被拦、PDF 结构损坏、浏览器太旧）时交给浏览器自带的 PDF 查看器。
+  // Blob URL 只指向用户自己的文件，不会发起跨站请求；不支持内置查看器的环境仍可下载。
+  useEffect(() => {
+    if (!error) {
+      setNativeUrl(null);
+      return undefined;
+    }
+    const url = URL.createObjectURL(new Blob([bytes.slice(0)], { type: "application/pdf" }));
+    setNativeUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [error, bytes]);
+
+  if (error) {
+    return (
+      <div>
+        <p className={styles.outlineBanner}>
+          <TriangleAlert size={14} aria-hidden />
+          {tx("内置 PDF 渲染器不可用，已切换到浏览器自带的查看器。")}
+        </p>
+        {nativeUrl && (
+          <iframe
+            className={styles.pdfNative}
+            src={nativeUrl}
+            title={tx("PDF 预览")}
+          />
+        )}
+        <p className={styles.statusHint}>{tx("若下方空白，请下载后用本地程序查看。")}</p>
+        <div className={styles.fallbackActions}>
+          <button
+            type="button"
+            className={styles.secondaryBtn}
+            onClick={() => void saveBlob(new Blob([bytes.slice(0)], { type: "application/pdf" }), material.title)}
+          >
+            <Download size={14} aria-hidden />
+            <span>{tx("下载查看")}</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
   return (
     <>
       {truncatedAt && (
@@ -361,7 +415,12 @@ async function loadDocxScripts(): Promise<string[]> {
   }));
 }
 
-function DocxView({ bytes, initialPage = 1, quote = "" }: { bytes: ArrayBuffer; initialPage?: number; quote?: string }) {
+function DocxView({ bytes, initialPage = 1, quote = "", onFallback }: {
+  bytes: ArrayBuffer;
+  initialPage?: number;
+  quote?: string;
+  onFallback?: () => void;
+}) {
   const { tx } = useI18n();
   const frameRef = useRef<HTMLIFrameElement>(null);
   const [error, setError] = useState(false);
@@ -401,6 +460,12 @@ function DocxView({ bytes, initialPage = 1, quote = "" }: { bytes: ArrayBuffer; 
         <div className={styles.state}>
           <TriangleAlert size={24} aria-hidden />
           <p>{tx("这份文档无法渲染（可能是旧版格式或文件已损坏），请下载后查看。")}</p>
+          {onFallback && (
+            <button type="button" className={styles.secondaryBtn} onClick={onFallback}>
+              <FileText size={14} aria-hidden />
+              <span>{tx("查看提取文字")}</span>
+            </button>
+          )}
         </div>
       )}
       <iframe
@@ -464,7 +529,7 @@ function XlsxView({ bytes, initialPage }: { bytes: ArrayBuffer; initialPage?: nu
       }
     })();
     return () => { cancelled = true; };
-  }, [bytes]);
+  }, [bytes, tx]);
 
   if (error) return <div className={styles.state}><TriangleAlert size={24} aria-hidden /><p>{error}</p></div>;
   if (!sheets) return <p className={styles.plainText}>{tx("正在解析表格…")}</p>;
@@ -496,84 +561,230 @@ function CsvView({ bytes }: { bytes: ArrayBuffer }) {
   return <SheetTable rows={rows} />;
 }
 
-// ------------------------------------------------------------------ 大纲预览（PPT / 旧版 doc·ppt）
+// ------------------------------------------------------------------ PPTX 视觉预览 / 提取文字兜底
 
-function OutlineView({ material, initialPage, quote, citationMode = false }: {
+function PptxView({ bytes, material, initialPage, quote, citationMode = false }: {
+  bytes: ArrayBuffer;
   material: CourseMaterial;
   initialPage?: number;
   quote?: string;
   citationMode?: boolean;
 }) {
+  const { tx } = useI18n();
+  const stageRef = useRef<HTMLDivElement>(null);
+  const [doc, setDoc] = useState<RenderedPptx | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [textView, setTextView] = useState(false);
+  const [stageWidth, setStageWidth] = useState(0);
+  // 引用预览只渲染被引用的那一页，避免长课件无谓地全量渲染。
+  const onlySlide = citationMode && initialPage ? normalizeInitialPage(initialPage) : undefined;
+
+  useEffect(() => {
+    let cancelled = false;
+    setDoc(null);
+    setFailed(false);
+    setTextView(false);
+    renderPptxDocument(bytes, { slides: onlySlide ? [onlySlide] : undefined })
+      .then((value) => { if (!cancelled) setDoc(value); })
+      .catch(() => { if (!cancelled) setFailed(true); });
+    return () => { cancelled = true; };
+  }, [bytes, onlySlide]);
+
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage || textView || failed) return undefined;
+    const update = () => setStageWidth(stage.clientWidth);
+    update();
+    if (typeof ResizeObserver === "undefined") return undefined;
+    const observer = new ResizeObserver(update);
+    observer.observe(stage);
+    return () => observer.disconnect();
+  }, [doc, failed, textView]);
+
+  const scale = doc ? clampPptxScale(stageWidth || 380, doc.width) : 1;
+  const frameDocument = useMemo(() => (doc ? pptxFrameDocument(doc.html, scale) : ""), [doc, scale]);
+
+  if (failed) {
+    return <ExtractedTextView material={material} initialPage={initialPage} quote={quote} citationMode={citationMode}
+      reason={tx("幻灯片视觉渲染失败，下面显示提取的文字。")} />;
+  }
+  if (!doc) return <p className={styles.plainText}>{tx("正在渲染幻灯片…")}</p>;
+  if (textView) {
+    return (
+      <div>
+        <div className={styles.fallbackActions}>
+          <button type="button" className={styles.secondaryBtn} onClick={() => setTextView(false)}>
+            {tx("返回幻灯片")}
+          </button>
+        </div>
+        <ExtractedTextView material={material} initialPage={initialPage} quote={quote} citationMode={citationMode} />
+      </div>
+    );
+  }
+  return (
+    <div>
+      <p className={styles.outlineBanner}>
+        <TriangleAlert size={14} aria-hidden />
+        {tx("幻灯片预览：文字、图片和形状按原位置渲染，复杂动画与部分字体可能和 PowerPoint 不同。")}
+      </p>
+      <div ref={stageRef} className={styles.pptxStage}>
+        <iframe
+          className={styles.pptxFrame}
+          sandbox=""
+          srcDoc={frameDocument}
+          title={tx("PowerPoint 预览")}
+        />
+      </div>
+      <div className={styles.fallbackActions}>
+        <button type="button" className={styles.secondaryBtn} onClick={() => setTextView(true)}>
+          <FileText size={14} aria-hidden />
+          <span>{tx("文字版")}</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ExtractedTextView({ material, initialPage, quote, reason, citationMode = false }: {
+  material: CourseMaterial;
+  initialPage?: number;
+  quote?: string;
+  reason?: string;
+  citationMode?: boolean;
+}) {
   const { t, tx } = useI18n();
   const client = useMemo(() => createMaterialClient(), []);
-  const listRef = useRef<HTMLOListElement>(null);
-  const [outline, setOutline] = useState<string[] | null>(null);
+  const hostRef = useRef<HTMLDivElement>(null);
+  const [data, setData] = useState<ExtractedText | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    client.outline(material.id)
-      .then((result) => { if (!cancelled) setOutline(result); })
+    setData(null);
+    setError(null);
+    client.text(material.id)
+      .then((result) => { if (!cancelled) setData(result); })
       .catch((failure: unknown) => { if (!cancelled) setError(toApiError(failure).message); });
     return () => { cancelled = true; };
   }, [client, material.id]);
 
   useEffect(() => {
-    if (!outline?.length || !listRef.current) return;
-    const quotedIndex = quote?.trim() ? outline.findIndex((heading) => heading.includes(quote)) : -1;
-    const index = quotedIndex >= 0 ? quotedIndex : Math.min(normalizeInitialPage(initialPage), outline.length) - 1;
-    const target = listRef.current.children[index];
-    if (target instanceof HTMLElement) target.scrollIntoView({ block: "start" });
-  }, [initialPage, outline, quote]);
+    if (!data || !hostRef.current) return;
+    const sections = [...hostRef.current.querySelectorAll<HTMLElement>("[data-extracted-page]")];
+    if (sections.length === 0) return;
+    const quoted = quote?.trim()
+      ? sections.findIndex((section) => section.textContent?.includes(quote))
+      : -1;
+    const targetPage = normalizeInitialPage(initialPage);
+    const byNumber = sections.findIndex((section) => Number(section.dataset.page ?? "") === targetPage);
+    const index = quoted >= 0 ? quoted : byNumber >= 0 ? byNumber : Math.min(targetPage, sections.length) - 1;
+    sections[index]?.scrollIntoView({ block: "start" });
+  }, [data, initialPage, quote]);
 
   return (
     <div>
       <p className={styles.outlineBanner}>
         <TriangleAlert size={14} aria-hidden />
-        {tx("仅显示大纲，完整排版请下载查看")}
+        {reason ?? tx("文字版预览：只显示提取到的文字，版式与图片请下载查看。")}
       </p>
       {error ? (
         <p className={styles.plainText}>{citationMode ? t("sources.missing") : error}</p>
-      ) : !outline ? (
-        <p className={styles.plainText}>{tx("正在加载大纲…")}</p>
-      ) : outline.length === 0 ? (
-        <p className={styles.plainText}>{tx("没有提取到标题。")}</p>
+      ) : !data ? (
+        <p className={styles.plainText}>{tx("正在加载文字…")}</p>
+      ) : data.pages.length === 0 ? (
+        <p className={styles.plainText}>{tx("没有可显示的文字。")}</p>
       ) : (
-        <ol ref={listRef} className={styles.outlineList}>
-          {outline.map((heading, index) => <li key={index}>{heading}</li>)}
-        </ol>
+        <div ref={hostRef} className={styles.extractedPages}>
+          {data.pages.map((page, index) => (
+            <section
+              key={index}
+              className={styles.extractedPage}
+              data-extracted-page
+              data-page={page.page ?? ""}
+            >
+              {page.page !== null && <span className={styles.pageLabel}>#{page.page}</span>}
+              <p className={styles.plainText}>{page.text}</p>
+            </section>
+          ))}
+        </div>
       )}
+      {data?.truncated && (
+        <p className={styles.statusHint}>
+          {tx("文字较多，仅显示前 {count} 字，完整内容请下载查看。", {
+            count: data.pages.reduce((sum, page) => sum + page.text.length, 0),
+          })}
+        </p>
+      )}
+      {data?.notes.map((note, index) => (
+        <p key={index} className={styles.statusHint}>{note}</p>
+      ))}
     </div>
   );
 }
 
 // ------------------------------------------------------------------ 分发与面板外壳
 
-function PreviewBody({ material, state, initialPage, quote, citationMode = false }: {
+function PreviewBody({ material, state, initialPage, quote, citationMode = false, fullscreen = false }: {
   material: CourseMaterial;
   state: RenderState;
   initialPage?: number;
   quote?: string;
   citationMode?: boolean;
+  fullscreen?: boolean;
 }) {
   const { t, tx } = useI18n();
+  const [forceText, setForceText] = useState(false);
+
+  useEffect(() => { setForceText(false); }, [material.id]);
+
   if (state.status === "loading") return <p className={styles.plainText}>{tx("正在加载…")}</p>;
-  if (state.status === "degraded" || state.status === "error") {
-    if (state.status === "error") {
-      return <div className={styles.state}><TriangleAlert size={24} aria-hidden /><p>{citationMode ? t("sources.missing") : state.message}</p></div>;
-    }
-    return <DownloadButton material={material} />;
+  if (state.status === "error") {
+    return (
+      <div>
+        <div className={styles.state} role="status">
+          <TriangleAlert size={24} aria-hidden />
+          <p>{citationMode ? t("sources.missing") : state.message}</p>
+        </div>
+        {!citationMode && (
+          <ExtractedTextView material={material} initialPage={initialPage} quote={quote}
+            reason={tx("读不到原件，下面显示上传时提取的文字。")} />
+        )}
+      </div>
+    );
+  }
+  if (state.status === "degraded") {
+    return (
+      <div>
+        <DownloadButton material={material} />
+        <div className={styles.fallbackActions}>
+          <button type="button" className={styles.secondaryBtn} onClick={() => setForceText((value) => !value)}>
+            <FileText size={14} aria-hidden />
+            <span>{forceText ? tx("收起提取文字") : tx("查看提取文字")}</span>
+          </button>
+        </div>
+        {forceText && (
+          <ExtractedTextView material={material} initialPage={initialPage} quote={quote} citationMode={citationMode}
+            reason={tx("读不到原件，下面显示上传时提取的文字。")} />
+        )}
+      </div>
+    );
   }
 
   const { bytes, legacy } = state;
+  if (forceText) {
+    return <ExtractedTextView material={material} initialPage={initialPage} quote={quote} citationMode={citationMode} />;
+  }
   switch (previewMode(material.kind, legacy)) {
-    case "pdf": return <PdfView bytes={bytes} initialPage={initialPage} />;
+    case "pdf": return <PdfView bytes={bytes} initialPage={initialPage} fullscreen={fullscreen} material={material} />;
     case "markdown": return <Markdown text={decodeText(bytes)} />;
     case "text": return <pre className={styles.plainText}>{decodeText(bytes)}</pre>;
     case "csv": return <CsvView bytes={bytes} />;
     case "xlsx": return <XlsxView bytes={bytes} initialPage={initialPage} />;
-    case "outline": return <OutlineView material={material} initialPage={initialPage} quote={quote} citationMode={citationMode} />;
-    case "docx": return <DocxView bytes={bytes} initialPage={initialPage} quote={quote} />;
+    case "pptx": return <PptxView bytes={bytes} material={material} initialPage={initialPage} quote={quote}
+      citationMode={citationMode} />;
+    case "extracted": return <ExtractedTextView material={material} initialPage={initialPage} quote={quote}
+      citationMode={citationMode} />;
+    case "docx": return <DocxView bytes={bytes} initialPage={initialPage} quote={quote} onFallback={() => setForceText(true)} />;
   }
 }
 
@@ -591,17 +802,53 @@ export function MaterialPreviewPanel({ material: providedMaterial, citation, ini
   const citationState = useCitationMaterial(citation);
   const material = citation ? citationState.material : providedMaterial;
   const state = useMaterialBytes(material ?? null);
+  const [fullscreen, setFullscreen] = useState(false);
+
+  useEffect(() => { setFullscreen(false); }, [material?.id, citation?.documentId]);
+
+  // 全屏时锁住页面滚动，Esc 先退出全屏；关闭面板或卸载时恢复原状。
+  useEffect(() => {
+    if (!fullscreen) return undefined;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.stopPropagation();
+      setFullscreen(false);
+    };
+    document.addEventListener("keydown", onKey, true);
+    return () => {
+      document.body.style.overflow = previous;
+      document.removeEventListener("keydown", onKey, true);
+    };
+  }, [fullscreen]);
+
   if (!citation && !providedMaterial) return null;
   const Icon = material && material.kind in TITLE_ICON ? TITLE_ICON[material.kind as keyof typeof TITLE_ICON] : FileText;
   const title = citation?.title ?? material?.title ?? "";
   return (
-    <aside className={cx(styles.panel, citation && styles.citationPanel)} aria-label={citation ? t("sources.preview") : tx("资料预览")}>
+    <aside
+      className={cx(styles.panel, citation && styles.citationPanel, fullscreen && styles.panelFullscreen)}
+      aria-label={citation ? t("sources.preview") : tx("资料预览")}
+      aria-modal={fullscreen || undefined}
+      role={fullscreen ? "dialog" : undefined}
+    >
       <header className={styles.head}>
         <span className={styles.headTitle}>
           <Icon size={15} aria-hidden />
           {title}
         </span>
         <div className={styles.headActions}>
+          <button
+            type="button"
+            className={styles.iconBtn}
+            aria-label={fullscreen ? tx("退出全屏预览") : tx("全屏预览")}
+            title={fullscreen ? tx("退出全屏预览") : tx("全屏预览")}
+            aria-pressed={fullscreen}
+            onClick={() => setFullscreen((value) => !value)}
+          >
+            {fullscreen ? <Minimize2 size={16} aria-hidden /> : <Maximize2 size={16} aria-hidden />}
+          </button>
           <button type="button" className={styles.iconBtn} aria-label={tx("关闭预览")} title={tx("关闭预览")} onClick={onClose}>
             <X size={16} aria-hidden />
           </button>
@@ -614,7 +861,8 @@ export function MaterialPreviewPanel({ material: providedMaterial, citation, ini
         ) : citation && citationState.status === "loading" ? (
           <p className={styles.plainText}>{tx("正在加载…")}</p>
         ) : material ? (
-          <PreviewBody material={material} state={state} initialPage={initialPage} quote={quote} citationMode={Boolean(citation)} />
+          <PreviewBody material={material} state={state} initialPage={initialPage} quote={quote}
+            citationMode={Boolean(citation)} fullscreen={fullscreen} />
         ) : null}
       </div>
     </aside>

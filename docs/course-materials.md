@@ -9,6 +9,8 @@
 | --- | --- |
 | GET `/api/materials` | 已上传的资料列表 |
 | POST `/api/materials` | 上传单个文件，multipart 字段名为 `file` |
+| GET `/api/materials/{document_id}/outline` | 资料大纲；PPTX / 旧版 doc·ppt 的降级视图 |
+| GET `/api/materials/{document_id}/text` | 上传时提取的正文，按页/节/幻灯片分组；原件丢失或无法排版渲染时的文字版预览 |
 | GET `/api/materials/search?q=栈&limit=5` | 搜索原文，limit 为 1–10 |
 | DELETE `/api/materials/{document_id}` | 删除资料及检索索引，成功返回 204 |
 
@@ -17,12 +19,15 @@
 结果返回 id、document_id、title、label、page、start_line、end_line、excerpt。
 PDF 的 page 从 1 开始；TXT/Markdown 使用从 1 开始的原始行号。
 
+PPTX 预览在浏览器端用 `@meshesha/pptxjs` 把幻灯片渲染成 HTML/SVG，放进 `sandbox=""` 的 iframe 并加 CSP 限制；复杂动画和部分字体会与 PowerPoint 有差异。渲染失败或旧版 `.ppt` 时回退到 `/text` 的文字版，界面可随时切换。
+
 ## 上传规则
 
-- 支持含可复制文字的 PDF、UTF-8 TXT、Markdown。
-- 单份最多 5 MB、100 页、200,000 字符；最多 30 份资料。
-- 暂不支持扫描 PDF OCR、加密 PDF、DOCX/PPTX。
-- 仅保存提取的文字与元数据，不保存原始文件；同名重复上传会生成独立资料。
+- 支持含可复制文字的 PDF、UTF-8 TXT、Markdown、CSV、DOCX/DOC、PPTX/PPT、XLSX/XLS。
+- 单份最多 100 MB、200 页/节/幻灯片/工作表、200,000 字符；最多 30 份资料。
+- 扫描版 PDF 在配置识图模型后可转写；加密 PDF 需要先解除密码。旧版 Office 文件按内容解析并提取文字。
+- 保存提取的文字、元数据和上传原件；原件用于资料预览、AI 修改和下载，删除资料时一并删除。
+- 同名重复上传会生成独立资料。
 - 删除后停止检索。历史对话的引用快照仍保留，前端删除确认中有说明。
 
 ## 检索与教学
