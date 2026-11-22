@@ -509,6 +509,10 @@ function AvatarMenu({
   onOpenSettings: (tab?: SettingsTab) => void;
 }) {
   const { t } = useI18n();
+  // 默认演示档案的称呼/头像跟随界面语言；用户自己改过名字时保留原名。
+  const defaultProfile = !displayName || displayName === "学习者";
+  const shownName = defaultProfile ? t("app.demoLearner") : displayName;
+  const shownAvatar = defaultProfile ? t("app.avatar") : avatarText;
   const [open, setOpen] = useState(false);
   const [closing, setClosing] = useState(false);
   const [position, setPosition] = useState({ left: 0, top: 0, width: 0 });
@@ -622,7 +626,7 @@ function AvatarMenu({
       <img src={avatarUrl} alt="" onError={() => setAvatarFailed(true)} />
     </span>
   ) : (
-    <span className={styles.avatar} aria-hidden>{avatarText || t("app.avatar")}</span>
+    <span className={styles.avatar} aria-hidden>{shownAvatar || t("app.avatar")}</span>
   );
 
   return (
@@ -646,7 +650,7 @@ function AvatarMenu({
           {modelIssue && <span className={styles.alertDot} aria-hidden />}
         </span>
         <span className={styles.userName}>
-          {displayName || t("app.demoLearner")}
+          {shownName || t("app.demoLearner")}
           <small className={styles.userPlan}> · {t("app.localVersion")}</small>
         </span>
         <ChevronUp size={13} className={cx(styles.profileChevron, expanded && styles.profileChevronOpen)} aria-hidden />
@@ -668,7 +672,7 @@ function AvatarMenu({
           <div className={styles.avatarMenuHead} role="presentation">
             {avatarNode}
             <span className={styles.avatarMenuName}>
-              {displayName || t("app.demoLearner")}
+              {shownName || t("app.demoLearner")}
               <small className={styles.userPlan}> · {t("app.localVersion")}</small>
             </span>
           </div>
