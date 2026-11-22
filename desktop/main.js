@@ -386,7 +386,7 @@ function registerQuickShortcut() {
       console.warn(`[KnowGap] 快捷键 ${accelerator} 注册出错：${error.message}`);
     }
   }
-  console.warn("[KnowGap] 快问浮窗快捷键全部注册失败，浮窗不可用");
+  console.warn("[KnowGap] 快问浮窗快捷键全部注册失败，可从托盘打开快问");
 }
 
 function displayShortcut() {
@@ -413,10 +413,10 @@ function notifyBackgroundOnce() {
   saveSettings();
   if (!Notification.isSupported()) return;
   try {
-    const key = displayShortcut() || "Alt+Space";
+    const key = displayShortcut();
     new Notification({
       title: "KnowGap",
-      body: `KnowGap 仍在后台运行，${key} 随时快问`,
+      body: key ? `KnowGap 仍在后台运行，${key} 随时快问` : "KnowGap 仍在后台运行，可从托盘打开快问",
       icon: path.join(__dirname, "icon.png"),
     }).show();
   } catch {
@@ -651,6 +651,9 @@ async function open() {
   startup?.setStatus("正在打开学习空间");
   appOrigin = `http://127.0.0.1:${port}`;
   frontendRevision = createHash("sha256").update(fs.readFileSync(path.join(folder, "index.html"))).digest("hex");
+  // The first coachmark can query IPC during loadURL; register before rendering it.
+  registerQuickShortcut();
+  refreshTrayMenu();
   await mainWindow.loadURL(frontendUrl("/"));
   try {
     await startup?.finish();
@@ -658,9 +661,6 @@ async function open() {
     console.warn("[KnowGap] 启动过渡已跳过", error);
   }
   startup = null;
-  if (stopping || !mainWindow || mainWindow.isDestroyed()) return;
-  registerQuickShortcut();
-  refreshTrayMenu();
 }
 
 if (!app.requestSingleInstanceLock()) {

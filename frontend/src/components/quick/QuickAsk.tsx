@@ -5,6 +5,7 @@ import { ArrowUp, CornerDownLeft, ExternalLink, Loader2, Plus, X } from "lucide-
 import { useAuth } from "@/components/auth/useAuth";
 import { Markdown } from "@/components/chat/Markdown";
 import { useI18n } from "@/components/LanguageProvider";
+import { useQuickShortcut } from "@/hooks/useQuickShortcut";
 import { ApiError } from "@/lib/api/errors";
 import { chatApi } from "@/lib/chat/api";
 import type { Subject } from "@/lib/chat/types";
@@ -57,7 +58,7 @@ export function QuickAsk() {
   const [error, setError] = useState("");
   const [tool, setTool] = useState("");
   const [conversationId, setConversationId] = useState<string | null>(null);
-  const [shortcut, setShortcut] = useState<string | null>(null);
+  const shortcut = useQuickShortcut();
   const panelRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -86,7 +87,6 @@ export function QuickAsk() {
     html.style.background = body.style.background = "transparent";
     body.style.minHeight = "0";
     body.style.overflow = "hidden";
-    void bridge.shortcut().then(setShortcut).catch(() => setShortcut(null));
     return () => {
       delete html.dataset.quickWindow;
       html.style.background = body.style.background = body.style.minHeight = body.style.overflow = "";
@@ -264,7 +264,7 @@ export function QuickAsk() {
               </label>
               <span className={styles.hint}>
                 <CornerDownLeft size={12} aria-hidden /> {tx("发送")} · Esc {desktop ? tx("收起") : tx("清空")}
-                {shortcut && <> · {tx("{shortcut} 呼出", { shortcut: shortcut.replace("CommandOrControl", "Ctrl") })}</>}
+                {shortcut && <> · {tx("{shortcut} 呼出", { shortcut })}</>}
               </span>
             </div>
             {phase !== "idle" && (

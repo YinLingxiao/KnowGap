@@ -51,7 +51,10 @@ def material_router(library: MaterialStore, subject_exists: Callable[[str], bool
     def search_materials(request: Request, q: Annotated[str, Query(min_length=1, max_length=600)],
                          limit: Annotated[int, Query(ge=1, le=10)] = 5,
                          student_id: str | None = None):
-        return library.search(owner(request, student_id), q.strip(), limit)
+        query = q.strip()
+        if not query:
+            raise HTTPException(422, '搜索内容不能为空。')
+        return library.search(owner(request, student_id), query, limit)
 
     @router.delete('/{document_id}', status_code=204)
     def delete_material(document_id: str, request: Request, student_id: str | None = None):

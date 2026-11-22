@@ -156,6 +156,9 @@ export const onboardingPhrases: Record<string, string> = {
   "最近对话": "Recent chat",
 
   // Quick ask
+  "按 {shortcut}": "Press {shortcut}",
+  "{shortcut} 随时快问": "{shortcut} to ask anytime",
+  "从托盘打开快问": "Open Quick Ask from the tray",
   "快问": "Quick ask",
   "正在确认登录状态…": "Checking sign-in status…",
   "请先在主窗口登录，或使用本机演示身份进入。":

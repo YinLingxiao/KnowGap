@@ -7,6 +7,7 @@ from pathlib import Path
 import uvicorn
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException
 
 from app.config import Settings
 from app.main import create_app
@@ -26,11 +27,24 @@ class ExportStaticFiles(StaticFiles):
             # Entry pages refer to one export's hashed assets. Always serve the installed page.
             return FileResponse(full_path, stat_result=stat_result, status_code=status_code,
                                 headers={"Cache-Control": "no-store"})
-        return super().file_response(full_path, stat_result, scope, status_code)
+        response = super().file_response(full_path, stat_result, scope, status_code)
+        # Windows can register .mjs as text/plain, which browsers refuse to execute.
+        media_type = {".js": "text/javascript; charset=utf-8",
+                      ".mjs": "text/javascript; charset=utf-8", ".wasm": "application/wasm"}.get(
+                          Path(full_path).suffix.lower())
+        if media_type and response.status_code != 304:
+            response.headers["Content-Type"] = media_type
+        return response
 
     async def get_response(self, path, scope):
-        response = await super().get_response(path, scope)
-        # StaticFiles 对不存在的文件返回 404 Response（不抛异常），所以按状态码判断。
+        try:
+            response = await super().get_response(path, scope)
+        except HTTPException as exc:
+            # Depending on 404.html, StaticFiles can either raise or return a 404.
+            candidate = f"{path.rstrip('/')}.html"
+            if exc.status_code == 404 and path and not Path(path).suffix and (Path(self.directory) / candidate).is_file():
+                return await super().get_response(candidate, scope)
+            raise
         if response.status_code != 404 or not path or Path(path).suffix:
             return response
         candidate = f"{path.rstrip('/')}.html"
