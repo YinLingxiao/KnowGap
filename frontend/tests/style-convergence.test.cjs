@@ -72,7 +72,6 @@ const spinModules = {
   [component('chat/PlanBar.module.css')]: ['spin', '900ms'],
   [component('chat/MessageList.module.css')]: ['spin', '2s'],
   [component('chat/LearningWidget.module.css')]: ['quiz-spin', '0.9s'],
-  [component('chat/LearningPlanPanel.module.css')]: ['spin', '1s'],
   [component('chat/GeneratedFiles.module.css')]: ['generated-spin', '900ms'],
   [component('chat/FileCard.module.css')]: ['file-spin', '900ms'],
   [component('agenda/TaskComposer.module.css')]: ['spin', '1s'],
@@ -244,8 +243,8 @@ test('three shared keyframes are unique and preserve their common semantics', ()
   assert.match(slide.body, /translateX\(0\)/);
 });
 
-test('all 19 spin modules use kg-spin without losing cycles or removing other keyframes', () => {
-  assert.equal(Object.keys(spinModules).length, 19);
+test('all 18 spin modules use kg-spin without losing cycles or removing other keyframes', () => {
+  assert.equal(Object.keys(spinModules).length, 18);
   for (const [file, [original, cycle]] of Object.entries(spinModules)) {
     const css = assertGlobalAnimation(file, 'kg-spin', `${cycle} linear infinite`);
     assertRemovedKeyframe(css, original, file);
