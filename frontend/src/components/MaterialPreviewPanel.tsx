@@ -24,7 +24,7 @@ import {
 import { createMaterialClient, type ExtractedText } from "@/lib/api/material-client";
 import { toApiError } from "@/lib/api/errors";
 import { cx } from "@/lib/cx";
-import { loadPptxSlides, type PptxPreview } from "@/lib/materials/pptx";
+import { clampPptxScale, pptxFrameDocument, renderPptxDocument, type RenderedPptx } from "@/lib/materials/pptx";
 import type { CourseMaterial } from "@/lib/types";
 import { Markdown, type CitationPreviewTarget } from "./chat/Markdown";
 import { useI18n } from "@/components/LanguageProvider";
@@ -561,7 +561,7 @@ function CsvView({ bytes }: { bytes: ArrayBuffer }) {
   return <SheetTable rows={rows} />;
 }
 
-// ------------------------------------------------------------------ PPTX 文字版 / 提取文字兜底
+// ------------------------------------------------------------------ PPTX 视觉预览 / 提取文字兜底
 
 function PptxView({ bytes, material, initialPage, quote, citationMode = false }: {
   bytes: ArrayBuffer;
@@ -571,67 +571,75 @@ function PptxView({ bytes, material, initialPage, quote, citationMode = false }:
   citationMode?: boolean;
 }) {
   const { tx } = useI18n();
-  const listRef = useRef<HTMLDivElement>(null);
-  const [result, setResult] = useState<PptxPreview | null>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const [doc, setDoc] = useState<RenderedPptx | null>(null);
   const [failed, setFailed] = useState(false);
+  const [textView, setTextView] = useState(false);
+  const [stageWidth, setStageWidth] = useState(0);
+  // 引用预览只渲染被引用的那一页，避免长课件无谓地全量渲染。
+  const onlySlide = citationMode && initialPage ? normalizeInitialPage(initialPage) : undefined;
 
   useEffect(() => {
     let cancelled = false;
-    setResult(null);
+    setDoc(null);
     setFailed(false);
-    loadPptxSlides(bytes)
-      .then((value) => { if (!cancelled) setResult(value); })
+    setTextView(false);
+    renderPptxDocument(bytes, { slides: onlySlide ? [onlySlide] : undefined })
+      .then((value) => { if (!cancelled) setDoc(value); })
       .catch(() => { if (!cancelled) setFailed(true); });
     return () => { cancelled = true; };
-  }, [bytes]);
+  }, [bytes, onlySlide]);
 
   useEffect(() => {
-    if (!result?.slides.length || !listRef.current) return;
-    const quotedIndex = quote?.trim()
-      ? result.slides.findIndex((slide) => [slide.title, ...slide.lines].some((line) => line.includes(quote)))
-      : -1;
-    const index = quotedIndex >= 0 ? quotedIndex : Math.min(normalizeInitialPage(initialPage), result.slides.length) - 1;
-    const target = listRef.current.querySelectorAll<HTMLElement>("[data-pptx-slide]")[index];
-    target?.scrollIntoView({ block: "start" });
-  }, [initialPage, quote, result]);
+    const stage = stageRef.current;
+    if (!stage || textView || failed) return undefined;
+    const update = () => setStageWidth(stage.clientWidth);
+    update();
+    if (typeof ResizeObserver === "undefined") return undefined;
+    const observer = new ResizeObserver(update);
+    observer.observe(stage);
+    return () => observer.disconnect();
+  }, [doc, failed, textView]);
+
+  const scale = doc ? clampPptxScale(stageWidth || 380, doc.width) : 1;
+  const frameDocument = useMemo(() => (doc ? pptxFrameDocument(doc.html, scale) : ""), [doc, scale]);
 
   if (failed) {
     return <ExtractedTextView material={material} initialPage={initialPage} quote={quote} citationMode={citationMode}
-      reason={tx("无法解析幻灯片版式，下面显示提取的文字。")} />;
+      reason={tx("幻灯片视觉渲染失败，下面显示提取的文字。")} />;
   }
-  if (!result) return <p className={styles.plainText}>{tx("正在解析幻灯片…")}</p>;
-  if (result.slides.length === 0) {
-    return <ExtractedTextView material={material} initialPage={initialPage} quote={quote} citationMode={citationMode}
-      reason={tx("没有读到幻灯片文字，下面显示上传时提取的内容。")} />;
+  if (!doc) return <p className={styles.plainText}>{tx("正在渲染幻灯片…")}</p>;
+  if (textView) {
+    return (
+      <div>
+        <div className={styles.fallbackActions}>
+          <button type="button" className={styles.secondaryBtn} onClick={() => setTextView(false)}>
+            {tx("返回幻灯片")}
+          </button>
+        </div>
+        <ExtractedTextView material={material} initialPage={initialPage} quote={quote} citationMode={citationMode} />
+      </div>
+    );
   }
   return (
     <div>
       <p className={styles.outlineBanner}>
         <TriangleAlert size={14} aria-hidden />
-        {tx("文字版幻灯片：只显示每页文字，图片、图表和动画请下载查看。")}
+        {tx("幻灯片预览：文字、图片和形状按原位置渲染，复杂动画与部分字体可能和 PowerPoint 不同。")}
       </p>
-      {result.truncated && (
-        <p className={styles.statusHint}>{tx("幻灯片较多，仅预览前 {count} 页。", { count: result.slides.length })}</p>
-      )}
-      <div ref={listRef} className={styles.slideList}>
-        {result.slides.map((slide, index) => (
-          <article
-            key={index}
-            className={styles.slideCard}
-            data-pptx-slide
-            aria-label={tx("第 {page} 张幻灯片", { page: index + 1 })}
-          >
-            <span className={styles.slideNumber}>{index + 1}</span>
-            {slide.title && <h4 className={styles.slideTitle}>{slide.title}</h4>}
-            {slide.lines.length > 0 ? (
-              <ul className={styles.slideLines}>
-                {slide.lines.map((line, lineIndex) => <li key={lineIndex}>{line}</li>)}
-              </ul>
-            ) : (
-              <p className={styles.statusHint}>{tx("（本页没有文字，可能是图片）")}</p>
-            )}
-          </article>
-        ))}
+      <div ref={stageRef} className={styles.pptxStage}>
+        <iframe
+          className={styles.pptxFrame}
+          sandbox=""
+          srcDoc={frameDocument}
+          title={tx("PowerPoint 预览")}
+        />
+      </div>
+      <div className={styles.fallbackActions}>
+        <button type="button" className={styles.secondaryBtn} onClick={() => setTextView(true)}>
+          <FileText size={14} aria-hidden />
+          <span>{tx("文字版")}</span>
+        </button>
       </div>
     </div>
   );

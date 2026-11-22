@@ -62,7 +62,11 @@ function loadPanel() {
     if (name === '@/lib/api/material-client') return { createMaterialClient: () => ({}) };
     if (name === '@/lib/api/errors') return { toApiError: (error) => ({ message: String(error) }) };
     if (name === '@/lib/cx') return { cx: (...parts) => parts.filter(Boolean).join(' ') };
-    if (name === '@/lib/materials/pptx') return { loadPptxSlides: async () => ({ slides: [], truncated: false }) };
+    if (name === '@/lib/materials/pptx') return {
+      renderPptxDocument: async () => ({ html: '', slideCount: 0, width: 960, height: 720 }),
+      clampPptxScale: () => 1,
+      pptxFrameDocument: () => '',
+    };
     if (name === './chat/Markdown') return { Markdown: () => null };
     return require(name);
   });

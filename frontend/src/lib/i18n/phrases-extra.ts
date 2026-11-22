@@ -441,4 +441,10 @@ export const extraPhrases: Record<string, string> = {
   "内置 PDF 渲染器不可用，已切换到浏览器自带的查看器。": "The built-in PDF renderer is unavailable; switched to the browser's own viewer.",
   "若下方空白，请下载后用本地程序查看。": "If the area below is blank, download and open the file locally.",
   "已添加 {name} 至{scope}，并按 {extension} 归档到「{type}」。": "Added {name} to {scope} and filed it under “{type}” by {extension}.",
+  "幻灯片视觉渲染失败，下面显示提取的文字。": "The slide renderer failed. Showing the extracted text instead.",
+  "正在渲染幻灯片…": "Rendering slides…",
+  "幻灯片预览：文字、图片和形状按原位置渲染，复杂动画与部分字体可能和 PowerPoint 不同。": "Slide preview: text, images and shapes are rendered in place; complex animations and some fonts may differ from PowerPoint.",
+  "PowerPoint 预览": "PowerPoint preview",
+  "文字版": "Text version",
+  "返回幻灯片": "Back to slides",
 };

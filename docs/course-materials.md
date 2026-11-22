@@ -19,6 +19,8 @@
 结果返回 id、document_id、title、label、page、start_line、end_line、excerpt。
 PDF 的 page 从 1 开始；TXT/Markdown 使用从 1 开始的原始行号。
 
+PPTX 预览在浏览器端用 `@meshesha/pptxjs` 把幻灯片渲染成 HTML/SVG，放进 `sandbox=""` 的 iframe 并加 CSP 限制；复杂动画和部分字体会与 PowerPoint 有差异。渲染失败或旧版 `.ppt` 时回退到 `/text` 的文字版，界面可随时切换。
+
 ## 上传规则
 
 - 支持含可复制文字的 PDF、UTF-8 TXT、Markdown、CSV、DOCX/DOC、PPTX/PPT、XLSX/XLS。
