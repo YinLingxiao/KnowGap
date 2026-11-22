@@ -25,7 +25,8 @@ export interface SpaceSubject {
 
 const NO_SUBJECT_TAGS = new Map<string, SubjectInfo>();
 
-/** 空间进度（已完成 / 全部）：feed 只带今天完成的任务，这里单独拉 status=all；任务变动后重新拉取 */function useSpaceProgress(subjectId: string) {
+/** 空间进度（已完成 / 全部）：feed 只带今天完成的任务，这里单独拉 status=all；任务变动后重新拉取 */
+function useSpaceProgress(subjectId: string) {
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   useEffect(() => {
     let alive = true;

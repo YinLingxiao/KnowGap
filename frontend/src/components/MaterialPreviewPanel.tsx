@@ -10,7 +10,8 @@
  * - xlsx / csv 不用 SheetJS 的 sheet_to_html（它的输出不转义单元格内容，真实存在过 CVE-2026-44549
  *   这种存储型 XSS），改用 sheet_to_json 拿纯数组数据，自己拼 <table>，交给 React 的文本节点自动转义。
  * - md 复用 chat/Markdown.tsx 的 Markdown 组件，它基于 ReactMarkdown，明确不渲染原始 HTML。
- * - pptx 用 JSZip 读 OOXML，只渲染每页文字（见 lib/materials/pptx.ts），不执行文档里的任何脚本。
+ * - pptx 用 @meshesha/pptxjs 渲染成 HTML/SVG（见 lib/materials/pptx.ts），放进 sandbox="" + CSP 的 iframe，
+ *   不执行脚本、不加载外部资源；渲染失败时回退到文字版。
  * - 旧版 .doc/.ppt 和原件丢失的资料走「文字版」：展示上传时后端已提取的纯文本，界面明确标注。
  *
  * 兼容性兜底：PDF 的 pdf.js 渲染失败时切到浏览器自带查看器；docx / pptx 解析失败时切到文字版；
@@ -764,7 +765,7 @@ function PreviewBody({ material, state, initialPage, quote, citationMode = false
         </div>
         {forceText && (
           <ExtractedTextView material={material} initialPage={initialPage} quote={quote} citationMode={citationMode}
-            reason={tx("读不到原件，下面显示上传时提取的文字。")} />
+            reason={tx("文件较大，不在应用里排版预览，下面显示上传时提取的文字。")} />
         )}
       </div>
     );

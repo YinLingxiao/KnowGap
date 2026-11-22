@@ -427,6 +427,7 @@ export const extraPhrases: Record<string, string> = {
   "查看提取文字": "Show extracted text",
   "收起提取文字": "Hide extracted text",
   "读不到原件，下面显示上传时提取的文字。": "The original file is unavailable. Showing the text extracted when it was uploaded.",
+  "文件较大，不在应用里排版预览，下面显示上传时提取的文字。": "This file is too large to lay out in the app. Showing the text extracted when it was uploaded.",
   "无法解析幻灯片版式，下面显示提取的文字。": "The slide layout could not be parsed. Showing the extracted text instead.",
   "没有读到幻灯片文字，下面显示上传时提取的内容。": "No slide text was found. Showing the content extracted at upload instead.",
   "文字版幻灯片：只显示每页文字，图片、图表和动画请下载查看。": "Text-only slides: only each page's text is shown; download to view images, charts and animations.",
