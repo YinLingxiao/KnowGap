@@ -62,6 +62,7 @@ function loadPanel() {
     if (name === '@/lib/api/material-client') return { createMaterialClient: () => ({}) };
     if (name === '@/lib/api/errors') return { toApiError: (error) => ({ message: String(error) }) };
     if (name === '@/lib/cx') return { cx: (...parts) => parts.filter(Boolean).join(' ') };
+    if (name === '@/lib/materials/pptx') return { loadPptxSlides: async () => ({ slides: [], truncated: false }) };
     if (name === './chat/Markdown') return { Markdown: () => null };
     return require(name);
   });

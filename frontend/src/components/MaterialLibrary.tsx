@@ -14,16 +14,14 @@ import type { Subject } from "@/lib/chat/types";
 import { cx } from "@/lib/cx";
 import { errorText } from "@/lib/i18n/errors";
 import { formatRelativeTime } from "@/lib/labels";
+import { fileExtension, KIND_LABELS, kindFromFilename, type MaterialKind } from "@/lib/materials/kinds";
 import type { CourseMaterial, SourceReference } from "@/lib/types";
 import { sourceLocation } from "./SourceReferences";
 import styles from "./MaterialLibrary.module.css";
 
 type ViewMode = "grid" | "list";
-type KindFilter = "all" | "pdf" | "md" | "txt" | "csv" | "docx" | "pptx" | "xlsx";
+type KindFilter = "all" | MaterialKind;
 type ScopeFilter = "all" | "general" | string;
-const UPLOAD_EXTENSION_RE = /\.(pdf|txt|md|csv|docx|doc|pptx|ppt|xlsx|xls)$/i;
-
-type MaterialKind = "pdf" | "md" | "txt" | "csv" | "docx" | "pptx" | "xlsx";
 
 // Office 格式复用聊天附件卡片（FileCard.tsx / GeneratedFiles.tsx）同一套图标，保持全站一致。
 const OFFICE_ICON = { docx: FileType, pptx: Presentation, xlsx: FileSpreadsheet } as const;
@@ -146,6 +144,7 @@ export function MaterialLibrary({
   const fileInput = useRef<HTMLInputElement>(null);
   const filterRef = useRef<HTMLDivElement>(null);
   const uploadMenuRef = useRef<HTMLDivElement>(null);
+  const docMenuRef = useRef<HTMLDivElement>(null);
   const generation = useRef(0);
   const pending = useRef(false);
 
@@ -178,8 +177,13 @@ export function MaterialLibrary({
     if (!filterOpen && !uploadMenuOpen && !menuDocId) return;
     const onDown = (event: MouseEvent) => {
       const target = event.target as Node;
+      const element = event.target instanceof Element ? event.target : null;
       if (filterOpen && !filterRef.current?.contains(target)) setFilterOpen(false);
       if (uploadMenuOpen && !uploadMenuRef.current?.contains(target)) setUploadMenuOpen(false);
+      // 点卡片右上角的「…」时不要把刚打开的菜单又收起来；点菜单外部才收起。
+      if (menuDocId && !docMenuRef.current?.contains(target) && !element?.closest("[data-doc-menu-trigger]")) {
+        setMenuDocId(null);
+      }
     };
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -204,19 +208,38 @@ export function MaterialLibrary({
       setError(tx("单份资料不能超过 100 MB。"));
       return;
     }
-    if (!UPLOAD_EXTENSION_RE.test(file.name)) {
+    // 后缀决定归档类型：.doc/.ppt/.xls 归到对应的新版 Office 类型，和后端 LEGACY_KINDS 一致。
+    const kind = kindFromFilename(file.name);
+    if (!kind) {
       setError(tx("请上传 PDF、Word（.docx / .doc）、PowerPoint（.pptx / .ppt）、Excel（.xlsx / .xls）、TXT、Markdown 或 CSV 文件。"));
       return;
     }
     pending.current = true;
     setOperation("upload");
     try {
-      const document = await client.upload(file, targetSubjectId);
-      setDocuments((current) => [document, ...current]);
+      const created = await client.upload(file, targetSubjectId);
+      // 后端按内容识别类型；类型缺失或不被认识时用后缀兜底，保证卡片、筛选和预览一致。
+      const material: CourseMaterial = created.kind === kind ? created : { ...created, kind };
+      setDocuments((current) => [material, ...current.filter((item) => item.id !== material.id)]);
+      // 自动归档：切到新资料按后缀归档的类型；如果当前在别的空间/归属里，也切到它的归属，
+      // 保证上传后立刻能看到这份资料。
+      setKindFilter(kind);
+      setScopeFilter((current) => {
+        const target = targetSubjectId ?? "general";
+        return current === "all" || current === target ? current : target;
+      });
+      setQuery("");
+      setResults([]);
+      setSearched(false);
       const scopeName = targetSubjectId && subjectMap[targetSubjectId]
         ? `「${subjectMap[targetSubjectId].name}」`
         : tx("通用资料库");
-      setNotice(tx("已添加 {name} 至{scope}。", { name: document.title, scope: scopeName }));
+      setNotice(tx("已添加 {name} 至{scope}，并按 {extension} 归档到「{type}」。", {
+        name: material.title,
+        scope: scopeName,
+        extension: `.${fileExtension(file.name)}`,
+        type: tx(KIND_LABELS[kind]),
+      }));
     } catch (failure) {
       setError(errorText(toApiError(failure), t, lang));
     } finally {
@@ -677,6 +700,7 @@ export function MaterialLibrary({
                       type="button"
                       className={styles.cardMoreBtn}
                       aria-label={t("materials.moreActions", { title: doc.title })}
+                      data-doc-menu-trigger
                       onClick={() => setMenuDocId(menuDocId === doc.id ? null : doc.id)}
                     >
                       <MoreHorizontal size={14} />
@@ -685,7 +709,10 @@ export function MaterialLibrary({
 
                   <div
                     className={styles.gridCardCenter}
-                    onClick={() => setPreviewDoc(doc)}
+                    onClick={() => {
+                      setMenuDocId(null);
+                      setPreviewDoc(doc);
+                    }}
                     title={t("materials.preview")}
                   >
                     <FileKindIcon kind={doc.kind} size="lg" />
@@ -701,7 +728,7 @@ export function MaterialLibrary({
                   </div>
 
                   {menuDocId === doc.id && (
-                    <div className={styles.docMenu} role="menu">
+                    <div ref={docMenuRef} className={styles.docMenu} role="menu">
                       <button
                         type="button"
                         role="menuitem"
@@ -755,7 +782,10 @@ export function MaterialLibrary({
                   <li key={doc.id} className={cx(styles.listRow, menuDocId === doc.id && styles.cardMenuOpen)}>
                     <div
                       className={styles.listRowMain}
-                      onClick={() => setPreviewDoc(doc)}
+                      onClick={() => {
+                        setMenuDocId(null);
+                        setPreviewDoc(doc);
+                      }}
                     >
                       <FileKindIcon kind={doc.kind} size="sm" />
                       <span className={styles.listRowTitle}>{doc.title}</span>
@@ -772,6 +802,7 @@ export function MaterialLibrary({
                         type="button"
                         className={styles.rowMoreBtn}
                         aria-label={t("materials.moreActions", { title: doc.title })}
+                        data-doc-menu-trigger
                         onClick={() => setMenuDocId(menuDocId === doc.id ? null : doc.id)}
                       >
                         <MoreHorizontal size={15} />
@@ -779,7 +810,7 @@ export function MaterialLibrary({
                     </div>
 
                     {menuDocId === doc.id && (
-                      <div className={styles.docMenu} role="menu">
+                      <div ref={docMenuRef} className={styles.docMenu} role="menu">
                         <button
                           type="button"
                           role="menuitem"

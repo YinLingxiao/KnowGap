@@ -91,6 +91,33 @@ def test_size_bytes_round_trips_in_list_response(tmp_path):
         assert listed[0]['size_bytes'] == document['size_bytes']
 
 
+def test_extracted_text_returns_pages_and_is_owner_scoped(tmp_path):
+    with TestClient(create_app(config(tmp_path))) as client:
+        document = upload(client, '第一段。\n第二段。', 'notes.txt').json()
+        response = client.get(f"/api/materials/{document['id']}/text")
+        assert response.status_code == 200
+        body = response.json()
+        assert body['kind'] == 'txt'
+        assert body['title'] == 'notes.txt'
+        assert body['truncated'] is False
+        assert [page['page'] for page in body['pages']] == [None]
+        assert '第一段。' in body['pages'][0]['text']
+        assert '第二段。' in body['pages'][0]['text']
+        assert client.get('/api/materials/unknown-id/text').status_code == 404
+        assert client.get(f"/api/materials/{document['id']}/text",
+                          params={'student_id': 'someone-else'}).status_code == 422
+
+
+def test_extracted_text_keeps_pdf_page_numbers(tmp_path):
+    with TestClient(create_app(config(tmp_path))) as client:
+        response = client.post('/api/materials', files={'file': ('lecture.pdf', pdf_bytes(), 'application/pdf')})
+        document = response.json()
+        body = client.get(f"/api/materials/{document['id']}/text").json()
+        assert [page['page'] for page in body['pages']] == [1, 2]
+        assert 'Queue follows FIFO.' in body['pages'][0]['text']
+        assert 'Stack follows LIFO' in body['pages'][1]['text']
+
+
 def test_outline_endpoint_returns_headings_and_is_owner_scoped(tmp_path):
     with TestClient(create_app(config(tmp_path))) as client:
         document = upload(client, '# 第一章\n内容。\n# 第二章\n更多内容。', 'notes.md').json()

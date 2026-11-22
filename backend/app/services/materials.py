@@ -324,6 +324,54 @@ class MaterialStore:
                 result['excerpt_complete'] = len(preview) <= excerpt_limit and len(preview) >= (row['chars'] or 0) * 0.9
             return result
 
+    def extracted_text(self, document_id: str, student_id: str, limit: int = MAX_TEXT) -> dict | None:
+        """上传时提取的正文，按页/节/幻灯片分组，给预览面板的「文字版」兜底。
+
+        原件丢失、旧版 .doc / .ppt 无法做排版渲染、或浏览器渲染失败时，学生仍能在应用里读到内容。
+        只返回去标识后的纯文本，不返回文件路径或原始字节。
+        """
+        with self.store.connection() as db:
+            row = db.execute(
+                'SELECT title, kind, notes_json FROM course_materials WHERE id = ? AND student_id = ?',
+                (document_id, student_id),
+            ).fetchone()
+            if row is None:
+                return None
+            pages: list[tuple[int | None, list[str]]] = []
+            total = 0
+            truncated = False
+            for chunk in db.execute(
+                'SELECT page, content FROM course_chunks WHERE document_id = ? ORDER BY rowid',
+                (document_id,),
+            ):
+                page = chunk['page']
+                if not pages or pages[-1][0] != page:
+                    pages.append((page, []))
+                content = chunk['content']
+                remaining = limit - total
+                if remaining <= 0:
+                    truncated = True
+                    break
+                if len(content) > remaining:
+                    content = content[:remaining]
+                    truncated = True
+                if content:
+                    pages[-1][1].append(content)
+                    total += len(content)
+                if truncated:
+                    break
+            try:
+                notes = json.loads(row['notes_json'] or '[]')
+            except (ValueError, TypeError):
+                notes = []
+            return {
+                'title': row['title'],
+                'kind': row['kind'],
+                'truncated': truncated,
+                'pages': [{'page': page, 'text': '\n'.join(parts)} for page, parts in pages if parts],
+                'notes': [note for note in notes if isinstance(note, str)],
+            }
+
     def list_materials(self, student_id: str, subject_id: str | None = None, unassigned: bool = False) -> list[Material]:
         """All materials by default; one Subject's, or only unassigned ones, when asked."""
         with self.store.connection() as db:

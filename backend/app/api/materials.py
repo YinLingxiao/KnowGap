@@ -47,6 +47,13 @@ def material_router(library: MaterialStore, subject_exists: Callable[[str], bool
             raise HTTPException(404, '资料不存在或已删除。')
         return {'outline': result['outline']}
 
+    @router.get('/{document_id}/text')
+    def material_text(document_id: str, request: Request, student_id: str | None = None):
+        result = library.extracted_text(document_id, owner(request, student_id))
+        if result is None:
+            raise HTTPException(404, '资料不存在或已删除。')
+        return result
+
     @router.get('/search', response_model=list[SourceReference])
     def search_materials(request: Request, q: Annotated[str, Query(min_length=1, max_length=600)],
                          limit: Annotated[int, Query(ge=1, le=10)] = 5,
