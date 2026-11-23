@@ -162,6 +162,83 @@ test('诊断提示词：被黑名单拦截时说明规则，测试用例失败�
   assert.match(p2, /实际输出/);
 });
 
+// ------------------------------------------------------------------ 缩进
+
+test('缩进单位跟着脚手架走：4 格、2 格、Tab，看不出来时用 4 格', () => {
+  assert.equal(model.detectIndentUnit('def f(x):\n    if x:\n        return 1\n    return 0'), '    ');
+  assert.equal(model.detectIndentUnit('function f() {\n  if (x) {\n    return 1;\n  }\n}'), '  ');
+  assert.equal(model.detectIndentUnit('int main() {\n\tint a = 1;\n\treturn 0;\n}'), '\t');
+  assert.equal(model.detectIndentUnit('n = int(input())\nprint(n * n)'), '    ');
+  assert.equal(model.detectIndentUnit(''), '    ');
+  // 续行对齐之类的零星宽度不影响多数
+  assert.equal(model.detectIndentUnit('def f(a,\n      b):\n    x = 1\n    if x:\n        y = 2\n    return x'), '    ');
+});
+
+test('编辑器按缩进单位回车和退格：4 格的函数体里回车还是 4 格，退格删一整级', () => {
+  const { EditorState, EditorSelection } = require('@codemirror/state');
+  const { insertNewlineAndIndent, deleteCharBackward } = require('@codemirror/commands');
+  const { python } = require('@codemirror/lang-python');
+  const { cpp } = require('@codemirror/lang-cpp');
+  const { indentUnit } = require('@codemirror/language');
+  const run = (command, doc, language) => {
+    let state = EditorState.create({
+      doc, selection: EditorSelection.cursor(doc.length),
+      extensions: [language, indentUnit.of(model.detectIndentUnit(doc)), EditorState.tabSize.of(4)],
+    });
+    command({ state, dispatch: (tr) => { state = tr.state; } });
+    return state.doc.toString();
+  };
+  assert.equal(run(insertNewlineAndIndent, 'def f(x):', python()), 'def f(x):\n    ');
+  assert.equal(run(insertNewlineAndIndent, 'def f(x):\n    if x:', python()), 'def f(x):\n    if x:\n        ');
+  assert.equal(run(deleteCharBackward, 'for i in range(3):\n    x = i\n    ', python()), 'for i in range(3):\n    x = i\n');
+  assert.equal(run(insertNewlineAndIndent, 'int main() {\n    int a = 1;', cpp()), 'int main() {\n    int a = 1;\n    ');
+});
+
+// ------------------------------------------------------------------ 运行记录
+
+test('解析：带上服务端编的 playgroundId，没有时为 null', () => {
+  const base = { language: 'python', starter_code: 'print(1)' };
+  assert.equal(model.parseCodePlaygroundSpec({ ...base, playgroundId: 'm1:p0' }).spec.playgroundId, 'm1:p0');
+  assert.equal(model.parseCodePlaygroundSpec(base).spec.playgroundId, null);
+});
+
+test('运行摘要：编译错误带第一条报错和行号', () => {
+  const report = model.buildRunReport('int main() {\n  printf("hi")\n}', '', failedResult());
+  assert.equal(report.status, 'compile_error');
+  assert.equal(report.error_line, 3);
+  assert.equal(report.error_message, "expected ';'");
+  assert.equal(report.failed_case, null);
+  assert.equal(report.code, 'int main() {\n  printf("hi")\n}');
+});
+
+test('运行摘要：用例不通过时带期望与实际；被拦截时带规则和那一行', () => {
+  const mismatch = client.mapSandboxResult({
+    ok: false, status: 'failed', message: '1/2 个测试用例通过。', language: 'python', stdout: '', stderr: '',
+    exit_code: 0, blocked: [], compile: null,
+    test_results: [
+      { index: 0, name: '用例1', input: '3', expected: '9', status: 'passed', passed: true, stdout: '9', stderr: '',
+        exit_code: 0, exit_note: null, duration_ms: 5, truncated: false, timed_out: false, diagnostics: [] },
+      { index: 1, name: '用例2', input: '-4', expected: '16', status: 'failed', passed: false, stdout: '-8', stderr: '',
+        exit_code: 0, exit_note: null, duration_ms: 5, truncated: false, timed_out: false, diagnostics: [] },
+    ],
+    passed: 1, total: 2, diagnostics: [], time_limit_seconds: 3,
+  });
+  const report = model.buildRunReport('print(2*int(input()))', 'ignored', mismatch);
+  assert.deepEqual(
+    [report.status, report.passed, report.total, report.failed_case],
+    ['failed', 1, 2, { name: '用例2', input: '-4', expected: '16', actual: '-8' }],
+  );
+  assert.equal(report.stdout, '-8');
+
+  const blocked = failedResult({
+    status: 'blocked', compile: null,
+    blocked: [{ rule_id: 'PROC-01', category: '进程与系统', description: '禁止启动子进程。', line: 2, excerpt: 'os.system("dir")' }],
+  });
+  const stopped = model.buildRunReport('import os\nos.system("dir")', '', blocked);
+  assert.equal(stopped.error_line, 2);
+  assert.match(stopped.error_message, /禁止启动子进程。.*os\.system/);
+});
+
 // ------------------------------------------------------------------ 接口映射
 
 test('映射：snake_case 转 camelCase，缺字段时给安全默认值', () => {

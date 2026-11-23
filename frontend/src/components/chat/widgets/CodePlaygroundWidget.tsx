@@ -13,7 +13,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Bot, CircleAlert, CircleCheck, LoaderCircle, Play, RotateCcw, ShieldAlert,
+  Bot, CircleAlert, CircleCheck, LoaderCircle, Play, RotateCcw, ShieldAlert, Sparkles,
 } from "lucide-react";
 import {
   defaultKeymap, history, historyKeymap, indentWithTab, temporarilySetTabFocusMode,
@@ -21,8 +21,8 @@ import {
 import { cpp } from "@codemirror/lang-cpp";
 import { javascript } from "@codemirror/lang-javascript";
 import { python } from "@codemirror/lang-python";
-import { HighlightStyle, bracketMatching, indentOnInput, syntaxHighlighting } from "@codemirror/language";
-import { EditorState, Prec, StateEffect, StateField, type Extension } from "@codemirror/state";
+import { HighlightStyle, bracketMatching, indentOnInput, indentUnit, syntaxHighlighting } from "@codemirror/language";
+import { EditorState, Prec, RangeSetBuilder, StateEffect, StateField, Transaction, type Extension } from "@codemirror/state";
 import {
   Decoration, EditorView, MatchDecorator, ViewPlugin, drawSelection, highlightActiveLine, keymap, lineNumbers,
   type DecorationSet, type ViewUpdate,
@@ -33,13 +33,14 @@ import {
   runSandbox, type SandboxCaseResult, type SandboxCaseStatus, type SandboxDiagnostic, type SandboxResult,
   type SandboxStatus,
 } from "@/lib/api/sandbox-client";
+import { cachedPlaygroundRun, loadPlaygroundRuns, reportPlaygroundRun } from "@/lib/chat/playgroundRuns";
 import { cx } from "@/lib/cx";
 import { useI18n } from "@/components/LanguageProvider";
 import base from "../LearningWidget.module.css";
 import { askInComposer, sendNow, useWidgetScope } from "./widgetEvents";
 import styles from "./CodePlaygroundWidget.module.css";
 import {
-  LANGUAGE_LABELS, buildDiagnosisPrompt, countTodos, parseCodePlaygroundSpec,
+  LANGUAGE_LABELS, buildDiagnosisPrompt, buildRunReport, countTodos, detectIndentUnit, parseCodePlaygroundSpec,
   type PlaygroundLanguage, type PlaygroundSpec,
 } from "./codePlaygroundModel";
 
@@ -88,6 +89,38 @@ const todoHighlighter = ViewPlugin.fromClass(
   { decorations: (plugin) => plugin.decorations },
 );
 
+/** 每行开头的缩进画淡竖线，每级一条，嵌套深了也看得清哪一层对哪一层。 */
+const TAB_SIZE = 4;
+
+function indentGuides(unit: string): Extension {
+  const columns = unit === "\t" ? TAB_SIZE : unit.length;
+  const guide = Decoration.mark({ class: "cm-sbx-indent", attributes: { style: `background-size: ${columns}ch 100%` } });
+  const build = (view: EditorView): DecorationSet => {
+    const builder = new RangeSetBuilder<Decoration>();
+    for (const { from, to } of view.visibleRanges) {
+      for (let pos = from; pos <= to;) {
+        const line = view.state.doc.lineAt(pos);
+        const lead = /^[ \t]*/.exec(line.text)?.[0].length ?? 0;
+        if (lead > 0) builder.add(line.from, line.from + lead, guide);
+        pos = line.to + 1;
+      }
+    }
+    return builder.finish();
+  };
+  return ViewPlugin.fromClass(
+    class {
+      decorations: DecorationSet;
+      constructor(view: EditorView) {
+        this.decorations = build(view);
+      }
+      update(update: ViewUpdate) {
+        if (update.docChanged || update.viewportChanged) this.decorations = build(update.view);
+      }
+    },
+    { decorations: (plugin) => plugin.decorations },
+  );
+}
+
 /** 出错行标红。装饰会随编辑自动平移。 */
 const setErrorLines = StateEffect.define<number[]>();
 const errorLineDeco = Decoration.line({ class: "cm-sbx-error-line" });
@@ -126,6 +159,7 @@ const editorTheme = EditorView.theme({
   },
   ".cm-matchingBracket": { backgroundColor: "var(--accent-soft-strong)", outline: "none" },
   ".cm-sbx-todo": { backgroundColor: "var(--orange-soft)", color: "var(--orange)", borderRadius: "3px" },
+  ".cm-sbx-indent": { backgroundImage: "linear-gradient(to right, var(--border-strong) 1px, transparent 1px)" },
   ".cm-line.cm-sbx-error-line": { backgroundColor: "var(--red-soft)" },
 });
 
@@ -323,6 +357,8 @@ function PlaygroundPanel({ spec, onAsk }: { spec: PlaygroundSpec; onAsk?: (promp
   const [stdin, setStdin] = useState("");
   const [asked, setAsked] = useState(false);
   const [missing, setMissing] = useState<{ tool: string; code: string } | null>(null);
+  const [restored, setRestored] = useState<{ status: string; passed: number; total: number } | null>(null);
+  const [variantAsked, setVariantAsked] = useState(false);
   const autoCheckedRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -334,11 +370,16 @@ function PlaygroundPanel({ spec, onAsk }: { spec: PlaygroundSpec; onAsk?: (promp
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return undefined;
+    // 缩进跟着脚手架走（Python 回车、退格和已有代码对不齐会直接 IndentationError）。
+    const unit = detectIndentUnit(spec.starterCode);
     const view = new EditorView({
       parent: host,
       state: EditorState.create({
         doc: spec.starterCode,
         extensions: [
+          indentUnit.of(unit),
+          EditorState.tabSize.of(TAB_SIZE),
+          indentGuides(unit),
           Prec.highest(keymap.of([{ key: "Mod-Enter", run: () => { void runRef.current(); return true; } }])),
           lineNumbers(),
           highlightActiveLine(),
@@ -369,6 +410,25 @@ function PlaygroundPanel({ spec, onAsk }: { spec: PlaygroundSpec; onAsk?: (promp
     };
   }, [spec, tx]);
 
+  // 刷新或切回这个对话时，把学生上次运行的代码放回编辑器；学生已经动手改了就不覆盖。
+  useEffect(() => {
+    const playgroundId = spec.playgroundId;
+    if (!playgroundId || !scope) return undefined;
+    let cancelled = false;
+    void loadPlaygroundRuns(scope).then(() => {
+      const run = cachedPlaygroundRun(scope, playgroundId);
+      const view = viewRef.current;
+      if (cancelled || !run || !view || run.code === spec.starterCode) return;
+      if (view.state.doc.toString() !== spec.starterCode) return;
+      view.dispatch({
+        changes: { from: 0, to: view.state.doc.length, insert: run.code },
+        annotations: Transaction.addToHistory.of(false),
+      });
+      setRestored({ status: run.status, passed: run.passed, total: run.total });
+    });
+    return () => { cancelled = true; };
+  }, [spec, scope]);
+
   const run = useCallback(async () => {
     const view = viewRef.current;
     if (!view || runningRef.current) return;
@@ -380,11 +440,18 @@ function PlaygroundPanel({ spec, onAsk }: { spec: PlaygroundSpec; onAsk?: (promp
     setError("");
     setAsked(false);
     setMissing(null);
+    setRestored(null);
+    setVariantAsked(false);
     try {
       const result = await runSandbox({
         language: spec.language, code, stdin,
         testCases: spec.testCases.map((item) => ({ name: item.name, input: item.input, expected: item.expected })),
       });
+      // 每次运行都记一笔（组件卸载了也照记），下一轮对话 AI 就知道学生写了什么、跑成什么样。
+      if (spec.playgroundId) {
+        void reportPlaygroundRun(scope, spec.playgroundId,
+          buildRunReport(code, spec.testCases.length ? "" : stdin, result));
+      }
       if (!mountedRef.current || seq !== seqRef.current) return;
       setLast({ id: seq, code, result });
       // 只有学生在运行期间没改过代码时才标红，否则行号可能已经对不上。
@@ -433,7 +500,16 @@ function PlaygroundPanel({ spec, onAsk }: { spec: PlaygroundSpec; onAsk?: (promp
     setLast(null);
     setError("");
     setAsked(false);
+    setRestored(null);
+    setVariantAsked(false);
     view.focus();
+  };
+
+  const askVariant = () => {
+    sendNow(scope, tx("我在代码实验台「{title}」里已经全部通过了。请看看我的写法有没有可以改进的地方，再出一个变式题。", {
+      title: spec.title,
+    }));
+    setVariantAsked(true);
   };
 
   const jumpTo = (lineNumber: number) => {
@@ -467,6 +543,8 @@ function PlaygroundPanel({ spec, onAsk }: { spec: PlaygroundSpec; onAsk?: (promp
   // 脚手架里本来就没有 TODO 时不显示进度徽章，否则会对一段没有挖空的代码说「已全部补全」。
   const hasTodos = countTodos(spec.starterCode) > 0;
   const failed = last !== null && !last.result.ok;
+  const solved = last !== null && last.result.status === "passed";
+  const restoredStatus = restored && restored.status in STATUS_TITLE ? tx(STATUS_TITLE[restored.status as SandboxStatus]) : "";
 
   return (
     <section className={base.widgetCard} aria-label={spec.title}>
@@ -488,6 +566,16 @@ function PlaygroundPanel({ spec, onAsk }: { spec: PlaygroundSpec; onAsk?: (promp
       {spec.instructions && <p className={styles.instructions}>{spec.instructions}</p>}
 
       <div className={styles.editor} ref={hostRef} />
+
+      {restored && (
+        <p className={styles.askedNote} role="status">
+          {restored.total > 0
+            ? tx("已恢复你上次运行的代码（{status} {passed}/{total}）。点「重置」可回到初始代码。", {
+              status: restoredStatus, passed: restored.passed, total: restored.total,
+            })
+            : tx("已恢复你上次运行的代码（{status}）。点「重置」可回到初始代码。", { status: restoredStatus })}
+        </p>
+      )}
 
       {spec.testCases.length === 0 && (
         <details className={styles.stdin}>
@@ -518,6 +606,12 @@ function PlaygroundPanel({ spec, onAsk }: { spec: PlaygroundSpec; onAsk?: (promp
           <button type="button" className={cx(styles.textBtn, styles.textBtnAccent)} onClick={diagnose}>
             <Bot size={13} aria-hidden />
             <span>{tx("让 AI 诊断报错原因")}</span>
+          </button>
+        )}
+        {solved && (
+          <button type="button" className={cx(styles.textBtn, styles.textBtnAccent)} onClick={askVariant} disabled={variantAsked}>
+            <Sparkles size={13} aria-hidden />
+            <span>{variantAsked ? tx("已发给 AI") : tx("做完了，来个变式")}</span>
           </button>
         )}
       </div>
@@ -557,6 +651,7 @@ function PlaygroundPanel({ spec, onAsk }: { spec: PlaygroundSpec; onAsk?: (promp
       <footer className={base.widgetFoot}>
         <span className={base.footHint}>
           {tx("Ctrl/⌘ + Enter 运行 · 按 Esc 再按 Tab 离开编辑器 · 每次最多运行 {seconds} 秒", { seconds: last?.result.timeLimitSeconds ?? 3 })}
+          {spec.playgroundId && <> · {tx("运行结果会带给下一轮 AI")}</>}
         </span>
       </footer>
     </section>

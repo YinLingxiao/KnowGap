@@ -37,7 +37,8 @@ from app.chat.checkpoints import MAX_TOOL_ROUNDS, resume_state
 from app.chat.usage import normalize_usage
 from app.chat.streaming import StreamStore
 from app.chat.schemas import DispatchThread, ProposeThreads, ReportProgress
-from app.chat.quizzes import QuizStore, guard_gaps, seal_quizzes
+from app.chat.playgrounds import PlaygroundStore, seal_cards
+from app.chat.quizzes import QuizStore, guard_gaps
 from app.chat.skills import WIDGET_RETRY_NOTICE, mode_widgets, refuses_widget
 from app.chat.skills.problem_drill_skill import DRILL_TOOLS, SEARCH_TOOL, drill_plan, guard_reply, wants_problems
 from app.agent_tools.web_search import TOOL_NAME as WEB_SEARCH_TOOL
@@ -943,6 +944,13 @@ class ChatService:
                 )
                 if not event_turn and not generation.checkpoint else []
             )
+            code_runs = (
+                PlaygroundStore(self.store).run_context(
+                    generation.conversation_id, student_id,
+                    message_ids={row["id"] for row in history if row["role"] == "assistant"},
+                )
+                if not event_turn and not generation.checkpoint else []
+            )
             onboarding_interview = (
                 False if event_turn else self.store.is_active_onboarding_conversation(student_id, generation.conversation_id)
             )
@@ -958,6 +966,7 @@ class ChatService:
                 attached_files=attached_files, system_turn=event_turn, image_question=image_question,
                 mode=None if event_turn else generation.mode,
                 quiz_attempts=quiz_attempts,
+                code_runs=code_runs,
                 onboarding_interview=onboarding_interview,
                 recent_conversations=recent_conversations,
             )
@@ -1155,7 +1164,7 @@ class ChatService:
                 logger.warning("problem_drill quiz check: %s", quiz_report)
             text = guard_gaps(text, {m.id for m, _ in memories if m.kind == "misconception"})
             # 定稿前封存题目：存库并抹掉正文里的答案与解析，done 事件和之后的读取都不含答案
-            text = seal_quizzes(text, assistant_id, generation.conversation_id, self.store)
+            text = seal_cards(text, assistant_id, generation.conversation_id, self.store)
             cited = [source.model_dump() for source in sources if f"[{source.label}]" in text]
             self.store.finish_reply(assistant_id, content=text, status="complete", meta={
                 "context_memory_ids": [m.id for m, _ in memories], "sources": cited, "truncated": finish == "length",
@@ -1214,7 +1223,8 @@ class ChatService:
                 else:
                     await self._analyze(student_id, generation, history, user_text, text, memories, exercise,
                                         self._background_model(model),
-                                        subject_id, plan_at_start, quiz_attempts=quiz_attempts)
+                                        subject_id, plan_at_start, quiz_attempts=quiz_attempts,
+                                        code_runs=code_runs)
             except Exception:
                 # The reply is already complete and stored; note-taking problems must not mark it failed.
                 logger.exception("Learning analysis failed")
@@ -1222,14 +1232,14 @@ class ChatService:
         except asyncio.CancelledError:
             if generation.streaming:
                 close_tool_batch(tool_messages)
-                self.store.finish_reply(assistant_id, content=seal_quizzes("".join(parts), assistant_id, generation.conversation_id, self.store),
+                self.store.finish_reply(assistant_id, content=seal_cards("".join(parts), assistant_id, generation.conversation_id, self.store),
                                         status="failed" if self.closing else "cancelled",
                                         error=INTERRUPTED if self.closing else None,
                                         meta={"tool_calls": tool_log, "tool_messages": tool_messages, **_reasoning_meta(thoughts)})
                 queue.put_nowait(("cancelled", {"message": self._message(student_id, assistant_id)}))
         except ProviderError as exc:
             close_tool_batch(tool_messages)
-            self.store.finish_reply(assistant_id, content=seal_quizzes("".join(parts), assistant_id, generation.conversation_id, self.store), status="failed", error=exc.detail,
+            self.store.finish_reply(assistant_id, content=seal_cards("".join(parts), assistant_id, generation.conversation_id, self.store), status="failed", error=exc.detail,
                                     meta={"tool_calls": tool_log, "tool_messages": tool_messages, **_reasoning_meta(thoughts)})
             queue.put_nowait(("error", {
                 "detail": exc.detail, "status_code": exc.status_code,
@@ -1240,7 +1250,7 @@ class ChatService:
             detail = "生成回复时发生内部错误，请重试。"
             try:
                 close_tool_batch(tool_messages)
-                self.store.finish_reply(assistant_id, content=seal_quizzes("".join(parts), assistant_id, generation.conversation_id, self.store), status="failed", error=detail,
+                self.store.finish_reply(assistant_id, content=seal_cards("".join(parts), assistant_id, generation.conversation_id, self.store), status="failed", error=detail,
                                         meta={"tool_calls": tool_log, "tool_messages": tool_messages, **_reasoning_meta(thoughts)})
             except Exception:
                 logger.exception("Could not record the failed reply")
@@ -1359,7 +1369,7 @@ class ChatService:
 
     async def _analyze(
         self, student_id, generation, history, user_text, reply, memories, exercise, model, subject_id=None,
-        plan_at_start=None, *, quiz_attempts: list[dict] | None = None,
+        plan_at_start=None, *, quiz_attempts: list[dict] | None = None, code_runs: list[dict] | None = None,
     ) -> None:
         user_id = generation.user_message_id
         if self.store.message_meta(user_id).get("analyzed"):
@@ -1378,7 +1388,7 @@ class ChatService:
         try:
             raw = await asyncio.wait_for(
                 self._complete_json(model, analysis_messages(learner_rows(history), user_text, reply, memories, given, exercise, is_thread,
-                                    learning_plan, quiz_attempts=quiz_attempts),
+                                    learning_plan, quiz_attempts=quiz_attempts, code_runs=code_runs),
                                     generation.conversation_id, generation.assistant_message_id, "analysis"),
                 ANALYSIS_TIMEOUT,
             )

@@ -24,9 +24,9 @@ MODES = ("explain", "solve", "practice", "plan", "research", "organize", "review
 ROWS = [{"role": "user", "content": "你好", "kind": "text", "status": "complete", "meta_json": "{}"}]
 
 MODE_NONE_BASELINE = {
-    "main": (7785, "aa1569ee3ad6b589"),
-    "thread": (15947, "c31725f6742674a3"),
-    "chat": (14177, "fe27312674c53e22"),
+    "main": (8139, "ff8278429c4b6d34"),
+    "thread": (16357, "e2f2eac5b663a0ea"),
+    "chat": (14510, "8478dbbaf404f7b1"),
 }
 
 
@@ -141,7 +141,7 @@ def test_mode_none_keeps_the_exact_baseline(role, length, digest):
 
     assert len(system) == length
     assert hashlib.sha256(system.encode()).hexdigest()[:16] == digest
-    assert len(WIDGET_SYSTEM_PROMPT) == 9804
+    assert len(WIDGET_SYSTEM_PROMPT) == 9860
 
 
 def test_invalid_mode_is_rejected_by_the_api(tmp_path):

@@ -198,6 +198,17 @@ function mapEvent(type: string, data: Wire): StreamEvent | null {
 }
 
 const root = API_BASE_URL;
+
+/** 服务端存的一次实验台运行（字段名照搬后端） */
+export interface PlaygroundRun {
+  id: string;
+  playground_id: string;
+  status: string;
+  passed: number;
+  total: number;
+  code: string;
+  created_at: string;
+}
 export function mapQuizAttempt(data: Wire): QuizAttemptResult {
   return {
     quizId: data.quiz_id, attemptId: data.attempt_id, optionIndex: data.option_index, correct: Boolean(data.correct),
@@ -268,6 +279,16 @@ export const chatApi = {
   async listQuizAttempts(conversationId: string): Promise<Record<string, QuizAttemptResult>> {
     const data = await request<Record<string, Wire>>(root, `${path(conversationId)}/quiz-attempts`, { cache: "no-store" });
     return Object.fromEntries(Object.entries(data).map(([quizId, item]) => [quizId, mapQuizAttempt(item)]));
+  },
+  /** 记一次代码实验台运行；下一轮对话会把它交给 AI */
+  reportPlaygroundRun(playgroundId: string, report: object): Promise<PlaygroundRun> {
+    return request(root, `/api/playgrounds/${encodeURIComponent(playgroundId)}/runs`, {
+      method: "POST", body: JSON.stringify(report),
+    });
+  },
+  /** 会话内每个代码实验台最近一次运行，key 为 playgroundId，打开时用来恢复代码 */
+  listPlaygroundRuns(conversationId: string): Promise<Record<string, PlaygroundRun>> {
+    return request(root, `${path(conversationId)}/playground-runs`, { cache: "no-store" });
   },
   async listConversations(): Promise<ConversationSummary[]> {
     return (await request<Wire[]>(root, "/api/conversations", { cache: "no-store" })).map(mapSummary);
