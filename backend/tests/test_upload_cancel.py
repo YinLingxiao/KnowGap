@@ -57,9 +57,12 @@ def test_disconnecting_while_reading_cancels_and_stores_nothing(library):
 
     async def scenario():
         with pytest.raises(HTTPException) as cancelled:
+            async def once_reading():  # 等识图真正开始再断开，慢机器上读文字也要一会儿
+                return started.is_set()
+
             await asyncio.wait_for(unless_disconnected(
                 library, guard, library.add_with_ocr(STUDENT, "课件.docx", docx_bytes(), None, guard),
-                after(3), poll=0.01), timeout=5)
+                once_reading, poll=0.01), timeout=20)
         assert started.is_set()
         return cancelled.value
 
