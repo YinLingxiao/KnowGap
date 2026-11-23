@@ -2,15 +2,17 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import {
-  ArrowDown, ArrowUp, ChevronDown, ChevronRight, FileSpreadsheet, FileText, FileType, Folder, LayoutGrid, List,
-  MessageSquareText, NotebookPen, Plus, Presentation, Trash2, Upload,
+  AlertCircle, ArrowDown, ArrowUp, ChevronDown, ChevronRight, FileSpreadsheet, FileText, FileType, Folder, LayoutGrid, List,
+  Loader2, MessageSquareText, NotebookPen, Plus, Presentation, RotateCw, Trash2, Upload, X,
 } from "lucide-react";
+import { uploadQueue, useUploads } from "@/hooks/useUploads";
 import { createMaterialClient } from "@/lib/api/material-client";
 import { toApiError } from "@/lib/api/errors";
 import { chatApi } from "@/lib/chat/api";
 import { DOCUMENT_EXTENSIONS } from "@/lib/chat/attachments";
 import { cx } from "@/lib/cx";
 import { localeOf, type Language } from "@/lib/i18n";
+import { sizeText, splitName } from "@/lib/materials/uploads";
 import type { CourseMaterial } from "@/lib/types";
 import { useI18n } from "@/components/LanguageProvider";
 import { askInComposer } from "./widgets/widgetEvents";
@@ -102,9 +104,10 @@ export function Library({ subjectId, notesChars, onOpenNotes, onChange }: Librar
   const [view, setView] = useState<"list" | "grid">("list");
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "date", dir: -1 });
   const [error, setError] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(0);
   const [dragging, setDragging] = useState(false);
   const [confirming, setConfirming] = useState<string | null>(null);
+  const jobs = useUploads(subjectId);
+  const active = jobs.filter((job) => job.state !== "failed").length;
 
   const refresh = useCallback(async () => {
     try {
@@ -126,26 +129,19 @@ export function Library({ subjectId, notesChars, onOpenNotes, onChange }: Librar
     window.addEventListener("knowgap:agent-env", onEnv);
     return () => window.removeEventListener("knowgap:agent-env", onEnv);
   }, [refresh, refreshWorkspace]);
+  // 后台上传的文件传完一个就刷新一次列表；失败的留在上传区，由用户重试或移除
+  useEffect(() => uploadQueue.watch((event) => {
+    if (event.type === "done" && event.job.subjectId === subjectId) void refresh();
+  }), [refresh, subjectId]);
   useEffect(() => {
     if (!confirming) return;
     const timer = window.setTimeout(() => setConfirming(null), 3000);
     return () => window.clearTimeout(timer);
   }, [confirming]);
 
-  const upload = async (files: File[]) => {
-    for (const file of files) {
-      setUploading((count) => count + 1);
-      try {
-        await client.upload(file, subjectId);
-        setError(null);
-      } catch (failure) {
-        setError(`${file.name}：${toApiError(failure).message}`);
-      } finally {
-        setUploading((count) => count - 1);
-      }
-    }
-    await refresh();
-    onChange();
+  const upload = (files: File[]) => {
+    setError(null);
+    uploadQueue.enqueue(files, subjectId);
   };
   const remove = async (id: string) => {
     setConfirming(null);
@@ -161,7 +157,7 @@ export function Library({ subjectId, notesChars, onOpenNotes, onChange }: Librar
     event.preventDefault();
     setDragging(false);
     const files = [...event.dataTransfer.files];
-    if (files.length) void upload(files);
+    if (files.length) upload(files);
   };
 
   const rows = useMemo(() => {
@@ -191,7 +187,7 @@ export function Library({ subjectId, notesChars, onOpenNotes, onChange }: Librar
   const showNotes = (filter === "all" || filter === "text") && notesChars > 0;
   const showWorkspace = filter === "all" && Boolean(tree.workspace);
   const total = rows.length + (showNotes ? 1 : 0);
-  const empty = loaded && items.length === 0 && !showNotes && !showWorkspace;
+  const empty = loaded && items.length === 0 && !showNotes && !showWorkspace && jobs.length === 0;
 
   const rowActions = (item: CourseMaterial) => (
     <span className={styles.actions}>
@@ -238,11 +234,47 @@ export function Library({ subjectId, notesChars, onOpenNotes, onChange }: Librar
         </button>
         <input
           ref={input} hidden multiple type="file" accept={DOCUMENT_EXTENSIONS.join(",")}
-          onChange={(event) => { const files = [...(event.target.files ?? [])]; event.target.value = ""; if (files.length) void upload(files); }}
+          onChange={(event) => { const files = [...(event.target.files ?? [])]; event.target.value = ""; if (files.length) upload(files); }}
         />
       </div>
 
       {error && <p className={styles.error} role="alert">{error}</p>}
+
+      {jobs.length > 0 && (
+        <ul className={styles.uploads} aria-label={tx("上传进度")}>
+          {jobs.map((job) => (
+            <li key={job.id} className={cx(styles.upload, job.state === "failed" && styles.uploadFailed)}>
+              {job.state === "failed"
+                ? <AlertCircle size={14} className={styles.uploadIcon} aria-hidden />
+                : <Loader2 size={14} className={cx(styles.uploadIcon, job.state === "uploading" && styles.spin)} aria-hidden />}
+              <span className={styles.uploadText}>
+                <span className={styles.uploadName} title={job.name}>
+                  <span>{splitName(job.name)[0]}</span>
+                  <span>{splitName(job.name)[1]}</span>
+                </span>
+                <span className={styles.uploadStatus}>
+                  {job.state === "failed" ? job.error
+                    : job.state === "queued" ? tx("排队中 · {size}", { size: sizeText(job.size) })
+                      : tx("上传并解析中… 图片多的课件要一两分钟")}
+                </span>
+              </span>
+              {job.state === "failed" && (
+                <button type="button" onClick={() => uploadQueue.retry(job.id)} aria-label={tx("重试上传 {name}", { name: job.name })} title={tx("重试")}>
+                  <RotateCw size={13} aria-hidden />
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => uploadQueue.cancel(job.id)}
+                aria-label={job.state === "failed" ? tx("移除 {name}", { name: job.name }) : tx("取消上传 {name}", { name: job.name })}
+                title={job.state === "failed" ? tx("移除") : tx("取消上传")}
+              >
+                <X size={13} aria-hidden />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
 
       {empty ? (
         <button type="button" className={styles.empty} onClick={() => input.current?.click()}>
@@ -332,7 +364,7 @@ export function Library({ subjectId, notesChars, onOpenNotes, onChange }: Librar
               </div>
             );
           })}
-          {loaded && total === 0 && !showWorkspace && <p className={styles.nested}>{tx("没有这个类型的资料。")}</p>}
+          {loaded && total === 0 && !showWorkspace && jobs.length === 0 && <p className={styles.nested}>{tx("没有这个类型的资料。")}</p>}
         </div>
       ) : (
         <div className={styles.grid}>
@@ -359,7 +391,7 @@ export function Library({ subjectId, notesChars, onOpenNotes, onChange }: Librar
       )}
 
       <footer className={styles.footer}>
-        <span>{uploading > 0 ? tx("正在上传并解析 {count} 个文件…", { count: uploading }) : tx("{count} 个文件", { count: total })}</span>
+        <span>{active > 0 ? tx("正在上传并解析 {count} 个文件…", { count: active }) : tx("{count} 个文件", { count: total })}</span>
         {dragging && <span>{tx("松开即可上传")}</span>}
       </footer>
     </div>

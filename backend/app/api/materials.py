@@ -1,5 +1,7 @@
 """Course material endpoints for the existing fixed local-demo identity."""
-from collections.abc import Callable
+import asyncio
+from collections.abc import Awaitable, Callable
+from contextlib import suppress
 from typing import Annotated
 
 from fastapi import APIRouter, File, HTTPException, Query, Request, Response, UploadFile
@@ -7,7 +9,30 @@ from starlette.concurrency import run_in_threadpool
 
 from app.auth.deps import current_student
 from app.models.schemas import DEMO_STUDENT, SourceReference
-from app.services.materials import MAX_UPLOAD_BYTES, Material, MaterialStore
+from app.services.materials import MAX_UPLOAD_BYTES, Material, MaterialStore, UploadCancelled, UploadGuard
+
+
+DISCONNECT_POLL_SECONDS = 0.5
+
+
+async def unless_disconnected(library: MaterialStore, guard: UploadGuard, job: Awaitable[Material],
+                              disconnected: Callable[[], Awaitable[bool]],
+                              poll: float = DISCONNECT_POLL_SECONDS) -> Material:
+    """解析可能要几分钟（识图）。前端取消上传就是断开连接：停掉解析，已经写进去的删掉，不留半截资料。"""
+    task = asyncio.ensure_future(job)
+    while True:
+        done, _ = await asyncio.wait({task}, timeout=poll)
+        if done:
+            return task.result()
+        if await disconnected():
+            break
+    guard.cancelled.set()
+    task.cancel()
+    with suppress(asyncio.CancelledError, UploadCancelled, HTTPException):
+        await task
+    if guard.inserted:
+        library.delete(guard.inserted, guard.student_id)
+    raise HTTPException(499, '上传已取消。')
 
 
 def material_router(library: MaterialStore, subject_exists: Callable[[str], bool] = lambda _: False) -> APIRouter:
@@ -36,7 +61,11 @@ def material_router(library: MaterialStore, subject_exists: Callable[[str], bool
             data = await file.read(MAX_UPLOAD_BYTES + 1)
             if len(data) > MAX_UPLOAD_BYTES:
                 raise HTTPException(413, '单份资料不能超过 100 MB。')
-            return await library.add_with_ocr(owner(request, student_id), file.filename or '', data, subject_id)
+            student = owner(request, student_id)
+            guard = UploadGuard(student_id=student)
+            return await unless_disconnected(
+                library, guard, library.add_with_ocr(student, file.filename or '', data, subject_id, guard),
+                request.is_disconnected)
         finally:
             await file.close()
 

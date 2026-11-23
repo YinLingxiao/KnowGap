@@ -7,6 +7,7 @@ export type ApiErrorKind =
   | "conflict"
   | "server"
   | "contract_pending"
+  | "cancelled"
   | "unknown";
 
 export class ApiError extends Error {

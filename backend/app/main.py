@@ -119,13 +119,23 @@ def create_app(settings: Settings | None = None, chat_model: ChatModel | None = 
     app.include_router(vision_router(vision_store, service_models, cors_origins=settings.cors_origins))
     app.include_router(demo_router(chat_store))
 
-    @app.middleware("http")
-    async def bind_student(request: Request, call_next):
-        token = set_student(profile_store.student_id())
-        try:
-            return await call_next(request)
-        finally:
-            reset_student(token)
+    # 纯 ASGI 中间件（不用 @app.middleware("http")）：BaseHTTPMiddleware 会包一层 receive，
+    # 接口里就检测不到客户端断开，取消上传时后端会继续解析并存下资料
+    class BindStudent:
+        def __init__(self, inner):
+            self.inner = inner
+
+        async def __call__(self, scope, receive, send):
+            if scope["type"] != "http":
+                await self.inner(scope, receive, send)
+                return
+            token = set_student(profile_store.student_id())
+            try:
+                await self.inner(scope, receive, send)
+            finally:
+                reset_student(token)
+
+    app.add_middleware(BindStudent)
 
     app.add_middleware(
         CORSMiddleware, allow_origins=settings.cors_origins,

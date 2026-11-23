@@ -1,14 +1,20 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Plus, RotateCcw, Search, X } from "lucide-react";
+import { FileSpreadsheet, FileText, FileType, Plus, Presentation, RotateCcw, Search, X } from "lucide-react";
 import { useI18n } from "@/components/LanguageProvider";
-import { DOCUMENT_EXTENSIONS } from "@/lib/chat/attachments";
+import { DOCUMENT_EXTENSIONS, MAX_UPLOAD_BYTES } from "@/lib/chat/attachments";
+import { kindFromFilename, type MaterialKind } from "@/lib/materials/kinds";
+import { sameFile, sizeText, splitName } from "@/lib/materials/uploads";
 import { SPACE_COLORS, LEVELS } from "@/lib/chat/space";
 import type { Level, SpaceInput, Subject } from "@/lib/chat/types";
 import { cx } from "@/lib/cx";
 import { DEFAULT_SPACE_ICON, SpaceIcon, filterSpaceIcons } from "./SpaceIcon";
 import styles from "./CreateSpaceDialog.module.css";
+
+const FILE_ICONS: Record<MaterialKind, typeof FileText> = {
+  pdf: FileType, docx: FileType, pptx: Presentation, xlsx: FileSpreadsheet, csv: FileSpreadsheet, md: FileText, txt: FileText,
+};
 
 interface CreateSpaceDialogProps {
   subject?: Subject | null;
@@ -29,6 +35,7 @@ export function CreateSpaceDialog({ subject, onClose, onCreate, onUpdate }: Crea
   const [pickerOpen, setPickerOpen] = useState(false);
   const [iconQuery, setIconQuery] = useState("");
   const [files, setFiles] = useState<File[]>([]);
+  const [rejected, setRejected] = useState<string | null>(null);
   const [working, setWorking] = useState(false);
   const [over, setOver] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -73,8 +80,21 @@ export function CreateSpaceDialog({ subject, onClose, onCreate, onUpdate }: Crea
   }, [pickerOpen]);
 
   const addFiles = (list: FileList | null) => {
-    if (!list) return;
-    setFiles((current) => [...current, ...Array.from(list)]);
+    if (!list?.length) return;
+    const picked = Array.from(list);
+    const unsupported = picked.filter((file) => !kindFromFilename(file.name));
+    const tooLarge = picked.filter((file) => kindFromFilename(file.name) && file.size > MAX_UPLOAD_BYTES);
+    const usable = picked.filter((file) => kindFromFilename(file.name) && file.size <= MAX_UPLOAD_BYTES);
+    setFiles((current) => [...current, ...usable.filter((file) => !current.some((item) => sameFile(item, file)))]);
+    setRejected(
+      unsupported.length ? tx("「{name}」的格式不支持，已跳过。", { name: unsupported[0].name })
+        : tooLarge.length ? tx("「{name}」超过 100 MB，已跳过。", { name: tooLarge[0].name })
+          : null,
+    );
+  };
+  const removeFile = (target: File) => {
+    setFiles((current) => current.filter((file) => file !== target));
+    setRejected(null);
   };
 
   const submit = async () => {
@@ -268,12 +288,43 @@ export function CreateSpaceDialog({ subject, onClose, onCreate, onUpdate }: Crea
               onDrop={(event) => { event.preventDefault(); setOver(false); addFiles(event.dataTransfer.files); }}
             >
               <span>{t("createSpace.dropFiles")}</span>
-              <input ref={fileRef} type="file" accept={DOCUMENT_EXTENSIONS.join(",")} multiple hidden onChange={(event) => addFiles(event.target.files)} />
+              <input
+                ref={fileRef} type="file" accept={DOCUMENT_EXTENSIONS.join(",")} multiple hidden
+                onClick={(event) => event.stopPropagation()}
+                onChange={(event) => { addFiles(event.target.files); event.target.value = ""; }}
+              />
             </div>
+            {rejected && <p className={styles.fileRejected} role="alert">{rejected}</p>}
             {files.length > 0 && (
-              <ul className={styles.fileList}>
-                {files.map((file) => <li key={file.name}>{file.name}</li>)}
-              </ul>
+              <>
+                <ul className={styles.fileList} aria-label={tx("待上传的资料")}>
+                  {files.map((file, index) => {
+                    const Icon = FILE_ICONS[kindFromFilename(file.name) ?? "txt"];
+                    return (
+                      <li key={`${file.name}-${file.size}-${index}`} className={styles.fileRow}>
+                        <Icon size={14} className={styles.fileIcon} aria-hidden />
+                        <span className={styles.fileName} title={file.name}>
+                          <span>{splitName(file.name)[0]}</span>
+                          <span>{splitName(file.name)[1]}</span>
+                        </span>
+                        <span className={styles.fileSize}>{sizeText(file.size)}</span>
+                        <button
+                          type="button"
+                          className={styles.fileRemove}
+                          onClick={() => removeFile(file)}
+                          aria-label={tx("移除 {name}", { name: file.name })}
+                          title={tx("移除")}
+                        >
+                          <X size={13} aria-hidden />
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+                <p className={styles.fileHint}>
+                  {tx("共 {count} 个文件。创建后在后台上传和解析，不用等它读完，进度在空间的「资料」里。", { count: files.length })}
+                </p>
+              </>
             )}
           </div>
         ) : (

@@ -31,6 +31,12 @@ interface WireExtractedText {
   truncated?: boolean;
   notes?: string[];
 }
+/**
+ * 上传要等后端读完整份资料：大课件里的图片逐张交给识图模型，后端最长约 150 秒再加写库时间。
+ * 不能用普通请求的 65 秒超时，否则前端先报「没传上」，后端其实还在读。
+ */
+export const UPLOAD_TIMEOUT_MS = 10 * 60_000;
+
 export function createMaterialClient(baseUrl = API_BASE_URL) {
   return {
     /** 默认列出全部；subjectId 只列该 Subject；unassigned 只列未归类资料 */
@@ -38,10 +44,12 @@ export function createMaterialClient(baseUrl = API_BASE_URL) {
       const query = scope.subjectId ? `?subject_id=${encodeURIComponent(scope.subjectId)}` : scope.unassigned ? "?unassigned=true" : "";
       return (await request<WireMaterial[]>(baseUrl, `/api/materials${query}`)).map(mapMaterial);
     },
-    async upload(file: File, subjectId?: string): Promise<CourseMaterial> {
+    /** signal 中断时请求断开，后端随之停止解析、不保存这份资料 */
+    async upload(file: File, subjectId?: string, signal?: AbortSignal): Promise<CourseMaterial> {
       const body = new FormData(); body.append("file", file);
       const query = subjectId ? `?subject_id=${encodeURIComponent(subjectId)}` : "";
-      return mapMaterial(await request<WireMaterial>(baseUrl, `/api/materials${query}`, { method: "POST", body }));
+      return mapMaterial(await request<WireMaterial>(baseUrl, `/api/materials${query}`,
+        { method: "POST", body, signal, timeoutMs: UPLOAD_TIMEOUT_MS }));
     },
     async search(query: string): Promise<SourceReference[]> {
       return (await request<WireSource[]>(baseUrl, `/api/materials/search?q=${encodeURIComponent(query)}`)).map(mapSource);
