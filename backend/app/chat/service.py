@@ -262,6 +262,17 @@ class ChatService:
             return self.model_factory(settings)
         return ChatCompletionsChat(settings, chatgpt_auth=self.chatgpt_auth)
 
+    def default_model(self) -> ChatModel:
+        """设置里选的默认模型（模型服务商）；没有配置服务商时退回旧的单模型设置。
+
+        不属于某个对话的功能（知识图谱、考前一页纸、按一句话建空间）都用它，
+        否则只在「模型服务商」里配了模型的用户会被告知「模型未配置」。
+        """
+        library = self.model_library
+        if library is not None and library.effective_key(None) is not None:
+            return self._build_chat(library.resolve(None))
+        return self.model()
+
     def _open_conversation_model(self, conversation_id: str) -> ChatModel:
         library = self.model_library
         if library is None:
@@ -1466,7 +1477,7 @@ class ChatService:
             raise ValueError("请用一句话说明你最近在学什么。")
         guessed = fallback_space(cleaned)
         try:
-            raw = await asyncio.wait_for(self.model().complete_json([
+            raw = await asyncio.wait_for(self.default_model().complete_json([
                 {"role": "system", "content": INFER_PROMPT},
                 {"role": "user", "content": json.dumps({"text": cleaned}, ensure_ascii=False)},
             ]), 15)

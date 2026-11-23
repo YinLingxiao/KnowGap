@@ -220,7 +220,7 @@ async def build_concept_graph(store: ChatStore, service, student_id: str, subjec
     try:
         if service is None:
             raise RuntimeError("chat service unavailable")
-        model = service.model()
+        model = service.default_model()
         model_name = getattr(getattr(model, "settings", None), "llm_model", None)
         raw = await asyncio.wait_for(
             service._complete_json(model, model_input(insights, outlines),
