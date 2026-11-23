@@ -13,7 +13,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Bot, CircleAlert, CircleCheck, LoaderCircle, Play, RotateCcw, ShieldAlert, Sparkles,
+  Bot, CircleAlert, CircleCheck, LoaderCircle, Play, RotateCcw, ShieldAlert,
 } from "lucide-react";
 import {
   defaultKeymap, history, historyKeymap, indentWithTab, temporarilySetTabFocusMode,
@@ -358,7 +358,6 @@ function PlaygroundPanel({ spec, onAsk }: { spec: PlaygroundSpec; onAsk?: (promp
   const [asked, setAsked] = useState(false);
   const [missing, setMissing] = useState<{ tool: string; code: string } | null>(null);
   const [restored, setRestored] = useState<{ status: string; passed: number; total: number } | null>(null);
-  const [variantAsked, setVariantAsked] = useState(false);
   const autoCheckedRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -441,7 +440,6 @@ function PlaygroundPanel({ spec, onAsk }: { spec: PlaygroundSpec; onAsk?: (promp
     setAsked(false);
     setMissing(null);
     setRestored(null);
-    setVariantAsked(false);
     try {
       const result = await runSandbox({
         language: spec.language, code, stdin,
@@ -501,15 +499,7 @@ function PlaygroundPanel({ spec, onAsk }: { spec: PlaygroundSpec; onAsk?: (promp
     setError("");
     setAsked(false);
     setRestored(null);
-    setVariantAsked(false);
     view.focus();
-  };
-
-  const askVariant = () => {
-    sendNow(scope, tx("我在代码实验台「{title}」里已经全部通过了。请看看我的写法有没有可以改进的地方，再出一个变式题。", {
-      title: spec.title,
-    }));
-    setVariantAsked(true);
   };
 
   const jumpTo = (lineNumber: number) => {
@@ -543,7 +533,6 @@ function PlaygroundPanel({ spec, onAsk }: { spec: PlaygroundSpec; onAsk?: (promp
   // 脚手架里本来就没有 TODO 时不显示进度徽章，否则会对一段没有挖空的代码说「已全部补全」。
   const hasTodos = countTodos(spec.starterCode) > 0;
   const failed = last !== null && !last.result.ok;
-  const solved = last !== null && last.result.status === "passed";
   const restoredStatus = restored && restored.status in STATUS_TITLE ? tx(STATUS_TITLE[restored.status as SandboxStatus]) : "";
 
   return (
@@ -608,12 +597,6 @@ function PlaygroundPanel({ spec, onAsk }: { spec: PlaygroundSpec; onAsk?: (promp
             <span>{tx("让 AI 诊断报错原因")}</span>
           </button>
         )}
-        {solved && (
-          <button type="button" className={cx(styles.textBtn, styles.textBtnAccent)} onClick={askVariant} disabled={variantAsked}>
-            <Sparkles size={13} aria-hidden />
-            <span>{variantAsked ? tx("已发给 AI") : tx("做完了，来个变式")}</span>
-          </button>
-        )}
       </div>
 
       {asked && (
@@ -651,7 +634,6 @@ function PlaygroundPanel({ spec, onAsk }: { spec: PlaygroundSpec; onAsk?: (promp
       <footer className={base.widgetFoot}>
         <span className={base.footHint}>
           {tx("Ctrl/⌘ + Enter 运行 · 按 Esc 再按 Tab 离开编辑器 · 每次最多运行 {seconds} 秒", { seconds: last?.result.timeLimitSeconds ?? 3 })}
-          {spec.playgroundId && <> · {tx("运行结果会带给下一轮 AI")}</>}
         </span>
       </footer>
     </section>
