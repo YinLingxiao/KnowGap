@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Plus, RotateCcw, Search, X } from "lucide-react";
 import { useI18n } from "@/components/LanguageProvider";
 import { DOCUMENT_EXTENSIONS } from "@/lib/chat/attachments";
-import { SPACE_COLORS, LEVELS } from "@/lib/chat/space";
+import { SPACE_COLORS } from "@/lib/chat/space";
 import type { Level, SpaceInput, Subject } from "@/lib/chat/types";
 import { cx } from "@/lib/cx";
 import { DEFAULT_SPACE_ICON, SpaceIcon, filterSpaceIcons } from "./SpaceIcon";
@@ -22,7 +22,7 @@ export function CreateSpaceDialog({ subject, onClose, onCreate, onUpdate }: Crea
   const editing = Boolean(subject);
   const [name, setName] = useState(subject?.name ?? "");
   const [goal, setGoal] = useState(subject?.goal ?? "");
-  const [level, setLevel] = useState<Level | null>(subject?.level ?? null);
+  const [level] = useState<Level | null>(subject?.level ?? null);
   const [deadline, setDeadline] = useState(subject?.deadline ?? "");
   const [color, setColor] = useState(subject?.color || SPACE_COLORS[0]);
   const [icon, setIcon] = useState(subject?.icon || DEFAULT_SPACE_ICON);
@@ -289,20 +289,6 @@ export function CreateSpaceDialog({ subject, onClose, onCreate, onUpdate }: Crea
           </div>
         ) : (
           <div className={styles.editExtra}>
-            <div className={styles.levels} role="radiogroup" aria-label={t("createSpace.levelLabel")}>
-              {LEVELS.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  role="radio"
-                  aria-checked={level === item.id}
-                  className={level === item.id ? styles.levelOn : styles.level}
-                  onClick={() => setLevel(level === item.id ? null : item.id)}
-                >
-                  {t(item.labelKey)}
-                </button>
-              ))}
-            </div>
             <input
               type="date"
               className={styles.dateInput}
