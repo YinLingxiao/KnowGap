@@ -5,6 +5,7 @@ import { ChevronRight, RefreshCw, Trash2, X } from "lucide-react";
 import { useI18n } from "@/components/LanguageProvider";
 import type { ApiError } from "@/lib/api/errors";
 import { chatApi } from "@/lib/chat/api";
+import { defaultMemoryScopeFilter, memoryMatchesScope, memoryScopeFilters, type MemoryScopeFilter } from "@/lib/chat/memoryScope";
 import type { LearnerMemory, LearnerMemoryStatus, MemoryKind, Subject } from "@/lib/chat/types";
 import { cx } from "@/lib/cx";
 import { errorText } from "@/lib/i18n/errors";
@@ -278,24 +279,24 @@ function NotesLink({ onOpen }: { onOpen: () => void }) {
   );
 }
 
-type Filter = "all" | "general" | "subject";
+type Filter = MemoryScopeFilter;
 
 export function MemoryDrawer(props: MemoryDrawerProps) {
   const { lang, t } = useI18n();
   const { loading, error, focusIds, contextSubjectId } = props;
   const groups: MemoryKind[] = ["misconception", "mastery", "preference"];
   const contextSubject = props.subjects.find((subject) => subject.id === contextSubjectId) ?? null;
-  const [filter, setFilter] = useState<Filter>(contextSubject ? "subject" : "all");
+  const focused = focusIds.length ? props.memories.find((memory) => focusIds.includes(memory.id)) : undefined;
+  const [filter, setFilter] = useState<Filter>(() =>
+    defaultMemoryScopeFilter(Boolean(contextSubject), focused?.subjectId));
   useEffect(() => {
-    setFilter(contextSubject && !focusIds.length ? "subject" : "all");
-  }, [contextSubject, focusIds]);
-  const memories = props.memories.filter((memory) =>
-    filter === "all" ? true : filter === "general" ? memory.subjectId === null : memory.subjectId === contextSubjectId);
-  const filters: Array<{ key: Filter; label: string }> = [
-    { key: "all", label: t("memory.filterAll") },
-    ...(contextSubject ? [{ key: "subject" as Filter, label: contextSubject.name }] : []),
-    { key: "general", label: t("memory.general") },
-  ];
+    setFilter(defaultMemoryScopeFilter(Boolean(contextSubject), focused?.subjectId));
+  }, [contextSubject, focused?.subjectId]);
+  const memories = props.memories.filter((memory) => memoryMatchesScope(memory, filter, contextSubjectId));
+  const filters: Array<{ key: Filter; label: string }> = memoryScopeFilters(Boolean(contextSubject)).map((key) => ({
+    key,
+    label: key === "all" ? t("memory.filterAll") : key === "general" ? t("memory.general") : contextSubject?.name ?? t("memory.filterSubject"),
+  }));
   return (
     <section className={styles.drawer} aria-labelledby="memory-title">
       <header className={styles.header}>
