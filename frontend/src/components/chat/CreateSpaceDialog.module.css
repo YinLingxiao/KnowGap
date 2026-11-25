@@ -13,11 +13,11 @@
 .dialog {
   position: relative;
   display: flex;
-  flex-direction: column;
-  gap: 16px;
-  width: min(440px, 100%);
+  flex-direction: row;
+  gap: 0;
+  width: min(640px, 100%);
   max-height: min(680px, 100%);
-  padding: 20px 22px 18px;
+  padding: 0;
   overflow: visible;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-xl);
@@ -25,6 +25,48 @@
   box-shadow: var(--shadow-popover);
   transform-origin: center;
   animation: modal-spring 280ms var(--ease-spring);
+}
+
+/* 左侧设置菜单 */
+.nav {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 2px;
+  width: 148px;
+  padding: 16px 10px;
+  border-right: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl) 0 0 var(--radius-xl);
+  background: var(--bg-subtle);
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  text-align: left;
+}
+
+.navItemActive {
+  background: var(--bg-active);
+  color: var(--text);
+  font-weight: 500;
+}
+
+/* 右侧内容区 */
+.main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+  max-height: inherit;
+  padding: 20px 22px 18px;
+  overflow-y: auto;
 }
 
 

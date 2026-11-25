@@ -105,7 +105,18 @@ export function CreateSpaceDialog({ subject, onClose, onCreate, onUpdate }: Crea
         aria-labelledby="space-dialog-title"
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <header className={styles.head}>
+        <nav className={styles.nav} aria-label={t("space.settings")}>
+          <button
+            type="button"
+            className={cx(styles.navItem, styles.navItemActive)}
+            aria-current="page"
+          >
+            {t("settings.tab.general")}
+          </button>
+        </nav>
+
+        <div className={styles.main}>
+          <header className={styles.head}>
           <h2 id="space-dialog-title">{editing ? t("createSpace.editTitle") : t("createSpace.newTitle")}</h2>
           <button className={styles.close} onClick={onClose} aria-label={t("common.close")}>
             <X size={16} />
@@ -315,6 +326,7 @@ export function CreateSpaceDialog({ subject, onClose, onCreate, onUpdate }: Crea
             {working ? t("common.processing") : editing ? t("common.save") : t("common.create")}
           </button>
         </footer>
+        </div>
       </div>
     </div>
   );
