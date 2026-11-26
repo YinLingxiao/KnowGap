@@ -287,15 +287,21 @@ export function MemoryDrawer(props: MemoryDrawerProps) {
   const groups: MemoryKind[] = ["misconception", "mastery", "preference"];
   const contextSubject = props.subjects.find((subject) => subject.id === contextSubjectId) ?? null;
   const focused = focusIds.length ? props.memories.find((memory) => focusIds.includes(memory.id)) : undefined;
-  const [filter, setFilter] = useState<Filter>(() =>
-    defaultMemoryScopeFilter(Boolean(contextSubject), focused?.subjectId));
+  const hasForeignFocus = Boolean(focused && focused.subjectId !== null && focused.subjectId !== contextSubjectId);
+  const defaultFilter = () =>
+    defaultMemoryScopeFilter(Boolean(contextSubject), focused?.subjectId, contextSubjectId);
+  const [filter, setFilter] = useState<Filter>(defaultFilter);
   useEffect(() => {
-    setFilter(defaultMemoryScopeFilter(Boolean(contextSubject), focused?.subjectId));
-  }, [contextSubject, focused?.subjectId]);
-  const memories = props.memories.filter((memory) => memoryMatchesScope(memory, filter, contextSubjectId));
-  const filters: Array<{ key: Filter; label: string }> = memoryScopeFilters(Boolean(contextSubject)).map((key) => ({
+    setFilter(defaultFilter());
+  }, [contextSubject, focused?.subjectId, contextSubjectId]);
+  const memories = props.memories.filter((memory) =>
+    memoryMatchesScope(memory, filter, contextSubjectId, focusIds));
+  const filters: Array<{ key: Filter; label: string }> = memoryScopeFilters(Boolean(contextSubject), hasForeignFocus).map((key) => ({
     key,
-    label: key === "all" ? t("memory.filterAll") : key === "general" ? t("memory.general") : contextSubject?.name ?? t("memory.filterSubject"),
+    label: key === "all" ? t("memory.filterAll")
+      : key === "general" ? t("memory.general")
+        : key === "focused" ? t("memory.filterFocused")
+          : contextSubject?.name ?? "",
   }));
   return (
     <section className={styles.drawer} aria-labelledby="memory-title">

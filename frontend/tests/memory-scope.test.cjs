@@ -15,23 +15,28 @@ const scope = mod.exports;
 
 test('空间内不提供「全部」，只显示本空间和通用', () => {
   assert.deepEqual(scope.memoryScopeFilters(true), ['subject', 'general']);
+  assert.deepEqual(scope.memoryScopeFilters(true, true), ['focused', 'subject', 'general']);
   assert.deepEqual(scope.memoryScopeFilters(false), ['all', 'general']);
   assert.equal(scope.defaultMemoryScopeFilter(true), 'subject');
   assert.equal(scope.defaultMemoryScopeFilter(true, null), 'general');
-  assert.equal(scope.defaultMemoryScopeFilter(true, 'subj-a'), 'subject');
+  assert.equal(scope.defaultMemoryScopeFilter(true, 'subj-a', 'subj-a'), 'subject');
+  assert.equal(scope.defaultMemoryScopeFilter(true, 'subj-b', 'subj-a'), 'focused');
   assert.equal(scope.defaultMemoryScopeFilter(false, 'subj-a'), 'all');
 });
 
-test('记忆筛选严格按 subject_id 隔离', () => {
-  const spaceA = { subjectId: 'subj-a' };
-  const spaceB = { subjectId: 'subj-b' };
-  const general = { subjectId: null };
+test('记忆筛选严格按 subject_id 隔离；聚焦视图只放聚焦的那条', () => {
+  const spaceA = { id: 'mem-a', subjectId: 'subj-a' };
+  const spaceB = { id: 'mem-b', subjectId: 'subj-b' };
+  const general = { id: 'mem-g', subjectId: null };
   assert.equal(scope.memoryMatchesScope(spaceA, 'subject', 'subj-a'), true);
   assert.equal(scope.memoryMatchesScope(spaceB, 'subject', 'subj-a'), false);
   assert.equal(scope.memoryMatchesScope(general, 'subject', 'subj-a'), false);
   assert.equal(scope.memoryMatchesScope(spaceB, 'general', 'subj-a'), false);
   assert.equal(scope.memoryMatchesScope(general, 'general', 'subj-a'), true);
   assert.equal(scope.memoryMatchesScope(spaceB, 'all', 'subj-a'), true);
+  assert.equal(scope.memoryMatchesScope(spaceA, 'focused', 'subj-a', ['mem-b']), false);
+  assert.equal(scope.memoryMatchesScope(spaceB, 'focused', 'subj-a', ['mem-b']), true);
+  assert.equal(scope.memoryMatchesScope(spaceB, 'focused', 'subj-a', []), false);
   assert.equal(scope.memoryMatchesScope(spaceA, 'subject', null), false);
 });
 

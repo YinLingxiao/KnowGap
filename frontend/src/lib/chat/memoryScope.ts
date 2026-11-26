@@ -6,26 +6,36 @@
  * 记忆混在当前空间里展示。
  */
 
-export type MemoryScopeFilter = "all" | "general" | "subject";
+export type MemoryScopeFilter = "all" | "general" | "subject" | "focused";
 
-/** 空间内只给「本空间」「通用」；全局记忆页才给「全部」。 */
-export function memoryScopeFilters(hasContext: boolean): MemoryScopeFilter[] {
-  return hasContext ? ["subject", "general"] : ["all", "general"];
+/**
+ * 空间内给「本空间」「通用」；如果聚焦的记忆属于其他空间，再临时给「聚焦记忆」，
+ * 避免记忆改过归属后从原对话点进来却看不到。全局记忆页才给「全部」。
+ */
+export function memoryScopeFilters(hasContext: boolean, hasForeignFocus = false): MemoryScopeFilter[] {
+  if (!hasContext) return ["all", "general"];
+  return hasForeignFocus ? ["focused", "subject", "general"] : ["subject", "general"];
 }
 
-/** 默认落在本空间；如果聚焦的是一条通用记忆，则落在「通用」。 */
-export function defaultMemoryScopeFilter(hasContext: boolean, focusedSubjectId?: string | null): MemoryScopeFilter {
+/** 默认落在本空间；聚焦通用记忆时落在「通用」，聚焦其他空间记忆时临时落在「聚焦记忆」。 */
+export function defaultMemoryScopeFilter(
+  hasContext: boolean, focusedSubjectId?: string | null, contextSubjectId?: string | null,
+): MemoryScopeFilter {
   if (!hasContext) return "all";
-  return focusedSubjectId === null ? "general" : "subject";
+  if (focusedSubjectId === null) return "general";
+  if (focusedSubjectId && contextSubjectId && focusedSubjectId !== contextSubjectId) return "focused";
+  return "subject";
 }
 
 /** 当前筛选下这条记忆是否可见。 */
 export function memoryMatchesScope(
-  memory: { subjectId: string | null },
+  memory: { id?: string; subjectId: string | null },
   filter: MemoryScopeFilter,
   contextSubjectId: string | null,
+  focusedIds: readonly string[] = [],
 ): boolean {
   if (filter === "all") return true;
   if (filter === "general") return memory.subjectId === null;
+  if (filter === "focused") return Boolean(memory.id && focusedIds.includes(memory.id));
   return Boolean(contextSubjectId) && memory.subjectId === contextSubjectId;
 }
