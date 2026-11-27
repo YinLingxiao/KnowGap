@@ -61,14 +61,13 @@ export interface InsightStats {
   threadsResolved: number;
   materials: number;
   lastStudiedAt: string | null;
-  daysToDeadline: number | null;
 }
 
 export interface SubjectInsights {
   schemaVersion: number;
   subject: {
     id: string; name: string; description: string; goal: string; level: Level | null;
-    deadline: string | null; color: string; mainConversationId: string | null;
+    color: string; mainConversationId: string | null;
   };
   stats: InsightStats;
   misconceptions: InsightMemory[];
@@ -79,7 +78,7 @@ export interface SubjectInsights {
 
 export interface CheatSheet {
   subjectId: string;
-  subject: { id: string; name: string; goal: string; level: Level | null; deadline: string | null };
+  subject: { id: string; name: string; goal: string; level: Level | null };
   stats: InsightStats;
   generatedAt: string;
   cached: boolean;
@@ -101,7 +100,7 @@ function mapStats(data: Wire): InsightStats {
     misconceptions: data.misconceptions, toReview: data.to_review, improving: data.improving,
     mastered: data.mastered, evidence: data.evidence, threadsOpen: data.threads_open,
     threadsResolved: data.threads_resolved, materials: data.materials,
-    lastStudiedAt: data.last_studied_at ?? null, daysToDeadline: data.days_to_deadline ?? null,
+    lastStudiedAt: data.last_studied_at ?? null,
   };
 }
 
@@ -125,7 +124,7 @@ export function mapInsights(data: Wire): SubjectInsights {
     schemaVersion: data.schema_version,
     subject: {
       id: s.id, name: s.name, description: s.description, goal: s.goal, level: s.level ?? null,
-      deadline: s.deadline ?? null, color: s.color, mainConversationId: s.main_conversation_id ?? null,
+      color: s.color, mainConversationId: s.main_conversation_id ?? null,
     },
     stats: mapStats(data.stats),
     misconceptions: (data.misconceptions ?? []).map(mapMemory),
@@ -145,7 +144,7 @@ export function mapCheatSheet(data: Wire): CheatSheet {
   const sec = data.sections ?? {};
   return {
     subjectId: data.subject_id,
-    subject: { ...data.subject, level: data.subject.level ?? null, deadline: data.subject.deadline ?? null },
+    subject: { ...data.subject, level: data.subject.level ?? null },
     stats: mapStats(data.stats),
     generatedAt: data.generated_at, cached: data.cached, degraded: data.degraded,
     notice: data.notice ?? null, model: data.model ?? null,

@@ -9,6 +9,7 @@ import { agendaPhrases } from "./phrases-agenda";
 import { extraPhrases } from "./phrases-extra";
 import { onboardingPhrases } from "./phrases-onboarding";
 import { settingsPhrases } from "./phrases-settings";
+import { spaceSettingsPhrases } from "./phrases-space-settings";
 import { widgetPhrases } from "./phrases-widgets";
 
 const basePhrases: Record<string, string> = {
@@ -206,7 +207,7 @@ const basePhrases: Record<string, string> = {
   "梳理概念框架、编写贯穿示例与对比表，支持在工作区生成结构化文档或代码演练": "Map the concept, write a running example and comparison table, and generate a structured document or code exercise in the workspace",
   "学习路线规划": "Learning-path planner",
   "项目主线专属": "Main-line only",
-  "对齐空间目标、基础与截止日，跳过已掌握知识点，针对薄弱点拆解候选支线": "Align with the space goal, level and deadline; skip mastered topics and break weak points into candidate Threads",
+  "对齐空间目标和日程安排，跳过已掌握知识点，针对薄弱点拆解候选支线": "Align with the space goal and your agenda; skip mastered topics and break weak points into candidate Threads",
   "模型接入与服务模型分工": "Model access & service-model roles",
   "请填写服务地址。": "Enter the service URL.",
   "已保存。": "Saved.",
@@ -316,7 +317,6 @@ const basePhrases: Record<string, string> = {
   "发送": "Send",
   "工作区路径无效": "Invalid workspace path",
   "未选择工作区": "No workspace selected",
-  "请选择 PDF、Word（.docx / .doc）、PPT（.pptx / .ppt）、Excel（.xlsx / .xls）、TXT、Markdown 或 CSV 文件。": "Choose a PDF, Word (.docx / .doc), PowerPoint (.pptx / .ppt), Excel (.xlsx / .xls), TXT, Markdown or CSV file.",
   "请先发一句话，再上传文件。": "Send a message before uploading files.",
   "每条消息最多 {count} 个文件附件": "Up to {count} file attachments per message",
   "自定义 Skill": "Custom Skill",
@@ -410,22 +410,12 @@ const basePhrases: Record<string, string> = {
   "空间笔记（Markdown）": "Space notes (Markdown)",
   "在这里记录本空间的笔记，支持 Markdown。对话里点「存入空间笔记」会自动追加到这里。": "Write notes for this space in Markdown. “Save to space notes” in chat appends here automatically.",
   "暂无内容，预览会实时显示在这里。": "No content yet; the preview appears here in real time.",
-  "空间概览与教学说明": "Space overview & teaching notes",
-  "空间学习记忆": "Space learning memories",
   "目标": "Goal",
   "未填写": "Not set",
   "基础": "Level",
   "截止": "Due",
-  "教学说明（失焦自动保存）": "Teaching notes (auto-save on blur)",
   "告诉模型在这个空间里怎么教你…": "Tell the model how to teach you in this space…",
-  "空间知识足迹（自动聚合）": "Space knowledge footprint (auto-aggregated)",
   "进行中支线": "Open Threads",
-  "已攻克归档": "Archived as mastered",
-  "待攻克薄弱点": "Weak points to tackle",
-  "专项攻克 →": "Focus practice →",
-  "已掌握与已归档": "Mastered & archived",
-  "支线 · {title}": "Thread · {title}",
-  "这个空间的误区和掌握会出现在这里。": "Misconceptions and mastered topics from this space appear here.",
   "去主线讲一讲": "Explain it in the main line",
   "合并小结": "Merge summary",
   "合并回主线": "Merge into the main line",
@@ -543,6 +533,7 @@ export const enPhrases: Record<string, string> = {
   ...agendaPhrases,
   ...onboardingPhrases,
   ...settingsPhrases,
+  ...spaceSettingsPhrases,
   ...widgetPhrases,
   ...extraPhrases,
 };

@@ -243,61 +243,6 @@ button.textBtn:disabled {
   cursor: default;
 }
 
-/* ImageAttach */
-.attach {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-}
-
-.attachBtn {
-  display: inline-grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  padding: 0;
-  border: 0;
-  border-radius: var(--radius);
-  background: transparent;
-  color: var(--text-secondary);
-}
-
-.attachBtn:hover:not(:disabled) {
-  background: var(--bg-hover);
-  color: var(--text);
-}
-
-.attachBtn:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.attachError {
-  position: absolute;
-  bottom: calc(100% + 6px);
-  left: 0;
-  z-index: 5;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: max-content;
-  max-width: 260px;
-  padding: 6px 10px;
-  border: 1px solid var(--red);
-  border-radius: var(--radius);
-  background: var(--bg-elevated);
-  color: var(--red);
-  font-size: var(--text-xs);
-  box-shadow: var(--shadow-elevated);
-}
-
-.attachError button {
-  padding: 0 2px;
-  border: 0;
-  background: transparent;
-  color: inherit;
-}
-
 .spin {
   animation: global(kg-spin) 0.9s linear infinite;
 }

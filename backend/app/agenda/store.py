@@ -136,7 +136,7 @@ def tasks(db, student, status="open", subject=None):
 def threads(db, student):
     return [dict(r) for r in db.execute(
         "SELECT c.id AS thread_id, c.title, s.id AS subject_id, s.name AS subject_name, "
-        "s.color AS subject_color, s.deadline AS deadline_date, c.updated_at "
+        "s.color AS subject_color, NULL AS deadline_date, c.updated_at "
         "FROM conversations c JOIN subjects s ON s.id=c.subject_id AND s.student_id=c.student_id "
         "WHERE c.student_id=? AND c.kind='thread' AND COALESCE(c.thread_status,'open')='open' "
         "ORDER BY c.updated_at DESC, c.id", (student,)

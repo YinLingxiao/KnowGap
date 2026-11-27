@@ -9,6 +9,7 @@ from app.chat.insights import subject_insights
 
 from app.chat.schemas import Conversation, ConversationSummary, CreateSubject, CreateThread, Subject, UpdateSubject
 from app.chat.store import ChatStore
+from app.memory import space_notes
 from app.auth.deps import current_student
 
 
@@ -20,6 +21,10 @@ class CheatSheetRequest(BaseModel):
 
 class ConceptGraphRequest(BaseModel):
     force: bool = False
+
+
+class MemoryNotesBody(BaseModel):
+    content: str = Field(default="", max_length=8000)
 
 
 def subject_router(store: ChatStore, service=None) -> APIRouter:
@@ -44,7 +49,15 @@ def subject_router(store: ChatStore, service=None) -> APIRouter:
 
     @router.patch("/{subject_id}", response_model=Subject)
     def update_subject(subject_id: str, body: UpdateSubject):
-        subject = store.update_subject(subject_id, current_student(), body.model_dump(exclude_unset=True))
+        changes = body.model_dump(exclude_unset=True)
+        if "thread_model_key" in changes:
+            # 空白等于「跟随主线」
+            changes["thread_model_key"] = (changes["thread_model_key"] or "").strip() or None
+        library = getattr(service, "model_library", None)
+        key = changes.get("thread_model_key")
+        if key and library is not None and library.effective_key(key) != key:
+            raise HTTPException(404, "这个模型不存在或未启用。")
+        subject = store.update_subject(subject_id, current_student(), changes)
         if subject is None:
             raise HTTPException(404, "Subject 不存在或已删除。")
         return subject
@@ -54,6 +67,59 @@ def subject_router(store: ChatStore, service=None) -> APIRouter:
         if store.subject(subject_id, current_student()) is None:
             raise HTTPException(404, "学习空间不存在。")
         return store.usage(current_student(), subject_id=subject_id)
+
+    def _view_or_404(subject_id: str) -> dict:
+        view = store.space_memory_view(current_student(), subject_id)
+        if view is None:  # 例如刚好被并发删掉
+            raise HTTPException(404, "学习空间不存在。")
+        return view
+
+    @router.get("/{subject_id}/memory-notes")
+    def memory_notes(subject_id: str):
+        """本空间的 Memory.md：条目、最近写入记录（来源：支线合并 / 主线整理 / 手动编辑）。"""
+        return _view_or_404(subject_id)
+
+    @router.put("/{subject_id}/memory-notes")
+    def replace_memory_notes(subject_id: str, body: MemoryNotesBody):
+        result = store.replace_space_memory(current_student(), subject_id, body.content)
+        if result is None:
+            raise HTTPException(404, "学习空间不存在。")
+        if not result.startswith(space_notes.OK_PREFIX):
+            raise HTTPException(400, result)
+        return {"result": result, **_view_or_404(subject_id)}
+
+    @router.post("/{subject_id}/memory-notes/{log_id}/revoke")
+    def revoke_memory_note(subject_id: str, log_id: str):
+        result = store.revoke_space_memory(current_student(), subject_id, log_id)
+        if result is None:
+            raise HTTPException(404, "学习空间或这次写入不存在。")
+        if not result.startswith(space_notes.OK_PREFIX):
+            raise HTTPException(409, result)
+        return {"result": result, **_view_or_404(subject_id)}
+
+    @router.get("/{subject_id}/thread-notes")
+    def thread_notes(subject_id: str):
+        """已合并支线的小结卡：每条支线的记忆。"""
+        notes = store.space_thread_notes(current_student(), subject_id)
+        if notes is None:
+            raise HTTPException(404, "学习空间不存在。")
+        return notes
+
+    @router.get("/{subject_id}/memory-sync")
+    def memory_sync_state(subject_id: str):
+        state = store.space_memory_sync_state(current_student(), subject_id)
+        if state is None:
+            raise HTTPException(404, "学习空间不存在。")
+        return state
+
+    @router.post("/{subject_id}/memory-sync")
+    def sync_memory_now(subject_id: str):
+        """立即把这个空间的记忆摘要写进总记忆（USER 笔记），不等间隔。"""
+        # 手动点「立即同步」本身就是确认：即使开了「写入前确认」也直接写，不排队。
+        result = store.sync_space_memory(current_student(), subject_id, force=True)
+        if result is None:
+            raise HTTPException(404, "学习空间不存在。")
+        return result
 
     @router.get("/{subject_id}/insights")
     def get_insights(subject_id: str):

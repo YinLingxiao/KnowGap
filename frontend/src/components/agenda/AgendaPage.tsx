@@ -146,8 +146,8 @@ export function AgendaPage(props: AgendaPageProps) {
     return applyViewOptions(built, effective, subjectMap, today, tx);
   }, [view, tasks, threads, today, options, subjectMap, tx]);
   const suggestions = useMemo(
-    () => buildTodaySuggestions(tasks, props.subjects.map((subject) => ({ id: subject.id, name: subject.name, deadline: subject.deadline })), today, tx),
-    [tasks, props.subjects, today, tx],
+    () => buildTodaySuggestions(tasks, today, tx),
+    [tasks, today, tx],
   );
   const doneToday = useMemo(() => completedOn(tasks, today), [tasks, today]);
 
@@ -392,7 +392,7 @@ export function AgendaPage(props: AgendaPageProps) {
   } else if (space) {
     main = (
       <SpaceTaskList
-        subject={{ id: space.id, name: space.name, color: space.color, deadline: space.deadline }}
+        subject={{ id: space.id, name: space.name, color: space.color }}
         tasks={tasks}
         threads={threads}
         today={today}
@@ -430,7 +430,6 @@ export function AgendaPage(props: AgendaPageProps) {
                 const task = tasks.find((item) => item.id === id);
                 if (task) void update(id, schedulePatch(task, today));
               }}
-              onBreakdown={openBreakdown}
             />
           </>
         ) : (
@@ -522,7 +521,7 @@ export function AgendaPage(props: AgendaPageProps) {
       <AiBreakdownDialog
         open={breakdownOpen}
         subjects={props.subjects.map((subject) => ({
-          id: subject.id, name: subject.name, color: subject.color, deadline: subject.deadline,
+          id: subject.id, name: subject.name, color: subject.color,
         }))}
         defaultSubjectId={breakdownSubject ?? spaceId}
         onClose={() => setBreakdownOpen(false)}

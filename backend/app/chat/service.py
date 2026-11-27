@@ -26,7 +26,8 @@ from app.agents.llm import ChatCompletionsChat, ChatModel, ProviderError
 from app.chat.agent import (
     HISTORY_CHARS, HISTORY_MESSAGES, active_exercise, analysis_messages, chat_messages,
     compress_history_messages, deterministic_compress_fallback, dialogue, instruct_memory_messages,
-    resolution_messages, review_messages, validate_analysis, validate_resolution,
+    resolution_messages, review_messages, space_merge_messages, space_review_messages, validate_analysis,
+    validate_resolution,
 )
 from app.chat.store import (
     ChatStore, INTERRUPTED, PROPOSAL_TASK_PREFIX, is_system_event, is_system_event_row, learner_rows,
@@ -44,6 +45,7 @@ from app.chat.skills.problem_drill_skill import DRILL_TOOLS, SEARCH_TOOL, drill_
 from app.agent_tools.web_search import TOOL_NAME as WEB_SEARCH_TOOL
 from app.agent_tools.problem_search import WEB_FETCH_TOOL_NAME
 from app.chat.coordination import cancel_deliveries, dispatch, next_delivery
+from app.memory import space_notes
 from app.memory.store import new_id
 from app.services.materials import MaterialStore
 from app.vision.pipeline import analyze_image_for_relay
@@ -58,6 +60,8 @@ IMAGE_FAILED = ("【图片读取失败】学生发了一张图片，但识图没
 logger = logging.getLogger(__name__)
 _PROFILE_LABEL_RE = re.compile(r"^\s*\[(?:Identity|Preference|Context|Activity|Experience)\]\s*")
 ANALYSIS_TIMEOUT = 60
+# 整理 Memory.md 的后台模型调用最多等这么久，超时下次再整理。
+SPACE_MEMORY_TIMEOUT = 60
 APPROVAL_TIMEOUT_SECONDS = 600
 # Memory review runs once a conversation goes quiet (or the user moves to another one) with at least
 # REVIEW_MIN_TURNS new turns; a long conversation is also reviewed every REVIEW_MAX_TURNS turns.
@@ -484,6 +488,8 @@ class ChatService:
     def thread_resolved(self, student_id: str, conversation_id: str, title: str, summary: str,
                         takeaways: list[str], message_id: str) -> None:
         """时机一：支线被标记已解决。重复 resolve 由 source_message_id 的唯一约束挡住。"""
+        # 与协调者唤醒无关：合并回来的支线由主线整理进本空间的 Memory.md。
+        self._schedule_thread_consolidation(student_id, conversation_id, title, summary, takeaways, message_id)
         try:
             if not self._agent_flag("coordinator_wakeup"):
                 return
@@ -495,6 +501,103 @@ class ChatService:
             self._schedule_wake(student_id, main_id)
         except Exception:
             logger.exception("Could not record the resolved Thread report")
+
+    def _spawn_background(self, coro) -> asyncio.Task:
+        task = asyncio.create_task(coro)
+        self.reviews.add(task)
+        task.add_done_callback(self.reviews.discard)
+        return task
+
+    def _space_memory_lock(self, subject_id: str) -> asyncio.Lock:
+        """同一个空间的 Memory.md 一次只整理一份：读条目、调模型、写回三步不被别的整理插队。"""
+        locks = self.__dict__.setdefault("_space_memory_locks", {})
+        return locks.setdefault(subject_id, asyncio.Lock())
+
+    def _schedule_thread_consolidation(self, student_id: str, thread_id: str, title: str, summary: str,
+                                       takeaways: list[str], message_id: str) -> None:
+        if self.closing:
+            return
+        running = self.__dict__.setdefault("_merging_cards", set())
+        if message_id in running:
+            return  # 同一张小结卡正在整理
+        try:
+            asyncio.get_running_loop()
+            if self.store.space_memory_merged(message_id):
+                return  # 已经整理过（重复点合并、服务重启后重试）
+            subject = self.store.conversation_subject(thread_id)
+            main_id = self._thread_parent_id(student_id, thread_id)
+            if subject is None or not main_id:
+                return
+            model = self._background_model(None)
+        except RuntimeError:
+            logger.warning("No running event loop; Thread %s is not consolidated into Memory.md", thread_id)
+            return
+        except Exception:
+            logger.exception("Could not start the Memory.md consolidation for Thread %s", thread_id)
+            return
+        card = {"title": title, "summary": summary, "takeaways": list(takeaways)}
+        running.add(message_id)
+        task = self._spawn_background(self._consolidate_thread(
+            student_id, model, subject, main_id, thread_id, card, message_id,
+        ))
+        task.add_done_callback(lambda _task: running.discard(message_id))
+
+    def _log_space_memory_results(self, results: list[str], where: str) -> None:
+        for result in results:
+            if not result.startswith(space_notes.OK_PREFIX):
+                logger.info("Memory.md op skipped (%s): %s", where, result)
+
+    async def _consolidate_thread(self, student_id: str, model, subject, main_id: str, thread_id: str,
+                                  card: dict, message_id: str) -> None:
+        """主线把刚合并的支线小结卡整理进 Memory.md（重新合并时改它上次写的条目）。
+
+        只有成功写回后才记为已整理；模型失败或超时，下次再点合并会重试。
+        """
+        try:
+            async with self._space_memory_lock(subject.id):
+                if self.store.space_memory_merged(message_id):
+                    return
+                entries = self.store.space_memory_entries(student_id, subject.id)
+                previous = self.store.space_memory_entries_from(student_id, subject.id, thread_id)
+                raw = await asyncio.wait_for(
+                    self._complete_json(model, space_merge_messages(subject, entries, card, previous),
+                                        main_id, message_id, "space_memory"),
+                    SPACE_MEMORY_TIMEOUT,
+                )
+                ops = raw.get("ops") if isinstance(raw, dict) else None
+                if not isinstance(ops, list):
+                    # 模型没按格式回答：不记为已整理，下次再点合并会重试
+                    logger.warning("Memory.md consolidation for Thread %s returned no ops list", thread_id)
+                    return
+                if not self.store.thread_is_resolved(thread_id):
+                    # 整理期间支线被重新打开了：这张旧小结不再写入，重新合并时会用新的小结卡
+                    return
+                results = self.store.apply_space_memory_ops(
+                    student_id, subject.id, ops, source="thread", source_id=thread_id,
+                    merged_message_id=message_id,
+                )
+                self._log_space_memory_results(results, f"thread {thread_id}")
+        except Exception:
+            logger.exception("Could not consolidate Thread %s into Memory.md", thread_id)
+
+    async def _review_space_memory(self, student_id: str, model, subject, turns: list[dict],
+                                   conversation_id: str, message_id: str | None) -> None:
+        """主线复盘最近几轮，补充或修正本空间的 Memory.md。支线不直接写。"""
+        try:
+            async with self._space_memory_lock(subject.id):
+                entries = self.store.space_memory_entries(student_id, subject.id)
+                raw = await asyncio.wait_for(
+                    self._complete_json(model, space_review_messages(subject, entries, turns),
+                                        conversation_id, message_id, "space_memory"),
+                    SPACE_MEMORY_TIMEOUT,
+                )
+                ops = raw.get("ops") if isinstance(raw, dict) else None
+                results = self.store.apply_space_memory_ops(
+                    student_id, subject.id, ops or [], source="main", source_id=conversation_id,
+                )
+                self._log_space_memory_results(results, f"main {conversation_id}")
+        except Exception:
+            logger.exception("Space Memory.md review failed for %s", conversation_id)
 
     def thread_reopened(self, conversation_id: str) -> None:
         """时机一的反向：重新打开支线后，还没投递的「已解决」汇报作废。"""
@@ -1357,6 +1460,17 @@ class ChatService:
             # 学习空间的对话内容不进通用 USER/MEMORY 笔记；学习记忆由 _analyze 的 learner_memories 负责。
             logger.info("Skipping general memory review: conversation %s belongs to Subject %s",
                         conversation_id, subject.id)
+            if self.store.role_context(conversation_id).get("role") == "main":
+                # 单独的后台任务：复盘可能在回复流收尾时被等待，整理 Memory.md 不能拖住这一轮对话。
+                self._spawn_background(
+                    self._review_space_memory(student_id, model, subject, turns, conversation_id, message_id))
+            # 对话原文不进总记忆，但空间记忆的一行摘要每天汇总进 USER 笔记一次。
+            # 开了「写入前确认」时不自动写：只在用户手动点「立即同步」时写（那次点击就是确认）。
+            try:
+                if not self._agent_flag("memory_write_approval"):
+                    self.store.sync_space_memory(student_id, subject.id)
+            except Exception:
+                logger.exception("Could not sync Subject %s memories into USER notes", subject.id)
             return
         try:
             raw = await self._complete_json(model, review_messages(self.store.agent_notes(student_id), turns),

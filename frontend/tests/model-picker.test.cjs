@@ -80,9 +80,6 @@ test('default choice, reasoning and short names', () => {
   assert.equal(picker.usesDefaultModel(catalog, null), true);
   assert.equal(picker.usesDefaultModel(catalog, deepseek.key), true);
   assert.equal(picker.usesDefaultModel(catalog, reasoner.key), false);
-  assert.equal(picker.supportsReasoning(deepseek), false);
-  assert.equal(picker.supportsReasoning(reasoner), true);
-  assert.equal(picker.supportsReasoning(gemini), true);
   assert.equal(picker.reasoningLabel('high'), '高');
   assert.equal(picker.reasoningLabel('medium'), '中');
   assert.equal(picker.reasoningLabel('low'), '低');
@@ -96,11 +93,14 @@ test('default choice, reasoning and short names', () => {
 });
 
 test('composer wires the picker beside reasoning effort and only for the current conversation', () => {
-  const composer = fs.readFileSync(path.join(root, 'components/chat/Composer.tsx'), 'utf8');
+  // Windows 上 core.autocrlf=true 检出是 CRLF：统一成 \n 再按行匹配
+  const composer = fs.readFileSync(path.join(root, 'components/chat/Composer.tsx'), 'utf8').replace(/\r\n/g, '\n');
   const chat = fs.readFileSync(path.join(root, 'hooks/useChat.ts'), 'utf8');
   const api = fs.readFileSync(path.join(root, 'lib/chat/api.ts'), 'utf8');
   assert.match(composer, /<ModelPicker/);
-  assert.match(composer, /supportsReasoning\(activeModel\)/);
+  // 思考深度写进提示词，对所有模型都有效：不再按模型标签隐藏
+  assert.doesNotMatch(composer, /supportsReasoning\(activeModel\)/);
+  assert.match(composer, /<div className=\{styles\.effortAnchor\} ref=\{effortRef\}>/);
   assert.match(composer, /disabled=\{generating\}/);
   assert.match(composer, /disabledReason=\{tx\("正在生成，请等这条回复完成后再切换模型"\)\}/);
   assert.doesNotMatch(composer, /effortModel/);
@@ -121,3 +121,22 @@ test('the menu flips below the trigger when the window has no room above it', ()
   assert.match(css, /max-height: min\(280px, var\(--picker-room, 280px\)\)/);
 });
 
+
+test('composer layout: the box holds only the input and send; tools sit below it; images upload through +', () => {
+  // Windows 上 core.autocrlf=true 检出是 CRLF：统一成 \n 再按行匹配
+  const composer = fs.readFileSync(path.join(root, 'components/chat/Composer.tsx'), 'utf8').replace(/\r\n/g, '\n');
+  const body = composer.slice(composer.indexOf('  return (\n    <div className={cx(styles.composer'));
+  const box = body.indexOf('className={cx(styles.box');
+  const send = body.indexOf('<div className={styles.sendTools}>');
+  const toolbar = body.indexOf('<div className={styles.toolbar}>');
+  assert.ok(box > 0 && send > box && toolbar > send, 'send lives in the box, the toolbar comes after it');
+  const tools = body.slice(toolbar);
+  for (const piece of ['<ModelPicker', 'styles.effortAnchor', '<ModePicker', 'aria-label={t("composer.addMore")}']) {
+    assert.ok(tools.includes(piece), `${piece} is in the toolbar under the box`);
+  }
+  assert.ok(tools.indexOf('<ModelPicker') < tools.indexOf('styles.effortAnchor'));
+  assert.ok(tools.indexOf('styles.effortAnchor') < tools.indexOf('<ModePicker'), 'model, then effort, then mode');
+  assert.doesNotMatch(composer, /ImageAttach/, 'no separate image button');
+  assert.match(composer, /IMAGE_RE\.test\(file\.type\)/, 'the + upload routes images to the image uploader');
+  assert.equal((composer.match(/<ModePicker/g) || []).length, 1, 'one mode picker for the landing page and conversations');
+});

@@ -45,10 +45,13 @@ export interface Subject {
   instructions: string;
   goal: string;
   level: Level | null;
-  deadline: string | null;
   color: string;
   icon?: string;
   mainConversationId: string | null;
+  /** 主线对话的模型；null 表示用全局默认。 */
+  mainModelKey: string | null;
+  /** 本空间支线的默认模型；null 表示跟随主线。 */
+  threadModelKey: string | null;
   progress: SpaceProgress;
   conversationCount: number;
   memoryCount: number;
@@ -61,11 +64,12 @@ export interface SpaceInput {
   name?: string;
   goal?: string;
   level?: Level | null;
-  deadline?: string | null;
   color?: string;
   icon?: string;
   description?: string;
   instructions?: string;
+  /** 本空间支线的默认模型；null 表示跟随主线。 */
+  threadModelKey?: string | null;
 }
 
 export interface LearnerMemory {
@@ -108,6 +112,51 @@ export interface TokenUsage {
 export interface SpaceUsage {
   total: TokenUsage;
   conversations: Record<string, TokenUsage>;
+}
+
+/** 学习空间记忆汇总进总记忆（USER 笔记）的状态。 */
+export interface SpaceMemorySync {
+  syncedAt: string | null;
+  nextSyncAt: string | null;
+  /** 当前写在总记忆里的那条摘要；还没同步过或空间没有可汇总的记忆时为 null。 */
+  entry: string | null;
+  intervalDays: number;
+}
+
+export type SpaceMemorySyncStatus = "synced" | "unchanged" | "not_due" | "error";
+
+/** 本空间 Memory.md 的一次写入：来自支线合并、主线整理或用户手动编辑。 */
+export interface SpaceMemoryNoteWrite {
+  id: string;
+  action: "add" | "patch" | "remove" | "replace";
+  content: string;
+  oldText: string;
+  source: "thread" | "main" | "user";
+  sourceId: string | null;
+  sourceTitle: string | null;
+  createdAt: string;
+  revoked: boolean;
+}
+
+/** 学习空间的 Memory.md：主线整理的学习记录，主线和支线每轮都会读取。 */
+export interface SpaceMemoryNotes {
+  entries: string[];
+  /** 当前字数（每条一行）。 */
+  size: number;
+  updatedAt: string | null;
+  limit: number;
+  history: SpaceMemoryNoteWrite[];
+}
+
+/** 已合并支线的小结卡，也就是每条支线的记忆。 */
+export interface SpaceThreadNote {
+  threadId: string;
+  messageId: string;
+  title: string;
+  summary: string;
+  takeaways: string[];
+  mergedAt: string;
+  status: string;
 }
 
 export interface ThreadProposal {

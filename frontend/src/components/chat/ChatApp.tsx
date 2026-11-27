@@ -36,6 +36,7 @@ import { MemoryDrawer } from "./MemoryDrawer";
 import { UpdateIndicator } from "../desktop/UpdateIndicator";
 import { MessageList } from "./MessageList";
 import { CreateSpaceDialog } from "./CreateSpaceDialog";
+import { SpaceSettingsDialog, type SpaceSettingsTab } from "./SpaceSettingsDialog";
 import { CoachmarkHost } from "../onboarding/Coachmark";
 import { GettingStarted } from "../onboarding/GettingStarted";
 import { HelpCenter, type HelpAction } from "../onboarding/HelpCenter";
@@ -46,7 +47,7 @@ import { AgendaPage } from "../agenda/AgendaPage";
 import { ReminderScheduler } from "../agenda/ReminderScheduler";
 import { TaskComposer } from "../agenda/TaskComposer";
 import { OPEN_AGENDA_EVENT } from "./AgendaToolCard";
-import { SubjectPage } from "./SubjectPage";
+import { SubjectPage, rememberSpacePanel } from "./SubjectPage";
 import { SubjectPicker } from "./SubjectPicker";
 import { TodayPanel } from "../home/TodayPanel";
 import todayStyles from "../home/TodayPanel.module.css";
@@ -151,7 +152,7 @@ function AuthenticatedChat({ user, onRename, onUploadAvatar, onRemoveAvatar }: {
   const [view, setViewState] = useState<View>({ type: "chat" });
   const [citationPreview, setCitationPreview] = useState<{ conversationId: string; request: CitationOpenRequest } | null>(null);
   const [sidebarMode, setSidebarModeState] = useState<SidebarMode>("chat");
-  const [spaceDialog, setSpaceDialog] = useState<null | { editId?: string; select: boolean }>(null);
+  const [spaceDialog, setSpaceDialog] = useState<null | { editId?: string; tab?: SpaceSettingsTab; select: boolean }>(null);
   const [viewRestored, setViewRestored] = useState(false);
   const [health, setHealth] = useState<HealthState>("checking");
   const [modelConfigured, setModelConfigured] = useState<boolean | null>(null);
@@ -376,6 +377,7 @@ function AuthenticatedChat({ user, onRename, onUploadAvatar, onRemoveAvatar }: {
     () => Object.fromEntries(chat.subjects.map((subject) => [subject.id, subject.name])) as Record<string, string>,
     [chat.subjects],
   );
+  const settingsSubject = spaceDialog?.editId ? chat.subjects.find((item) => item.id === spaceDialog.editId) ?? null : null;
   const conversationTitles = useMemo(
     () => Object.fromEntries(chat.conversations.map((item) => [item.id, item.title])),
     [chat.conversations],
@@ -666,7 +668,7 @@ function AuthenticatedChat({ user, onRename, onUploadAvatar, onRemoveAvatar }: {
               subjectNames={subjectNames}
               userId={user.id}
               onOpenSidebar={() => setSidebarOpen(true)}
-              onEdit={() => setSpaceDialog({ editId: pageSubject.id, select: false })}
+              onEdit={(tab) => setSpaceDialog({ editId: pageSubject.id, tab, select: false })}
               onDelete={async () => {
                 const ok = await chat.deleteSubject(pageSubject.id);
                 if (ok) setView({ type: "spaces" });
@@ -782,7 +784,6 @@ function AuthenticatedChat({ user, onRename, onUploadAvatar, onRemoveAvatar }: {
                     mode={chat.mode}
                     onModeChange={chat.setMode}
                   />
-                  <p className={styles.disclaimer}>{t("chat.disclaimer")}</p>
             </div>
             </div>
             {citationPreview?.conversationId === chat.activeId && (
@@ -1056,9 +1057,50 @@ function AuthenticatedChat({ user, onRename, onUploadAvatar, onRemoveAvatar }: {
           onClose={() => setSettingsOpen(false)}
         />
       )}
-      {spaceDialog && (
+      {settingsSubject && (
+        <SpaceSettingsDialog
+          key={settingsSubject.id}
+          subject={settingsSubject}
+          initialTab={spaceDialog?.tab}
+          memories={chat.memories}
+          subjects={chat.subjects}
+          conversationTitles={conversationTitles}
+          onClose={() => setSpaceDialog(null)}
+          onUpdate={(id, input) => chat.updateSubject(id, input)}
+          mainModelKey={settingsSubject.mainConversationId
+            ? chat.modelKeyFor(settingsSubject.mainConversationId, settingsSubject.mainModelKey)
+            : null}
+          onMainModelChange={async (key) => (settingsSubject.mainConversationId
+            ? chat.setConversationModel(settingsSubject.mainConversationId, key)
+            : false)}
+          onDelete={async () => {
+            const ok = await chat.deleteSubject(settingsSubject.id);
+            if (ok) {
+              setSpaceDialog(null);
+              if (view.type === "subject" && view.id === settingsSubject.id) setView({ type: "spaces" });
+            }
+            return ok;
+          }}
+          onUpdateMemory={chat.updateMemory}
+          onDeleteMemory={chat.deleteMemory}
+          onOpenConversation={(id) => {
+            setSpaceDialog(null);
+            // 本空间的主线或支线：留在学习空间页里打开；别处的对话（比如记忆证据来自普通对话）照常打开
+            const found = chat.conversations.find((item) => item.id === id);
+            if (found && found.subjectId !== settingsSubject.id) return showConversation(id);
+            rememberSpacePanel(settingsSubject.id, id === settingsSubject.mainConversationId ? null : id);
+            setView({ type: "subject", id: settingsSubject.id });
+          }}
+          onPractice={settingsSubject.mainConversationId ? (memory) => {
+            const mainId = settingsSubject.mainConversationId!;
+            setSpaceDialog(null);
+            setView({ type: "subject", id: settingsSubject.id });
+            void chat.sendTo(mainId, tx("针对我之前在「{topic}」上的薄弱点（{summary}），请开启一个巩固支线，带我彻底搞懂并做一道题验证。", { topic: memory.topic, summary: memory.summary }));
+          } : undefined}
+        />
+      )}
+      {spaceDialog && !spaceDialog.editId && (
         <CreateSpaceDialog
-          subject={spaceDialog.editId ? chat.subjects.find((item) => item.id === spaceDialog.editId) ?? null : null}
           onClose={() => setSpaceDialog(null)}
           onCreate={async (input: SpaceInput & { name: string }, files: File[]) => {
             const subject = await chat.createSubject(input);
@@ -1074,7 +1116,6 @@ function AuthenticatedChat({ user, onRename, onUploadAvatar, onRemoveAvatar }: {
             else setView({ type: "subject", id: subject.id });
             return true;
           }}
-          onUpdate={(id, input) => chat.updateSubject(id, input)}
         />
       )}
       <Toaster toasts={toasts} onDismiss={dismiss} />

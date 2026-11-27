@@ -9,7 +9,7 @@ import { AGENDA_CHANGED_EVENT, COMPOSE_TASK_EVENT, type ComposeTaskDetail, type 
 import type { TranslatePhrase } from "@/lib/i18n";
 import styles from "./TaskComposer.module.css";
 
-type Subject = { id: string; name: string; color: string; deadline: string | null };
+type Subject = { id: string; name: string; color: string };
 type Field = "date" | "deadline" | "priority" | "reminder" | "labels" | "subject";
 const REMINDERS = [0, 5, 10, 15, 30, 60, 120, 1440];
 const reminderLabel = (value: number, tx: TranslatePhrase) => value === 0

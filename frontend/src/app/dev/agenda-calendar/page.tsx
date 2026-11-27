@@ -63,7 +63,7 @@ export default function AgendaCalendarPreview() {
   }, []);
   if (process.env.NODE_ENV !== "development") return <p>此预览仅在开发环境可用。</p>;
   if (!ready) return <p>正在准备本地预览…</p>;
-  const subjects = [{ id: "circuits", name: "电路原理", color: "var(--accent)", deadline: shift(today, 7) }];
+  const subjects = [{ id: "circuits", name: "电路原理", color: "var(--accent)" }];
   const threads: AgendaThread[] = [{ threadId: "thread", title: "节点法的适用边界", subjectId: "circuits", subjectName: "电路原理", subjectColor: "var(--accent)", deadlineDate: shift(monday(today), 4), updatedAt: "" }];
   const buttonStyle = { border: "1px solid var(--border-strong)", borderRadius: "var(--radius-sm)", padding: "6px 10px", background: "var(--bg)", color: "var(--text)", cursor: "pointer" };
   return <main style={{ height: "100dvh", padding: 20, display: "flex", flexDirection: "column", gap: 12, background: "var(--bg-app-shell)", color: "var(--text)" }}>

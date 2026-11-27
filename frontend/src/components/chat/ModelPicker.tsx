@@ -19,10 +19,6 @@ export function reasoningLabel(level: ReasoningLevel): string | null {
   return REASONING_TEXT[level] ?? null;
 }
 
-export function supportsReasoning(model: CatalogModel | null): boolean {
-  return model?.tags.reasoning === "low" || model?.tags.reasoning === "medium" || model?.tags.reasoning === "high";
-}
-
 export function shortModelName(name: string): string {
   const text = name.trim();
   if (text.length <= 8) return text;
@@ -89,7 +85,6 @@ export interface ModelPickerProps {
   initialQuery?: string;
   onSelect: (modelKey: string | null) => Promise<boolean> | boolean;
   onManage?: () => void;
-  onResolved?: (model: CatalogModel | null) => void;
   onOpenChange?: (open: boolean) => void;
 }
 
@@ -108,17 +103,15 @@ function TagList({ tags }: { tags: ModelTags }) {
 export function ModelPicker({
   modelKey, conversationId, client = modelLibraryApi, disabled = false,
   disabledReason = "正在生成，请等这条回复完成后再切换模型", suspended = false, error = "",
-  defaultOpen = false, initialQuery = "", onSelect, onManage, onResolved, onOpenChange,
+  defaultOpen = false, initialQuery = "", onSelect, onManage, onOpenChange,
 }: ModelPickerProps) {
   const listId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
   const [placement, setPlacement] = useState<{ below: boolean; room: number }>({ below: false, room: 280 });
-  const onResolvedRef = useRef(onResolved);
   const onOpenChangeRef = useRef(onOpenChange);
   const seenConversation = useRef(conversationId);
-  onResolvedRef.current = onResolved;
   onOpenChangeRef.current = onOpenChange;
   const [models, setModels] = useState<CatalogModel[]>([]);
   const [loading, setLoading] = useState(true);
@@ -175,10 +168,6 @@ export function ModelPicker({
   }, [conversationId, setMenu]);
   useEffect(() => { if (disabled || suspended) setMenu(false); }, [disabled, suspended, setMenu]);
 
-  const resolved = loading ? null : effectiveModel(models, modelKey);
-  useEffect(() => {
-    onResolvedRef.current?.(resolved);
-  }, [resolved]);
 
   const visible = filterCatalog(models, query);
   const groups = groupCatalog(visible);

@@ -87,12 +87,12 @@ def agenda_router(chat_store, model):
         with transaction() as (db, student):
             persistence.references(db, student, {"subject_id": body.subject_id})
             if body.subject_id:
-                space = db.execute("SELECT name, goal, deadline FROM subjects WHERE id=? AND student_id=?",
+                space = db.execute("SELECT name, goal FROM subjects WHERE id=? AND student_id=?",
                                    (body.subject_id, student)).fetchone()
                 weak = db.execute(
                     "SELECT topic FROM learner_memories WHERE student_id=? AND subject_id=? AND kind='misconception' "
                     "AND status!='resolved' ORDER BY updated_at DESC LIMIT 8", (student, body.subject_id)).fetchall()
-                context = {"name": space["name"], "goal": space["goal"], "deadline": space["deadline"],
+                context = {"name": space["name"], "goal": space["goal"],
                            "weak_points": [row["topic"] for row in weak]}
         return await build(model, body, context)
 

@@ -421,12 +421,6 @@ export type MarkerSegment =
 
 export const imageMarker = (imageId: string) => `[[kg-image:${imageId}]]`;
 
-/** Puts the marker on its own line at the end of the draft, keeping what the student already typed. */
-export function withImageMarker(draft: string, marker: string): string {
-  const body = draft.replace(/\s+$/, "");
-  return body ? `${body}\n${marker}\n` : `${marker}\n`;
-}
-
 const IMAGE_LINE_RE = /^\[\[kg-image:img_[A-Za-z0-9_-]{16,40}\]\]$/;
 
 /** Composer draft: images sit on their own lines before the typed text, so the textarea only shows the text. */

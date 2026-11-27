@@ -14,12 +14,46 @@ from app.models.schemas import DEMO_STUDENT, TutorOutput
 from tests.test_acceptance_support import isolated_settings
 
 
+def is_space_memory_call(messages) -> bool:
+    """后台整理学习空间 Memory.md 的调用（支线合并、主线复盘）。"""
+    # 两个整理提示词都写「本空间的 Memory.md」；对话系统提示里的快照标题是「本空间 Memory.md」，不会误判。
+    return bool(messages) and "本空间的 Memory.md" in str(messages[0].get("content", ""))
+
+
 class FakeChat:
-    def __init__(self, replies=(), analyses=()):
+    """测试用模型。整理 Memory.md 的 JSON 调用走单独的 space_memory 队列（默认返回空操作），
+    不占用 analyses、也不记进 analysis_calls，所以支线合并带来的后台调用不会打乱其他测试的顺序。
+    子类覆盖 complete_json 时同样适用（见 __init_subclass__）。"""
+
+    def __init__(self, replies=(), analyses=(), space_memory=()):
         self.replies = list(replies)
         self.analyses = list(analyses)
         self.calls = []
         self.analysis_calls = []
+        self.space_memory = list(space_memory)
+        self.space_memory_calls = []
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        own = cls.__dict__.get("complete_json")
+        if own is None:
+            return
+
+        async def complete_json(self, messages, _own=own):
+            if is_space_memory_call(messages):
+                return FakeChat._space_memory_reply(self, messages)
+            return await _own(self, messages)
+
+        cls.complete_json = complete_json
+
+    def _space_memory_reply(self, messages):
+        if not hasattr(self, "space_memory_calls"):
+            self.space_memory_calls, self.space_memory = [], []
+        self.space_memory_calls.append(json.loads(messages[-1]["content"]))
+        result = self.space_memory.pop(0) if self.space_memory else {"ops": []}
+        if isinstance(result, Exception):
+            raise result
+        return result
 
     async def stream(self, messages):
         self.calls.append(messages)
@@ -31,6 +65,8 @@ class FakeChat:
         yield "finish", "stop"
 
     async def complete_json(self, messages):
+        if is_space_memory_call(messages):
+            return self._space_memory_reply(messages)
         self.analysis_calls.append(json.loads(messages[-1]["content"]))
         result = self.analyses.pop(0) if self.analyses else {}
         if isinstance(result, Exception):

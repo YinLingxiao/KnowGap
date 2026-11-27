@@ -7,6 +7,7 @@ import json
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
+from app.memory import space_notes, space_sync
 from app.chat.store import ChatStore
 from app.config import Settings
 from app.demo.markers import AGENDA_PREFIX, REQUEST_PREFIX
@@ -34,7 +35,7 @@ PROFILE_ENTRIES = (
 
 
 def _subject_id(db, student_id: str, name: str) -> str | None:
-    row = db.execute("SELECT id, deadline FROM subjects WHERE student_id = ? AND name = ?", (student_id, name)).fetchone()
+    row = db.execute("SELECT id FROM subjects WHERE student_id = ? AND name = ?", (student_id, name)).fetchone()
     return row["id"] if row else None
 
 
@@ -137,7 +138,7 @@ def _stamp_main(store: ChatStore, student_id: str, conversation_id: str, request
 
 def _ensure_subject(
     store: ChatStore, student_id: str, *, name: str, description: str, instructions: str,
-    goal: str, deadline: str | None, color: str, request_id: str,
+    goal: str, color: str, request_id: str,
 ):
     found = _subject_by_request(store, student_id, request_id)
     if found is None:
@@ -157,11 +158,12 @@ def _ensure_subject(
     if found is not None:
         return store.update_subject(found.id, student_id, {
             "description": description, "instructions": instructions, "goal": goal,
-            "deadline": deadline, "color": color,
+            # 空间不再有截止日期（时间安排在日程里）；重新导入时清掉旧的演示值。
+            "deadline": None, "color": color,
         })
     created = store.create_subject(
         student_id, name, description, instructions,
-        goal=goal, deadline=deadline, color=color,
+        goal=goal, color=color,
     )
     _stamp_main(store, student_id, created.main_conversation_id, request_id)
     return created
@@ -230,12 +232,12 @@ def _clear_profile(store: ChatStore, student_id: str) -> None:
     store.save_agent_note(student_id, "user", join_entries(kept))
 
 
-def _seed_data_structures(store: ChatStore, student_id: str, deadline: str) -> None:
+def _seed_data_structures(store: ChatStore, student_id: str) -> None:
     subject = _ensure_subject(
         store, student_id, name=DS_NAME, description=DS_DESCRIPTION,
         instructions="演示时先引用学生原话，再纠正栈、队列、树和哈希的易错点。",
         goal="十天内过完栈、队列、二叉树和哈希的易错点（演示）",
-        deadline=deadline, color="#3d6fdb", request_id=DS_MAIN,
+        color="#3d6fdb", request_id=DS_MAIN,
     )
     messages = _turns(store, subject.main_conversation_id, (
         ("ds-u1", "我在准备数据结构测验（演示）。我一直觉得栈是先进先出的。",
@@ -331,12 +333,12 @@ def _seed_data_structures(store: ChatStore, student_id: str, deadline: str) -> N
              ["队空仍然是 front 等于 rear", "队满可以用空一个单元，或另记元素个数"])
 
 
-def _seed_circuit(store: ChatStore, student_id: str, deadline: str) -> None:
+def _seed_circuit(store: ChatStore, student_id: str) -> None:
     subject = _ensure_subject(
         store, student_id, name=CIRCUIT_NAME, description=CIRCUIT_DESCRIPTION,
         instructions="演示多空间时用，只保留少量电路易错点。",
         goal="把电位方向和节点电流守恒讲清楚（演示）",
-        deadline=deadline, color="#0f6e56", request_id=CIRCUIT_MAIN,
+        color="#0f6e56", request_id=CIRCUIT_MAIN,
     )
     messages = _turns(store, subject.main_conversation_id, (
         ("circuit-u1", "演示一下电路：我总觉得电流从低电位流向高电位。",
@@ -364,9 +366,8 @@ def _seed_circuit(store: ChatStore, student_id: str, deadline: str) -> None:
 
 
 def seed_store(store: ChatStore, student_id: str) -> None:
-    today = date.today()
-    _seed_data_structures(store, student_id, (today + timedelta(days=10)).isoformat())
-    _seed_circuit(store, student_id, (today + timedelta(days=21)).isoformat())
+    _seed_data_structures(store, student_id)
+    _seed_circuit(store, student_id)
     _seed_profile(store, student_id)
     seed_agenda(store, student_id)
 
@@ -397,6 +398,11 @@ def reset_store(store: ChatStore, student_id: str) -> None:
         db.execute("BEGIN IMMEDIATE")
         subject_ids = _seed_subject_ids(db, student_id)
         _reset_agenda(db, student_id, subject_ids)
+        timestamp = datetime.now(timezone.utc).isoformat()
+        for subject_id in subject_ids:
+            # 空间的 Memory.md 和它在 USER 里的汇总摘要一起清掉
+            space_notes.drop(db, student_id, subject_id)
+            space_sync.forget(db, student_id, subject_id, timestamp)
         if subject_ids:
             placeholders = ",".join("?" * len(subject_ids))
             db.execute(

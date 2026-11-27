@@ -76,9 +76,9 @@ export function AgendaEmpty(props: AgendaEmptyProps) {
               <button
                 type="button"
                 className={styles.suggestBtn}
-                onClick={() => (item.kind === "breakdown" ? props.onBreakdown?.(item.subjectId) : item.taskId && props.onSchedule?.(item.taskId))}
+                onClick={() => props.onSchedule?.(item.taskId)}
               >
-                {item.kind === "breakdown" ? tx("AI 拆解排期") : item.kind === "inbox" ? tx("安排到今天") : tx("提前到今天")}
+                {item.kind === "pull" ? tx("提前到今天") : tx("安排到今天")}
               </button>
             </li>
           ))}

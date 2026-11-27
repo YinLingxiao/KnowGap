@@ -53,11 +53,6 @@
   white-space: nowrap;
 }
 
-.urgent {
-  color: var(--red);
-  font-weight: 500;
-}
-
 .bar {
   width: 48px;
   height: 4px;

@@ -14,6 +14,7 @@ for (const relative of [
   'lib/i18n/phrases-agenda.ts',
   'lib/i18n/phrases-onboarding.ts',
   'lib/i18n/phrases-settings.ts',
+  'lib/i18n/phrases-space-settings.ts',
   'lib/i18n/phrases-widgets.ts',
   'lib/i18n/phrases-extra.ts',
   'lib/i18n/index.ts',
@@ -88,6 +89,7 @@ test('phrase modules do not silently disagree on a translation', () => {
     'phrases-agenda.ts',
     'phrases-onboarding.ts',
     'phrases-settings.ts',
+    'phrases-space-settings.ts',
     'phrases-widgets.ts',
     'phrases-extra.ts',
   ];
