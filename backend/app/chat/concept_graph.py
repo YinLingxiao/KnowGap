@@ -85,7 +85,7 @@ def material_outlines(store: ChatStore, student_id: str, subject_id: str) -> lis
 def _fingerprint(insights: dict, outlines: list[dict]) -> str:
     subject = insights["subject"]
     stable = {
-        "subject": {key: subject[key] for key in ("name", "goal", "level", "description", "deadline")},
+        "subject": {key: subject[key] for key in ("name", "goal", "description", "deadline")},
         "misconceptions": [(m["id"], m["topic"], m["summary"], m["status"], len(m["evidence"]))
                            for m in insights["misconceptions"]],
         "mastered": [(m["id"], m["topic"], m["summary"]) for m in insights["mastered"]],
@@ -170,7 +170,7 @@ def validate(raw, known: list[dict]) -> list[dict]:
 def model_input(insights: dict, outlines: list[dict]) -> list[dict]:
     subject = insights["subject"]
     payload = {
-        "subject": {key: subject[key] for key in ("name", "goal", "level", "description", "deadline")},
+        "subject": {key: subject[key] for key in ("name", "goal", "description", "deadline")},
         "materials": [{"title": item["title"], "kind": item["kind"], "outline": item["outline"]} for item in outlines],
         "misconceptions": [{"id": m["id"], "topic": m["topic"], "summary": m["summary"]}
                            for m in insights["misconceptions"][:12]],

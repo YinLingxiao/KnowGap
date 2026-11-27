@@ -7,23 +7,56 @@
  */
 
 export type MemoryScopeFilter = "all" | "general" | "subject" | "focused";
+export type FocusedMemoryScope = "none" | "subject" | "general" | "mixed";
 
 /**
- * 空间内给「本空间」「通用」；如果聚焦的记忆属于其他空间，再临时给「聚焦记忆」，
- * 避免记忆改过归属后从原对话点进来却看不到。全局记忆页才给「全部」。
+ * 汇总当前聚焦的所有记忆落在哪些范围里（与 memories 数组顺序无关）：
+ * - none：没有匹配到聚焦记忆
+ * - subject：全部属于当前空间
+ * - general：全部属于通用记忆
+ * - mixed：包含其他空间记忆，或跨了多个范围（如本空间 + 通用）
  */
-export function memoryScopeFilters(hasContext: boolean, hasForeignFocus = false): MemoryScopeFilter[] {
-  if (!hasContext) return ["all", "general"];
-  return hasForeignFocus ? ["focused", "subject", "general"] : ["subject", "general"];
+export function classifyFocusedMemories(
+  contextSubjectId: string | null,
+  memories: ReadonlyArray<{ id?: string; subjectId: string | null }>,
+  focusIds: readonly string[],
+): FocusedMemoryScope {
+  if (!contextSubjectId || !focusIds.length) return "none";
+  let hasSubject = false;
+  let hasGeneral = false;
+  for (const memory of memories) {
+    if (!memory.id || !focusIds.includes(memory.id)) continue;
+    if (memory.subjectId === null) {
+      hasGeneral = true;
+    } else if (memory.subjectId === contextSubjectId) {
+      hasSubject = true;
+    } else {
+      return "mixed";
+    }
+    if (hasSubject && hasGeneral) return "mixed";
+  }
+  if (hasSubject) return "subject";
+  if (hasGeneral) return "general";
+  return "none";
 }
 
-/** 默认落在本空间；聚焦通用记忆时落在「通用」，聚焦其他空间记忆时临时落在「聚焦记忆」。 */
+/**
+ * 空间内给「本空间」「通用」；如果聚焦的记忆跨了范围或包含其他空间记忆，再临时给「聚焦记忆」，
+ * 保证全部聚焦记忆都能一次看到，且不会混入未聚焦的其他空间记忆。全局记忆页才给「全部」。
+ */
+export function memoryScopeFilters(inSpace: boolean, focusedScope: FocusedMemoryScope = "none"): MemoryScopeFilter[] {
+  if (!inSpace) return ["all", "general"];
+  return focusedScope === "mixed" ? ["focused", "subject", "general"] : ["subject", "general"];
+}
+
+/** 默认落在本空间；全部聚焦通用记忆时落在「通用」，跨范围或含其他空间记忆时临时落在「聚焦记忆」。 */
 export function defaultMemoryScopeFilter(
-  hasContext: boolean, focusedSubjectId?: string | null, contextSubjectId?: string | null,
+  inSpace: boolean,
+  focusedScope: FocusedMemoryScope = "none",
 ): MemoryScopeFilter {
-  if (!hasContext) return "all";
-  if (focusedSubjectId === null) return "general";
-  if (focusedSubjectId && contextSubjectId && focusedSubjectId !== contextSubjectId) return "focused";
+  if (!inSpace) return "all";
+  if (focusedScope === "general") return "general";
+  if (focusedScope === "mixed") return "focused";
   return "subject";
 }
 

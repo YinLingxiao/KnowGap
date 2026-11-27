@@ -132,7 +132,7 @@ def subject_insights(store: ChatStore, student_id: str, subject_id: str, *, toda
         "schema_version": SCHEMA_VERSION,
         "subject": {
             "id": subject.id, "name": subject.name, "description": subject.description, "goal": subject.goal,
-            "level": subject.level, "deadline": subject.deadline, "color": subject.color,
+            "deadline": subject.deadline, "color": subject.color,
             "main_conversation_id": subject.main_conversation_id,
         },
         "stats": stats,

@@ -151,7 +151,7 @@ def _dialogue(store: ChatStore, main_id: str | None) -> list[dict]:
 def model_input(store: ChatStore, library, student_id: str, insights: dict, notes: str) -> list[dict]:
     subject = insights["subject"]
     payload = {
-        "subject": {key: subject[key] for key in ("name", "goal", "level", "deadline", "description")},
+        "subject": {key: subject[key] for key in ("name", "goal", "deadline", "description")},
         "misconceptions": [{"topic": m["topic"], "summary": m["summary"]} for m in insights["misconceptions"][:10]],
         "mastered": [m["topic"] for m in insights["mastered"][:10]],
         "thread_conclusions": [{"title": c["title"], "summary": clip(c["summary"], 300), "takeaways": c["takeaways"]}
@@ -271,7 +271,7 @@ async def build_cheatsheet(store: ChatStore, service, student_id: str, subject_i
     subject = insights["subject"]
     sheet = {
         "subject_id": subject_id,
-        "subject": {key: subject[key] for key in ("id", "name", "goal", "level", "deadline")},
+        "subject": {key: subject[key] for key in ("id", "name", "goal", "deadline")},
         "stats": insights["stats"],
         "generated_at": now(),
         "cached": False,

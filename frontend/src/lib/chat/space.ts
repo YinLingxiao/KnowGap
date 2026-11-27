@@ -1,19 +1,7 @@
-import { translate, type Language, type MessageKey } from "@/lib/i18n";
-import type { Level, SpaceProgress } from "./types";
+import { translate, type Language } from "@/lib/i18n";
+import type { SpaceProgress } from "./types";
 
 export const SPACE_COLORS = ["#3d6fdb", "#2e8a5c", "#0f766e", "#c2650a", "#a16207", "#c93535", "#be185d", "#7c5cbf"];
-
-export const LEVELS: Array<{ id: Level; labelKey: MessageKey }> = [
-  { id: "beginner", labelKey: "level.beginner" },
-  { id: "some", labelKey: "level.some" },
-  { id: "fluent", labelKey: "level.fluent" },
-  { id: "exam", labelKey: "level.exam" },
-];
-
-export function levelLabel(level: Level | null, lang: Language): string | null {
-  const item = LEVELS.find((entry) => entry.id === level);
-  return item ? translate(lang, item.labelKey) : null;
-}
 
 /** 摘录只用于一两行预览，去掉 Markdown 记号后直接显示文字 */
 export function plainText(markdown: string): string {

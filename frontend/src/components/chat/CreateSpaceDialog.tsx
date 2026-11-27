@@ -1,16 +1,53 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { FileSpreadsheet, FileText, FileType, Plus, Presentation, RotateCcw, Search, X } from "lucide-react";
 import { useI18n } from "@/components/LanguageProvider";
 import { DOCUMENT_EXTENSIONS, MAX_UPLOAD_BYTES } from "@/lib/chat/attachments";
 import { kindFromFilename, type MaterialKind } from "@/lib/materials/kinds";
 import { sameFile, sizeText, splitName } from "@/lib/materials/uploads";
 import { SPACE_COLORS } from "@/lib/chat/space";
-import type { Level, SpaceInput, Subject } from "@/lib/chat/types";
+import type { SpaceInput, Subject } from "@/lib/chat/types";
 import { cx } from "@/lib/cx";
 import { DEFAULT_SPACE_ICON, SpaceIcon, filterSpaceIcons } from "./SpaceIcon";
 import styles from "./CreateSpaceDialog.module.css";
+
+const PICKER_WIDTH = 276;
+const PICKER_EDGE = 12;
+const PICKER_GAP = 8;
+const PICKER_ESTIMATED_HEIGHT = 320;
+
+export interface PickerPosition {
+  top: number;
+  left: number;
+  width: number;
+  maxHeight: number;
+}
+
+/** 按锚点与视口尺寸计算 fixed 弹层坐标：优先放下方，放不下翻到上方，水平与垂直都不超出视口。 */
+export function computePickerPosition(
+  anchor: { top: number; bottom: number; left: number },
+  viewport: { width: number; height: number },
+  popoverHeight = PICKER_ESTIMATED_HEIGHT,
+): PickerPosition {
+  const maxWidth = Math.max(0, viewport.width - PICKER_EDGE * 2);
+  const width = Math.min(PICKER_WIDTH, maxWidth);
+  const left = Math.max(PICKER_EDGE, Math.min(anchor.left - 6, viewport.width - PICKER_EDGE - width));
+  const maxHeight = Math.max(120, viewport.height - PICKER_EDGE * 2);
+  const height = Math.min(popoverHeight, maxHeight);
+  const availBelow = viewport.height - anchor.bottom - PICKER_GAP - PICKER_EDGE;
+  const availAbove = anchor.top - PICKER_GAP - PICKER_EDGE;
+  let top: number;
+  if (height <= availBelow) {
+    top = anchor.bottom + PICKER_GAP;
+  } else if (height <= availAbove) {
+    top = anchor.top - PICKER_GAP - height;
+  } else {
+    top = Math.max(PICKER_EDGE, viewport.height - PICKER_EDGE - height);
+  }
+  return { top, left, width, maxHeight };
+}
 
 const FILE_ICONS: Record<MaterialKind, typeof FileText> = {
   pdf: FileType, docx: FileType, pptx: Presentation, xlsx: FileSpreadsheet, csv: FileSpreadsheet, md: FileText, txt: FileText,
@@ -28,12 +65,11 @@ export function CreateSpaceDialog({ subject, onClose, onCreate, onUpdate }: Crea
   const editing = Boolean(subject);
   const [name, setName] = useState(subject?.name ?? "");
   const [goal, setGoal] = useState(subject?.goal ?? "");
-  // 水平不再在这里编辑，保存时原样带回，避免清掉已有空间的设置。
-  const level: Level | null = subject?.level ?? null;
   const [deadline, setDeadline] = useState(subject?.deadline ?? "");
   const [color, setColor] = useState(subject?.color || SPACE_COLORS[0]);
   const [icon, setIcon] = useState(subject?.icon || DEFAULT_SPACE_ICON);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerPos, setPickerPos] = useState<PickerPosition | null>(null);
   const [iconQuery, setIconQuery] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [rejected, setRejected] = useState<string | null>(null);
@@ -42,10 +78,18 @@ export function CreateSpaceDialog({ subject, onClose, onCreate, onUpdate }: Crea
   const fileRef = useRef<HTMLInputElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const visibleIcons = useMemo(() => filterSpaceIcons(iconQuery), [iconQuery]);
   const isDefaultAppearance = icon === DEFAULT_SPACE_ICON && color === SPACE_COLORS[0];
+
+  const updatePickerPosition = useCallback(() => {
+    const anchor = pickerRef.current?.getBoundingClientRect();
+    if (!anchor || typeof window === "undefined") return;
+    const measuredHeight = popoverRef.current?.getBoundingClientRect().height || PICKER_ESTIMATED_HEIGHT;
+    setPickerPos(computePickerPosition(anchor, { width: window.innerWidth, height: window.innerHeight }, measuredHeight));
+  }, []);
 
   useEffect(() => {
     nameRef.current?.focus();
@@ -68,17 +112,25 @@ export function CreateSpaceDialog({ subject, onClose, onCreate, onUpdate }: Crea
   useEffect(() => {
     if (!pickerOpen) {
       setIconQuery("");
+      setPickerPos(null);
       return;
     }
+    updatePickerPosition();
     searchRef.current?.focus();
     const onDown = (event: MouseEvent) => {
-      if (pickerRef.current && !pickerRef.current.contains(event.target as Node)) {
-        setPickerOpen(false);
-      }
+      const target = event.target as Node;
+      if (pickerRef.current?.contains(target) || popoverRef.current?.contains(target)) return;
+      setPickerOpen(false);
     };
     document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
-  }, [pickerOpen]);
+    window.addEventListener("resize", updatePickerPosition);
+    window.addEventListener("scroll", updatePickerPosition, true);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      window.removeEventListener("resize", updatePickerPosition);
+      window.removeEventListener("scroll", updatePickerPosition, true);
+    };
+  }, [pickerOpen, updatePickerPosition]);
 
   const addFiles = (list: FileList | null) => {
     if (!list?.length) return;
@@ -105,7 +157,6 @@ export function CreateSpaceDialog({ subject, onClose, onCreate, onUpdate }: Crea
     const input = {
       name: trimmed.slice(0, 40),
       goal: goal.trim(),
-      level,
       deadline: deadline || null,
       color,
       icon,
@@ -117,29 +168,125 @@ export function CreateSpaceDialog({ subject, onClose, onCreate, onUpdate }: Crea
     if (ok) onClose();
   };
 
+  const pickerPopover = pickerOpen ? (
+    <div
+      ref={popoverRef}
+      className={styles.pickerPopover}
+      role="dialog"
+      aria-label={tx("图标与颜色选择器")}
+      style={pickerPos ? {
+        top: `${pickerPos.top}px`,
+        left: `${pickerPos.left}px`,
+        width: `${pickerPos.width}px`,
+        maxHeight: `${pickerPos.maxHeight}px`,
+      } : undefined}
+      onMouseDown={(event) => event.stopPropagation()}
+    >
+      <div className={styles.pickerSearch}>
+        <Search size={13} aria-hidden />
+        <input
+          ref={searchRef}
+          type="text"
+          value={iconQuery}
+          placeholder={tx("搜索图标…")}
+          aria-label={tx("搜索图标")}
+          onChange={(event) => setIconQuery(event.target.value)}
+        />
+        {iconQuery && (
+          <button
+            type="button"
+            className={styles.searchClear}
+            aria-label={tx("清空搜索")}
+            onClick={() => { setIconQuery(""); searchRef.current?.focus(); }}
+          >
+            <X size={12} aria-hidden />
+          </button>
+        )}
+      </div>
+
+      <div className={styles.colorRow} role="radiogroup" aria-label={t("createSpace.colorAria")}>
+        {SPACE_COLORS.map((item) => (
+          <button
+            key={item}
+            type="button"
+            role="radio"
+            aria-checked={color === item}
+            className={color === item ? styles.dotOn : styles.dot}
+            style={{ background: item }}
+            onClick={() => setColor(item)}
+            aria-label={`颜色 ${item}`}
+          />
+        ))}
+      </div>
+
+      {visibleIcons.length === 0 ? (
+        <p className={styles.pickerEmpty}>{tx("没有匹配的图标")}</p>
+      ) : (
+        <div className={styles.iconGrid} role="listbox" aria-label={tx("可选图标")}>
+          {visibleIcons.map((entry) => {
+            const active = icon === entry.id;
+            const IconComp = entry.icon;
+            return (
+              <button
+                key={entry.id}
+                type="button"
+                role="option"
+                aria-selected={active}
+                className={cx(styles.iconCell, active && styles.iconCellActive)}
+                style={active ? { color } : undefined}
+                title={tx(entry.label)}
+                aria-label={tx(entry.label)}
+                onClick={() => setIcon(entry.id)}
+              >
+                <IconComp size={15} aria-hidden />
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      <div className={styles.pickerFoot}>
+        <button
+          type="button"
+          className={styles.resetBtn}
+          disabled={isDefaultAppearance}
+          onClick={() => {
+            setIcon(DEFAULT_SPACE_ICON);
+            setColor(SPACE_COLORS[0]);
+          }}
+        >
+          <RotateCcw size={12} aria-hidden />
+          <span>{tx("重置图标与颜色")}</span>
+        </button>
+      </div>
+    </div>
+  ) : null;
+
   return (
     <div className={styles.backdrop} onMouseDown={onClose}>
       <div
-        className={styles.dialog}
+        className={cx(styles.dialog, editing && styles.dialogEdit)}
         role="dialog"
         aria-modal="true"
         aria-labelledby="space-dialog-title"
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <nav className={styles.nav} aria-label={t("space.settings")}>
-          <button
-            type="button"
-            className={cx(styles.navItem, styles.navItemActive)}
-            aria-current="page"
-          >
-            {t("settings.tab.general")}
-          </button>
-        </nav>
+        {editing && (
+          <nav className={styles.nav} aria-label={t("space.settings")}>
+            <button
+              type="button"
+              className={cx(styles.navItem, styles.navItemActive)}
+              aria-current="page"
+            >
+              {t("settings.tab.general")}
+            </button>
+          </nav>
+        )}
 
         <div className={styles.main}>
           <header className={styles.head}>
-            <h2 id="space-dialog-title">{editing ? t("createSpace.editTitle") : t("createSpace.newTitle")}</h2>
-            <button className={styles.close} onClick={onClose} aria-label={t("common.close")}>
+            <h2 id="space-dialog-title">{editing ? t("space.settings") : t("createSpace.newTitle")}</h2>
+            <button type="button" className={styles.close} onClick={onClose} aria-label={t("common.close")}>
               <X size={16} />
             </button>
           </header>
@@ -154,7 +301,10 @@ export function CreateSpaceDialog({ subject, onClose, onCreate, onUpdate }: Crea
                   type="button"
                   className={cx(styles.iconSwatch, pickerOpen && styles.iconSwatchOpen)}
                   style={{ color }}
-                  onClick={() => setPickerOpen((v) => !v)}
+                  onClick={() => {
+                    if (!pickerOpen) updatePickerPosition();
+                    setPickerOpen((v) => !v);
+                  }}
                   aria-expanded={pickerOpen}
                   aria-haspopup="dialog"
                   aria-label={tx("选择图标和颜色")}
@@ -164,87 +314,6 @@ export function CreateSpaceDialog({ subject, onClose, onCreate, onUpdate }: Crea
                     <SpaceIcon name={icon} size={15} />
                   </span>
                 </button>
-                {pickerOpen && (
-                  <div className={styles.pickerPopover} role="dialog" aria-label={tx("图标与颜色选择器")}>
-                    <div className={styles.pickerSearch}>
-                      <Search size={13} aria-hidden />
-                      <input
-                        ref={searchRef}
-                        type="text"
-                        value={iconQuery}
-                        placeholder={tx("搜索图标…")}
-                        aria-label={tx("搜索图标")}
-                        onChange={(event) => setIconQuery(event.target.value)}
-                      />
-                      {iconQuery && (
-                        <button
-                          type="button"
-                          className={styles.searchClear}
-                          aria-label={tx("清空搜索")}
-                          onClick={() => { setIconQuery(""); searchRef.current?.focus(); }}
-                        >
-                          <X size={12} aria-hidden />
-                        </button>
-                      )}
-                    </div>
-
-                    <div className={styles.colorRow} role="radiogroup" aria-label={t("createSpace.colorAria")}>
-                      {SPACE_COLORS.map((item) => (
-                        <button
-                          key={item}
-                          type="button"
-                          role="radio"
-                          aria-checked={color === item}
-                          className={color === item ? styles.dotOn : styles.dot}
-                          style={{ background: item }}
-                          onClick={() => setColor(item)}
-                          aria-label={`颜色 ${item}`}
-                        />
-                      ))}
-                    </div>
-
-                    {visibleIcons.length === 0 ? (
-                      <p className={styles.pickerEmpty}>{tx("没有匹配的图标")}</p>
-                    ) : (
-                      <div className={styles.iconGrid} role="listbox" aria-label={tx("可选图标")}>
-                        {visibleIcons.map((entry) => {
-                          const active = icon === entry.id;
-                          const IconComp = entry.icon;
-                          return (
-                            <button
-                              key={entry.id}
-                              type="button"
-                              role="option"
-                              aria-selected={active}
-                              className={cx(styles.iconCell, active && styles.iconCellActive)}
-                              style={active ? { color } : undefined}
-                              title={tx(entry.label)}
-                              aria-label={tx(entry.label)}
-                              onClick={() => setIcon(entry.id)}
-                            >
-                              <IconComp size={15} aria-hidden />
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-
-                    <div className={styles.pickerFoot}>
-                      <button
-                        type="button"
-                        className={styles.resetBtn}
-                        disabled={isDefaultAppearance}
-                        onClick={() => {
-                          setIcon(DEFAULT_SPACE_ICON);
-                          setColor(SPACE_COLORS[0]);
-                        }}
-                      >
-                        <RotateCcw size={12} aria-hidden />
-                        <span>{tx("重置图标与颜色")}</span>
-                      </button>
-                    </div>
-                  </div>
-                )}
               </div>
               <input
                 id="space-name-input"
@@ -340,14 +409,19 @@ export function CreateSpaceDialog({ subject, onClose, onCreate, onUpdate }: Crea
               )}
             </div>
           ) : (
-            <div className={styles.editExtra}>
-              <input
-                type="date"
-                className={styles.dateInput}
-                value={deadline}
-                aria-label={t("createSpace.deadline")}
-                onChange={(event) => setDeadline(event.target.value)}
-              />
+            <div className={styles.field}>
+              <label className={styles.label} htmlFor="space-deadline-input">
+                {t("createSpace.deadline")}
+              </label>
+              <div className={styles.editExtra}>
+                <input
+                  id="space-deadline-input"
+                  type="date"
+                  className={styles.dateInput}
+                  value={deadline}
+                  onChange={(event) => setDeadline(event.target.value)}
+                />
+              </div>
             </div>
           )}
 
@@ -366,6 +440,7 @@ export function CreateSpaceDialog({ subject, onClose, onCreate, onUpdate }: Crea
           </footer>
         </div>
       </div>
+      {pickerPopover && (typeof document !== "undefined" ? createPortal(pickerPopover, document.body) : pickerPopover)}
     </div>
   );
 }

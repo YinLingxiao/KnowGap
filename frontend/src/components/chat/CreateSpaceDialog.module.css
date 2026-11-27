@@ -15,16 +15,20 @@
   display: flex;
   flex-direction: row;
   gap: 0;
-  width: min(640px, 100%);
+  width: min(440px, 100%);
   max-height: min(680px, 100%);
   padding: 0;
-  overflow: visible;
+  overflow: hidden;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-xl);
   background: var(--bg-elevated);
   box-shadow: var(--shadow-popover);
   transform-origin: center;
   animation: modal-spring 280ms var(--ease-spring);
+}
+
+.dialogEdit {
+  width: min(640px, 100%);
 }
 
 /* 左侧设置菜单 */
@@ -36,7 +40,7 @@
   width: 148px;
   padding: 16px 10px;
   border-right: 1px solid var(--border-subtle);
-  border-radius: var(--radius-xl) 0 0 var(--radius-xl);
+  border-radius: calc(var(--radius-xl) - 1px) 0 0 calc(var(--radius-xl) - 1px);
   background: var(--bg-subtle);
 }
 
@@ -64,9 +68,9 @@
   flex-direction: column;
   gap: 16px;
   min-width: 0;
+  min-height: 0;
   padding: 20px 22px 18px;
-  /* 不裁剪：图标与颜色弹层要能伸出弹窗，和改版前一致。 */
-  overflow: visible;
+  overflow-y: auto;
 }
 
 /* 窄窗口下只有一项的侧栏没有意义，收起来把宽度留给表单。 */
@@ -242,15 +246,16 @@
 }
 
 .pickerPopover {
-  position: absolute;
-  top: calc(100% + 8px);
-  left: -6px;
-  z-index: 40;
+  position: fixed;
+  z-index: 60;
   display: flex;
   flex-direction: column;
   gap: 10px;
   width: 276px;
+  max-width: calc(100vw - 24px);
+  max-height: calc(100vh - 24px);
   padding: 10px;
+  overflow-y: auto;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
   background: var(--bg-elevated);

@@ -137,7 +137,7 @@ def _stamp_main(store: ChatStore, student_id: str, conversation_id: str, request
 
 def _ensure_subject(
     store: ChatStore, student_id: str, *, name: str, description: str, instructions: str,
-    goal: str, level: str, deadline: str | None, color: str, request_id: str,
+    goal: str, deadline: str | None, color: str, request_id: str,
 ):
     found = _subject_by_request(store, student_id, request_id)
     if found is None:
@@ -157,11 +157,11 @@ def _ensure_subject(
     if found is not None:
         return store.update_subject(found.id, student_id, {
             "description": description, "instructions": instructions, "goal": goal,
-            "level": level, "deadline": deadline, "color": color,
+            "deadline": deadline, "color": color,
         })
     created = store.create_subject(
         student_id, name, description, instructions,
-        goal=goal, level=level, deadline=deadline, color=color,
+        goal=goal, deadline=deadline, color=color,
     )
     _stamp_main(store, student_id, created.main_conversation_id, request_id)
     return created
@@ -235,7 +235,7 @@ def _seed_data_structures(store: ChatStore, student_id: str, deadline: str) -> N
         store, student_id, name=DS_NAME, description=DS_DESCRIPTION,
         instructions="演示时先引用学生原话，再纠正栈、队列、树和哈希的易错点。",
         goal="十天内过完栈、队列、二叉树和哈希的易错点（演示）",
-        level="exam", deadline=deadline, color="#3d6fdb", request_id=DS_MAIN,
+        deadline=deadline, color="#3d6fdb", request_id=DS_MAIN,
     )
     messages = _turns(store, subject.main_conversation_id, (
         ("ds-u1", "我在准备数据结构测验（演示）。我一直觉得栈是先进先出的。",
@@ -336,7 +336,7 @@ def _seed_circuit(store: ChatStore, student_id: str, deadline: str) -> None:
         store, student_id, name=CIRCUIT_NAME, description=CIRCUIT_DESCRIPTION,
         instructions="演示多空间时用，只保留少量电路易错点。",
         goal="把电位方向和节点电流守恒讲清楚（演示）",
-        level="some", deadline=deadline, color="#0f6e56", request_id=CIRCUIT_MAIN,
+        deadline=deadline, color="#0f6e56", request_id=CIRCUIT_MAIN,
     )
     messages = _turns(store, subject.main_conversation_id, (
         ("circuit-u1", "演示一下电路：我总觉得电流从低电位流向高电位。",

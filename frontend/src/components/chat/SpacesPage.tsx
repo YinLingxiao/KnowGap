@@ -5,7 +5,7 @@ import {
   ArrowUpDown, GraduationCap, LayoutGrid, List, MoreHorizontal, PanelLeftOpen,
   Plus, Search, X,
 } from "lucide-react";
-import { levelLabel, studiedLabel } from "@/lib/chat/space";
+import { studiedLabel } from "@/lib/chat/space";
 import type { Subject } from "@/lib/chat/types";
 import { useI18n } from "@/components/LanguageProvider";
 import { localeOf, type MessageKey } from "@/lib/i18n";
@@ -232,7 +232,6 @@ export function SpacesPage(props: SpacesPageProps) {
                   <div className={styles.cardBody}>
                     <div className={styles.nameRow}>
                       <span className={styles.name}>{subject.name}</span>
-                      {levelLabel(subject.level, lang) && <span className={styles.tag}>{levelLabel(subject.level, lang)}</span>}
                     </div>
                     {subject.goal && <p className={styles.goal}>{subject.goal}</p>}
                   </div>

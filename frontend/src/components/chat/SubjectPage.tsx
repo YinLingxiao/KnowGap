@@ -14,7 +14,7 @@ import { useSlidingThumb } from "@/hooks/useSlidingThumb";
 import { toApiError } from "@/lib/api/errors";
 import { chatApi } from "@/lib/chat/api";
 import { PLAN_EVENT, planApi, type PlanEventDetail } from "@/lib/chat/plan";
-import { levelLabel, plainText } from "@/lib/chat/space";
+import { plainText } from "@/lib/chat/space";
 import type { ConversationSummary, LearnerMemory, Subject, SpaceUsage, TokenUsage } from "@/lib/chat/types";
 import { latestPlanChangeId } from "@/lib/chat/wakeEvents";
 import { API_BASE_URL } from "@/lib/config";
@@ -109,7 +109,7 @@ export function SubjectPage({
   onEdit: () => void;
   onDelete: () => Promise<boolean>;
 }) {
-  const { lang, t, tx } = useI18n();
+  const { t, tx } = useI18n();
   const mainId = subject.mainConversationId;
   const { loadConversation, loadSubjects, loadMemories, threadDispatch } = chat;
   const [panel, setPanel] = useState<Panel>({ mode: "list" });
@@ -495,7 +495,6 @@ export function SubjectPage({
           </span>
           <div className={styles.heading}>
             <h1>{subject.name}</h1>
-            {levelLabel(subject.level, lang) && <span className={styles.tag}>{levelLabel(subject.level, lang)}</span>}
             {subject.deadline && (
               <span className={styles.metaPill} title={t("space.deadlineTitle", { date: subject.deadline })}>
                 <CalendarDays size={11} aria-hidden />
@@ -542,7 +541,7 @@ export function SubjectPage({
                 {threadNeedsAttention && <span className={styles.inlineDot} aria-hidden />}
               </button>
             )}
-            <button className={styles.icon} aria-label={t("space.settings")} title={t("space.editSpace")} onClick={onEdit}>
+            <button className={styles.icon} aria-label={t("space.settings")} title={t("space.settings")} onClick={onEdit}>
               <Settings size={15} />
             </button>
             <button className={styles.icon} aria-label={t("space.moreActions")} title={t("space.moreActions")} onClick={() => setMenu((open) => !open)}>
@@ -1005,7 +1004,6 @@ export function SubjectPage({
                 <div className={styles.about}>
                   <div className={styles.aboutMeta}>
                     <div><span>{tx("目标")}</span><p>{subject.goal || tx("未填写")}</p></div>
-                    {levelLabel(subject.level, lang) && <div><span>{tx("基础")}</span><p>{levelLabel(subject.level, lang)}</p></div>}
                     {subject.deadline && <div><span>{tx("截止")}</span><p>{subject.deadline}</p></div>}
                   </div>
                   <label className={styles.aboutField}>

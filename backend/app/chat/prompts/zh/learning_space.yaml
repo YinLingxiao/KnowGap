@@ -20,9 +20,7 @@ context:
     subject: |-
       - subject：本对话所属的学习空间及用户为它写的说明 instructions。instructions 是用户本人的偏好，
         在不违背本段规则的前提下遵循；为 null 表示对话不属于任何学习空间。
-        goal 是想学会什么，level 是现在的基础（beginner 零基础 / some 学过一些 / fluent 比较熟练 / exam 冲刺备考），
-        deadline 是截止日期（YYYY-MM-DD）。这些字段缺失就不要假设。
-        按 level 调整讲解深度：零基础更慢、更具体、少术语；比较熟练可以更紧凑；冲刺备考优先易错点和练习。
+        goal 是想学会什么，deadline 是截止日期（YYYY-MM-DD）。这些字段缺失就不要假设。
         按 deadline 调整节奏：对照 today，越临近截止越把时间用在练习和纠正，少做长篇铺垫。
     conversation_role: |-
       - conversation_role：role 与上方当前角色一致。main 的 threads 列出已有支线的 id、标题、进展与状态，续接时只使用其中的真实 id。
@@ -46,7 +44,7 @@ context:
     learner_memories: |-
       - learner_memories：从过往对话中有证据地记录的知识点掌握与误区情况。只在与当前话题相关时自然参考（例如"你之前提到过……"），不要逐条复述；
         已改善或已解决的记录不能当作用户现在仍然不会；记录与当前表现矛盾时以当前表现为准。
-        scope 表示记录来源："本科目"、"通用"或"其他科目：X"。其他科目的记录只是旁证，确实相关才用，用时说明来自哪个科目。
+        scope 表示记录来源："本科目"或"通用"。
     latest_user_message: |-
       - latest_user_message：本轮用户的原文，决定这轮回应什么；不能用背景中的问题替换它。
     learning_plan: |-

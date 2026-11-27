@@ -221,8 +221,6 @@ def subject_context(subject: Subject) -> dict:
     data = {"name": subject.name, "description": subject.description, "instructions": subject.instructions}
     if subject.goal:
         data["goal"] = subject.goal
-    if subject.level:
-        data["level"] = subject.level
     if subject.deadline:
         data["deadline"] = subject.deadline
     return data

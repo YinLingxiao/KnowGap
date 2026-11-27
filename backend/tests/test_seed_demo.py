@@ -42,7 +42,7 @@ def _assert_demo(store, student):
     ds = subjects[DS_NAME]
     circuit = subjects[CIRCUIT_NAME]
     assert "演示" in ds.description and "演示" in ds.goal
-    assert ds.level == "exam"
+    assert ds.level is None and circuit.level is None
     assert ds.deadline == (date.today() + timedelta(days=10)).isoformat()
     main_chat = store.conversation(ds.main_conversation_id, student)
     assert sum(item.role == "user" for item in main_chat.messages) >= 5

@@ -52,7 +52,7 @@ def test_thread_dedup_and_context_carries_the_anchor(tmp_path):
 
         send(client, thread["id"], "て形怎么用", "req-thread-01")
         assert context_of(model.calls[0])["conversation_role"]["role"] == "main"
-        assert context_of(model.calls[0])["subject"]["level"] == "beginner"
+        assert "level" not in context_of(model.calls[0])["subject"]
         assert context_of(model.calls[0])["subject"]["deadline"] == "2026-12-31"
         role = context_of(model.calls[1])["conversation_role"]
         assert role["role"] == "thread" and "问候" in role["anchor"]["excerpt"]

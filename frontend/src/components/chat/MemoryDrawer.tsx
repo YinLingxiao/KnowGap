@@ -5,7 +5,7 @@ import { ChevronRight, RefreshCw, Trash2, X } from "lucide-react";
 import { useI18n } from "@/components/LanguageProvider";
 import type { ApiError } from "@/lib/api/errors";
 import { chatApi } from "@/lib/chat/api";
-import { defaultMemoryScopeFilter, memoryMatchesScope, memoryScopeFilters, type MemoryScopeFilter } from "@/lib/chat/memoryScope";
+import { classifyFocusedMemories, defaultMemoryScopeFilter, memoryMatchesScope, memoryScopeFilters, type MemoryScopeFilter } from "@/lib/chat/memoryScope";
 import type { LearnerMemory, LearnerMemoryStatus, MemoryKind, Subject } from "@/lib/chat/types";
 import { cx } from "@/lib/cx";
 import { errorText } from "@/lib/i18n/errors";
@@ -285,25 +285,28 @@ export function MemoryDrawer(props: MemoryDrawerProps) {
   const { lang, t } = useI18n();
   const { loading, error, focusIds, contextSubjectId } = props;
   const groups: MemoryKind[] = ["misconception", "mastery", "preference"];
-  const contextSubject = props.subjects.find((subject) => subject.id === contextSubjectId) ?? null;
-  const focused = focusIds.length ? props.memories.find((memory) => focusIds.includes(memory.id)) : undefined;
-  const hasForeignFocus = Boolean(focused && focused.subjectId !== null && focused.subjectId !== contextSubjectId);
-  const defaultFilter = () =>
-    defaultMemoryScopeFilter(Boolean(contextSubject), focused?.subjectId, contextSubjectId);
-  const [filter, setFilter] = useState<Filter>(defaultFilter);
+  const inSpace = Boolean(contextSubjectId);
+  const contextSubject = contextSubjectId
+    ? props.subjects.find((subject) => subject.id === contextSubjectId) ?? null
+    : null;
+  const focusedScope = classifyFocusedMemories(contextSubjectId, props.memories, focusIds);
+  const [filter, setFilter] = useState<Filter>(() => defaultMemoryScopeFilter(inSpace, focusedScope));
   useEffect(() => {
-    setFilter(defaultFilter());
-    // focusIds 是每次点开时新建的数组：点另一条记忆时也要回到它所在的范围。
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [contextSubject, focused?.subjectId, contextSubjectId, focusIds]);
+    // focusIds 每次点击记忆提示时都会新建数组，因此同空间内点另一条记忆也会跳回其对应范围。
+    if (!focusIds) return;
+    setFilter(defaultMemoryScopeFilter(Boolean(contextSubjectId), focusedScope));
+  }, [contextSubjectId, focusedScope, focusIds]);
+  const availableFilters = memoryScopeFilters(inSpace, focusedScope);
+  const scopedMemories = props.memories.filter((memory) =>
+    availableFilters.some((key) => memoryMatchesScope(memory, key, contextSubjectId, focusIds)));
   const memories = props.memories.filter((memory) =>
     memoryMatchesScope(memory, filter, contextSubjectId, focusIds));
-  const filters: Array<{ key: Filter; label: string }> = memoryScopeFilters(Boolean(contextSubject), hasForeignFocus).map((key) => ({
+  const filters: Array<{ key: Filter; label: string }> = availableFilters.map((key) => ({
     key,
     label: key === "all" ? t("memory.filterAll")
       : key === "general" ? t("memory.general")
         : key === "focused" ? t("memory.filterFocused")
-          : contextSubject?.name ?? "",
+          : contextSubject?.name ?? t("memory.filterSubject"),
   }));
   return (
     <section className={styles.drawer} aria-labelledby="memory-title">
@@ -338,8 +341,8 @@ export function MemoryDrawer(props: MemoryDrawerProps) {
       {error && <p className={styles.error}>{errorText(error, t, lang)}</p>}
       {!loading && !error && memories.length === 0 && (
         <div className={styles.empty}>
-          <p className={styles.emptyTitle}>{props.memories.length ? t("memory.emptyScope") : t("memory.emptyAll")}</p>
-          {!props.memories.length && (props.onPractice || props.onStartOnboarding) && (
+          <p className={styles.emptyTitle}>{scopedMemories.length ? t("memory.emptyScope") : t("memory.emptyAll")}</p>
+          {!scopedMemories.length && (props.onPractice || props.onStartOnboarding) && (
             <button type="button" onClick={props.onPractice ?? props.onStartOnboarding}>{t("memory.practice")}</button>
           )}
         </div>
