@@ -6,11 +6,17 @@ import type { TranslatePhrase } from "@/lib/i18n";
 import type { TodaySuggestion } from "./agendaModel";
 import styles from "./AgendaEmpty.module.css";
 
-// 快录解析器只识别中文语法；示例会原样填入输入框，因此保持中文，避免点了却解析不出来。
-const EXAMPLES = [
+// 快录解析器主要识别中文语法；中文界面保留中文示例。英文界面给出英文示例，
+// 至少能直接当任务标题使用，日期/时长仍可在打开后的面板里补。
+const EXAMPLES_ZH = [
   "明天下午3点 复习戴维南定理 #电路原理 45分钟",
   "周五晚上 整理本章错题 p2",
   "下周一截止 预习下一章 30分钟",
+];
+const EXAMPLES_EN = [
+  "Review Thévenin's theorem tomorrow at 3 pm #circuits 45 min",
+  "Organize this week's mistakes Friday evening p2",
+  "Preview next chapter by next Monday 30 min",
 ];
 
 export interface AgendaEmptyProps {
@@ -25,10 +31,12 @@ export interface AgendaEmptyProps {
 }
 
 export function AgendaEmpty(props: AgendaEmptyProps) {
-  const { tx } = useI18n();
+  const { lang, tx } = useI18n();
   if (props.variant === "week") {
     return <p className={styles.weekHint}>{tx("在时间格里点击或拖动来创建任务")}</p>;
   }
+
+  const examples = lang === "en" ? EXAMPLES_EN : EXAMPLES_ZH;
 
   const copy = COPY[props.variant];
   const count = props.completedCount ?? 0;
@@ -50,7 +58,7 @@ export function AgendaEmpty(props: AgendaEmptyProps) {
       {props.variant === "inbox" && props.onExample && !props.hideAction && (
         <div className={styles.examples}>
           <span>{tx("也可以直接这样写")}</span>
-          {EXAMPLES.map((example) => (
+          {examples.map((example) => (
             <button key={example} type="button" className={styles.example} onClick={() => props.onExample?.(example)}>
               {example}
             </button>

@@ -2,6 +2,8 @@
 import io
 import json
 import re
+import threading
+from dataclasses import dataclass, field
 from pathlib import PurePosixPath
 from typing import Literal
 
@@ -17,8 +19,22 @@ from app.services.office_readers import (
 
 MAX_UPLOAD_BYTES = 100 * 1024 * 1024
 MAX_TEXT = 200_000
-MAX_DOCUMENTS = 30
+MAX_DOCUMENTS = 300  # 所有空间合计；每个空间放一门课的讲义，30 份很快就满
 MAX_PAGES = 200
+
+
+class UploadCancelled(Exception):
+    """上传途中前端取消了（断开连接）：不再写入资料库。"""
+
+
+@dataclass
+class UploadGuard:
+    """一次上传的取消开关。解析在后台线程里跑，写库前看一眼；已经写进去的由上传接口负责删掉。"""
+    student_id: str = ''
+    cancelled: threading.Event = field(default_factory=threading.Event)
+    inserted: str | None = None
+
+
 CHUNK_SIZE = 1000
 UNIT_LABELS = {'pdf': '页', 'docx': '节', 'pptx': '张幻灯片', 'xlsx': '个工作表', 'text': '页'}
 # 旧版二进制格式存成对应的新格式类型（界面、技能、检索都按新格式处理），文件名保留原样
@@ -216,16 +232,17 @@ class MaterialStore:
             # 原始文件字节数：预览面板用它判断要不要降级，历史记录没有这列时统一按 0（会直接尝试渲染，不影响正确性）
             ensure_column(db, 'course_materials', 'size_bytes', 'INTEGER NOT NULL DEFAULT 0')
 
-    async def add_with_ocr(self, student_id: str, filename: str, data: bytes, subject_id: str | None = None) -> Material:
+    async def add_with_ocr(self, student_id: str, filename: str, data: bytes, subject_id: str | None = None,
+                           guard: UploadGuard | None = None) -> Material:
         """上传入口用这个：扫描版 PDF 先尝试让识图模型转写，其余和 add 一样。"""
         from starlette.concurrency import run_in_threadpool
 
         extension = PurePosixPath(filename).suffix.lower()
         # 课件和 Word 文档里的图片交给识图模型（旧版 .doc 不读图片）
         if self.slide_ocr is not None and extension in ('.ppt', '.pptx', '.docx'):
-            return await self._add_slides(student_id, filename, data, subject_id)
+            return await self._add_slides(student_id, filename, data, subject_id, guard)
         try:
-            return await run_in_threadpool(self.add, student_id, filename, data, subject_id)
+            return await run_in_threadpool(self.add, student_id, filename, data, subject_id, None, guard)
         except ScannedPdfError:
             if self.ocr is None:
                 raise
@@ -233,9 +250,10 @@ class MaterialStore:
                 reading = await self.ocr(data)
             except ProviderError as exc:
                 raise HTTPException(422 if exc.status_code == 503 else 502, exc.detail) from None
-            return await run_in_threadpool(self.add, student_id, filename, data, subject_id, ('pdf', reading))
+            return await run_in_threadpool(self.add, student_id, filename, data, subject_id, ('pdf', reading), guard)
 
-    async def _add_slides(self, student_id: str, filename: str, data: bytes, subject_id: str | None) -> Material:
+    async def _add_slides(self, student_id: str, filename: str, data: bytes, subject_id: str | None,
+                          guard: UploadGuard | None = None) -> Material:
         """课件：先读文字，再让识图模型读幻灯片里的图片；图片读不了不影响文字。"""
         from starlette.concurrency import run_in_threadpool
 
@@ -246,10 +264,10 @@ class MaterialStore:
             pass
         if not any(text.strip() for _, text in reading.pages):
             raise HTTPException(422, '没有提取到文字，请选择包含文字的资料。')
-        return await run_in_threadpool(self.add, student_id, filename, data, subject_id, (kind, reading))
+        return await run_in_threadpool(self.add, student_id, filename, data, subject_id, (kind, reading), guard)
 
     def add(self, student_id: str, filename: str, data: bytes, subject_id: str | None = None,
-            preread: tuple[str, Reading] | None = None) -> Material:
+            preread: tuple[str, Reading] | None = None, guard: UploadGuard | None = None) -> Material:
         if len(data) > MAX_UPLOAD_BYTES:
             raise HTTPException(413, '单份资料不能超过 100 MB。')
         title = PurePosixPath(filename.replace('\\', '/')).name
@@ -265,9 +283,11 @@ class MaterialStore:
                             chunk_count=len(records), created_at=now(), subject_id=subject_id, size_bytes=len(data))
         with self.store.connection() as db:
             db.execute('BEGIN IMMEDIATE')
+            if guard is not None and guard.cancelled.is_set():
+                raise UploadCancelled()
             count = db.execute('SELECT COUNT(*) FROM course_materials WHERE student_id = ?', (student_id,)).fetchone()[0]
             if count >= MAX_DOCUMENTS:
-                raise HTTPException(409, '最多保存 30 份资料，请删除不需要的资料后再上传。')
+                raise HTTPException(409, f'最多保存 {MAX_DOCUMENTS} 份资料，请删除不需要的资料后再上传。')
             db.execute('INSERT INTO course_materials(id, student_id, title, kind, page_count, chunk_count, created_at, '
                        'subject_id, outline_json, chars, notes_json, ocr_json, size_bytes) '
                        'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
@@ -279,6 +299,8 @@ class MaterialStore:
             db.executemany('INSERT INTO course_chunks VALUES (?, ?, ?, ?, ?, ?)', records)
             db.executemany('INSERT INTO course_index(chunk_id, terms) VALUES (?, ?)',
                            [(record[0], ' '.join(terms(record[2]))) for record in records])
+        if guard is not None:
+            guard.inserted = document_id
         if self.originals is not None:
             try:
                 self.originals.save_original(document_id, student_id, title, kind, data)
@@ -323,6 +345,54 @@ class MaterialStore:
                 # 让模型知道这是不是全文：不是全文时只能据可见部分作答，并提示学生按页追问
                 result['excerpt_complete'] = len(preview) <= excerpt_limit and len(preview) >= (row['chars'] or 0) * 0.9
             return result
+
+    def extracted_text(self, document_id: str, student_id: str, limit: int = MAX_TEXT) -> dict | None:
+        """上传时提取的正文，按页/节/幻灯片分组，给预览面板的「文字版」兜底。
+
+        原件丢失、旧版 .doc / .ppt 无法做排版渲染、或浏览器渲染失败时，学生仍能在应用里读到内容。
+        只返回去标识后的纯文本，不返回文件路径或原始字节。
+        """
+        with self.store.connection() as db:
+            row = db.execute(
+                'SELECT title, kind, notes_json FROM course_materials WHERE id = ? AND student_id = ?',
+                (document_id, student_id),
+            ).fetchone()
+            if row is None:
+                return None
+            pages: list[tuple[int | None, list[str]]] = []
+            total = 0
+            truncated = False
+            for chunk in db.execute(
+                'SELECT page, content FROM course_chunks WHERE document_id = ? ORDER BY rowid',
+                (document_id,),
+            ):
+                page = chunk['page']
+                if not pages or pages[-1][0] != page:
+                    pages.append((page, []))
+                content = chunk['content']
+                remaining = limit - total
+                if remaining <= 0:
+                    truncated = True
+                    break
+                if len(content) > remaining:
+                    content = content[:remaining]
+                    truncated = True
+                if content:
+                    pages[-1][1].append(content)
+                    total += len(content)
+                if truncated:
+                    break
+            try:
+                notes = json.loads(row['notes_json'] or '[]')
+            except (ValueError, TypeError):
+                notes = []
+            return {
+                'title': row['title'],
+                'kind': row['kind'],
+                'truncated': truncated,
+                'pages': [{'page': page, 'text': '\n'.join(parts)} for page, parts in pages if parts],
+                'notes': [note for note in notes if isinstance(note, str)],
+            }
 
     def list_materials(self, student_id: str, subject_id: str | None = None, unassigned: bool = False) -> list[Material]:
         """All materials by default; one Subject's, or only unassigned ones, when asked."""

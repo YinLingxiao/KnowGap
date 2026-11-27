@@ -5,7 +5,7 @@ export const COACH_COPY: Record<CoachId, string> = {
   thread: "复杂卡点在右侧支线展开，结论回到主线",
   sheet: "薄弱点够了，试试考前一页纸",
   fog: "看看你的知识迷雾图",
-  spotlight: "Alt+Space 随时快问",
+  spotlight: "从托盘打开快问",
   select: "选中一句话，可以追问、举例或存进笔记",
   plan: "这是这段学习的计划，会随讲解推进",
   agenda: "按 Q 随手记，或让 AI 排",

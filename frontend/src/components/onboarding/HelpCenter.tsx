@@ -4,6 +4,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { GUIDES_RESET_EVENT, checklistDismissKey, checklistDoneKey, resetCoachmarks } from "./coach";
 import { useI18n } from "@/components/LanguageProvider";
+import { useQuickShortcut } from "@/hooks/useQuickShortcut";
 import styles from "./HelpCenter.module.css";
 
 export type HelpAction =
@@ -47,7 +48,6 @@ const GROUPS: Array<{ title: string; items: Array<{ action: HelpAction; title: s
 
 const KEYS = [
   ["Q", "记一条任务"],
-  ["Alt+Space", "随时快问"],
   ["/", "聚焦输入框"],
   ["Esc", "关闭当前浮层"],
   ["Enter", "发送"],
@@ -55,6 +55,8 @@ const KEYS = [
 
 export function HelpCenter({ desktop, userId, onClose, onTry }: HelpCenterProps) {
   const { tx } = useI18n();
+  const shortcut = useQuickShortcut();
+  const keys = desktop && shortcut ? [...KEYS, [shortcut, "随时快问"]] : KEYS;
   const panel = useRef<HTMLDivElement>(null);
   const close = useRef(onClose);
   close.current = onClose;
@@ -132,7 +134,7 @@ export function HelpCenter({ desktop, userId, onClose, onTry }: HelpCenterProps)
                   <div>
                     <strong>{tx("随时快问")}</strong>
                     <p>{tx("不离开当前页面，问一句就收起。")}</p>
-                    <span>{tx("按 Alt+Space")}</span>
+                    <span>{shortcut ? tx("按 {shortcut}", { shortcut }) : tx("从托盘打开快问")}</span>
                   </div>
                   <button type="button" onClick={() => onTry("spotlight")}>{tx("试一试")}</button>
                 </li>
@@ -143,7 +145,7 @@ export function HelpCenter({ desktop, userId, onClose, onTry }: HelpCenterProps)
             <h3>{tx("快捷键")}</h3>
             <table className={styles.keys}>
               <tbody>
-                {KEYS.map(([key, label]) => (
+                {keys.map(([key, label]) => (
                   <tr key={key}>
                     <th scope="row"><kbd>{key}</kbd></th>
                     <td>{tx(label)}</td>

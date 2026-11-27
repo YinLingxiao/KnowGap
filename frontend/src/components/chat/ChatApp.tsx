@@ -7,6 +7,8 @@ import {
   Mic, PanelLeftOpen, RotateCcw, X,
 } from "lucide-react";
 import { useChat } from "@/hooks/useChat";
+import { useQuickShortcut } from "@/hooks/useQuickShortcut";
+import { uploadQueue } from "@/hooks/useUploads";
 import { useI18n } from "@/components/LanguageProvider";
 import type { HealthState } from "@/lib/types";
 import { getAIConfig, testAIConfig, type AIConfigStatus } from "@/lib/api/ai-config";
@@ -15,7 +17,6 @@ import { cx } from "@/lib/cx";
 import { errorText } from "@/lib/i18n/errors";
 import type { Translate } from "@/lib/i18n";
 import type { Problem } from "@/lib/types";
-import { createMaterialClient } from "@/lib/api/material-client";
 import { chatApi } from "@/lib/chat/api";
 import type { SpaceInput } from "@/lib/chat/types";
 import type { AuthUser } from "@/lib/api/auth";
@@ -119,8 +120,16 @@ function AuthenticatedChat({ user, onRename, onUploadAvatar, onRemoveAvatar }: {
   onRemoveAvatar: () => Promise<void>;
 }) {
   const { lang, t, tx } = useI18n();
+  const quickShortcut = useQuickShortcut();
   const { toasts, push, dismiss } = useToasts();
   const chat = useChat(push, user.id);
+  // 后台上传：传完刷新空间列表（资料数），失败弹一条提示——用户可能已经去了别的页面
+  const loadSubjectsRef = useRef(chat.loadSubjects);
+  loadSubjectsRef.current = chat.loadSubjects;
+  useEffect(() => uploadQueue.watch((event) => {
+    if (event.type === "done") void loadSubjectsRef.current();
+    else push({ tone: "error", title: t("chat.uploadFailed", { name: event.job.name }), description: event.job.error ?? undefined });
+  }), [push, t]);
   const [narrow, setNarrow] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [memoryOpen, setMemoryOpen] = useState(false);
@@ -1022,7 +1031,8 @@ function AuthenticatedChat({ user, onRename, onUploadAvatar, onRemoveAvatar }: {
                 }));
               }, 60);
             } else if (action === "spotlight") {
-              push({ tone: "info", title: tx("按 Alt+Space 随时快问") });
+              push({ tone: "info", title: quickShortcut
+                ? tx("{shortcut} 随时快问", { shortcut: quickShortcut }) : tx("从托盘打开快问") });
             }
           }}
         />
@@ -1054,15 +1064,11 @@ function AuthenticatedChat({ user, onRename, onUploadAvatar, onRemoveAvatar }: {
             const subject = await chat.createSubject(input);
             if (!subject) return false;
             if (files.length) {
-              const client = createMaterialClient();
-              for (const file of files) {
-                try {
-                  await client.upload(file, subject.id);
-                } catch {
-                  push({ tone: "error", title: t("chat.uploadFailed", { name: file.name }) });
-                }
-              }
-              void chat.loadSubjects();
+              // 不等解析：空间先建好，资料在后台传，新空间打开时右侧直接显示资料库和进度
+              uploadQueue.enqueue(files, subject.id);
+              try {
+                localStorage.setItem(`knowgap.space.panel.v1:${API_BASE_URL}:${subject.id}`, JSON.stringify({ mode: "info", section: "files" }));
+              } catch { /* 记不住面板也不影响上传 */ }
             }
             if (spaceDialog.select) chat.newChat(subject.id);
             else setView({ type: "subject", id: subject.id });

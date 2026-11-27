@@ -70,3 +70,24 @@ test('course search encodes query, keeps location, and accepts DELETE 204', asyn
   global.fetch = async () => json({detail: '单份资料不能超过 5 MB。'}, 413);
   await assert.rejects(client.upload(new File(['x'], 'large.txt')), error => error.kind === 'validation');
 });
+
+test('a caller-cancelled request reports cancelled, not a timeout', async () => {
+  global.fetch = (_url, options) => new Promise((_resolve, reject) => {
+    options.signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+  });
+  const controller = new AbortController();
+  const pending = request('http://backend.example', '/api/materials', { method: 'POST', signal: controller.signal });
+  controller.abort();
+  await assert.rejects(pending, (error) => error.kind === 'cancelled');
+});
+
+test('material uploads get a long timeout and pass the cancel signal through', async () => {
+  let seen;
+  global.fetch = async (_url, options) => { seen = options; return json({ id: 'm1', title: 'a.pdf', kind: 'pdf', page_count: 1, chunk_count: 1, created_at: '2026-11-23T00:00:00Z' }); };
+  const controller = new AbortController();
+  const material = await createMaterialClient('http://backend.example').upload(new Blob(['x']), 'space-1', controller.signal);
+  assert.equal(material.id, 'm1');
+  assert.ok(seen.signal, 'request has an abort signal');
+  const { UPLOAD_TIMEOUT_MS } = require(path.join(temporary, 'lib/api/material-client.js'));
+  assert.ok(UPLOAD_TIMEOUT_MS >= 5 * 60_000, 'longer than the backend picture-reading deadline');
+});

@@ -13,6 +13,30 @@ function mapMaterial(data: WireMaterial): CourseMaterial {
     chunkCount: data.chunk_count, createdAt: data.created_at, subjectId: data.subject_id ?? null,
     sizeBytes: data.size_bytes ?? 0 };
 }
+
+export interface ExtractedPage {
+  /** 页码 / 节号 / 幻灯片号；纯文本资料为 null。 */
+  page: number | null;
+  text: string;
+}
+
+export interface ExtractedText {
+  pages: ExtractedPage[];
+  truncated: boolean;
+  notes: string[];
+}
+
+interface WireExtractedText {
+  pages?: Array<{ page?: number | null; text?: string }>;
+  truncated?: boolean;
+  notes?: string[];
+}
+/**
+ * 上传要等后端读完整份资料：大课件里的图片逐张交给识图模型，后端最长约 150 秒再加写库时间。
+ * 不能用普通请求的 65 秒超时，否则前端先报「没传上」，后端其实还在读。
+ */
+export const UPLOAD_TIMEOUT_MS = 10 * 60_000;
+
 export function createMaterialClient(baseUrl = API_BASE_URL) {
   return {
     /** 默认列出全部；subjectId 只列该 Subject；unassigned 只列未归类资料 */
@@ -20,10 +44,12 @@ export function createMaterialClient(baseUrl = API_BASE_URL) {
       const query = scope.subjectId ? `?subject_id=${encodeURIComponent(scope.subjectId)}` : scope.unassigned ? "?unassigned=true" : "";
       return (await request<WireMaterial[]>(baseUrl, `/api/materials${query}`)).map(mapMaterial);
     },
-    async upload(file: File, subjectId?: string): Promise<CourseMaterial> {
+    /** signal 中断时请求断开，后端随之停止解析、不保存这份资料 */
+    async upload(file: File, subjectId?: string, signal?: AbortSignal): Promise<CourseMaterial> {
       const body = new FormData(); body.append("file", file);
       const query = subjectId ? `?subject_id=${encodeURIComponent(subjectId)}` : "";
-      return mapMaterial(await request<WireMaterial>(baseUrl, `/api/materials${query}`, { method: "POST", body }));
+      return mapMaterial(await request<WireMaterial>(baseUrl, `/api/materials${query}`,
+        { method: "POST", body, signal, timeoutMs: UPLOAD_TIMEOUT_MS }));
     },
     async search(query: string): Promise<SourceReference[]> {
       return (await request<WireSource[]>(baseUrl, `/api/materials/search?q=${encodeURIComponent(query)}`)).map(mapSource);
@@ -32,6 +58,20 @@ export function createMaterialClient(baseUrl = API_BASE_URL) {
     async outline(id: string): Promise<string[]> {
       const data = await request<{ outline: string[] }>(baseUrl, `/api/materials/${encodeURIComponent(id)}/outline`);
       return data.outline;
+    },
+    /** 上传时提取的正文（按页分组）：原件丢失或浏览器无法排版渲染时的文字版兜底 */
+    async text(id: string): Promise<ExtractedText> {
+      const data = await request<WireExtractedText>(baseUrl, `/api/materials/${encodeURIComponent(id)}/text`);
+      return {
+        pages: (Array.isArray(data.pages) ? data.pages : [])
+          .filter((page) => page && typeof page.text === "string")
+          .map((page) => ({
+            page: typeof page.page === "number" && Number.isFinite(page.page) ? page.page : null,
+            text: page.text ?? "",
+          })),
+        truncated: Boolean(data.truncated),
+        notes: (Array.isArray(data.notes) ? data.notes : []).filter((note): note is string => typeof note === "string"),
+      };
     },
     /** 取回原始文件字节，供预览面板本地渲染；不同于 chat/api.ts 的 downloadFile，这里返回 Blob 而不是触发保存 */
     async downloadBytes(id: string): Promise<Blob> {

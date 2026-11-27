@@ -480,16 +480,88 @@
 
 .fileList {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 168px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
 }
 
-.fileList li {
-  padding: 2px 8px;
+.fileRow {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) auto 22px;
+  align-items: center;
+  column-gap: 8px;
+  min-height: 30px;
+  padding: 0 4px 0 8px;
   border-radius: var(--radius-sm);
-  background: var(--bg-subtle);
   color: var(--text-secondary);
   font-size: var(--text-xs);
+}
+
+.fileRow:hover {
+  background: var(--bg-hover);
+}
+
+.fileIcon {
+  color: var(--text-tertiary);
+}
+
+.fileName {
+  display: flex;
+  min-width: 0;
+  color: var(--text);
+  white-space: pre;
+}
+
+.fileName > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fileName > span:last-child {
+  flex-shrink: 0;
+}
+
+.fileSize {
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.fileRemove {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+}
+
+.fileRemove:hover {
+  background: var(--bg-active);
+  color: var(--text);
+}
+
+.fileRemove:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: -1px;
+}
+
+.fileHint,
+.fileRejected {
+  margin: 0;
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}
+
+.fileHint {
+  color: var(--text-tertiary);
+}
+
+.fileRejected {
+  color: var(--red);
 }
 
 .editExtra {

@@ -6,6 +6,7 @@ import {
   type CoachId,
 } from "./coach";
 import { useI18n } from "@/components/LanguageProvider";
+import { useQuickShortcut } from "@/hooks/useQuickShortcut";
 import styles from "./Coachmark.module.css";
 
 const LEGACY = new Set<CoachId>(LEGACY_COACH_IDS);
@@ -73,6 +74,7 @@ function place(id: CoachId, node: HTMLElement): Box | null {
 
 export function CoachmarkHost({ userId, enabled }: { userId: string; enabled: boolean }) {
   const { tx } = useI18n();
+  const shortcut = useQuickShortcut();
   const [current, setCurrent] = useState<CoachId | null>(null);
   const [box, setBox] = useState<Box | null>(null);
   const [paused, setPaused] = useState(false);
@@ -155,14 +157,16 @@ export function CoachmarkHost({ userId, enabled }: { userId: string; enabled: bo
   }, [enabled, paused, userId]);
 
   if (!current || !box) return null;
+  const copy = current === "spotlight" && shortcut
+    ? tx("{shortcut} 随时快问", { shortcut }) : tx(COACH_COPY[current]);
   return (
     <div
       className={styles.bubble}
       style={{ top: box.top, left: box.left, right: box.right }}
       role="dialog"
-      aria-label={tx(COACH_COPY[current])}
+      aria-label={copy}
     >
-      <p>{tx(COACH_COPY[current])}</p>
+      <p>{copy}</p>
       <button
         type="button"
         onClick={() => {

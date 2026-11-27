@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useI18n } from "@/components/LanguageProvider";
 import { toApiError, type ApiError } from "@/lib/api/errors";
 import { agendaApi } from "@/lib/agenda/api";
 import { formatYmd } from "@/lib/agenda/quickAdd";
@@ -38,6 +39,7 @@ function applyPatch(task: AgendaTask, patch: TaskPatch): AgendaTask {
 }
 
 export function useAgenda(onFailure: (message: string) => void): UseAgenda {
+  const { tx } = useI18n();
   const [status, setStatus] = useState<AgendaStatus>("loading");
   const [error, setError] = useState<ApiError | null>(null);
   const [tasks, setTasks] = useState<AgendaTask[]>([]);
@@ -46,6 +48,8 @@ export function useAgenda(onFailure: (message: string) => void): UseAgenda {
   const sequence = useRef(0);
   const failure = useRef(onFailure);
   failure.current = onFailure;
+  const translate = useRef(tx);
+  translate.current = tx;
 
   const reload = useCallback(async () => {
     const mine = ++sequence.current;
@@ -80,7 +84,7 @@ export function useAgenda(onFailure: (message: string) => void): UseAgenda {
       notifyChanged();
       return task;
     } catch (cause) {
-      failure.current(`创建失败：${toApiError(cause).message}`);
+      failure.current(translate.current("创建失败：{message}", { message: toApiError(cause).message }));
       return null;
     }
   }, []);
@@ -98,7 +102,7 @@ export function useAgenda(onFailure: (message: string) => void): UseAgenda {
       return saved;
     } catch (cause) {
       setTasks(previous);
-      failure.current(`保存失败：${toApiError(cause).message}`);
+      failure.current(translate.current("保存失败：{message}", { message: toApiError(cause).message }));
       return null;
     }
   }, []);
@@ -110,7 +114,7 @@ export function useAgenda(onFailure: (message: string) => void): UseAgenda {
       notifyChanged();
       return true;
     } catch (cause) {
-      failure.current(`删除失败：${toApiError(cause).message}`);
+      failure.current(translate.current("删除失败：{message}", { message: toApiError(cause).message }));
       return false;
     }
   }, []);

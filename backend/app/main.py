@@ -22,6 +22,7 @@ from app.services.chatgpt_auth import ChatGPTAuth
 from app.services.search_settings import SearchSettings
 from app.services.materials import MaterialStore
 from app.api.materials import material_router
+from app.api.validation import validation_detail
 from app.auth.deps import current_student, reset_student, set_student
 from app.services.file_store import FileStore
 from app.profile.router import profile_router
@@ -31,7 +32,6 @@ from app.chat.subjects import subject_router
 from app.chat.service import ChatService
 from app.chat.store import ChatStore
 from app.agenda.router import agenda_router
-from app.learning.router import learning_router
 from app.code_sandbox.router import sandbox_router
 from app.demo.router import demo_router
 from app.vision.router import vision_router
@@ -112,21 +112,31 @@ def create_app(settings: Settings | None = None, chat_model: ChatModel | None = 
     from app.chat.files_router import files_router; app.include_router(files_router(file_store))
     from app.chat.plan_router import plan_router; app.include_router(plan_router(chat_store))
     from app.chat.quizzes import quiz_router; app.include_router(quiz_router(chat_store))
+    from app.chat.playgrounds import playground_router; app.include_router(playground_router(chat_store))
     app.include_router(agenda_router(chat_store, chat))
-    app.include_router(learning_router(chat_store, chat))
     app.include_router(subject_router(chat_store, chat_service))
     app.include_router(profile_router(profile_store, chat_store))
     app.include_router(sandbox_router(allowed_origins=settings.cors_origins))
     app.include_router(vision_router(vision_store, service_models, cors_origins=settings.cors_origins))
     app.include_router(demo_router(chat_store))
 
-    @app.middleware("http")
-    async def bind_student(request: Request, call_next):
-        token = set_student(profile_store.student_id())
-        try:
-            return await call_next(request)
-        finally:
-            reset_student(token)
+    # 纯 ASGI 中间件（不用 @app.middleware("http")）：BaseHTTPMiddleware 会包一层 receive，
+    # 接口里就检测不到客户端断开，取消上传时后端会继续解析并存下资料
+    class BindStudent:
+        def __init__(self, inner):
+            self.inner = inner
+
+        async def __call__(self, scope, receive, send):
+            if scope["type"] != "http":
+                await self.inner(scope, receive, send)
+                return
+            token = set_student(profile_store.student_id())
+            try:
+                await self.inner(scope, receive, send)
+            finally:
+                reset_student(token)
+
+    app.add_middleware(BindStudent)
 
     app.add_middleware(
         CORSMiddleware, allow_origins=settings.cors_origins,
@@ -147,6 +157,10 @@ def create_app(settings: Settings | None = None, chat_model: ChatModel | None = 
             return JSONResponse(status_code=422, content={"detail": "AI 配置请求格式无效，请提交 JSON 对象。"})
         if request.url.path in {"/api/search/config", "/api/search/test"}:
             return JSONResponse(status_code=422, content={"detail": "搜索配置请求格式无效，请提交 JSON 对象。"})
+        if (request.url.path == "/api/materials/search"
+                or request.url.path == "/api/subjects"
+                or request.url.path.startswith(("/api/subjects/", "/api/agenda/"))):
+            return JSONResponse(status_code=422, content={"detail": validation_detail(exc)})
         return await request_validation_exception_handler(request, exc)
 
     @app.exception_handler(StateConflict)

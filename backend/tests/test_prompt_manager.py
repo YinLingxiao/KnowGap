@@ -90,7 +90,7 @@ def test_each_context_field_rule_is_keyed_by_the_field_it_describes():
             assert text.startswith(f"- {key}："), key
     rows = [{"role": "user", "content": "你好", "kind": "text", "status": "complete", "meta_json": "{}"}]
     sent = set(learning_context(chat_messages(rows, [], None, [], conversation_role={"role": "chat"})))
-    always_sent = set(fields) - {"long_term_notes", "learning_plan", "quiz_attempts", "recent_conversations"}  # optional per-turn context
+    always_sent = set(fields) - {"long_term_notes", "learning_plan", "quiz_attempts", "code_runs", "recent_conversations"}  # optional per-turn context
     assert always_sent <= sent, always_sent - sent
 
 
@@ -135,7 +135,7 @@ def test_learning_roles_get_the_fields_their_contract_describes():
     for role in ("main", "thread"):
         sent = set(learning_context(chat_messages(rows, [], None, [], conversation_role={"role": role})))
         # the plan, the hint and prior-knowledge fields are only sent when they apply to the turn
-        optional = {"long_term_notes", "learning_plan", "transfer_learning_hint", "quiz_attempts", "recent_conversations"}
+        optional = {"long_term_notes", "learning_plan", "transfer_learning_hint", "quiz_attempts", "code_runs", "recent_conversations"}
         always_sent = set(fields) - optional
         assert always_sent <= sent, (role, always_sent - sent)
 
@@ -161,7 +161,7 @@ def test_role_prompts_stay_within_their_length_budget():
 
 def test_widget_prompt_for_none_keeps_the_existing_constant():
     assert widget_prompt_for(None) == WIDGET_SYSTEM_PROMPT
-    assert len(WIDGET_SYSTEM_PROMPT) == 9804
+    assert len(WIDGET_SYSTEM_PROMPT) == 9860
 
 
 def test_widget_prompt_for_practice_keeps_only_the_quiz_spec():

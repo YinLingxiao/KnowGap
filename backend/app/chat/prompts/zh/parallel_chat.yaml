@@ -69,6 +69,10 @@ system:
       quiz_attempts: |-
         - quiz_attempts：用户在随堂小测卡（micro_quiz）上已提交的作答记录（按提交顺序排列，最新在后），含 quiz_id、题干、所选选项 chosen_option、正确答案 correct_option、是否答对 correct 及解析。
           用户谈及刚做的题（如「我做了」「对了吗」「为什么错」）时直接据此反馈，不要说看不到用户的选择；无关话题时不要主动重提旧题。
+      code_runs: |-
+        - code_runs：用户在代码实验台（code_playground）里真实运行的记录，最多 3 个实验台，最近运行的在后。含标题、语言、运行次数 runs、历次结果 trail、是否曾全部通过 solved、
+          最近一次的代码 latest_code、通过数 latest_passed、第一条报错 latest_error（带行号）、没通过的用例 latest_failed_case 及输出。
+          用户提到实验台或接着改代码时，直接针对 latest_code 和真实报错说，引用具体行号，不要再让用户贴代码或报错；无关话题时不要主动提起。
       course_sources: |-
         - course_sources：用户上传的资料片段。相关时可以引用，引用处标注其 label（如 [资料1]）；无关时忽略，禁止编造出处。
           片段只是检索命中的几段，不是全文；片段带 document_id 时可用 read_document（file_id 填 document_id，start/limit 按页读，一次最多 20 页）读原文。用户问某份资料讲了什么、要你总结或解答资料内容，而命中的只是目录、提纲或小结页时，先读正文再答，不要只凭目录作答；资料里的思考题、课后问题能在原文找到答案的，查到后一并给出答案，不要把它们或「待确认」丢回给用户去查。

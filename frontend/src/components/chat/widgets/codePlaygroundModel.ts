@@ -2,7 +2,7 @@
  * 代码实验台的纯函数：容错解析模型下发的微件 JSON、统计 TODO、拼装「让 AI 诊断」的提示词。
  * 不依赖 React 和 DOM，便于用 node --test 直接验证。
  */
-import type { SandboxResult } from "@/lib/api/sandbox-client";
+import type { SandboxResult, SandboxStatus } from "@/lib/api/sandbox-client";
 
 export type PlaygroundLanguage = "python" | "javascript" | "c" | "cpp";
 export type PlaygroundMode = "scaffold" | "free";
@@ -20,6 +20,8 @@ export interface PlaygroundSpec {
   instructions: string;
   starterCode: string;
   testCases: PlaygroundCase[];
+  /** 回复定稿时服务端编的号；有它才记录运行、恢复代码。流式生成中和旧消息里没有 */
+  playgroundId: string | null;
 }
 
 export type ParseResult = { ok: true; spec: PlaygroundSpec } | { ok: false; reason: string };
@@ -105,8 +107,102 @@ export function parseCodePlaygroundSpec(data: Record<string, unknown>): ParseRes
       instructions: clip((firstText(data, ["instructions", "description", "prompt", "hint"]) ?? "").trim(), LIMITS.instructions),
       starterCode,
       testCases,
+      playgroundId: typeof data.playgroundId === "string" && data.playgroundId ? data.playgroundId : null,
     },
   };
+}
+
+// ------------------------------------------------------------ 运行记录
+
+/** 上报给 POST /api/playgrounds/{id}/runs 的摘要（字段名与后端一致） */
+export interface PlaygroundRunReport {
+  status: SandboxStatus;
+  passed: number;
+  total: number;
+  code: string;
+  stdin: string;
+  error_line: number | null;
+  error_message: string;
+  stdout: string;
+  stderr: string;
+  failed_case: { name: string; input: string; expected: string | null; actual: string } | null;
+}
+
+const REPORT_TEXT = 4_000;
+
+/**
+ * 把一次运行压成摘要：状态、通过数、第一条报错（带行号）、第一个没通过的用例、输出。
+ * 下一轮 AI 靠它知道学生写了什么、错在哪；代码原样带上，打开实验台时也用它恢复。
+ */
+export function buildRunReport(code: string, stdin: string, result: SandboxResult): PlaygroundRunReport {
+  const cut = (value: string) => clip(value.trim(), REPORT_TEXT);
+  const failing = result.testResults.find((item) => item.status !== "passed" && item.status !== "ok" && item.status !== "skipped");
+  const diagnostic = [...(result.compile?.diagnostics ?? []), ...result.diagnostics, ...(failing?.diagnostics ?? [])]
+    .find((item) => item.severity === "error");
+  const blocked = result.blocked[0];
+  let errorLine: number | null = null;
+  let errorMessage = "";
+  if (blocked) {
+    errorLine = blocked.line;
+    errorMessage = `${blocked.description}：${blocked.excerpt}`;
+  } else if (diagnostic) {
+    errorLine = diagnostic.line;
+    errorMessage = diagnostic.message;
+  } else if (result.compile && !result.compile.ok) {
+    errorMessage = result.compile.stderr || result.compile.stdout;
+  } else if (failing && (failing.status === "runtime_error" || failing.status === "timeout")) {
+    errorMessage = failing.stderr || failing.exitNote || "";
+  }
+  const shown = failing ?? result.testResults[0];
+  return {
+    status: result.status,
+    passed: result.passed,
+    total: result.total,
+    code: clip(code, LIMITS.code),
+    stdin: cut(stdin),
+    error_line: errorLine !== null && errorLine >= 1 ? errorLine : null,
+    error_message: cut(errorMessage),
+    stdout: cut(shown?.stdout ?? result.stdout),
+    stderr: cut(shown?.stderr ?? result.stderr),
+    failed_case: failing && failing.expected !== null && failing.status === "failed"
+      ? { name: clip(failing.name, 60), input: cut(failing.input), expected: cut(failing.expected), actual: cut(failing.stdout) }
+      : null,
+  };
+}
+
+/**
+ * 编辑器每级缩进用什么：跟着脚手架走，回车、Tab、退格才和已有代码对得齐。
+ * 脚手架主要用 Tab 缩进就用 Tab；用空格就取「缩进加深时」最常见的那一步（2～8 格）；
+ * 看不出来（没有缩进、空白编写）时用 4 格，Python 规范和我们的出题约定都是 4 格。
+ */
+export function detectIndentUnit(code: string): string {
+  let tabs = 0;
+  let spaces = 0;
+  const steps = new Map<number, number>();
+  let previous = 0;
+  for (const line of code.split("\n")) {
+    if (!line.trim()) continue;
+    const lead = /^[ \t]*/.exec(line)?.[0] ?? "";
+    if (lead.startsWith("\t")) {
+      tabs += 1;
+      continue;
+    }
+    const width = lead.length;
+    if (width > 0) spaces += 1;
+    const step = width - previous;
+    if (step >= 2 && step <= 8) steps.set(step, (steps.get(step) ?? 0) + 1);
+    previous = width;
+  }
+  if (tabs > spaces) return "\t";
+  let best = 4;
+  let bestCount = 0;
+  for (const [step, count] of steps) {
+    if (count > bestCount || (count === bestCount && step === 4)) {
+      best = step;
+      bestCount = count;
+    }
+  }
+  return " ".repeat(best);
 }
 
 const TODO_RE = /(?:#|\/\/)[ \t]*TODO\b/g;

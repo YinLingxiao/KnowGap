@@ -17,6 +17,11 @@ new Function('module', 'exports', 'require', js)(mod, mod.exports, name => {
   if (name === '@/lib/api/material-client') return { createMaterialClient: () => ({}) };
   if (name === '@/lib/api/errors') return { toApiError: error => ({ message: String(error) }) };
   if (name === '@/lib/cx') return { cx: (...parts) => parts.filter(Boolean).join(' ') };
+  if (name === '@/lib/materials/pptx') return {
+    renderPptxDocument: async () => ({ html: "", slideCount: 0, width: 960, height: 720 }),
+    clampPptxScale: () => 1,
+    pptxFrameDocument: () => "",
+  };
   if (name === './chat/Markdown') return { Markdown: () => null };
   return require(name);
 });
@@ -44,12 +49,28 @@ test('previewMode：按文件类型和是否为旧版 OLE 字节选择渲染分�
   // xlsx 不区分新旧：SheetJS 原生支持旧版 .xls（BIFF8）
   assert.equal(panel.previewMode('xlsx', false), 'xlsx');
   assert.equal(panel.previewMode('xlsx', true), 'xlsx');
-  // pptx 没有成熟的纯 JS 渲染库，新旧版本统一走大纲视图
-  assert.equal(panel.previewMode('pptx', false), 'outline');
-  assert.equal(panel.previewMode('pptx', true), 'outline');
-  // docx：新版（ZIP）走真实渲染，旧版 .doc（OLE 字节）降级到大纲视图
+  // 新版 .pptx 是 ZIP，可以读出文字版幻灯片；旧版 .ppt 是 OLE，只能看提取文字
+  assert.equal(panel.previewMode('pptx', false), 'pptx');
+  assert.equal(panel.previewMode('pptx', true), 'extracted');
+  // docx：新版（ZIP）走真实渲染，旧版 .doc（OLE 字节）降级到提取文字
   assert.equal(panel.previewMode('docx', false), 'docx');
-  assert.equal(panel.previewMode('docx', true), 'outline');
+  assert.equal(panel.previewMode('docx', true), 'extracted');
+});
+
+test('normalizeInitialPage / pdfPagesToRender / worksheetIndex：页码从 1 起，非法值回到第一页', () => {
+  assert.equal(panel.normalizeInitialPage(undefined), 1);
+  assert.equal(panel.normalizeInitialPage(0), 1);
+  assert.equal(panel.normalizeInitialPage(-3), 1);
+  assert.equal(panel.normalizeInitialPage(2.5), 1);
+  assert.equal(panel.normalizeInitialPage(4), 4);
+  assert.deepEqual(panel.pdfPagesToRender(3, 2), [1, 2, 3]);
+  assert.deepEqual(panel.pdfPagesToRender(0, 1), []);
+  // 目标页超出前 100 页时也要补进渲染列表
+  assert.equal(panel.pdfPagesToRender(150, 130).includes(130), true);
+  assert.equal(panel.worksheetIndex(undefined, 3), 0);
+  assert.equal(panel.worksheetIndex(2, 3), 1);
+  assert.equal(panel.worksheetIndex(9, 3), 2);
+  assert.equal(panel.worksheetIndex(1, 0), null);
 });
 
 test('parseCsv：引号内的逗号/换行/转义引号不被拆开，BOM 与空行被忽略', () => {

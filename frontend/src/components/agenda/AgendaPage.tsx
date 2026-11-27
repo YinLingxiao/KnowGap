@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CircleAlert, Download, Ellipsis, LoaderCircle, PanelLeftOpen, Plus, RotateCcw, Sparkles } from "lucide-react";
+import { useI18n } from "@/components/LanguageProvider";
 import { describeError } from "@/lib/api/errors";
 import { agendaApi } from "@/lib/agenda/api";
 import type { AgendaTask, AgendaThread, TaskInput, TaskPatch, TaskPriority } from "@/lib/agenda/types";
@@ -64,6 +65,7 @@ function download(blob: Blob, filename: string) {
 
 export function AgendaPage(props: AgendaPageProps) {
   const { onNotify } = props;
+  const { tx } = useI18n();
   const notifyError = useCallback((title: string) => onNotify({ tone: "error", title }), [onNotify]);
   const agenda = useAgenda(notifyError);
   const { tasks, threads, today, update, create, remove } = agenda;
@@ -137,15 +139,15 @@ export function AgendaPage(props: AgendaPageProps) {
   const groups = useMemo<AgendaGroup[]>(() => {
     const build = { includeDone: options.showCompleted };
     let built: AgendaGroup[] = [];
-    if (view === "today") built = buildTodayGroups(tasks, threads, today, build);
-    else if (view === "inbox") built = buildInboxGroups(tasks, build);
-    else if (view === "upcoming") built = buildUpcomingGroups(tasks, threads, today, build);
+    if (view === "today") built = buildTodayGroups(tasks, threads, today, build, tx);
+    else if (view === "inbox") built = buildInboxGroups(tasks, build, tx);
+    else if (view === "upcoming") built = buildUpcomingGroups(tasks, threads, today, build, tx);
     const effective = view === "upcoming" && options.groupBy === "date" ? { ...options, groupBy: "none" as const } : options;
-    return applyViewOptions(built, effective, subjectMap, today);
-  }, [view, tasks, threads, today, options, subjectMap]);
+    return applyViewOptions(built, effective, subjectMap, today, tx);
+  }, [view, tasks, threads, today, options, subjectMap, tx]);
   const suggestions = useMemo(
-    () => buildTodaySuggestions(tasks, props.subjects.map((subject) => ({ id: subject.id, name: subject.name, deadline: subject.deadline })), today),
-    [tasks, props.subjects, today],
+    () => buildTodaySuggestions(tasks, props.subjects.map((subject) => ({ id: subject.id, name: subject.name, deadline: subject.deadline })), today, tx),
+    [tasks, props.subjects, today, tx],
   );
   const doneToday = useMemo(() => completedOn(tasks, today), [tasks, today]);
 
@@ -185,10 +187,10 @@ export function AgendaPage(props: AgendaPageProps) {
     pendingDone.current.set(task.id, timer);
     onNotify({
       tone: "success",
-      title: "1 个任务已完成",
-      action: { label: "撤销", onClick: () => { if (!cancelComplete(task.id)) void update(task.id, { status: "open" }); } },
+      title: tx("1 个任务已完成"),
+      action: { label: tx("撤销"), onClick: () => { if (!cancelComplete(task.id)) void update(task.id, { status: "open" }); } },
     });
-  }, [cancelComplete, markLeaving, onNotify, update]);
+  }, [cancelComplete, markLeaving, onNotify, tx, update]);
   const toggleDone = useCallback((task: AgendaTask) => {
     if (task.status === "done") void update(task.id, { status: "open" });
     else completeTask(task);
@@ -204,7 +206,7 @@ export function AgendaPage(props: AgendaPageProps) {
   }, [tasks, completeTask, cancelComplete, update]);
   const insertBeside = useCallback(async (task: AgendaTask, where: "above" | "below") => {
     const created = await create({
-      title: "新任务", parentId: task.parentId, subjectId: task.subjectId, scheduledDate: task.scheduledDate,
+      title: tx("新任务"), parentId: task.parentId, subjectId: task.subjectId, scheduledDate: task.scheduledDate,
       scheduledStartAt: task.scheduledStartAt, priority: task.priority, source: "manual",
     });
     if (!created) return;
@@ -221,7 +223,7 @@ export function AgendaPage(props: AgendaPageProps) {
       }
     }
     openTask(created);
-  }, [create, tasks, update, openTask]);
+  }, [create, tasks, update, openTask, tx]);
   const duplicateTask = useCallback(async (task: AgendaTask) => {
     const created = await create({
       title: task.title, notes: task.notes, parentId: task.parentId, priority: task.priority, labels: [...task.labels],
@@ -266,9 +268,9 @@ export function AgendaPage(props: AgendaPageProps) {
     try {
       const blob = await agendaApi.exportIcs({ status: "open", subjectId: spaceId });
       download(blob, "knowgap-agenda.ics");
-      onNotify({ tone: "success", title: "已导出 knowgap-agenda.ics" });
+      onNotify({ tone: "success", title: tx("已导出 {name}", { name: "knowgap-agenda.ics" }) });
     } catch (cause) {
-      onNotify({ tone: "error", title: cause instanceof Error ? cause.message : "导出失败" });
+      onNotify({ tone: "error", title: cause instanceof Error ? cause.message : tx("导出失败") });
     } finally {
       setExporting(false);
     }
@@ -283,7 +285,7 @@ export function AgendaPage(props: AgendaPageProps) {
   const failure = agenda.error ? describeError(agenda.error) : null;
   const showInspector = Boolean(inspected);
   const currentWeek = weekStart ?? mondayOf(today);
-  const heading = space ? space.name : (VIEW_LABELS as Record<string, string>)[view] ?? "日程";
+  const heading = space ? space.name : tx((VIEW_LABELS as Record<string, string>)[view] ?? "日程");
   const groupKeyFor = (defaults: NonNullable<AgendaGroup["compose"]>) => {
     if (view === "inbox") return "inbox";
     if (view === "today" && (!defaults.scheduledDate || defaults.scheduledDate === today)) return "today";
@@ -354,7 +356,7 @@ export function AgendaPage(props: AgendaPageProps) {
   let main: React.ReactNode;
   if (agenda.status === "loading") {
     main = (
-      <div className={styles.skeleton} role="status" aria-label="正在加载日程">
+      <div className={styles.skeleton} role="status" aria-label={tx("正在加载日程")}>
         {Array.from({ length: 7 }, (_, index) => <span key={index} style={{ width: `${88 - index * 6}%` }} />)}
       </div>
     );
@@ -362,10 +364,10 @@ export function AgendaPage(props: AgendaPageProps) {
     main = (
       <div className={styles.state} role="alert">
         <CircleAlert size={20} aria-hidden />
-        <h2>{failure?.title ?? "日程加载失败"}</h2>
+        <h2>{failure?.title ?? tx("日程加载失败")}</h2>
         <p>{agenda.error?.message && agenda.error.message !== failure?.title ? agenda.error.message : failure?.hint}</p>
         <button type="button" className={styles.btn} onClick={() => void agenda.reload()}>
-          <RotateCcw size={13} aria-hidden />重新加载
+          <RotateCcw size={13} aria-hidden />{tx("重新加载")}
         </button>
       </div>
     );
@@ -381,7 +383,7 @@ export function AgendaPage(props: AgendaPageProps) {
         onSelectThread={(id) => props.onOpenThread(id, threads.find((thread) => thread.threadId === id)?.subjectId ?? null)}
         onReschedule={(taskId, patch) => void update(taskId, patch)}
         onCreateAt={(slot) => void create({
-          title: "新任务", scheduledDate: slot.scheduledDate, scheduledStartAt: slot.scheduledStartAt,
+          title: tx("新任务"), scheduledDate: slot.scheduledDate, scheduledStartAt: slot.scheduledStartAt,
           durationMinutes: slot.scheduledStartAt ? 30 : null, source: "manual",
         }).then((task) => { if (task) openTask(task); })}
         showCompleted={options.showCompleted}
@@ -442,14 +444,14 @@ export function AgendaPage(props: AgendaPageProps) {
     <div className={styles.page} data-coachmark="agenda">
       <header className={styles.top}>
         {!props.sidebarOpen && (
-          <button type="button" className={styles.iconBtn} onClick={props.onOpenSidebar} aria-label="展开侧栏" title="展开侧栏">
+          <button type="button" className={styles.iconBtn} onClick={props.onOpenSidebar} aria-label={tx("展开侧栏")} title={tx("展开侧栏")}>
             <PanelLeftOpen size={16} />
           </button>
         )}
         <span className={styles.spacer} />
         <div className={styles.addAction}>
           <button type="button" className={styles.addTask} onClick={() => dispatchCompose({ subjectId: spaceId })}>
-            <Plus size={15} aria-hidden />添加任务
+            <Plus size={15} aria-hidden />{tx("添加任务")}
           </button>
         </div>
         <ViewOptions
@@ -457,8 +459,8 @@ export function AgendaPage(props: AgendaPageProps) {
           week={view === "week"}
           onChange={(next) => { setOptions(next); saveViewOptions(view, next); }}
         />
-        <button type="button" className={styles.btn} onClick={() => openBreakdown(spaceId)} aria-label="AI 拆解排期" title="AI 拆解排期">
-          <Sparkles size={13} aria-hidden />AI 拆解排期
+        <button type="button" className={styles.btn} onClick={() => openBreakdown(spaceId)} aria-label={tx("AI 拆解排期")} title={tx("AI 拆解排期")}>
+          <Sparkles size={13} aria-hidden />{tx("AI 拆解排期")}
         </button>
         {/* 低频操作收进「…」菜单 */}
         <div className={styles.moreAnchor} ref={moreRef}>
@@ -468,8 +470,8 @@ export function AgendaPage(props: AgendaPageProps) {
             onClick={() => setMoreOpen((open) => !open)}
             aria-haspopup="menu"
             aria-expanded={moreOpen}
-            aria-label="更多操作"
-            title="更多操作"
+            aria-label={tx("更多操作")}
+            title={tx("更多操作")}
           >
             {exporting ? <LoaderCircle size={15} className={styles.spin} aria-hidden /> : <Ellipsis size={16} aria-hidden />}
           </button>
@@ -483,7 +485,7 @@ export function AgendaPage(props: AgendaPageProps) {
                 onClick={() => { setMoreOpen(false); void exportIcs(); }}
               >
                 <Download size={14} aria-hidden />
-                <span>导出到日历（.ics）</span>
+                <span>{tx("导出到日历（.ics）")}</span>
               </button>
             </div>
           )}
@@ -527,7 +529,7 @@ export function AgendaPage(props: AgendaPageProps) {
         onCreated={(created) => {
           setBreakdownOpen(false);
           void agenda.reload();
-          onNotify({ tone: "success", title: `已加入 ${created.children.length + (created.parent ? 1 : 0)} 项任务` });
+          onNotify({ tone: "success", title: tx("已加入 {count} 项任务", { count: created.children.length + (created.parent ? 1 : 0) }) });
         }}
       />
     </div>

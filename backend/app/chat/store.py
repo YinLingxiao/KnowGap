@@ -255,6 +255,21 @@ class ChatStore:
                 );
                 CREATE INDEX IF NOT EXISTS idx_quiz_attempts_quiz ON quiz_attempts(quiz_id);
                 CREATE INDEX IF NOT EXISTS idx_quiz_attempts_conversation ON quiz_attempts(conversation_id);
+                -- 代码实验台与运行记录：同样只随会话删除（app/chat/playgrounds.py）
+                CREATE TABLE IF NOT EXISTS playground_items (
+                    playground_id TEXT PRIMARY KEY, message_id TEXT NOT NULL,
+                    conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+                    title TEXT NOT NULL, language TEXT NOT NULL, created_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_playground_items_message ON playground_items(message_id);
+                CREATE TABLE IF NOT EXISTS playground_runs (
+                    id TEXT PRIMARY KEY,
+                    playground_id TEXT NOT NULL REFERENCES playground_items(playground_id) ON DELETE CASCADE,
+                    conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+                    status TEXT NOT NULL, passed INTEGER NOT NULL DEFAULT 0, total INTEGER NOT NULL DEFAULT 0,
+                    code TEXT NOT NULL, detail_json TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_playground_runs_conversation ON playground_runs(conversation_id);
             """)
             # NULL subject_id: conversation outside any Subject / general memory that applies everywhere.
             ensure_column(db, "conversations", "subject_id", "TEXT")

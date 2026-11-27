@@ -250,7 +250,7 @@ async def build_cheatsheet(store: ChatStore, service, student_id: str, subject_i
     try:
         if service is None:
             raise RuntimeError("chat service unavailable")
-        model = service.model()
+        model = service.default_model()
         model_name = getattr(getattr(model, "settings", None), "llm_model", None)
         raw = await asyncio.wait_for(
             service._complete_json(model, model_input(store, getattr(service, "library", None), student_id,

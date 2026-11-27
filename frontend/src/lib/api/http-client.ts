@@ -20,10 +20,14 @@ interface RequestOptions extends RequestInit {
 
 export async function request<T = unknown>(
   baseUrl: string, path: string,
-  { timeoutMs = REQUEST_TIMEOUT_MS, headers, ...init }: RequestOptions = {},
+  { timeoutMs = REQUEST_TIMEOUT_MS, headers, signal, ...init }: RequestOptions = {},
 ): Promise<T> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  // 调用方自己的取消（例如取消上传）：同样中断请求，但报「已取消」而不是「超时」
+  const cancel = () => controller.abort();
+  if (signal?.aborted) cancel();
+  signal?.addEventListener("abort", cancel);
   try {
     const response = await fetch(`${baseUrl}${path}`, {
       ...init, headers: { Accept: "application/json", ...authHeader(), ...(init.body && !(init.body instanceof FormData) ? { "Content-Type": "application/json" } : {}), ...headers },
@@ -37,11 +41,13 @@ export async function request<T = unknown>(
     return await response.json() as T;
   } catch (error) {
     if (error instanceof ApiError) throw error;
+    if (signal?.aborted) throw new ApiError("cancelled", "已取消。");
     if (controller.signal.aborted) throw new ApiError("timeout", "请求超时，输入已保留。继续发送前请先刷新会话，核对是否已保存。");
     if (error instanceof SyntaxError) throw new ApiError("server", "后端返回了无法读取的数据，请稍后重试");
     throw new ApiError("network", "无法连接到后端服务");
   } finally {
     clearTimeout(timer);
+    signal?.removeEventListener("abort", cancel);
   }
 }
 
