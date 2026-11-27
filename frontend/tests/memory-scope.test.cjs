@@ -45,4 +45,7 @@ test('记忆抽屉使用统一的 scope 过滤，不再在空间里渲染全部'
   assert.match(drawer, /memoryScopeFilters\(/);
   assert.match(drawer, /memoryMatchesScope\(/);
   assert.doesNotMatch(drawer, /filter === "all" \? true/);
+
+  // 抽屉开着时点另一条记忆，也要把筛选重置到那条记忆的范围。
+  assert.match(drawer, /setFilter\(defaultFilter\(\)\);[\s\S]*?\}, \[[^\]]*focusIds[^\]]*\]\);/);
 });

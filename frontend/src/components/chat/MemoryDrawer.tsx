@@ -293,7 +293,9 @@ export function MemoryDrawer(props: MemoryDrawerProps) {
   const [filter, setFilter] = useState<Filter>(defaultFilter);
   useEffect(() => {
     setFilter(defaultFilter());
-  }, [contextSubject, focused?.subjectId, contextSubjectId]);
+    // focusIds 是每次点开时新建的数组：点另一条记忆时也要回到它所在的范围。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contextSubject, focused?.subjectId, contextSubjectId, focusIds]);
   const memories = props.memories.filter((memory) =>
     memoryMatchesScope(memory, filter, contextSubjectId, focusIds));
   const filters: Array<{ key: Filter; label: string }> = memoryScopeFilters(Boolean(contextSubject), hasForeignFocus).map((key) => ({
