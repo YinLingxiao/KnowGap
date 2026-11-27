@@ -64,9 +64,16 @@
   flex-direction: column;
   gap: 16px;
   min-width: 0;
-  max-height: inherit;
   padding: 20px 22px 18px;
-  overflow-y: auto;
+  /* 不裁剪：图标与颜色弹层要能伸出弹窗，和改版前一致。 */
+  overflow: visible;
+}
+
+/* 窄窗口下只有一项的侧栏没有意义，收起来把宽度留给表单。 */
+@media (max-width: 560px) {
+  .nav {
+    display: none;
+  }
 }
 
 
@@ -570,28 +577,6 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-}
-
-.levels {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.level,
-.levelOn {
-  height: 26px;
-  padding: 0 9px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  color: var(--text-secondary);
-  font-size: var(--text-xs);
-}
-
-.levelOn {
-  border-color: var(--border-strong);
-  background: var(--bg-active);
-  color: var(--text);
 }
 
 .dateInput {
