@@ -110,6 +110,29 @@ def test_layered_recall_prefers_own_subject_and_never_crosses_subjects(tmp_path)
         assert all(scope in {"本科目", "通用"} for scope in scopes)
 
 
+def test_each_space_lists_only_its_own_memories(tmp_path):
+    """Space A's memory must never be returned when listing Space B."""
+    analyses = [
+        observation("misconception", "栈的出入顺序", "认为栈是先进先出", "栈就是先进先出", tags=["栈"]),
+        observation("misconception", "进程调度", "混淆了抢占式与非抢占式调度", "非抢占式调度也会打断进程", tags=["调度"]),
+    ]
+    model = FakeChat(analyses=analyses)
+    with TestClient(create_app(isolated_settings(tmp_path), chat_model=model)) as client:
+        ds = new_subject(client, "数据结构")
+        os_ = new_subject(client, "操作系统")
+        send(client, new_chat(client, ds["id"]), "栈就是先进先出", "req-isolation-01")
+        send(client, new_chat(client, os_["id"]), "非抢占式调度也会打断进程", "req-isolation-02")
+
+        ds_memories = client.get(f"/api/learner-memories?subject_id={ds['id']}").json()
+        os_memories = client.get(f"/api/learner-memories?subject_id={os_['id']}").json()
+        assert [memory["summary"] for memory in ds_memories] == ["认为栈是先进先出"]
+        assert [memory["summary"] for memory in os_memories] == ["混淆了抢占式与非抢占式调度"]
+        assert all(memory["subject_id"] == ds["id"] for memory in ds_memories)
+        assert all(memory["subject_id"] == os_["id"] for memory in os_memories)
+        assert {memory["id"] for memory in ds_memories}.isdisjoint({memory["id"] for memory in os_memories})
+        assert len(client.get("/api/learner-memories").json()) == 2
+
+
 def test_memory_scope_can_be_corrected(tmp_path):
     model = FakeChat(analyses=[observation("misconception", "栈", "认为栈是先进先出", "栈就是先进先出", tags=["栈"])])
     with TestClient(create_app(isolated_settings(tmp_path), chat_model=model)) as client:
