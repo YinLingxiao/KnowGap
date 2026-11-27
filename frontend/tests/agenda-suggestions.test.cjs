@@ -44,34 +44,25 @@ test('completedOn counts tasks finished on that local day', () => {
   assert.equal(completedOn(tasks, '2026-10-23'), 1);
 });
 
-test('buildTodaySuggestions offers inbox, a near task, and an empty deadline space', () => {
+test('buildTodaySuggestions offers the inbox task and a task within a week', () => {
   const tasks = [
     task({ id: 'inbox', title: '还没排的' }),
     task({ id: 'soon', title: '后天的', scheduledDate: '2026-10-26' }),
     task({ id: 'far', title: '很后面', scheduledDate: '2026-11-20' }),
-    task({ id: 'owned', title: '已有任务', subjectId: 'busy', scheduledDate: '2026-10-28' }),
   ];
-  const subjects = [
-    { id: 'empty', name: '电路原理', deadline: '2026-10-30' },
-    { id: 'busy', name: '高数', deadline: '2026-10-28' },
-    { id: 'late', name: '英语', deadline: '2026-12-01' },
-  ];
-  const suggestions = buildTodaySuggestions(tasks, subjects, TODAY);
-  assert.equal(suggestions.length, 3);
-  assert.deepEqual(suggestions.map((item) => item.kind), ['inbox', 'pull', 'breakdown']);
-  assert.equal(suggestions[0].taskId, 'inbox');
-  assert.equal(suggestions[1].taskId, 'soon');
-  assert.equal(suggestions[2].subjectId, 'empty');
+  const suggestions = buildTodaySuggestions(tasks, TODAY);
+  assert.deepEqual(suggestions.map((item) => [item.kind, item.taskId]), [['inbox', 'inbox'], ['pull', 'soon']]);
 });
 
-test('buildTodaySuggestions stays within three and skips spaces that already have tasks', () => {
-  const tasks = [task({ id: 'inbox', title: '收件' })];
-  const subjects = [
-    { id: 'a', name: '甲', deadline: '2026-10-25' },
-    { id: 'b', name: '乙', deadline: '2026-10-26' },
-    { id: 'c', name: '丙', deadline: '2026-10-27' },
+test('buildTodaySuggestions takes deadlines only from tasks, never from learning spaces', () => {
+  // 学习空间不再有截止日期：没有任务时不会凭空建议「某空间快截止了」。
+  assert.deepEqual(buildTodaySuggestions([], TODAY), []);
+  // 只有截止日期、还没排期的任务：7 天内截止就建议排一下
+  const tasks = [
+    task({ id: 'due', title: '交报告', scheduledDate: null, deadlineDate: '2026-10-27' }),
+    task({ id: 'later', title: '期末论文', scheduledDate: null, deadlineDate: '2026-12-20' }),
   ];
-  const suggestions = buildTodaySuggestions(tasks, subjects, TODAY);
-  assert.equal(suggestions.length, 3);
-  assert.deepEqual(suggestions.map((item) => item.subjectId), [null, 'a', 'b']);
+  const suggestions = buildTodaySuggestions(tasks, TODAY);
+  assert.deepEqual(suggestions.map((item) => [item.kind, item.taskId]), [['due', 'due']]);
+  assert.match(suggestions[0].detail, /截止，还没排期/);
 });

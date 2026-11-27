@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import {
-  Brain, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Download, History, Library as LibraryIcon, Link2, ListTodo,
+  CheckCircle2, ChevronLeft, ChevronRight, Download, History, Library as LibraryIcon, Link2, ListTodo,
   LoaderCircle, Maximize2, MessagesSquare, Mic, Minimize2, MoreHorizontal,
-  PanelLeftOpen, Plus, RotateCcw, Settings, SlidersHorizontal, Target, Waypoints, X, Zap,
+  PanelLeftOpen, Plus, RotateCcw, Settings, Target, Waypoints, X, Zap,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { ChatController } from "@/hooks/useChat";
@@ -28,7 +28,7 @@ import { ConceptGraph, type AttackTarget } from "./ConceptGraph";
 import { SpaceTasks } from "../agenda/SpaceTasks";
 import { Composer } from "./Composer";
 import { Markdown } from "./Markdown";
-import { MemoryItem } from "./MemoryDrawer";
+import type { SpaceSettingsTab } from "./SpaceSettingsDialog";
 import { Library } from "./Library";
 import { MessageList } from "./MessageList";
 import { UsageStats } from "./UsageStats";
@@ -43,7 +43,7 @@ type Panel =
   | { mode: "graph" }
   | { mode: "tasks" }
   | { mode: "thread"; id: string }
-  | { mode: "info"; section: "about" | "files" | "memory" };
+  | { mode: "info"; section: "files" };
 
 const SAVE_TO_PAGE_EVENT = "knowgap:save-to-page";
 const PRIOR_PREFIX = "先验技能：";
@@ -79,6 +79,19 @@ async function syncPriorSkills(skills: string[]) {
   await chatApi.saveAgentNote("user", [...kept, `${PRIOR_PREFIX}${merged.join("、")}`].join("\n§\n"));
 }
 
+/** 在空间页里打开一条支线（threadId 为 null 时回到支线列表、看主线）。 */
+export const SPACE_OPEN_EVENT = "knowgap:space-open";
+export interface SpaceOpenDetail { subjectId: string; threadId: string | null }
+
+/** 进入空间页时要打开的面板：先记下来，空间页挂载时会恢复；已经在空间页时由事件直接切换。 */
+export function rememberSpacePanel(subjectId: string, threadId: string | null): void {
+  try {
+    localStorage.setItem(`knowgap.space.panel.v1:${API_BASE_URL}:${subjectId}`,
+      JSON.stringify(threadId ? { mode: "thread", id: threadId } : { mode: "list" }));
+  } catch { /* 存储不可用时只打开空间 */ }
+  window.dispatchEvent(new CustomEvent<SpaceOpenDetail>(SPACE_OPEN_EVENT, { detail: { subjectId, threadId } }));
+}
+
 function readPanel(subjectId: string): Panel {
   try {
     const parsed: unknown = JSON.parse(localStorage.getItem(`knowgap.space.panel.v1:${API_BASE_URL}:${subjectId}`) ?? "null");
@@ -87,9 +100,8 @@ function readPanel(subjectId: string): Panel {
     if (parsed.mode === "graph") return { mode: "graph" };
     if (parsed.mode === "tasks") return { mode: "tasks" };
     if (parsed.mode === "thread" && "id" in parsed && typeof parsed.id === "string") return { mode: "thread", id: parsed.id };
-    if (parsed.mode === "info" && "section" in parsed && (parsed.section === "about" || parsed.section === "files" || parsed.section === "memory")) {
-      return { mode: "info", section: parsed.section };
-    }
+    // 「概览」「记忆」已移进空间设置；旧的面板记录落回资料库或支线列表。
+    if (parsed.mode === "info" && "section" in parsed && parsed.section === "files") return { mode: "info", section: "files" };
   } catch { /* fall back to the thread list */ }
   return { mode: "list" };
 }
@@ -106,7 +118,8 @@ export function SubjectPage({
   subjectNames: Record<string, string>;
   userId: string;
   onOpenSidebar: () => void;
-  onEdit: () => void;
+  /** 打开空间设置，可指定落在哪个分区。 */
+  onEdit: (tab?: SpaceSettingsTab) => void;
   onDelete: () => Promise<boolean>;
 }) {
   const { t, tx } = useI18n();
@@ -135,8 +148,6 @@ export function SubjectPage({
   const [usage, setUsage] = useState<SpaceUsage | null>(null);
   const [menu, setMenu] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [instructions, setInstructions] = useState(subject.instructions);
-  const [instructionsSaved, setInstructionsSaved] = useState(false);
   const [resolveFor, setResolveFor] = useState<string | null>(null);
   const [draft, setDraft] = useState<{ title: string; summary: string; takeaways: string } | null>(null);
   const [drafting, setDrafting] = useState(false);
@@ -175,10 +186,6 @@ export function SubjectPage({
     setMenu(false);
     setConfirmDelete(false);
   }, [subject.id]);
-
-  useEffect(() => {
-    setInstructions(subject.instructions);
-  }, [subject.instructions]);
 
   useEffect(() => {
     const onPanel = (event: Event) => {
@@ -346,6 +353,20 @@ export function SubjectPage({
     void chat.loadConversation(id);
   };
 
+  // 空间设置等处要求「在空间里打开某条支线 / 主线」：已经在这个空间页时直接切面板
+  const openThreadRef = useRef(openThread);
+  openThreadRef.current = openThread;
+  useEffect(() => {
+    const onOpen = (event: Event) => {
+      const detail = (event as CustomEvent<SpaceOpenDetail>).detail;
+      if (!detail || detail.subjectId !== subject.id) return;
+      if (detail.threadId) openThreadRef.current(detail.threadId);
+      else setPanel({ mode: "list" });
+    };
+    window.addEventListener(SPACE_OPEN_EVENT, onOpen);
+    return () => window.removeEventListener(SPACE_OPEN_EVENT, onOpen);
+  }, [subject.id]);
+
   const attackFromGraph = async (target: AttackTarget) => {
     const title = tx("专项：{label}", { label: target.label }).trim().slice(0, 60);
     const prompt = target.kind === "misconception"
@@ -423,15 +444,6 @@ export function SubjectPage({
     void chat.loadSubjects();
   };
 
-  const saveInstructions = async () => {
-    if (instructions.trim() === subject.instructions) return;
-    const ok = await chat.updateSubject(subject.id, { instructions });
-    if (ok) {
-      setInstructionsSaved(true);
-      window.setTimeout(() => setInstructionsSaved(false), 1600);
-    }
-  };
-
   const openThreads = threads.filter((item) => item.threadStatus !== "resolved");
   const doneThreads = threads.filter((item) => item.threadStatus === "resolved");
   const spaceMemories = useMemo(
@@ -450,13 +462,8 @@ export function SubjectPage({
     executionStatus: item.executionStatus ?? null,
     threadStatus: item.threadStatus ?? null,
   }])), [threads]);
-  const conversationTitles = useMemo(
-    () => Object.fromEntries(chat.conversations.map((item) => [item.id, item.title])),
-    [chat.conversations],
-  );
   const failureFor = (id: string | null) => chat.sendFailure?.conversationId === id ? chat.sendFailure : null;
   const panelVisible = (!narrow && !panelCollapsed) || overlay;
-  const isOverviewOn = panelVisible && panel.mode === "info" && panel.section === "about";
   const libraryOpen = panel.mode === "pages" || (panel.mode === "info" && panel.section === "files");
   // 只有选中的标签显示名字，其余只留图标（名字放在悬停提示和无障碍标签里）
   const tabs: Array<{
@@ -472,10 +479,6 @@ export function SubjectPage({
       open: () => setPanel({ mode: "graph" }), coachmark: weakReady && fogReady ? "fog" : undefined },
     { key: "tasks", icon: ListTodo, label: t("space.tab.tasks"), title: t("space.tab.tasksTitle"), active: panel.mode === "tasks",
       open: () => setPanel({ mode: "tasks" }) },
-    { key: "memory", icon: Brain, label: t("space.tab.memory"), title: t("space.tab.memoryTitle", { count: spaceMemories.length }),
-      active: panel.mode === "info" && panel.section === "memory", open: () => setPanel({ mode: "info", section: "memory" }) },
-    { key: "about", icon: SlidersHorizontal, label: t("space.tab.overview"), title: t("space.tab.overviewTitle"),
-      active: panel.mode === "info" && panel.section === "about", open: () => setPanel({ mode: "info", section: "about" }) },
   ];
   const tabsRef = useRef<HTMLDivElement>(null);
   const tabThumb = useSlidingThumb(tabsRef, [panel.mode, panel.mode === "info" ? panel.section : null, openThreads.length, panelVisible]);
@@ -495,12 +498,6 @@ export function SubjectPage({
           </span>
           <div className={styles.heading}>
             <h1>{subject.name}</h1>
-            {subject.deadline && (
-              <span className={styles.metaPill} title={t("space.deadlineTitle", { date: subject.deadline })}>
-                <CalendarDays size={11} aria-hidden />
-                <span>{subject.deadline}</span>
-              </span>
-            )}
             {subject.goal && (
               <span className={cx(styles.metaPill, styles.metaGoal)} title={t("space.goalTitle", { goal: subject.goal })}>
                 <Target size={11} aria-hidden />
@@ -513,20 +510,6 @@ export function SubjectPage({
             <button type="button" className={styles.overviewBtn} data-coachmark={weakReady ? "sheet" : undefined} onClick={() => { setCheatSheetOpen(true); window.dispatchEvent(new Event(CHEATSHEET_OPENED_EVENT)); }} title={t("space.sheetTitle")}>
               <Zap size={13} aria-hidden />
               <span>{t("space.sheet")}</span>
-            </button>
-            <button
-              type="button"
-              className={cx(styles.overviewBtn, isOverviewOn && styles.overviewBtnOn)}
-              onClick={() => {
-                if (isOverviewOn) {
-                  showPanel({ mode: "list" });
-                } else {
-                  showPanel({ mode: "info", section: "about" });
-                }
-              }}
-            >
-              <SlidersHorizontal size={13} aria-hidden />
-              <span>{t("space.tab.overview")}</span>
             </button>
             {!panelVisible && (
               <button
@@ -541,7 +524,7 @@ export function SubjectPage({
                 {threadNeedsAttention && <span className={styles.inlineDot} aria-hidden />}
               </button>
             )}
-            <button className={styles.icon} aria-label={t("space.settings")} title={t("space.settings")} onClick={onEdit}>
+            <button className={styles.icon} aria-label={t("space.settings")} title={t("space.settings")} onClick={() => onEdit()}>
               <Settings size={15} />
             </button>
             <button className={styles.icon} aria-label={t("space.moreActions")} title={t("space.moreActions")} onClick={() => setMenu((open) => !open)}>
@@ -681,7 +664,7 @@ export function SubjectPage({
             )}
             onRegenerate={() => void chat.regenerate(mainId)}
             onStartExercise={(problemId) => void chat.sendTo(mainId, `请安排练习「${problemsById[problemId]?.title ?? problemId}」，在支线中带我完成。`)}
-            onOpenMemories={() => showPanel({ mode: "info", section: "memory" })}
+            onOpenMemories={() => onEdit("memory")}
             onOpenSummary={openThread}
             onConfirmProposal={async (messageId, proposalId) => {
               const id = await chatApi.confirmProposal(mainId, messageId, proposalId);
@@ -880,7 +863,7 @@ export function SubjectPage({
           )}
           {panel.mode === "tasks" && (
             <SpaceTasks
-              subject={{ id: subject.id, name: subject.name, color: subject.color, deadline: subject.deadline ?? null }}
+              subject={{ id: subject.id, name: subject.name, color: subject.color }}
               subjects={chat.subjects.map((item) => ({ id: item.id, name: item.name, color: item.color }))}
               onOpenThread={openThread}
             />
@@ -964,7 +947,7 @@ export function SubjectPage({
                     void refreshThreads();
                   }}
                   onStartExercise={(problemId) => void chat.startExerciseOn(threadId, problemId)}
-                  onOpenMemories={() => showPanel({ mode: "info", section: "memory" })}
+                  onOpenMemories={() => onEdit("memory")}
                   onDecideTool={(approvalId, allow) => void chat.decideTool(approvalId, allow)}
                   onSendText={(text) => chat.sendTo(threadId, text)}
                   onOpenWeakPoints={() => showPanel({ mode: "graph" })}
@@ -995,112 +978,6 @@ export function SubjectPage({
           )}
           {panel.mode === "info" && (
             <div className={styles.info}>
-              {panel.section !== "files" && (
-                <header className={styles.threadSubHead}>
-                  <strong>{panel.section === "about" ? tx("空间概览与教学说明") : tx("空间学习记忆")}</strong>
-                </header>
-              )}
-              {panel.section === "about" && (
-                <div className={styles.about}>
-                  <div className={styles.aboutMeta}>
-                    <div><span>{tx("目标")}</span><p>{subject.goal || tx("未填写")}</p></div>
-                    {subject.deadline && <div><span>{tx("截止")}</span><p>{subject.deadline}</p></div>}
-                  </div>
-                  <label className={styles.aboutField}>
-                    <div className={styles.aboutLabel}>
-                      <span>{tx("教学说明（失焦自动保存）")}</span>
-                      {instructionsSaved && <em className={styles.saved}>{tx("已保存")}</em>}
-                    </div>
-                    <textarea
-                      value={instructions}
-                      maxLength={4000}
-                      placeholder={tx("告诉模型在这个空间里怎么教你…")}
-                      onChange={(event) => setInstructions(event.target.value)}
-                      onBlur={() => void saveInstructions()}
-                    />
-                  </label>
-
-                  {/* 零成本足迹式知识看板（不耗额外 Token，自动聚合本空间卡点、已掌握与已解决支线） */}
-                  <div className={styles.footprintSection}>
-                    <span className={styles.footprintTitle}>{tx("空间知识足迹（自动聚合）")}</span>
-                    <div className={styles.footprintStats}>
-                      <div className={styles.footprintStat}>
-                        <strong>{spaceMemories.filter((m) => m.kind === "misconception" && m.status !== "resolved").length}</strong>
-                        <span>{tx("待巩固卡点")}</span>
-                      </div>
-                      <div className={styles.footprintStat}>
-                        <strong>{openThreads.length}</strong>
-                        <span>{tx("进行中支线")}</span>
-                      </div>
-                      <div className={styles.footprintStat}>
-                        <strong>{spaceMemories.filter((m) => m.kind === "mastery" || m.status === "resolved").length + doneThreads.length}</strong>
-                        <span>{tx("已攻克归档")}</span>
-                      </div>
-                    </div>
-
-                    {spaceMemories.filter((m) => m.kind === "misconception" && m.status !== "resolved").length > 0 && (
-                      <div className={styles.footprintGroup}>
-                        <p className={styles.footprintGroupHead}>
-                          <i className={cx(styles.headDot, styles.headDotRed)} aria-hidden />
-                          {tx("待攻克薄弱点")}
-                        </p>
-                        {spaceMemories
-                          .filter((m) => m.kind === "misconception" && m.status !== "resolved")
-                          .map((m) => (
-                            <div key={m.id} className={styles.footprintCard}>
-                              <div className={styles.footprintCardBody}>
-                                <strong>{m.topic}</strong>
-                                <p>{m.summary}</p>
-                              </div>
-                              {mainId && (
-                                <button
-                                  type="button"
-                                  className={styles.footprintActionBtn}
-                                  onClick={() =>
-                                    void chat.sendTo(
-                                      mainId,
-                                      tx("针对我之前在「{topic}」上的薄弱点（{summary}），请开启一个巩固支线，带我彻底搞懂并做一道题验证。", { topic: m.topic, summary: m.summary }),
-                                    )
-                                  }
-                                >
-                                  {tx("专项攻克 →")}
-                                </button>
-                              )}
-                            </div>
-                          ))}
-                      </div>
-                    )}
-
-                    {(doneThreads.length > 0 || spaceMemories.some((m) => m.kind === "mastery" || m.status === "resolved")) && (
-                      <div className={styles.footprintGroup}>
-                        <p className={styles.footprintGroupHead}>
-                          <i className={cx(styles.headDot, styles.headDotGreen)} aria-hidden />
-                          已掌握与已归档
-                        </p>
-                        {doneThreads.map((t) => (
-                          <button
-                            key={t.id}
-                            type="button"
-                            className={styles.footprintDoneRow}
-                            onClick={() => openThread(t.id)}
-                          >
-                            <CheckCircle2 size={13} className={styles.footprintDoneIcon} aria-hidden />
-                            <span>支线 · {t.title}</span>
-                          </button>
-                        ))}
-                        {spaceMemories
-                          .filter((m) => m.kind === "mastery" || m.status === "resolved")
-                          .map((m) => (
-                            <div key={m.id} className={styles.footprintDoneRow}>
-                              <CheckCircle2 size={13} className={styles.footprintDoneIcon} aria-hidden />
-                              <span>{m.topic}：{m.summary}</span>
-                            </div>
-                          ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
               {panel.section === "files" && (
                 <Library
                   subjectId={subject.id}
@@ -1108,30 +985,6 @@ export function SubjectPage({
                   onOpenNotes={() => setPanel({ mode: "pages" })}
                   onChange={() => void chat.loadSubjects()}
                 />
-              )}
-              {panel.section === "memory" && (
-                <div className={styles.memoriesPane}>
-                  {spaceMemories.length === 0 ? (
-                    <div className={styles.muted}>
-                      <p>这个空间的误区和掌握会出现在这里。</p>
-                      <button type="button" onClick={() => showPanel({ mode: "list" })}>去主线讲一讲</button>
-                    </div>
-                  ) : (
-                    spaceMemories.map((memory) => (
-                      <MemoryItem
-                        key={memory.id}
-                        memory={memory}
-                        subjects={chat.subjects}
-                        conversationTitles={conversationTitles}
-                        onUpdate={chat.updateMemory}
-                        onDelete={chat.deleteMemory}
-                        onOpenConversation={(convId) => {
-                          if (threads.some((t) => t.id === convId)) openThread(convId);
-                        }}
-                      />
-                    ))
-                  )}
-                </div>
               )}
             </div>
           )}

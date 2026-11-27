@@ -44,7 +44,9 @@ function library(): ModelLibraryClient {
 function Bar({ width, children }: { width: number; children: ReactNode }) {
   return (
     <div style={{ width, container: "composer-toolbar / inline-size" }}>
+      {/* 和对话框的 .rightTools 一样：模型菜单以这一行为定位容器 */}
       <div style={{
+        position: "relative",
         display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6,
         minHeight: 42, padding: "8px 10px", border: "1px solid var(--border)",
         borderRadius: 16, background: "var(--bg-elevated)",

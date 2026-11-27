@@ -1,5 +1,6 @@
+/* 不设定位：弹层相对外层工具组（对话框的 .rightTools）右对齐，模型按钮不在最右边时也不会从左侧被裁掉 */
 .root {
-  position: relative;
+  position: static;
   min-width: 0;
   max-width: 168px;
 }

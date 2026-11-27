@@ -135,7 +135,6 @@ export function CheatSheet({ subject, notes, onClose }: { subject: Subject; note
   const formulas = sheet?.sections.formulas ?? [];
   const contrasts = sheet?.sections.contrasts ?? [];
   const quiz = sheet?.sections.quiz ?? [];
-  const days = sheet?.stats.daysToDeadline;
   const pending = loading && !sheet;
 
   return createPortal(
@@ -182,12 +181,6 @@ export function CheatSheet({ subject, notes, onClose }: { subject: Subject; note
             <h2>⚡ {subject.name} · {tx("考前一页纸")}</h2>
             <div className={styles.sheetMeta}>
               {subject.goal && <span>{tx("目标：{goal}", { goal: subject.goal })}</span>}
-              {subject.deadline && (
-                <span>
-                  {tx("考试 {deadline}", { deadline: subject.deadline })}
-                  {typeof days === "number" && days >= 0 ? tx("（剩 {days} 天）", { days }) : ""}
-                </span>
-              )}
               {sheet && (
                 <span>
                   {tx("待攻克 {count}", { count: sheet.stats.misconceptions })} · {tx("已掌握 {count}", { count: sheet.stats.mastered })} · {tx("已解决支线 {count}", { count: sheet.stats.threadsResolved })}

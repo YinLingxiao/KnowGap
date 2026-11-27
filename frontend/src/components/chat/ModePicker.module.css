@@ -1,99 +1,9 @@
-.bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  min-width: 0;
-  margin-top: 8px;
-}
-
-.heroBar {
-  gap: 10px;
-  margin-top: 14px;
-}
-
-.chip {
-  display: inline-flex;
-  flex-shrink: 0;
-  align-items: center;
-  gap: 6px;
-  min-height: 28px;
-  padding: 0 10px;
-  border: 1px solid transparent;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: var(--text-xs);
-  font-weight: 500;
-  line-height: 1;
-  white-space: nowrap;
-  animation: mode-chip-in 180ms var(--ease-out) calc(var(--item-index, 0) * 24ms) backwards;
-  transition:
-    background-color var(--t-hover) var(--ease-out),
-    border-color var(--t-hover) var(--ease-out),
-    color var(--t-hover) var(--ease-out),
-    transform var(--t-press) var(--ease-out);
-}
-
-.heroChip {
-  min-height: 30px;
-  padding: 0 11px;
-  font-size: var(--text-sm);
-}
-
-.iconWrap {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.iconWrapOn {
-  animation: mode-icon-pop 220ms var(--ease-spring);
-}
-
 .icon {
   flex-shrink: 0;
   width: 15px;
   height: 15px;
   opacity: 0.82;
   transition: opacity var(--t-hover) var(--ease-out);
-}
-
-.chip:hover:not(:disabled) {
-  background: var(--bg-hover);
-  color: var(--text);
-}
-
-.chip:active:not(:disabled) {
-  transform: scale(0.96);
-}
-
-.chip:hover:not(:disabled) .icon,
-.chipOn .icon {
-  opacity: 1;
-}
-
-.chip:focus-visible {
-  outline: var(--focus-ring);
-  outline-offset: 1px;
-}
-
-.chip:disabled {
-  opacity: 0.45;
-}
-
-.chipOn {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-  color: var(--accent-text);
-  font-weight: 600;
-}
-
-.chipOn:hover:not(:disabled) {
-  border-color: var(--accent);
-  background: var(--accent-soft-strong);
-  color: var(--accent-text);
 }
 
 .anchor {
@@ -264,6 +174,26 @@
   animation: mode-menu-pop 180ms var(--ease-spring);
 }
 
+.menuEnd {
+  right: 0;
+  left: auto;
+  transform-origin: bottom right;
+}
+
+.menuDown {
+  top: calc(100% + 6px);
+  bottom: auto;
+  transform-origin: top right;
+  animation-name: mode-menu-pop-down;
+}
+
+@keyframes mode-menu-pop-down {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.96);
+  }
+}
+
 .menuItem {
   display: flex;
   align-items: center;
@@ -323,27 +253,6 @@
   color: var(--accent-text);
 }
 
-@keyframes mode-chip-in {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-}
-
-@keyframes mode-icon-pop {
-  0% {
-    transform: scale(0.84);
-  }
-
-  60% {
-    transform: scale(1.1);
-  }
-
-  100% {
-    transform: scale(1);
-  }
-}
-
 @keyframes mode-pill-in {
   from {
     opacity: 0.7;
@@ -366,15 +275,12 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .chip,
-  .iconWrapOn,
   .activePill,
   .menu,
   .menuItem {
     animation: none;
   }
 
-  .chip:active:not(:disabled),
   .trigger:active:not(:disabled),
   .activeMain:active:not(:disabled),
   .clearBtn:active:not(:disabled) {
@@ -386,15 +292,12 @@
   }
 }
 
-:global([data-motion="reduced"]) .chip,
-:global([data-motion="reduced"]) .iconWrapOn,
 :global([data-motion="reduced"]) .activePill,
 :global([data-motion="reduced"]) .menu,
 :global([data-motion="reduced"]) .menuItem {
   animation: none;
 }
 
-:global([data-motion="reduced"]) .chip:active:not(:disabled),
 :global([data-motion="reduced"]) .trigger:active:not(:disabled),
 :global([data-motion="reduced"]) .activeMain:active:not(:disabled),
 :global([data-motion="reduced"]) .clearBtn:active:not(:disabled) {

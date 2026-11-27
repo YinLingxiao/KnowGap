@@ -80,7 +80,8 @@ test('the space panel tab bar is icon-only except the active tab, has a Library 
   assert.match(page, /\{tab\.active && <span className=\{styles\.tabLabel\}>\{tab\.label\}<\/span>\}/);
   assert.match(page, /aria-label=\{tab\.label\}/);
   const labels = [...page.matchAll(/key: "(\w+)", icon: \w+, label: t\("([^"]+)"\)/g)].map((m) => m[2]);
-  assert.deepEqual(labels, ['space.tab.threads', 'space.tab.library', 'space.tab.graph', 'space.tab.tasks', 'space.tab.memory', 'space.tab.overview']);
+  // 记忆和概览已移进空间设置卡片（SpaceSettingsDialog）。
+  assert.deepEqual(labels, ['space.tab.threads', 'space.tab.library', 'space.tab.graph', 'space.tab.tasks']);
   assert.doesNotMatch(page, /label: "Pages"/);
   assert.match(page, /const libraryOpen = panel\.mode === "pages"/);
   assert.match(page, /<Library\s[^>]*onOpenNotes=\{\(\) => setPanel\(\{ mode: "pages" \}\)\}/);

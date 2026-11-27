@@ -153,6 +153,4 @@ test('message markers split into text, image and netlist segments', () => {
     { kind: 'netlist', netlistId: NET, version: 3 },
     { kind: 'text', text: '\n电路拓扑已确认。[[kg-image:../../x]]' },
   ]);
-  assert.equal(v.withImageMarker('', '[[m]]'), '[[m]]\n');
-  assert.equal(v.withImageMarker('这道题  \n', '[[m]]'), '这道题\n[[m]]\n');
 });

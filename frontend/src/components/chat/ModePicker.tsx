@@ -10,8 +10,9 @@ import styles from "./ModePicker.module.css";
 interface ModePickerProps {
   value: ChatMode | null;
   onChange: (mode: ChatMode | null) => void;
-  hero?: boolean;
   disabled?: boolean;
+  /** At the right end of a toolbar: align the menu's right edge so it stays inside the window. */
+  alignEnd?: boolean;
 }
 
 function ModeTriggerIcon() {
@@ -68,10 +69,19 @@ const MODE_ICONS: Record<ChatMode, ReactNode> = {
   review: <GraduationCap size={15} strokeWidth={1.75} className={styles.icon} aria-hidden />,
 };
 
-export function ModePicker({ value, onChange, hero = false, disabled = false }: ModePickerProps) {
+export function ModePicker({ value, onChange, disabled = false, alignEnd = false }: ModePickerProps) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
+  const [down, setDown] = useState(false);
   const anchorRef = useRef<HTMLDivElement>(null);
+  // Decide the direction when opening: down only if there is no room above and more room below.
+  const toggle = () => {
+    if (!open && anchorRef.current && typeof window !== "undefined") {
+      const rect = anchorRef.current.getBoundingClientRect();
+      setDown(rect.top < 300 && window.innerHeight - rect.bottom > rect.top);
+    }
+    setOpen(!open);
+  };
 
   useEffect(() => {
     if (disabled) setOpen(false);
@@ -83,7 +93,9 @@ export function ModePicker({ value, onChange, hero = false, disabled = false }: 
       if (!anchorRef.current?.contains(event.target as Node)) setOpen(false);
     };
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key !== "Escape") return;
+      setOpen(false);
+      anchorRef.current?.querySelector<HTMLButtonElement>("button[aria-haspopup]")?.focus();
     };
     document.addEventListener("mousedown", onPointerDown);
     document.addEventListener("keydown", onKeyDown);
@@ -92,33 +104,6 @@ export function ModePicker({ value, onChange, hero = false, disabled = false }: 
       document.removeEventListener("keydown", onKeyDown);
     };
   }, [open]);
-
-  if (hero) {
-    return (
-      <div className={cx(styles.bar, styles.heroBar)} role="group" aria-label={t("chat.mode.label")}>
-        {CHAT_MODE_OPTIONS.map((option, index) => {
-          const selected = value === option.id;
-          return (
-            <button
-              key={option.id}
-              type="button"
-              className={cx(styles.chip, styles.heroChip, selected && styles.chipOn)}
-              style={{ "--item-index": index } as CSSProperties}
-              aria-pressed={selected}
-              disabled={disabled}
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => onChange(selected ? null : option.id)}
-            >
-              <span key={selected ? "on" : "off"} className={cx(styles.iconWrap, selected && styles.iconWrapOn)}>
-                {MODE_ICONS[option.id]}
-              </span>
-              <span>{t(option.labelKey)}</span>
-            </button>
-          );
-        })}
-      </div>
-    );
-  }
 
   const activeOption = value ? CHAT_MODE_OPTIONS.find((option) => option.id === value) ?? null : null;
   const shortLabel = t("chat.mode.short");
@@ -136,7 +121,7 @@ export function ModePicker({ value, onChange, hero = false, disabled = false }: 
             aria-label={t("chat.mode.label")}
             disabled={disabled}
             onMouseDown={(event) => event.preventDefault()}
-            onClick={() => setOpen((prev) => !prev)}
+            onClick={toggle}
           >
             {MODE_ICONS[activeOption.id]}
             <span>{t(activeOption.labelKey)}</span>
@@ -166,7 +151,7 @@ export function ModePicker({ value, onChange, hero = false, disabled = false }: 
           aria-label={t("chat.mode.label")}
           disabled={disabled}
           onMouseDown={(event) => event.preventDefault()}
-          onClick={() => setOpen((prev) => !prev)}
+          onClick={toggle}
         >
           <ModeTriggerIcon />
           <span>{shortLabel}</span>
@@ -175,7 +160,7 @@ export function ModePicker({ value, onChange, hero = false, disabled = false }: 
       )}
 
       {open && !disabled && (
-        <div className={styles.menu} role="menu" aria-label={t("chat.mode.label")}>
+        <div className={cx(styles.menu, alignEnd && styles.menuEnd, down && styles.menuDown)} role="menu" aria-label={t("chat.mode.label")}>
           {CHAT_MODE_OPTIONS.map((option, index) => {
             const selected = value === option.id;
             return (

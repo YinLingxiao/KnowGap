@@ -1,15 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { ArrowUpRight, CalendarClock, CircleAlert, RotateCcw } from "lucide-react";
+import { ArrowUpRight, CircleAlert, RotateCcw } from "lucide-react";
 import { useI18n } from "@/components/LanguageProvider";
 import { describeError } from "@/lib/api/errors";
 import { agendaApi } from "@/lib/agenda/api";
 import { AGENDA_CHANGED_EVENT, type AgendaTask, type AgendaThread } from "@/lib/agenda/types";
-import { cx } from "@/lib/cx";
 import { AgendaList, useListState, type SubjectInfo, type TaskActions } from "./AgendaList";
 import {
-  applyViewOptions, buildSpaceGroups, compareSiblings, deadlineInfo, dispatchCompose, monthDay, taskKey,
+  applyViewOptions, buildSpaceGroups, compareSiblings, dispatchCompose, taskKey,
   type AgendaGroup, type AgendaViewOptions,
 } from "./agendaModel";
 import { TaskInspector } from "./TaskInspector";
@@ -20,7 +19,6 @@ export interface SpaceSubject {
   id: string;
   name: string;
   color: string;
-  deadline: string | null;
 }
 
 const NO_SUBJECT_TAGS = new Map<string, SubjectInfo>();
@@ -81,19 +79,12 @@ export function SpaceTaskList(props: SpaceTaskListProps) {
     if (!props.viewOptions) return built;
     return applyViewOptions(built, props.viewOptions, new Map([[subject.id, subject]]), today, tx);
   }, [tasks, threads, subject, today, props.viewOptions, tx]);
-  const deadline = deadlineInfo(subject.deadline, today, tx);
 
   return (
     <div className={styles.view}>
       <header className={styles.head}>
         <span className={styles.dot} style={{ background: subject.color }} aria-hidden />
         <h2 className={styles.name} title={subject.name}>{subject.name}</h2>
-        {subject.deadline && (
-          <span className={cx(styles.meta, deadline?.urgent && styles.urgent)} title={tx("截止日 {date}", { date: subject.deadline })}>
-            <CalendarClock size={12} aria-hidden />
-            {tx("{date}截止", { date: monthDay(subject.deadline, tx) })}
-          </span>
-        )}
         {progress && progress.total > 0 && (
           <span className={styles.meta} title={tx("已完成 {done} / 全部 {total}", { done: progress.done, total: progress.total })}>
             <span className={styles.bar} aria-hidden>

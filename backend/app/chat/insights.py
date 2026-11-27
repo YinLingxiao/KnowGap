@@ -12,7 +12,6 @@ How the data is linked (see store.py):
 
 import json
 import sqlite3
-from datetime import date
 
 from app.chat.store import ChatStore
 
@@ -61,16 +60,9 @@ def _summary_cards(db: sqlite3.Connection, main_id: str | None) -> dict[str, dic
     return cards
 
 
-def _days_left(deadline: str | None, today: date | None) -> int | None:
-    if not deadline:
-        return None
-    try:
-        return (date.fromisoformat(deadline[:10]) - (today or date.today())).days
-    except ValueError:
-        return None
 
 
-def subject_insights(store: ChatStore, student_id: str, subject_id: str, *, today: date | None = None) -> dict | None:
+def subject_insights(store: ChatStore, student_id: str, subject_id: str) -> dict | None:
     """None when the space does not exist or belongs to another student (callers answer 404)."""
     subject = store.subject(subject_id, student_id)
     if subject is None:
@@ -126,13 +118,12 @@ def subject_insights(store: ChatStore, student_id: str, subject_id: str, *, toda
         "threads_resolved": sum(t["status"] == "resolved" for t in threads),
         "materials": len(material_rows),
         "last_studied_at": subject.progress.last_studied_at,
-        "days_to_deadline": _days_left(subject.deadline, today),
     }
     return {
         "schema_version": SCHEMA_VERSION,
         "subject": {
             "id": subject.id, "name": subject.name, "description": subject.description, "goal": subject.goal,
-            "deadline": subject.deadline, "color": subject.color,
+            "color": subject.color,
             "main_conversation_id": subject.main_conversation_id,
         },
         "stats": stats,

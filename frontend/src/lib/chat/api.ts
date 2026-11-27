@@ -8,6 +8,7 @@ import type { ChatMode } from "./modes";
 import type {
   ChatMessage, Conversation, ConversationSummary, GeneratedFile, LearnerMemory, LearnerMemoryStatus, MemoryChange,
   MemoryWriteItem, SpaceInput, QuizAttemptResult, StreamEvent, Subject, TokenUsage, SpaceUsage,
+  SpaceMemorySync, SpaceMemorySyncStatus, SpaceMemoryNotes, SpaceThreadNote,
 } from "./types";
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- wire payloads are mapped field by field below */
@@ -17,6 +18,29 @@ interface SendMessageBody {
   content: string;
   client_request_id: string;
   mode?: ChatMode;
+}
+
+function mapMemorySync(data: Wire): SpaceMemorySync {
+  return {
+    syncedAt: data.synced_at ?? null,
+    nextSyncAt: data.next_sync_at ?? null,
+    entry: data.entry ?? null,
+    intervalDays: Number(data.interval_days ?? 1),
+  };
+}
+
+function mapMemoryNotes(data: Wire): SpaceMemoryNotes {
+  return {
+    entries: data.entries ?? [],
+    size: Number(data.size ?? 0),
+    updatedAt: data.updated_at ?? null,
+    limit: Number(data.limit ?? 0),
+    history: (data.history ?? []).map((item: Wire) => ({
+      id: item.id, action: item.action, content: item.content ?? "", oldText: item.old_text ?? "",
+      source: item.source, sourceId: item.source_id ?? null, sourceTitle: item.source_title ?? null,
+      createdAt: item.created_at, revoked: Boolean(item.revoked),
+    })),
+  };
 }
 
 function mapUsage(data: Wire): TokenUsage {
@@ -120,9 +144,11 @@ function mapSummary(data: Wire): ConversationSummary {
 function mapSubject(data: Wire): Subject {
   return {
     id: data.id, name: data.name, description: data.description, instructions: data.instructions,
-    goal: data.goal ?? "", level: data.level ?? null, deadline: data.deadline ?? null, color: data.color ?? "#3d6fdb",
+    goal: data.goal ?? "", level: data.level ?? null, color: data.color ?? "#3d6fdb",
     icon: data.icon ?? "graduation-cap",
     mainConversationId: data.main_conversation_id ?? null,
+    mainModelKey: data.main_model_key ?? null,
+    threadModelKey: data.thread_model_key ?? null,
     progress: {
       toReview: data.progress?.to_review ?? 0, improving: data.progress?.improving ?? 0,
       mastered: data.progress?.mastered ?? 0, openThreads: data.progress?.open_threads ?? 0,
@@ -138,11 +164,11 @@ function spaceBody(input: SpaceInput): Wire {
   if (input.name !== undefined) body.name = input.name;
   if (input.goal !== undefined) body.goal = input.goal;
   if (input.level !== undefined) body.level = input.level;
-  if (input.deadline !== undefined) body.deadline = input.deadline;
   if (input.color !== undefined) body.color = input.color;
   if (input.icon !== undefined) body.icon = input.icon;
   if (input.description !== undefined) body.description = input.description;
   if (input.instructions !== undefined) body.instructions = input.instructions;
+  if (input.threadModelKey !== undefined) body.thread_model_key = input.threadModelKey;
   return body;
 }
 
@@ -655,6 +681,34 @@ export const chatApi = {
     return { total: mapUsage(data.total), conversations: Object.fromEntries(
       Object.entries(data.conversations).map(([cid, value]) => [cid, mapUsage(value)]),
     ) };
+  },
+  async spaceMemoryNotes(id: string): Promise<SpaceMemoryNotes> {
+    return mapMemoryNotes(await request<Wire>(root, `/api/subjects/${encodeURIComponent(id)}/memory-notes`, { cache: "no-store" }));
+  },
+  async saveSpaceMemoryNotes(id: string, content: string): Promise<SpaceMemoryNotes> {
+    return mapMemoryNotes(await request<Wire>(root, `/api/subjects/${encodeURIComponent(id)}/memory-notes`, {
+      method: "PUT", body: JSON.stringify({ content }),
+    }));
+  },
+  async revokeSpaceMemoryNote(id: string, logId: string): Promise<SpaceMemoryNotes> {
+    return mapMemoryNotes(await request<Wire>(
+      root, `/api/subjects/${encodeURIComponent(id)}/memory-notes/${encodeURIComponent(logId)}/revoke`, { method: "POST" },
+    ));
+  },
+  async spaceThreadNotes(id: string): Promise<SpaceThreadNote[]> {
+    const data = await request<Wire[]>(root, `/api/subjects/${encodeURIComponent(id)}/thread-notes`, { cache: "no-store" });
+    return data.map((item) => ({
+      threadId: item.thread_id, messageId: item.message_id, title: item.title ?? "", summary: item.summary ?? "",
+      takeaways: item.takeaways ?? [], mergedAt: item.merged_at, status: item.status ?? "resolved",
+    }));
+  },
+  async spaceMemorySync(id: string): Promise<SpaceMemorySync> {
+    const data = await request<Wire>(root, `/api/subjects/${encodeURIComponent(id)}/memory-sync`, { cache: "no-store" });
+    return mapMemorySync(data);
+  },
+  async syncSpaceMemory(id: string): Promise<SpaceMemorySync & { status: SpaceMemorySyncStatus; message: string }> {
+    const data = await request<Wire>(root, `/api/subjects/${encodeURIComponent(id)}/memory-sync`, { method: "POST" });
+    return { ...mapMemorySync(data), status: data.status, message: data.message ?? "" };
   },
   async confirmProposal(id: string, messageId: string, proposalId: string): Promise<string> {
     const data = await request<Wire>(root, `${path(id)}/confirm-proposal`, {

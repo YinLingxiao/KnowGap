@@ -8,7 +8,8 @@ from uuid import uuid4
 SEP = "\n§\n"
 LIMITS = {"user": 1375, "memory": 2200}
 INJECTION = re.compile(r"忽略以上|ignore previous|ignore all|system prompt|你现在是|<\s*/?\s*system", re.I)
-SECRET = re.compile(r"sk-[A-Za-z0-9]|Bearer\s+\S|api[_-]?key\s*[:=]", re.I)
+# sk- 只在词首才像密钥：task-1、disk-scheduling、flask-sqlalchemy 这类不算。
+SECRET = re.compile(r"(?<![A-Za-z0-9])sk-[A-Za-z0-9]|Bearer\s+\S|api[_-]?key\s*[:=]", re.I)
 LONG_TOKEN = re.compile(r"[A-Za-z0-9+/]{40,}={0,2}")
 
 

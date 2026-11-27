@@ -410,17 +410,15 @@ export function completedOn(tasks: AgendaTask[], day: string): number {
 
 export interface TodaySuggestion {
   id: string;
-  kind: "inbox" | "pull" | "breakdown";
+  kind: "inbox" | "pull" | "due";
   title: string;
   detail: string;
-  taskId: string | null;
-  subjectId: string | null;
+  taskId: string;
 }
 
-/** 今天没有安排时的建议，最多 3 条：收件箱未排期、7 天内可提前、临近截止但还没任务的空间 */
+/** 今天没有安排时的建议，最多 3 条：收件箱里还没排期的、7 天内可以提前的、7 天内截止却还没排期的。截止日期只来自任务本身。 */
 export function buildTodaySuggestions(
   tasks: AgendaTask[],
-  subjects: { id: string; name: string; deadline: string | null }[],
   today: string,
   tx: TranslatePhrase = raw,
 ): TodaySuggestion[] {
@@ -434,7 +432,6 @@ export function buildTodaySuggestions(
       title: inbox.task.title,
       detail: tx("待办里还没排期"),
       taskId: inbox.task.id,
-      subjectId: null,
     });
   }
   const soon = addDays(today, 7);
@@ -442,29 +439,26 @@ export function buildTodaySuggestions(
     .map((node) => ({ node, day: nodeDay(node) }))
     .filter((item): item is { node: TaskNode; day: string } => Boolean(item.day && item.day > today && item.day <= soon))
     .sort((a, b) => a.day.localeCompare(b.day) || compareNodes(a.node, b.node));
-  if (future[0] && out.length < 3) {
+  if (future[0]) {
     out.push({
       id: `pull:${future[0].node.task.id}`,
       kind: "pull",
       title: future[0].node.task.title,
       detail: tx("{date}的安排", { date: dateWord(future[0].day, today, tx) }),
       taskId: future[0].node.task.id,
-      subjectId: null,
     });
   }
-  const horizon = addDays(today, 14);
-  const busy = new Set(tasks.filter((task) => task.status !== "cancelled" && task.subjectId).map((task) => task.subjectId));
-  for (const subject of subjects) {
-    if (out.length >= 3) break;
-    if (!subject.deadline || subject.deadline < today || subject.deadline > horizon) continue;
-    if (busy.has(subject.id)) continue;
+  const due = nodes
+    .filter((node) => !nodeDay(node) && node.task.deadlineDate
+      && node.task.deadlineDate >= today && node.task.deadlineDate <= soon)
+    .sort((a, b) => (a.task.deadlineDate as string).localeCompare(b.task.deadlineDate as string) || compareNodes(a, b))[0];
+  if (due) {
     out.push({
-      id: `breakdown:${subject.id}`,
-      kind: "breakdown",
-      title: subject.name,
-      detail: tx("{date}截止，还没有任务", { date: dateWord(subject.deadline, today, tx) }),
-      taskId: null,
-      subjectId: subject.id,
+      id: `due:${due.task.id}`,
+      kind: "due",
+      title: due.task.title,
+      detail: tx("{date}截止，还没排期", { date: dateWord(due.task.deadlineDate as string, today, tx) }),
+      taskId: due.task.id,
     });
   }
   return out;

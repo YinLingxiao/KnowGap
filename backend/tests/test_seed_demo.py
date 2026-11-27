@@ -1,4 +1,3 @@
-from datetime import date, timedelta
 
 from app.chat.insights import subject_insights
 from app.memory.curated import split_entries
@@ -43,7 +42,7 @@ def _assert_demo(store, student):
     circuit = subjects[CIRCUIT_NAME]
     assert "演示" in ds.description and "演示" in ds.goal
     assert ds.level is None and circuit.level is None
-    assert ds.deadline == (date.today() + timedelta(days=10)).isoformat()
+    assert ds.deadline is None and circuit.deadline is None, "演示空间不再设截止日期"
     main_chat = store.conversation(ds.main_conversation_id, student)
     assert sum(item.role == "user" for item in main_chat.messages) >= 5
     _assert_quotes(store, student, ds.id)

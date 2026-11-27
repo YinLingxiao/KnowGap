@@ -11,14 +11,14 @@ import {
 } from "lucide-react";
 import type { StreamPhase } from "@/hooks/useChat";
 import { useI18n } from "@/components/LanguageProvider";
-import { modelLibraryApi, type CatalogModel, type ModelLibraryClient } from "@/lib/api/model-library";
-import { uploadImage } from "@/lib/api/vision-client";
+import { modelLibraryApi, type ModelLibraryClient } from "@/lib/api/model-library";
+import { MAX_IMAGE_BYTES, uploadImage } from "@/lib/api/vision-client";
 import { toApiError } from "@/lib/api/errors";
 import {
   ATTACHMENT_ACCEPT, MAX_FILE_MARKERS, attachmentApi, formatFileMarker, intentsFor, isDocumentFile, parseFileMarkers, pickAttachmentFiles,
 } from "@/lib/chat/attachments";
 import { useDevMode } from "@/lib/devMode";
-import { ModelPicker, supportsReasoning } from "./ModelPicker";
+import { ModelPicker } from "./ModelPicker";
 import { ModePicker } from "./ModePicker";
 import { PlanBar } from "./PlanBar";
 import { chatApi } from "@/lib/chat/api";
@@ -28,7 +28,6 @@ import { cx } from "@/lib/cx";
 import type { Problem } from "@/lib/types";
 import { QUOTE_TO_COMPOSER_EVENT, SEND_TO_COMPOSER_EVENT, type ComposerTextDetail } from "./SelectionToolbar";
 import { OutboxBar } from "./OutboxBar";
-import { ImageAttach } from "./widgets/ImageAttach";
 import { ImageThumb } from "./widgets/ImageMarker";
 import { joinDraftImages, splitDraftImages, withLeadingImage } from "./widgets/visionData";
 import {
@@ -39,6 +38,13 @@ import { FileCard, kindFromName, rememberFile, recalledFile, scaleOf, type FileC
 import styles from "./Composer.module.css";
 
 export type ThinkingEffort = "off" | "low" | "medium" | "high";
+
+/** 上方放不下（不到 needed 像素）且下方更宽敞时往下开。 */
+export function opensDown(anchor: Element | null, needed = 320): boolean {
+  if (!anchor || typeof window === "undefined") return false;
+  const rect = anchor.getBoundingClientRect();
+  return rect.top < needed && window.innerHeight - rect.bottom > rect.top;
+}
 
 const EFFORT_OPTIONS: Array<{
   id: ThinkingEffort;
@@ -59,6 +65,9 @@ const AGENT_ENV_EVENT = "knowgap:agent-env";
 const FEYNMAN_PROMPT = "我想用费曼学习法自测：请你扮演一位认真但有疑惑的同桌听我讲，并在我讲得含糊或漏掉边界条件的地方追问我。我现在开始讲：";
 
 const IMAGE_RE = /^image\/(png|jpe?g|webp)$/i;
+// Windows 拖入的部分文件 type 为空：再按扩展名认一次
+const IMAGE_NAME_RE = /\.(png|jpe?g|webp)$/i;
+const isImageFile = (file: File) => IMAGE_RE.test(file.type) || (!file.type && IMAGE_NAME_RE.test(file.name));
 
 interface PendingFile {
   key: string;
@@ -244,9 +253,11 @@ export function Composer({
   const [plusPane, setPlusPane] = useState<"root" | "skills" | "exercises">("root");
   const [formatBarOpen, setFormatBarOpen] = useState(false);
   const [effortOpen, setEffortOpen] = useState(false);
+  // 菜单往上开还是往下开：按打开那一刻按钮上下各有多少空间决定（首页输入框在页面中间，往上不一定放得下）
+  const [menuDown, setMenuDown] = useState(false);
+  const [effortDown, setEffortDown] = useState(false);
   const [wsOpen, setWsOpen] = useState(false);
   const [effort, setEffort] = useState<ThinkingEffort>("medium");
-  const [activeModel, setActiveModel] = useState<CatalogModel | null>(null);
   const [localModelKey, setLocalModelKey] = useState<string | null>(null);
   const [modelError, setModelError] = useState("");
   const [workspace, setWorkspace] = useState<string>("");
@@ -513,16 +524,20 @@ export function Composer({
     setModelError("");
   }, [conversationId]);
 
-  useEffect(() => {
-    if (!supportsReasoning(activeModel)) setEffortOpen(false);
-  }, [activeModel]);
-
-  const selectEffort = (next: ThinkingEffort) => {
+  const applyEffort = (next: ThinkingEffort) => {
     setEffort(next);
-    setEffortOpen(false);
     try { localStorage.setItem(EFFORT_STORAGE_KEY, next); } catch { /* ignore */ }
     window.dispatchEvent(new CustomEvent<ThinkingEffort>(EFFORT_EVENT, { detail: next }));
-    void chatApi.saveReasoningEffort(next).catch(() => {});
+  };
+  const selectEffort = (next: ThinkingEffort) => {
+    const previous = effort;
+    setEffortOpen(false);
+    applyEffort(next);
+    // 存不上就改回去，免得界面显示的和实际生效的不一致
+    void chatApi.saveReasoningEffort(next).catch(() => {
+      applyEffort(previous);
+      setAttachNote(tx("思考深度没有保存成功，已改回原来的设置。"));
+    });
   };
 
   useEffect(() => {
@@ -647,6 +662,7 @@ export function Composer({
       updatePending(() => []);
       setImageUploads(0);
       setFileHint("");
+      setAttachNote("");
       setDragging(false);
       dragDepth.current = 0;
     }
@@ -657,7 +673,12 @@ export function Composer({
   const addFile = useCallback(async (file: File) => {
     if (locked || generating) return;
     const epoch = uploadEpoch.current;
-    if (IMAGE_RE.test(file.type)) {
+    setAttachNote("");
+    if (isImageFile(file)) {
+      if (file.size > MAX_IMAGE_BYTES) {
+        setAttachNote(tx("「{name}」超过 10 MB，换一张小一点的图片。", { name: file.name }));
+        return;
+      }
       setImageUploads((count) => count + 1);
       try {
         const image = await uploadImage(file);
@@ -673,7 +694,7 @@ export function Composer({
     }
     // 旧版 Office 也交给后端返回准确的 415 中文说明，不尝试读取二进制文件。
     if (!isDocumentFile(file.name) && !/\.(doc|ppt|xls)$/i.test(file.name)) {
-      setFileHint(tx("请选择 PDF、Word（.docx / .doc）、PPT（.pptx / .ppt）、Excel（.xlsx / .xls）、TXT、Markdown 或 CSV 文件。"));
+      setFileHint(tx("请选择图片（PNG、JPG、WebP）或 PDF、Word（.docx / .doc）、PPT（.pptx / .ppt）、Excel（.xlsx / .xls）、TXT、Markdown、CSV 文件。"));
       return;
     }
     if (!conversationId && !ensureConversation) {
@@ -963,6 +984,7 @@ export function Composer({
 
   const openPlusMenu = () => {
     setPlusPane("root");
+    setMenuDown(opensDown(menuRef.current));
     loadMentions();
     setMenuOpen(true);
   };
@@ -1009,14 +1031,20 @@ export function Composer({
           aria-hidden
         />
         {/* LobeHub 风格：顶部 Markdown 格式工具栏（由 + 菜单中的「格式工具」开关控制） */}
-        {attachNote && <p className={styles.wsError} role="status">{attachNote}</p>}
+        {attachNote && (
+          <p className={styles.attachNote} role="alert">
+            {attachNote}
+            <button type="button" className={styles.dismissFileHint} onClick={() => setAttachNote("")}>{tx("知道了")}</button>
+          </p>
+        )}
         {imageUploads > 0 && <p className={styles.fileNote} role="status">{tx("正在上传图片…")}</p>}
         {fileHint && (
           <p className={styles.wsError} role="alert">
             {fileHint}
             {" "}
             <button type="button" className={styles.dismissFileHint} onClick={() => setFileHint("")}>
-              知道了            </button>
+              {tx("知道了")}
+            </button>
           </p>
         )}
         {(pendingFiles.length > 0 || parsedDraft.files.length > 0 || draftImages.images.length > 0) && (
@@ -1163,405 +1191,403 @@ export function Composer({
               </div>
             )}
           </div>
-        </div>
-
-        <div className={styles.toolbar}>
-          <div className={styles.leftTools}>
-            <div className={styles.menuAnchor} ref={menuRef}>
-              <button
-                type="button"
-                className={styles.tool}
-                onClick={() => {
-                  setMenuOpen((open) => {
-                    const next = !open;
-                    if (next) {
-                      setPlusPane("root");
-                      loadMentions();
-                    }
-                    return next;
-                  });
-                }}
-                aria-expanded={menuOpen}
-                aria-haspopup="menu"
-                aria-label={t("composer.addMore")}
-                title={t("composer.addMoreTitle")}
-                disabled={generating || locked}
-              >
-                <Plus size={16} aria-hidden />
+          <div className={styles.sendTools}>
+            {generating && (
+              <button type="button" className={cx(styles.send, styles.stop)} onClick={onStop} aria-label={tx("停止生成")} title={tx("停止生成")}>
+                <Square size={11} fill="currentColor" aria-hidden />
               </button>
-              {menuOpen && (
-                <div className={styles.menu} role="menu">
-                  {plusPane === "root" ? (
-                    <>
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className={styles.lobeMenuItem}
-                        onClick={() => {
-                          setMenuOpen(false);
-                          triggerFilePicker();
-                        }}
-                      >
-                        <span className={styles.lobeMenuLeft}>
-                          <Paperclip size={15} aria-hidden />
-                          <span>{t("composer.attach")}</span>
-                        </span>
-                        <ChevronRight size={14} className={styles.lobeMenuArrow} aria-hidden />
-                      </button>
-
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className={styles.lobeMenuItem}
-                        onClick={() => setPlusPane("skills")}
-                      >
-                        <span className={styles.lobeMenuLeft}>
-                          <Layers size={15} aria-hidden />
-                          <span>{t("composer.skills")}</span>
-                          <span className={styles.lobeMenuPill}>{t("composer.auto")} | {skillItems.totalCount}</span>
-                        </span>
-                        <ChevronRight size={14} className={styles.lobeMenuArrow} aria-hidden />
-                      </button>
-
-                      {onStartExercise && problems.length > 0 && (
-                        <button
-                          type="button"
-                          role="menuitem"
-                          className={styles.lobeMenuItem}
-                          onClick={() => setPlusPane("exercises")}
-                        >
-                          <span className={styles.lobeMenuLeft}>
-                            <Dumbbell size={15} aria-hidden />
-                            <span>{t("composer.exercises")}</span>
-                            <span className={styles.lobeMenuPill}>{problems.length}</span>
-                          </span>
-                          <ChevronRight size={14} className={styles.lobeMenuArrow} aria-hidden />
-                        </button>
-                      )}
-
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className={styles.lobeMenuItem}
-                        onClick={() => {
-                          setMenuOpen(false);
-                          onChange(tx(FEYNMAN_PROMPT));
-                          textareaRef.current?.focus();
-                        }}
-                        title={tx("切换为费曼反转自测：由你讲给 AI 听，AI 负责挑刺追问")}
-                      >
-                        <span className={styles.lobeMenuLeft}>
-                          <Mic size={15} aria-hidden />
-                          <span>{t("composer.feynman")}</span>
-                        </span>
-                      </button>
-
-                      <div className={styles.lobeMenuDivider} role="separator" />
-                      <p className={styles.lobeMenuSection}>{t("composer.conversationSettings")}</p>
-
-                      {devTools && (
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className={styles.lobeMenuItem}
-                        onClick={() => {
-                          setMenuOpen(false);
-                          void pickWorkspaceFolder();
-                        }}
-                        onContextMenu={openWsManual}
-                        aria-busy={wsPicking || undefined}
-                        title={
-                          hasFolderPicker
-                            ? workspace
-                              ? t("composer.workspaceCurrent", { path: workspace })
-                              : t("composer.chooseWorkspace")
-                            : workspace
-                              ? t("composer.workspaceCurrentSimple", { path: workspace })
-                              : t("composer.bindWorkspace")
-                        }
-                      >
-                        <span className={styles.lobeMenuLeft}>
-                          <Target size={15} aria-hidden />
-                          <span>{t("composer.workspace")}</span>
-                          <span className={styles.lobeMenuPill}>{wsShortName}</span>
-                        </span>
-                      </button>
-                      )}
-
-                      <button
-                        type="button"
-                        role="menuitemcheckbox"
-                        aria-checked={formatBarOpen}
-                        className={styles.lobeMenuItem}
-                        onClick={() => setFormatBarOpen((v) => !v)}
-                      >
-                        <span className={styles.lobeMenuLeft}>
-                          <Type size={15} aria-hidden />
-                          <span>{t("composer.formatTools")}</span>
-                        </span>
-                        <span className={cx(styles.lobeSwitch, formatBarOpen && styles.lobeSwitchOn)} aria-hidden>
-                          <i />
-                        </span>
-                      </button>
-
-                      {devTools && (
-                      <button
-                        type="button"
-                        role="menuitemcheckbox"
-                        aria-checked={autoApprove}
-                        className={styles.lobeMenuItem}
-                        onClick={() => void saveEnv(workspace, !autoApprove)}
-                        title={t("composer.approveWritesTitle")}
-                      >
-                        <span className={styles.lobeMenuLeft}>
-                          <ShieldCheck size={15} aria-hidden />
-                          <span>{t("composer.approveWrites")}</span>
-                        </span>
-                        <span className={cx(styles.lobeSwitch, autoApprove && styles.lobeSwitchOn)} aria-hidden>
-                          <i />
-                        </span>
-                      </button>
-                      )}
-                    </>
-                  ) : plusPane === "exercises" ? (
-                    <>
-                      <div className={styles.lobeSubhead}>
-                        <button
-                          type="button"
-                          className={styles.lobeBackBtn}
-                          onClick={() => setPlusPane("root")}
-                        >
-                          <ChevronLeft size={14} aria-hidden />
-                          <span>{t("composer.back")}</span>
-                        </button>
-                        <span className={styles.lobeSubheadHint}>{t("composer.exercisesHint")}</span>
-                      </div>
-                      <div className={styles.cmdScroll}>
-                        {problems.map((problem) => (
-                          <button
-                            key={problem.id}
-                            type="button"
-                            role="menuitem"
-                            className={styles.cmdItem}
-                            onClick={() => {
-                              setMenuOpen(false);
-                              setPlusPane("root");
-                              onStartExercise?.(problem.id);
-                            }}
-                          >
-                            <span className={styles.cmdIcon}><Dumbbell size={14} aria-hidden /></span>
-                            <span className={styles.cmdBody}>
-                              <span className={styles.cmdTitle}>{problem.title}</span>
-                              {problem.inputSequence && problem.outputSequence && (
-                                <span className={styles.cmdDesc}>
-                                  {problem.inputSequence.join("")} → {problem.outputSequence.join("")}
-                                </span>
-                              )}
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className={styles.lobeSubhead}>
-                        <button
-                          type="button"
-                          className={styles.lobeBackBtn}
-                          onClick={() => setPlusPane("root")}
-                        >
-                          <ChevronLeft size={14} aria-hidden />
-                          <span>{tx("返回")}</span>
-                        </button>
-                      </div>
-                      <div className={styles.cmdScroll}>
-                        {skillItems.custom.map((sk) => (
-                          <button
-                            key={sk.key}
-                            type="button"
-                            role="menuitem"
-                            className={styles.cmdItem}
-                            onClick={() => {
-                              setMenuOpen(false);
-                              setPlusPane("root");
-                              const next = `${value ? `${value} ` : ""}@[${sk.name}] `;
-                              onChange(next);
-                              requestAnimationFrame(() => textareaRef.current?.focus());
-                            }}
-                          >
-                            <span className={styles.cmdIcon}><Sparkles size={14} aria-hidden /></span>
-                            <span className={styles.cmdBody}>
-                              <span className={styles.cmdTitle}>{sk.name}</span>
-                              <span className={styles.cmdDesc}>{sk.hint}</span>
-                            </span>
-                            <span className={styles.cmdTag}>{tx("自定义")}</span>
-                          </button>
-                        ))}
-                        {skillItems.totalCount === 0 && (
-                          <p className={styles.cmdEmpty}>{tx("没有匹配的 Skill 或文件")}</p>
-                        )}
-                      </div>
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-
-            <span className={styles.imageSlot}>
-              <ImageAttach
-                disabled={generating || locked}
-                onUploaded={(img) => {
-                  addImageMarker(img.marker);
-                  textareaRef.current?.focus();
-                }}
-              />
-            </span>
-
-            {!hero && onModeChange && <ModePicker value={mode} onChange={onModeChange} disabled={locked} />}
-
-            {/* 状态徽标：只在开启自动批准 / 绑定工作区时出现，点击打开 + 菜单里的对应项 */}
-            <div className={styles.menuAnchor} ref={wsRef}>
-              {(autoApprove || workspace) && (
-                <span className={styles.statusBadges}>
-                  {autoApprove && (
+            )}
+            <button type="button" className={styles.send} onClick={onSend} disabled={!canSend} aria-label={tx(generating ? "加入待发送" : "发送")} title={tx(generating ? "加入待发送 (Enter)" : "发送 (Enter)")}>
+              <ArrowUp size={15} aria-hidden />
+            </button>
+          </div>
+        </div>
+      </div>
+      <div className={styles.toolbar}>
+        <div className={styles.leftTools}>
+          <div className={styles.menuAnchor} ref={menuRef}>
+            <button
+              type="button"
+              className={styles.tool}
+              onClick={() => {
+                setMenuOpen((open) => {
+                  const next = !open;
+                  if (next) {
+                    setPlusPane("root");
+                    setMenuDown(opensDown(menuRef.current));
+                    loadMentions();
+                  }
+                  return next;
+                });
+              }}
+              aria-expanded={menuOpen}
+              aria-haspopup="menu"
+              aria-label={t("composer.addMore")}
+              title={t("composer.addMoreTitle")}
+              disabled={generating || locked}
+            >
+              <Plus size={16} aria-hidden />
+            </button>
+            {menuOpen && (
+              <div className={cx(styles.menu, menuDown && styles.menuDown)} role="menu">
+                {plusPane === "root" ? (
+                  <>
                     <button
                       type="button"
-                      className={styles.statusBadge}
-                      onClick={openPlusMenu}
-                      disabled={generating || locked}
-                      aria-label={tx("帮我批准已开启")}
-                      title={tx("帮我批准已开启：Agent 写入工作区文件无需逐次确认（终端命令仍需确认）。点击调整")}
+                      role="menuitem"
+                      className={styles.lobeMenuItem}
+                      onClick={() => {
+                        setMenuOpen(false);
+                        triggerFilePicker();
+                      }}
                     >
-                      <ShieldCheck size={13} aria-hidden />
+                      <span className={styles.lobeMenuLeft}>
+                        <Paperclip size={15} aria-hidden />
+                        <span>{t("composer.attach")}</span>
+                      </span>
+                      <ChevronRight size={14} className={styles.lobeMenuArrow} aria-hidden />
+                    </button>
+
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className={styles.lobeMenuItem}
+                      onClick={() => setPlusPane("skills")}
+                    >
+                      <span className={styles.lobeMenuLeft}>
+                        <Layers size={15} aria-hidden />
+                        <span>{t("composer.skills")}</span>
+                        <span className={styles.lobeMenuPill}>{t("composer.auto")} | {skillItems.totalCount}</span>
+                      </span>
+                      <ChevronRight size={14} className={styles.lobeMenuArrow} aria-hidden />
+                    </button>
+
+                    {onStartExercise && problems.length > 0 && (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className={styles.lobeMenuItem}
+                        onClick={() => setPlusPane("exercises")}
+                      >
+                        <span className={styles.lobeMenuLeft}>
+                          <Dumbbell size={15} aria-hidden />
+                          <span>{t("composer.exercises")}</span>
+                          <span className={styles.lobeMenuPill}>{problems.length}</span>
+                        </span>
+                        <ChevronRight size={14} className={styles.lobeMenuArrow} aria-hidden />
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className={styles.lobeMenuItem}
+                      onClick={() => {
+                        setMenuOpen(false);
+                        onChange(tx(FEYNMAN_PROMPT));
+                        textareaRef.current?.focus();
+                      }}
+                      title={tx("切换为费曼反转自测：由你讲给 AI 听，AI 负责挑刺追问")}
+                    >
+                      <span className={styles.lobeMenuLeft}>
+                        <Mic size={15} aria-hidden />
+                        <span>{t("composer.feynman")}</span>
+                      </span>
+                    </button>
+
+                    <div className={styles.lobeMenuDivider} role="separator" />
+                    <p className={styles.lobeMenuSection}>{t("composer.conversationSettings")}</p>
+
+                    {devTools && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className={styles.lobeMenuItem}
+                      onClick={() => {
+                        setMenuOpen(false);
+                        void pickWorkspaceFolder();
+                      }}
+                      onContextMenu={openWsManual}
+                      aria-busy={wsPicking || undefined}
+                      title={
+                        hasFolderPicker
+                          ? workspace
+                            ? t("composer.workspaceCurrent", { path: workspace })
+                            : t("composer.chooseWorkspace")
+                          : workspace
+                            ? t("composer.workspaceCurrentSimple", { path: workspace })
+                            : t("composer.bindWorkspace")
+                      }
+                    >
+                      <span className={styles.lobeMenuLeft}>
+                        <Target size={15} aria-hidden />
+                        <span>{t("composer.workspace")}</span>
+                        <span className={styles.lobeMenuPill}>{wsShortName}</span>
+                      </span>
+                    </button>
+                    )}
+
+                    <button
+                      type="button"
+                      role="menuitemcheckbox"
+                      aria-checked={formatBarOpen}
+                      className={styles.lobeMenuItem}
+                      onClick={() => setFormatBarOpen((v) => !v)}
+                    >
+                      <span className={styles.lobeMenuLeft}>
+                        <Type size={15} aria-hidden />
+                        <span>{t("composer.formatTools")}</span>
+                      </span>
+                      <span className={cx(styles.lobeSwitch, formatBarOpen && styles.lobeSwitchOn)} aria-hidden>
+                        <i />
+                      </span>
+                    </button>
+
+                    {devTools && (
+                    <button
+                      type="button"
+                      role="menuitemcheckbox"
+                      aria-checked={autoApprove}
+                      className={styles.lobeMenuItem}
+                      onClick={() => void saveEnv(workspace, !autoApprove)}
+                      title={t("composer.approveWritesTitle")}
+                    >
+                      <span className={styles.lobeMenuLeft}>
+                        <ShieldCheck size={15} aria-hidden />
+                        <span>{t("composer.approveWrites")}</span>
+                      </span>
+                      <span className={cx(styles.lobeSwitch, autoApprove && styles.lobeSwitchOn)} aria-hidden>
+                        <i />
+                      </span>
+                    </button>
+                    )}
+                  </>
+                ) : plusPane === "exercises" ? (
+                  <>
+                    <div className={styles.lobeSubhead}>
+                      <button
+                        type="button"
+                        className={styles.lobeBackBtn}
+                        onClick={() => setPlusPane("root")}
+                      >
+                        <ChevronLeft size={14} aria-hidden />
+                        <span>{t("composer.back")}</span>
+                      </button>
+                      <span className={styles.lobeSubheadHint}>{t("composer.exercisesHint")}</span>
+                    </div>
+                    <div className={styles.cmdScroll}>
+                      {problems.map((problem) => (
+                        <button
+                          key={problem.id}
+                          type="button"
+                          role="menuitem"
+                          className={styles.cmdItem}
+                          onClick={() => {
+                            setMenuOpen(false);
+                            setPlusPane("root");
+                            onStartExercise?.(problem.id);
+                          }}
+                        >
+                          <span className={styles.cmdIcon}><Dumbbell size={14} aria-hidden /></span>
+                          <span className={styles.cmdBody}>
+                            <span className={styles.cmdTitle}>{problem.title}</span>
+                            {problem.inputSequence && problem.outputSequence && (
+                              <span className={styles.cmdDesc}>
+                                {problem.inputSequence.join("")} → {problem.outputSequence.join("")}
+                              </span>
+                            )}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className={styles.lobeSubhead}>
+                      <button
+                        type="button"
+                        className={styles.lobeBackBtn}
+                        onClick={() => setPlusPane("root")}
+                      >
+                        <ChevronLeft size={14} aria-hidden />
+                        <span>{tx("返回")}</span>
+                      </button>
+                    </div>
+                    <div className={styles.cmdScroll}>
+                      {skillItems.custom.map((sk) => (
+                        <button
+                          key={sk.key}
+                          type="button"
+                          role="menuitem"
+                          className={styles.cmdItem}
+                          onClick={() => {
+                            setMenuOpen(false);
+                            setPlusPane("root");
+                            const next = `${value ? `${value} ` : ""}@[${sk.name}] `;
+                            onChange(next);
+                            requestAnimationFrame(() => textareaRef.current?.focus());
+                          }}
+                        >
+                          <span className={styles.cmdIcon}><Sparkles size={14} aria-hidden /></span>
+                          <span className={styles.cmdBody}>
+                            <span className={styles.cmdTitle}>{sk.name}</span>
+                            <span className={styles.cmdDesc}>{sk.hint}</span>
+                          </span>
+                          <span className={styles.cmdTag}>{tx("自定义")}</span>
+                        </button>
+                      ))}
+                      {skillItems.totalCount === 0 && (
+                        <p className={styles.cmdEmpty}>{tx("没有匹配的 Skill 或文件")}</p>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* 状态徽标：只在开启自动批准 / 绑定工作区时出现，点击打开 + 菜单里的对应项 */}
+          <div className={styles.menuAnchor} ref={wsRef}>
+            {(autoApprove || workspace) && (
+              <span className={styles.statusBadges}>
+                {autoApprove && (
+                  <button
+                    type="button"
+                    className={styles.statusBadge}
+                    onClick={openPlusMenu}
+                    disabled={generating || locked}
+                    aria-label={tx("帮我批准已开启")}
+                    title={tx("帮我批准已开启：Agent 写入工作区文件无需逐次确认（终端命令仍需确认）。点击调整")}
+                  >
+                    <ShieldCheck size={13} aria-hidden />
+                  </button>
+                )}
+                {workspace && (
+                  <button
+                    type="button"
+                    className={styles.statusBadge}
+                    onClick={openPlusMenu}
+                    onContextMenu={openWsManual}
+                    disabled={generating || locked}
+                    aria-label={tx("当前工作区：{name}", { name: wsShortName })}
+                    title={tx("当前工作区：{path}（点击调整{suffix}）", { path: workspace, suffix: hasFolderPicker ? tx("，右键手动输入") : "" })}
+                  >
+                    <FolderOpen size={13} aria-hidden />
+                  </button>
+                )}
+              </span>
+            )}
+
+            {wsOpen && (
+              <div className={styles.wsPopover} role="dialog" aria-label={tx("工作区文件夹")}>
+                <p className={styles.menuLabel}>{tx("工作区文件夹（Agent 读写目录）")}</p>
+                {!hasFolderPicker && (
+                  <p className={styles.wsHint}>{tx("浏览器内无法读取本地绝对路径，请粘贴文件夹路径；桌面版点击即可直接选择文件夹。")}</p>
+                )}
+                <input
+                  className={styles.wsInput}
+                  value={wsDraft}
+                  placeholder={tx("粘贴本地已存在的文件夹路径…")}
+                  onChange={(e) => setWsDraft(e.target.value)}
+                />
+                {wsNote && <p className={styles.wsError}>{wsNote}</p>}
+                <div className={styles.wsActions}>
+                  {hasFolderPicker && (
+                    <button
+                      type="button"
+                      className={styles.wsBtn}
+                      onClick={() => {
+                        void window.knowgap?.selectFolder?.(wsDraft.trim() || workspace || undefined).then((picked) => {
+                          if (picked) setWsDraft(picked);
+                        });
+                      }}
+                    >
+                      {tx("浏览…")}
                     </button>
                   )}
                   {workspace && (
                     <button
                       type="button"
-                      className={styles.statusBadge}
-                      onClick={openPlusMenu}
-                      onContextMenu={openWsManual}
-                      disabled={generating || locked}
-                      aria-label={tx("当前工作区：{name}", { name: wsShortName })}
-                      title={tx("当前工作区：{path}（点击调整{suffix}）", { path: workspace, suffix: hasFolderPicker ? tx("，右键手动输入") : "" })}
+                      className={styles.wsBtn}
+                      onClick={() => void saveEnv("", autoApprove)}
                     >
-                      <FolderOpen size={13} aria-hidden />
+                      {tx("解绑")}
                     </button>
                   )}
-                </span>
-              )}
-
-              {wsOpen && (
-                <div className={styles.wsPopover} role="dialog" aria-label={tx("工作区文件夹")}>
-                  <p className={styles.menuLabel}>{tx("工作区文件夹（Agent 读写目录）")}</p>
-                  {!hasFolderPicker && (
-                    <p className={styles.wsHint}>{tx("浏览器内无法读取本地绝对路径，请粘贴文件夹路径；桌面版点击即可直接选择文件夹。")}</p>
-                  )}
-                  <input
-                    className={styles.wsInput}
-                    value={wsDraft}
-                    placeholder={tx("粘贴本地已存在的文件夹路径…")}
-                    onChange={(e) => setWsDraft(e.target.value)}
-                  />
-                  {wsNote && <p className={styles.wsError}>{wsNote}</p>}
-                  <div className={styles.wsActions}>
-                    {hasFolderPicker && (
-                      <button
-                        type="button"
-                        className={styles.wsBtn}
-                        onClick={() => {
-                          void window.knowgap?.selectFolder?.(wsDraft.trim() || workspace || undefined).then((picked) => {
-                            if (picked) setWsDraft(picked);
-                          });
-                        }}
-                      >
-                        {tx("浏览…")}
-                      </button>
-                    )}
-                    {workspace && (
-                      <button
-                        type="button"
-                        className={styles.wsBtn}
-                        onClick={() => void saveEnv("", autoApprove)}
-                      >
-                        {tx("解绑")}
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      className={styles.wsBtnPrimary}
-                      onClick={() => void saveEnv(wsDraft.trim(), autoApprove)}
-                    >
-                      {tx("保存")}
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    className={styles.wsBtnPrimary}
+                    onClick={() => void saveEnv(wsDraft.trim(), autoApprove)}
+                  >
+                    {tx("保存")}
+                  </button>
                 </div>
-              )}
-            </div>
-          </div>
-
-          <div className={styles.rightTools}>
-            <ModelPicker
-              conversationId={conversationId}
-              modelKey={shownModelKey}
-              client={modelClient}
-              disabled={generating}
-              disabledReason={tx("正在生成，请等这条回复完成后再切换模型")}
-              suspended={effortOpen}
-              error={modelError}
-              onOpenChange={(open) => { if (open) setEffortOpen(false); }}
-              onResolved={setActiveModel}
-              onSelect={selectModel}
-            />
-            {supportsReasoning(activeModel) && <div className={styles.effortAnchor} ref={effortRef}>
-              <button
-                type="button"
-                className={styles.effortBtn}
-                onClick={() => setEffortOpen((v) => !v)}
-                aria-expanded={effortOpen}
-                aria-haspopup="menu"
-                title={tx("模型思考深度：{label}", { label: tx(activeEffort.label) })}
-              >
-                <span className={styles.effortLevel}>{tx(activeEffort.shortLabel)}</span>
-                <ChevronDown size={12} aria-hidden />
-              </button>
-
-              {effortOpen && (
-                <div className={styles.effortMenu} role="menu" aria-label={tx("思考深度")}>
-                  <p className={styles.menuLabel}>{tx("思考深度（Reasoning Effort）")}</p>
-                  {EFFORT_OPTIONS.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      role="menuitemradio"
-                      aria-checked={effort === item.id}
-                      className={cx(styles.effortOption, effort === item.id && styles.effortOptionOn)}
-                      onClick={() => selectEffort(item.id)}
-                    >
-                      <ThinkingGauge segments={item.segments} />
-                      <div className={styles.effortOptionBody}>
-                        <span className={styles.effortOptionTitle}>{tx(item.label)}</span>
-                        <span className={styles.effortOptionDesc}>{tx(item.desc)}</span>
-                      </div>
-                      {effort === item.id && <Check size={13} className={styles.effortCheck} aria-hidden />}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>}
-
-            {generating && (
-              <button className={cx(styles.send, styles.stop)} onClick={onStop} aria-label={tx("停止生成")} title={tx("停止生成")}>
-                <Square size={11} fill="currentColor" aria-hidden />
-              </button>
+              </div>
             )}
-              <button className={styles.send} onClick={onSend} disabled={!canSend} aria-label={tx(generating ? "加入待发送" : "发送")} title={tx(generating ? "加入待发送 (Enter)" : "发送 (Enter)")}>
-                <ArrowUp size={15} aria-hidden />
-              </button>
           </div>
         </div>
+
+        <p className={styles.disclaimer}>{tx("AI 生成的内容可能有误，重要信息请核对。")}</p>
+
+        <div className={styles.rightTools}>
+          <ModelPicker
+            conversationId={conversationId}
+            modelKey={shownModelKey}
+            client={modelClient}
+            disabled={generating}
+            disabledReason={tx("正在生成，请等这条回复完成后再切换模型")}
+            suspended={effortOpen}
+            error={modelError}
+            onOpenChange={(open) => { if (open) setEffortOpen(false); }}
+            onSelect={selectModel}
+          />
+          {/* 思考深度写进提示词，对所有模型都有效，所以一直显示 */}
+          <div className={styles.effortAnchor} ref={effortRef}>
+            <button
+              type="button"
+              className={styles.effortBtn}
+              onClick={() => {
+                if (!effortOpen) setEffortDown(opensDown(effortRef.current));
+                setEffortOpen((v) => !v);
+              }}
+              aria-expanded={effortOpen}
+              aria-haspopup="menu"
+              aria-label={tx("思考深度：{label}", { label: tx(activeEffort.shortLabel) })}
+              title={tx("模型思考深度：{label}", { label: tx(activeEffort.label) })}
+            >
+              <span className={styles.effortLevel}>{tx(activeEffort.shortLabel)}</span>
+              <ChevronDown size={12} aria-hidden />
+            </button>
+
+            {effortOpen && (
+              <div className={cx(styles.effortMenu, effortDown && styles.menuDown)} role="menu" aria-label={tx("思考深度")}>
+                <p className={styles.menuLabel}>{tx("思考深度（Reasoning Effort）")}</p>
+                {EFFORT_OPTIONS.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={effort === item.id}
+                    className={cx(styles.effortOption, effort === item.id && styles.effortOptionOn)}
+                    onClick={() => selectEffort(item.id)}
+                  >
+                    <ThinkingGauge segments={item.segments} />
+                    <div className={styles.effortOptionBody}>
+                      <span className={styles.effortOptionTitle}>{tx(item.label)}</span>
+                      <span className={styles.effortOptionDesc}>{tx(item.desc)}</span>
+                    </div>
+                    {effort === item.id && <Check size={13} className={styles.effortCheck} aria-hidden />}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {onModeChange && (
+            <ModePicker value={mode} onChange={onModeChange} disabled={locked} alignEnd />
+          )}
+        </div>
       </div>
-      {hero && onModeChange && <ModePicker value={mode} onChange={onModeChange} hero disabled={locked} />}
     </div>
   );
 }

@@ -21,8 +21,10 @@ from app.chat.schemas import (
 from app.memory.curated import LIMITS, MemoryWriteItem, apply as apply_note, bump_turns, decide, pending
 from app.memory.curated import ensure as ensure_notes
 from app.memory.curated import (
-    ensure_fts, read_all, read_updated_at, revoke_applied_note, search as search_notes, snapshot_text, write as write_note,
+    ensure_fts, read_all, read_updated_at, revoke_applied_note, search as search_notes, snapshot_text, split_entries,
+    write as write_note,
 )
+from app.memory import space_notes, space_sync
 from app.memory.store import Store, ensure_column, new_id, now
 from app.chat import history as conversation_history
 from app.models.schemas import Problem, SourceReference
@@ -286,6 +288,7 @@ class ChatStore:
             ensure_column(db, "subjects", "color", "TEXT NOT NULL DEFAULT '#3d6fdb'")
             ensure_column(db, "subjects", "icon", "TEXT NOT NULL DEFAULT 'graduation-cap'")
             ensure_column(db, "subjects", "main_conversation_id", "TEXT")
+            ensure_column(db, "subjects", "thread_model_key", "TEXT")
             ensure_column(db, "conversations", "notes_snapshot", "TEXT")
             ensure_column(db, "conversations", "context_summary", "TEXT NOT NULL DEFAULT ''")
             ensure_column(db, "conversations", "compressed_up_to_seq", "INTEGER NOT NULL DEFAULT 0")
@@ -297,6 +300,8 @@ class ChatStore:
             ensure_column(db, "quiz_items", "plan_step_id", "TEXT")
             self._migrate_spaces(db)
             ensure_notes(db)
+            space_sync.ensure(db)
+            space_notes.ensure(db)
             from app.chat.onboarding import ensure as ensure_onboarding
             from app.chat.preferences import ensure as ensure_preferences
             from app.chat.streaming import ensure as ensure_outbox
@@ -502,6 +507,12 @@ class ChatStore:
         if own:
             return own
         if (row["kind"] or "") == "thread" and row["parent_id"]:
+            # 支线：自己选过的 > 空间设置的支线模型 > 主线的模型 > 全局默认。
+            subject_id = row["subject_id"] if "subject_id" in names else None
+            if subject_id:
+                space = db.execute("SELECT thread_model_key FROM subjects WHERE id = ?", (subject_id,)).fetchone()
+                if space and space["thread_model_key"]:
+                    return space["thread_model_key"]
             parent = db.execute("SELECT model_key FROM conversations WHERE id = ?", (row["parent_id"],)).fetchone()
             if parent and parent["model_key"]:
                 return parent["model_key"]
@@ -510,7 +521,7 @@ class ChatStore:
     def conversation_model_key(self, conversation_id: str) -> str | None:
         with self.connection() as db:
             row = db.execute(
-                "SELECT model_key, kind, parent_id FROM conversations WHERE id = ?", (conversation_id,),
+                "SELECT model_key, kind, parent_id, subject_id FROM conversations WHERE id = ?", (conversation_id,),
             ).fetchone()
             return self._model_key(db, row) if row else None
 
@@ -681,7 +692,12 @@ class ChatStore:
             "MAX(updated_at) AS studied FROM conversations WHERE subject_id = ?",
             (subject_id,),
         ).fetchone()
+        main_model = db.execute(
+            "SELECT model_key FROM conversations WHERE id = ?", (row["main_conversation_id"],),
+        ).fetchone() if row["main_conversation_id"] else None
         return Subject(
+            main_model_key=main_model["model_key"] if main_model else None,
+            thread_model_key=row["thread_model_key"] if "thread_model_key" in row.keys() else None,
             id=row["id"], name=row["name"], description=row["description"], instructions=row["instructions"],
             goal=row["goal"] or "", level=row["level"] if row["level"] in LEVELS else None,
             deadline=row["deadline"], color=row["color"] or DEFAULT_COLOR,
@@ -738,6 +754,9 @@ class ChatStore:
             for field in ("name", "description", "instructions", "goal", "level", "deadline", "color", "icon"):
                 if field in changes and (field != "icon" or changes[field] is not None):
                     db.execute(f"UPDATE subjects SET {field} = ? WHERE id = ?", (changes[field], subject_id))
+            if "thread_model_key" in changes:
+                db.execute("UPDATE subjects SET thread_model_key = ? WHERE id = ?",
+                           (changes["thread_model_key"] or None, subject_id))
             if "name" in changes and changes["name"] and current.main_conversation_id:
                 db.execute(
                     "UPDATE conversations SET title = ? WHERE id = ? AND title = ?",
@@ -750,8 +769,12 @@ class ChatStore:
         # Nothing learned is destroyed: conversations become ordinary chats, memories become general.
         with self.connection() as db:
             db.execute("BEGIN IMMEDIATE")
-            if self._subject(db, subject_id, student_id) is None:
+            subject = self._subject(db, subject_id, student_id)
+            if subject is None:
                 return False
+            # 空间没了，它在总记忆里的那条摘要也一起去掉；记忆本身下面会转成通用的。
+            space_sync.forget(db, student_id, subject_id, now())
+            space_notes.drop(db, student_id, subject_id)
             db.execute(
                 "UPDATE conversations SET subject_id = NULL, kind = 'chat', parent_id = NULL, "
                 "anchor_message_id = NULL, thread_status = NULL, resolved_at = NULL WHERE subject_id = ?",
@@ -1447,6 +1470,150 @@ class ChatStore:
             """, (request_id, conversation_id, message_id, purpose, model, now(),
                   values.get("input_tokens"), values.get("output_tokens"), values.get("cached_tokens")))
 
+    # ------------------------------------------------------------ space Memory.md
+
+    def space_memory_entries(self, student_id: str, subject_id: str) -> list[str]:
+        with self.connection() as db:
+            return space_notes.read_entries(db, student_id, subject_id)[0]
+
+    def space_memory_view(self, student_id: str, subject_id: str) -> dict | None:
+        """Memory.md 的条目、最近的写入记录（带来源）和上限；没有空间时返回 None。"""
+        with self.connection() as db:
+            if self._subject(db, subject_id, student_id) is None:
+                return None
+            entries, updated_at = space_notes.read_entries(db, student_id, subject_id)
+            log = space_notes.history(db, student_id, subject_id)
+            source_ids = {item["source_id"] for item in log if item["source_id"]}
+            titles = {row["id"]: row["title"] for row in db.execute(
+                f"SELECT id, title FROM conversations WHERE id IN ({','.join('?' * len(source_ids))})",
+                tuple(source_ids),
+            )} if source_ids else {}
+        return {
+            "entries": entries,
+            "size": space_notes.size(entries),
+            "updated_at": updated_at,
+            "limit": space_notes.LIMIT,
+            "history": [{
+                "id": item["id"], "action": item["action"], "content": item["content"], "old_text": item["old_text"],
+                "source": item["source"], "source_id": item["source_id"],
+                "source_title": titles.get(item["source_id"]) if item["source_id"] else None,
+                "created_at": item["created_at"], "revoked": bool(item["revoked_at"]),
+            } for item in log],
+        }
+
+    def replace_space_memory(self, student_id: str, subject_id: str, text: str) -> str | None:
+        with self.connection() as db:
+            db.execute("BEGIN IMMEDIATE")
+            if self._subject(db, subject_id, student_id) is None:
+                return None
+            return space_notes.replace(db, student_id, subject_id, text, now())
+
+    def revoke_space_memory(self, student_id: str, subject_id: str, log_id: str) -> str | None:
+        """撤销一次写入。空间或这次写入不存在时返回 None。"""
+        with self.connection() as db:
+            db.execute("BEGIN IMMEDIATE")
+            if self._subject(db, subject_id, student_id) is None:
+                return None
+            return space_notes.revoke(db, student_id, subject_id, log_id, now())
+
+    def apply_space_memory_ops(self, student_id: str, subject_id: str, ops: list, *, source: str,
+                               source_id: str | None = None, merged_message_id: str | None = None) -> list[str]:
+        """按顺序应用模型给出的 add/patch/remove（最多 MAX_OPS 条）；每条单独校验，坏的跳过不影响其他条。
+
+        merged_message_id：这次是在整理某张支线小结卡，成功后记下来，以后重复合并就不再整理。
+        """
+        results = []
+        with self.connection() as db:
+            db.execute("BEGIN IMMEDIATE")
+            if self._subject(db, subject_id, student_id) is None:
+                return results
+            for op in (ops if isinstance(ops, list) else [])[:space_notes.MAX_OPS]:
+                if not isinstance(op, dict):
+                    continue
+                results.append(space_notes.apply(
+                    db, student_id, subject_id, str(op.get("action") or ""), op.get("content"), op.get("old_text"),
+                    now(), source=source, source_id=source_id,
+                ))
+            if merged_message_id:
+                space_notes.mark_merged(db, student_id, subject_id, merged_message_id, now())
+        return results
+
+    def thread_is_resolved(self, conversation_id: str) -> bool:
+        with self.connection() as db:
+            row = db.execute("SELECT thread_status FROM conversations WHERE id = ?", (conversation_id,)).fetchone()
+        return bool(row) and row["thread_status"] == "resolved"
+
+    def space_memory_merged(self, message_id: str) -> bool:
+        with self.connection() as db:
+            return space_notes.already_merged(db, message_id)
+
+    def space_memory_entries_from(self, student_id: str, subject_id: str, source_id: str) -> list[str]:
+        with self.connection() as db:
+            return space_notes.entries_from(db, student_id, subject_id, source_id)
+
+    def space_thread_notes(self, student_id: str, subject_id: str) -> list[dict] | None:
+        """已合并支线的小结卡（标题、小结、要点），新的在前。这就是每条支线的记忆。"""
+        with self.connection() as db:
+            subject = self._subject(db, subject_id, student_id)
+            if subject is None:
+                return None
+            main_id = subject.main_conversation_id
+            if not main_id:
+                return []
+            threads = {row["id"]: row for row in db.execute(
+                "SELECT id, thread_status, resolved_at FROM conversations WHERE parent_id = ? AND kind = 'thread'",
+                (main_id,),
+            )}
+            rows = db.execute(
+                "SELECT id, meta_json, created_at FROM conversation_messages WHERE conversation_id = ? "
+                "AND meta_json LIKE '%thread_summary%' ORDER BY seq DESC", (main_id,),
+            ).fetchall()
+        notes, seen = [], set()
+        for row in rows:
+            card = json.loads(row["meta_json"] or "{}").get("thread_summary")
+            if not isinstance(card, dict) or card.get("thread_id") in seen:
+                continue
+            seen.add(card.get("thread_id"))
+            thread = threads.get(card.get("thread_id"))
+            notes.append({
+                "thread_id": card.get("thread_id"), "message_id": row["id"],
+                "title": card.get("title") or "", "summary": card.get("summary") or "",
+                "takeaways": list(card.get("takeaways") or []),
+                "merged_at": row["created_at"],
+                "status": (thread["thread_status"] or "open") if thread else "deleted",
+            })
+        return notes
+
+    # ------------------------------------------------- space → USER memory sync
+
+    def space_memory_sync_state(self, student_id: str, subject_id: str) -> dict | None:
+        """上次把这个空间汇总进总记忆的时间与写入的条目；没有空间时返回 None。"""
+        with self.connection() as db:
+            if self._subject(db, subject_id, student_id) is None:
+                return None
+            previous = space_sync.state(db, student_id, subject_id)
+        synced_at = previous["synced_at"] if previous else None
+        return {
+            "synced_at": synced_at,
+            "next_sync_at": space_sync.next_sync_at(synced_at),
+            "entry": (previous or {}).get("entry") or None,
+            "interval_days": space_sync.SYNC_INTERVAL.days,
+        }
+
+    def sync_space_memory(self, student_id: str, subject_id: str, *, force: bool = False) -> dict | None:
+        """把空间记忆的摘要写进 USER 笔记；未到间隔且不强制时什么也不做。没有空间时返回 None。"""
+        with self.connection() as db:
+            db.execute("BEGIN IMMEDIATE")
+            subject = self._subject(db, subject_id, student_id)
+            if subject is None:
+                return None
+            memories = [m for m in self._memories(db, student_id) if m.subject_id == subject_id]
+            result = space_sync.sync(
+                db, student_id, subject_id, subject.name, subject.goal, memories, now(),
+                force=force,
+            )
+        return {**result, **(self.space_memory_sync_state(student_id, subject_id) or {})}
+
     def usage(self, student_id: str, subject_id: str | None = None,
               conversation_id: str | None = None) -> dict:
         with self.connection() as db:
@@ -1748,6 +1915,12 @@ class ChatStore:
     def frozen_notes(self, conversation_id: str, student_id: str) -> str:
         with self.connection() as db:
             text = snapshot_text(read_all(db, student_id))
+            row = db.execute("SELECT subject_id FROM conversations WHERE id = ? AND student_id = ?",
+                             (conversation_id, student_id)).fetchone()
+            if row is not None and row["subject_id"]:
+                # 空间里的主线和支线都读同一份 Memory.md 快照。
+                text += "\n\n" + space_notes.snapshot_section(
+                    space_notes.read_entries(db, student_id, row["subject_id"])[0])
             db.execute("UPDATE conversations SET notes_snapshot = ? WHERE id = ? AND student_id = ?",
                        (text, conversation_id, student_id))
             return text

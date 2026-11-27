@@ -60,7 +60,8 @@ def test_insights_aggregates_memories_threads_and_stats(tmp_path):
         data = response.json()
         assert data["schema_version"] == 1
         assert data["subject"]["name"] == "数据结构" and data["subject"]["goal"] == "期末 85+"
-        assert data["subject"]["deadline"] == "2026-12-31"
+        # 学习空间不再有截止日期（时间安排在日程里），洞察里不带它
+        assert "deadline" not in data["subject"]
 
         [wrong] = data["misconceptions"]
         assert wrong["topic"] == "栈的顺序" and wrong["status"] in {"suspected", "needs_review"}
@@ -78,7 +79,7 @@ def test_insights_aggregates_memories_threads_and_stats(tmp_path):
         stats = data["stats"]
         assert stats["misconceptions"] == 1 and stats["to_review"] == 1 and stats["mastered"] == 1
         assert stats["threads_open"] == 1 and stats["threads_resolved"] == 1 and stats["evidence"] == 2
-        assert stats["materials"] == 0 and isinstance(stats["days_to_deadline"], int)
+        assert stats["materials"] == 0 and "days_to_deadline" not in stats
         # Read-only and deterministic.
         assert client.get(f"/api/subjects/{space['id']}/insights").json() == data
 
@@ -88,8 +89,8 @@ def test_insights_empty_space_shape_and_404s(tmp_path):
         space = client.post("/api/subjects", json={"name": "空空间"}).json()
         data = client.get(f"/api/subjects/{space['id']}/insights").json()
         assert data["misconceptions"] == [] and data["mastered"] == [] and data["threads"] == []
-        assert data["materials"] == [] and data["subject"]["deadline"] is None
-        assert data["stats"]["days_to_deadline"] is None and data["stats"]["misconceptions"] == 0
+        assert data["materials"] == [] and "deadline" not in data["subject"]
+        assert data["stats"]["misconceptions"] == 0
         assert client.get("/api/subjects/subj-missing/insights").status_code == 404
         assert client.post("/api/subjects/subj-missing/cheatsheet", json={}).status_code == 404
 

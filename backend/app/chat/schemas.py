@@ -66,6 +66,8 @@ class UpdateSubject(StrictModel):
     deadline: Deadline | None = None
     color: Color | None = None
     icon: SubjectIcon | None = None
+    # 本空间支线的默认模型；显式传 null 表示用默认。主线模型就是主线对话的 model_key，走会话的模型接口改。
+    thread_model_key: str | None = Field(default=None, max_length=200)
 
 
 class SpaceProgress(BaseModel):
@@ -88,6 +90,9 @@ class Subject(BaseModel):
     color: str = "#3d6fdb"
     icon: str = DEFAULT_SUBJECT_ICON
     main_conversation_id: str | None = None
+    # 主线模型（主线对话的 model_key）和本空间支线的默认模型；None 表示用全局默认。
+    main_model_key: str | None = None
+    thread_model_key: str | None = None
     progress: SpaceProgress = Field(default_factory=SpaceProgress)
     conversation_count: int
     memory_count: int

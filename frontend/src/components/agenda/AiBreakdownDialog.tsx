@@ -9,7 +9,7 @@ import styles from "./AiBreakdownDialog.module.css";
 
 export interface AiBreakdownDialogProps {
   open: boolean;
-  subjects: { id: string; name: string; color: string; deadline: string | null }[];
+  subjects: { id: string; name: string; color: string }[];
   defaultSubjectId?: string | null;
   initialGoal?: string;
   onClose: () => void;
@@ -70,7 +70,7 @@ export default function AiBreakdownDialog({ open, subjects, defaultSubjectId, in
       const value = defaults.current;
       setGoal(value.initialGoal);
       setSubjectId(value.defaultSubjectId ?? "");
-      setDeadline(value.subjects.find(subject => subject.id === value.defaultSubjectId)?.deadline ?? "");
+      setDeadline("");
       setStage("input"); setParent(null); setChildren([]); setError(""); setSaving(false); busyRef.current = false;
       dialogRef.current?.showModal();
     } else dialogRef.current?.close();
@@ -141,7 +141,7 @@ export default function AiBreakdownDialog({ open, subjects, defaultSubjectId, in
         {stage !== "preview" ? <fieldset className={styles.inputGroup} disabled={stage === "generating"}>
           <label>{tx("学习目标")}<textarea autoFocus required maxLength={4000} rows={4} placeholder={tx("例如：下周五前掌握电路原理的戴维南定理，完成一套练习题。")} value={goal} onChange={event => setGoal(event.target.value)} /></label>
           <div className={styles.inputOptions}>
-            <label>{tx("关联空间")} <span>{tx("可选")}</span><select value={subjectId} onChange={event => { setSubjectId(event.target.value); setDeadline(subjects.find(subject => subject.id === event.target.value)?.deadline ?? ""); }}>
+            <label>{tx("关联空间")} <span>{tx("可选")}</span><select value={subjectId} onChange={event => setSubjectId(event.target.value)}>
               <option value="">{tx("不关联空间")}</option>{subjects.map(subject => <option key={subject.id} value={subject.id}>{subject.name}</option>)}
             </select></label>
             <label>{tx("截止日期")} <span>{tx("可选")}</span><input type="date" min={localToday()} value={deadline} onChange={event => setDeadline(event.target.value)} /></label>

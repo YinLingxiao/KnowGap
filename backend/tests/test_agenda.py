@@ -197,7 +197,8 @@ def test_threads_feed_dates_and_subject_filter(client):
     feed = client.get(BASE + "/feed", params={"from": "2026-01-01", "to": "2026-01-02"}).json()
     assert [t["id"] for t in feed["tasks"]] == [task["id"]]  # all open, not schedule-filtered
     assert feed["threads"][0]["thread_id"] == thread["id"]
-    assert feed["threads"][0]["deadline_date"] == "2026-10-30"
+    # 支线不再借用空间的截止日期：日程里的日期只来自任务本身
+    assert feed["threads"][0]["deadline_date"] is None
     assert feed["threads"][0]["subject_name"] == "电路"
     today = date.today().isoformat()
     assert len(client.get(BASE + "/feed", params={"from": today, "to": today}).json()["tasks"]) == 2

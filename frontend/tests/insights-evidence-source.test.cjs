@@ -23,7 +23,7 @@ const memory = {
 test("insights 证据透传 source，缺省不补成原话", () => {
   const result = mapInsights({
     schema_version: 1,
-    subject: { id: "s", name: "n", description: "", goal: "", level: null, deadline: null, color: "", main_conversation_id: null },
+    subject: { id: "s", name: "n", description: "", goal: "", level: null, color: "", main_conversation_id: null },
     stats: {},
     misconceptions: [memory],
     mastered: [],
